@@ -24,14 +24,14 @@ const CONFIG = {
     symbol: '$DNG', // Your token symbol
     name: 'Dungeon Token',
     decimals: 18,
-    // TODO: Add your mainnet token contract address
-    mainnetAddress: '0xYOUR_DNG_TOKEN_ADDRESS', 
-    testnetAddress: null // No token on testnet
+    // Deployed token addresses
+    mainnetAddress: '0xYOUR_DNG_TOKEN_ADDRESS', // TODO: Deploy to mainnet
+    testnetAddress: '0xA8D54F6FEeAFaf5C2c546D1D1644aE2f46A2d910' // ✅ Deployed!
   },
   
   // NFT Contract Addresses
   NFT_CONTRACTS: {
-    testnet: '0xEA37B1D036a880DfF372bCdd8b2A3AEeEe01e55A',
+    testnet: '0x06c7D4b0C35858c78c3B213fbf50fB4A25f20512', // ✅ Deployed!
     mainnet: '0xYOUR_MAINNET_NFT_CONTRACT' // TODO: Deploy NFT to mainnet
   },
   
@@ -65,8 +65,8 @@ const CONFIG = {
   
   // Minting Costs
   MINT_PRICE: {
-    testnet: '0.001', // ETH on testnet
-    mainnet: '500'    // $DNG tokens on mainnet (fixed for all rarities)
+    testnet: '500', // 500 $DNG tokens on testnet
+    mainnet: '500'  // 500 $DNG tokens on mainnet
   },
   
   // Rarity System - Uncommon = 25 dungeon ROI baseline
