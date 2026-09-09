@@ -1,0 +1,58 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+
+# Environment variables
+.env
+.env.local
+.env.production
+*.env
+
+# Private keys (IMPORTANT!)
+private-key.txt
+*.key
+*.pem
+
+# Deployment
+.vercel
+.deployment
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs
+dist/
+build/
+out/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Smart contract artifacts (if using Hardhat)
+artifacts/
+cache/
+typechain/
+typechain-types/
+
+# Coverage
+coverage/
+.nyc_output/

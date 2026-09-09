@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dungeon Knights - Idle RPG</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="game-container">
+        <!-- Top Header -->
+        <header class="game-header">
+            <div class="header-logo">
+                <h1>Dungeon<br>Knights</h1>
+            </div>
+            <div class="header-stats">
+                <div class="stat-item dungeon-progress">
+                    <span class="stat-label" id="dungeonNameDisplay">Forgotten Crypts</span>
+                    <span class="stat-value" id="dungeonProgress">Loot: 0</span>
+                </div>
+                <div class="stat-item knights-count">
+                    <span class="stat-label">Knights</span>
+                    <span class="stat-value" id="knightsCount">0</span>
+                </div>
+                <div class="stat-item treasure-count">
+                    <span class="stat-label">Gold</span>
+                    <span class="stat-value" id="treasureAmount">500</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Game Area -->
+        <main class="game-main" id="gameMain">
+            <!-- Border Decorations -->
+            <div class="border-decoration border-top-left"></div>
+            <div class="border-decoration border-top-right"></div>
+            <div class="border-decoration border-bottom-left"></div>
+            <div class="border-decoration border-bottom-right"></div>
+            
+            <!-- Game Canvas -->
+            <canvas id="gameCanvas" width="1200" height="800"></canvas>
+            
+            <!-- Atmospheric Text -->
+            <div class="atmosphere-text" id="atmosphereText"></div>
+            
+            <!-- Knight Portraits Sidebar -->
+            <aside class="knight-sidebar">
+                <div class="sidebar-header">Active Squad</div>
+                <div id="activeKnightPortraits" class="knight-portraits-container">
+                    <!-- Dynamically populated -->
+                </div>
+            </aside>
+            
+            <!-- Minimap -->
+            <div class="minimap-container">
+                <canvas id="minimapCanvas" width="150" height="150"></canvas>
+            </div>
+            
+            <!-- Game Log -->
+            <div class="game-log-container">
+                <div id="gameLog" class="game-log">
+                    <p class="log-entry">🎮 Welcome to Dungeon Knights!</p>
+                    <p class="log-entry">💡 Press 'H' for keyboard shortcuts</p>
+                </div>
+            </div>
+        </main>
+
+        <!-- Bottom Control Panel -->
+        <footer class="control-panel">
+            <div class="control-section">
+                <button id="startDungeon" class="btn-action btn-start" title="Deploy Knights (Space)">⚔️ Deploy</button>
+                <button id="stopDungeon" class="btn-action btn-stop" title="Recall Knights (Esc)">🛡️ Recall</button>
+                <button id="returnMenuBtn" class="btn-action btn-menu" title="Return to Menu">🏠 Menu</button>
+            </div>
+            
+            <div class="control-section">
+                <div class="quick-stats">
+                    <span>Gold/min: <strong id="goldRate">0</strong></span>
+                    <span>Active: <strong id="activeKnights">0/15</strong></span>
+                    <span>Loot: <strong id="activeLoot">0</strong></span>
+                </div>
+            </div>
+            
+            <div class="control-section">
+                <button id="muteBtn" class="btn-action btn-mute" title="Toggle Sound Effects (S)">🔊</button>
+                <button id="muteMusicBtn" class="btn-action btn-mute-music" title="Toggle Music (M)">🎵</button>
+                <button id="helpBtn" class="btn-action btn-menu" title="Show Shortcuts (H)">❓</button>
+            </div>
+        </footer>
+
+        <!-- Squad Management Panel (Collapsible) -->
+        <div class="squad-panel" id="squadPanel">
+            <button class="panel-toggle" id="squadToggle">Squad Manager</button>
+            <div class="panel-content">
+                <div class="panel-section">
+                    <h3>⚔️ Deployed Knights (<span id="deployedCount">0</span>)</h3>
+                    <div id="deployedKnights" class="knight-roster">
+                        <p class="placeholder-text">No knights deployed</p>
+                    </div>
+                </div>
+                
+                <div class="panel-section">
+                    <h3>🏰 All Knights (<span id="totalKnightsCount">0</span>)</h3>
+                    <div id="allKnightsRoster" class="knight-roster scrollable-roster">
+                        <p class="placeholder-text">Loading knights...</p>
+                    </div>
+                </div>
+                
+                <div class="panel-section">
+                    <h3>😴 Resting Knights</h3>
+                    <div id="restingKnights" class="knight-roster">
+                        <p class="placeholder-text">No knights resting</p>
+                    </div>
+                </div>
+                
+                <div class="panel-section">
+                    <h3>📊 Squad Stats</h3>
+                    <div id="squadStats" class="squad-stats">
+                        <p>Total Power: <strong id="totalPower">0</strong></p>
+                        <p>Avg Speed: <strong id="avgSpeed">0</strong></p>
+                        <p>Total Stamina: <strong id="totalStamina">0</strong></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dungeon Completion Modal -->
+    <div id="completionModal" class="modal hidden">
+        <div class="modal-content">
+            <h2>🎉 Dungeon Cleared!</h2>
+            <div class="completion-stats">
+                <p><strong>Dungeon:</strong> <span id="completedDungeon">-</span></p>
+                <p><strong>Gold Earned:</strong> <span id="completionGold">0</span> 💰</p>
+                <p><strong>Time:</strong> <span id="completionTime">0:00</span> ⏱️</p>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-primary" id="nextDungeonBtn">🗺️ Next Dungeon</button>
+                <button class="btn-secondary" id="replayDungeonBtn">🔄 Replay This Dungeon</button>
+                <button class="btn-secondary" id="restHeroesBtn">🍺 Rest All Heroes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Keyboard Shortcuts Overlay -->
+    <div id="shortcutsOverlay" class="shortcuts-overlay hidden">
+        <h3>⌨️ Keyboard Shortcuts</h3>
+        <div class="shortcut-list">
+            <div class="shortcut-key">Space</div>
+            <div class="shortcut-desc">Deploy Knights</div>
+            
+            <div class="shortcut-key">Esc</div>
+            <div class="shortcut-desc">Recall Knights</div>
+            
+            <div class="shortcut-key">S</div>
+            <div class="shortcut-desc">Toggle Sound Effects</div>
+            
+            <div class="shortcut-key">M</div>
+            <div class="shortcut-desc">Toggle Music</div>
+            
+            <div class="shortcut-key">H</div>
+            <div class="shortcut-desc">Show/Hide This Menu</div>
+            
+            <div class="shortcut-key">Q</div>
+            <div class="shortcut-desc">Toggle Squad Panel</div>
+        </div>
+        <button class="btn-secondary shortcuts-close" id="shortcutsClose">Close</button>
+    </div>
+
+    <!-- Tooltip -->
+    <div id="tooltip" class="tooltip hidden"></div>
+
+    <!-- Scripts -->
+    <script src="audio.js"></script>
+    <script src="characters.js"></script>
+    <script src="dungeon.js"></script>
+    <script src="pathfinding.js"></script>
+    <script src="combat.js"></script>
+    <script src="ui.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>

@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#1a1a2e">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Select Your Dungeon - Dungeon Knights</title>
+    <link rel="stylesheet" href="dungeon-select.css">
+    <link rel="stylesheet" href="mobile.css">
+</head>
+<body>
+    <div class="selection-container">
+        <!-- Header -->
+        <header class="selection-header">
+            <h1>Choose Your Dungeon</h1>
+            <p class="subtitle">Select your starting dungeon. After completion, dungeons will cycle randomly.</p>
+        </header>
+
+        <!-- Dungeon Grid -->
+        <main class="dungeon-grid">
+            <!-- Forgotten Crypts -->
+            <div class="dungeon-card" data-dungeon="crypts">
+                <div class="dungeon-image-wrapper">
+                    <img src="maps/crypts.png" alt="Forgotten Crypts" class="dungeon-image">
+                    <div class="dungeon-overlay">
+                        <span class="dungeon-icon">🏰</span>
+                    </div>
+                </div>
+                <div class="dungeon-info">
+                    <h2 class="dungeon-name">Forgotten Crypts</h2>
+                    <p class="dungeon-desc">Ancient tombs filled with restless spirits and cursed treasures.</p>
+                    <div class="dungeon-stats">
+                        <span>💀 Undead</span>
+                        <span>⚔️ Difficulty: ★★☆☆☆</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Goblin Mines -->
+            <div class="dungeon-card" data-dungeon="mines">
+                <div class="dungeon-image-wrapper">
+                    <img src="maps/goblin.png" alt="Goblin Mines" class="dungeon-image">
+                    <div class="dungeon-overlay">
+                        <span class="dungeon-icon">⛏️</span>
+                    </div>
+                </div>
+                <div class="dungeon-info">
+                    <h2 class="dungeon-name">Goblin Mines</h2>
+                    <p class="dungeon-desc">Deep caverns where goblins hoard stolen gems and gold.</p>
+                    <div class="dungeon-stats">
+                        <span>👺 Goblins</span>
+                        <span>⚔️ Difficulty: ★★☆☆☆</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Overgrown Temple -->
+            <div class="dungeon-card" data-dungeon="temple">
+                <div class="dungeon-image-wrapper">
+                    <img src="maps/temple.png" alt="Overgrown Temple" class="dungeon-image">
+                    <div class="dungeon-overlay">
+                        <span class="dungeon-icon">🌿</span>
+                    </div>
+                </div>
+                <div class="dungeon-info">
+                    <h2 class="dungeon-name">Overgrown Temple</h2>
+                    <p class="dungeon-desc">Ruins reclaimed by nature, guarded by plant creatures.</p>
+                    <div class="dungeon-stats">
+                        <span>🌱 Nature</span>
+                        <span>⚔️ Difficulty: ★★☆☆☆</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Magma Chambers -->
+            <div class="dungeon-card" data-dungeon="magma">
+                <div class="dungeon-image-wrapper">
+                    <img src="maps/magma.png" alt="Magma Chambers" class="dungeon-image">
+                    <div class="dungeon-overlay">
+                        <span class="dungeon-icon">🔥</span>
+                    </div>
+                </div>
+                <div class="dungeon-info">
+                    <h2 class="dungeon-name">Magma Chambers</h2>
+                    <p class="dungeon-desc">Scorching caverns inhabited by fire elementals and lava beasts.</p>
+                    <div class="dungeon-stats">
+                        <span>🔥 Fire</span>
+                        <span>⚔️ Difficulty: ★★☆☆☆</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Void Rift -->
+            <div class="dungeon-card" data-dungeon="void">
+                <div class="dungeon-image-wrapper">
+                    <img src="maps/void rift.png" alt="Void Rift" class="dungeon-image">
+                    <div class="dungeon-overlay">
+                        <span class="dungeon-icon">🌌</span>
+                    </div>
+                </div>
+                <div class="dungeon-info">
+                    <h2 class="dungeon-name">Void Rift</h2>
+                    <p class="dungeon-desc">A tear in reality where cosmic horrors lurk in the darkness.</p>
+                    <div class="dungeon-stats">
+                        <span>🌌 Cosmic</span>
+                        <span>⚔️ Difficulty: ★★☆☆☆</span>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="selection-footer">
+            <button id="backToMenuBtn" class="btn-back">🏠 Back to Menu</button>
+        </footer>
+    </div>
+
+    <!-- Loading Transition -->
+    <div id="loadingTransition" class="loading-transition hidden">
+        <div class="loading-content">
+            <h2 id="loadingDungeonName">Entering Dungeon...</h2>
+            <div class="loading-spinner"></div>
+            <p class="loading-text">Preparing your knights...</p>
+        </div>
+    </div>
+
+    <script src="dungeon-select.js"></script>
+</body>
+</html>

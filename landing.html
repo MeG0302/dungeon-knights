@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#1a1a2e">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Dungeon Knights - Enter</title>
+    <link rel="stylesheet" href="landing.css">
+    <link rel="stylesheet" href="wallet-widget.css">
+    <link rel="stylesheet" href="mobile.css">
+</head>
+<body>
+    <!-- Wallet Button -->
+    <div class="wallet-header">
+        <button class="wallet-btn" id="connectWalletBtn">🔌 Connect Wallet</button>
+    </div>
+
+    <!-- Main Landing Container -->
+    <div class="landing-container">
+        <!-- Animated Background -->
+        <div class="bg-animation"></div>
+        
+        <!-- Rune Borders -->
+        <div class="rune-border rune-left"></div>
+        <div class="rune-border rune-right"></div>
+        
+        <!-- Main Title -->
+        <div class="game-logo">
+            <h1 class="title-dungeon">Dungeon</h1>
+            <h1 class="title-knights">Knights</h1>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+            <button class="action-btn enter-btn" id="enterDungeonBtn">
+                <div class="btn-icon-container">
+                    <div class="btn-icon-box">🏰</div>
+                </div>
+                <span class="btn-label">Enter Dungeon</span>
+                <span class="btn-arrow">⟫</span>
+            </button>
+            
+            <button class="action-btn summon-btn" id="summonKnightBtn">
+                <div class="btn-icon-container">
+                    <div class="btn-icon-box">🔮</div>
+                </div>
+                <span class="btn-label">Summon Knight</span>
+                <span class="btn-arrow">⟫</span>
+            </button>
+            
+            <button class="action-btn marketplace-btn" id="marketplaceBtn" disabled>
+                <div class="btn-icon-container">
+                    <div class="btn-icon-box">💰</div>
+                </div>
+                <span class="btn-label">Marketplace</span>
+                <span class="btn-arrow">🚧</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/@privy-io/privy-browser@0.14.0/dist/privy.umd.js"></script>
+    <script src="config.js"></script>
+    <script src="ethers-5.7.2.umd.min.js"></script>
+    <script src="web3-integration.js"></script>
+    <script src="privy-integration.js"></script>
+    <script src="rainbowkit-integration.js"></script>
+    <script src="wallet-widget.js"></script>
+    <script src="audio.js"></script>
+    <script src="landing.js"></script>
+</body>
+</html>

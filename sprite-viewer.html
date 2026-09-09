@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monster Sprite Viewer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #1a1a2e;
+            color: #e0e0e0;
+        }
+        .sprite-container {
+            margin: 20px 0;
+            padding: 20px;
+            background: #16213e;
+            border-radius: 10px;
+            border: 2px solid #53a8b6;
+        }
+        h2 {
+            color: #53a8b6;
+        }
+        canvas {
+            border: 2px solid #ffd700;
+            background: #000;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+        .info {
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 5px;
+        }
+        .coords {
+            color: #ffd700;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎮 Monster Sprite Viewer</h1>
+    <p>This page helps you view and adjust monster sprite coordinates.</p>
+
+    <div class="sprite-container">
+        <h2>Crypts - Undead/Skeleton</h2>
+        <canvas id="crypts" width="600" height="400"></canvas>
+        <div class="info">
+            <p>File: <span class="coords">Pixel_art_dungeon_monsters_2K_202609041603.jpeg</span></p>
+            <p>Current coords: <span class="coords">x: 50, y: 50, w: 150, h: 150</span></p>
+        </div>
+    </div>
+
+    <div class="sprite-container">
+        <h2>Mines - Goblin</h2>
+        <canvas id="mines" width="600" height="400"></canvas>
+        <div class="info">
+            <p>File: <span class="coords">Pixel_art_dungeon_monsters_2K_202609041603 (1).jpeg</span></p>
+            <p>Current coords: <span class="coords">x: 250, y: 50, w: 150, h: 150</span></p>
+        </div>
+    </div>
+
+    <div class="sprite-container">
+        <h2>Temple - Plant/Nature</h2>
+        <canvas id="temple" width="600" height="400"></canvas>
+        <div class="info">
+            <p>File: <span class="coords">Pixel_art_dungeon_monsters_2K_202609041603 (2).jpeg</span></p>
+            <p>Current coords: <span class="coords">x: 50, y: 250, w: 150, h: 150</span></p>
+        </div>
+    </div>
+
+    <div class="sprite-container">
+        <h2>Magma - Fire Demon</h2>
+        <canvas id="magma" width="600" height="400"></canvas>
+        <div class="info">
+            <p>File: <span class="coords">Pixel_art_dungeon_monsters_2K_202609041603 (3).jpeg</span></p>
+            <p>Current coords: <span class="coords">x: 450, y: 50, w: 150, h: 150</span></p>
+        </div>
+    </div>
+
+    <div class="sprite-container">
+        <h2>Void - Cosmic Creature</h2>
+        <canvas id="void" width="600" height="400"></canvas>
+        <div class="info">
+            <p>File: <span class="coords">Five_pixel_art_dungeon_monsters_2K_202609041604.jpeg</span></p>
+            <p>Current coords: <span class="coords">x: 50, y: 50, w: 180, h: 180</span></p>
+        </div>
+    </div>
+
+    <script>
+        const monsters = {
+            crypts: {
+                file: 'monsters/Pixel_art_dungeon_monsters_2K_202609041603.jpeg',
+                coords: { x: 50, y: 50, w: 150, h: 150 }
+            },
+            mines: {
+                file: 'monsters/Pixel_art_dungeon_monsters_2K_202609041603 (1).jpeg',
+                coords: { x: 250, y: 50, w: 150, h: 150 }
+            },
+            temple: {
+                file: 'monsters/Pixel_art_dungeon_monsters_2K_202609041603 (2).jpeg',
+                coords: { x: 50, y: 250, w: 150, h: 150 }
+            },
+            magma: {
+                file: 'monsters/Pixel_art_dungeon_monsters_2K_202609041603 (3).jpeg',
+                coords: { x: 450, y: 50, w: 150, h: 150 }
+            },
+            void: {
+                file: 'monsters/Five_pixel_art_dungeon_monsters_2K_202609041604.jpeg',
+                coords: { x: 50, y: 50, w: 180, h: 180 }
+            }
+        };
+
+        Object.entries(monsters).forEach(([key, data]) => {
+            const canvas = document.getElementById(key);
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+            
+            img.onload = () => {
+                // Draw full sprite sheet (scaled down)
+                const scale = Math.min(canvas.width / img.width, canvas.height / img.height);
+                ctx.drawImage(img, 0, 0, img.width * scale, img.height * scale);
+                
+                // Highlight the selected area
+                ctx.strokeStyle = '#00ff00';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(
+                    data.coords.x * scale,
+                    data.coords.y * scale,
+                    data.coords.w * scale,
+                    data.coords.h * scale
+                );
+                
+                // Draw extracted monster on the right
+                ctx.drawImage(
+                    img,
+                    data.coords.x, data.coords.y, data.coords.w, data.coords.h,
+                    canvas.width - 150, 50, 100, 100
+                );
+                
+                // Label
+                ctx.fillStyle = '#00ff00';
+                ctx.font = '12px monospace';
+                ctx.fillText('Selected Area', data.coords.x * scale, data.coords.y * scale - 5);
+                ctx.fillText('Preview (100x100)', canvas.width - 150, 40);
+            };
+            
+            img.onerror = () => {
+                ctx.fillStyle = '#ff0000';
+                ctx.font = '16px Arial';
+                ctx.fillText(`Failed to load: ${data.file}`, 10, 30);
+            };
+            
+            img.src = data.file;
+        });
+    </script>
+</body>
+</html>

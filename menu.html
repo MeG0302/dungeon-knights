@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#1a1a2e">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Dungeon Knights - Main Menu</title>
+    <link rel="stylesheet" href="menu.css">
+    <link rel="stylesheet" href="wallet-widget.css">
+    <link rel="stylesheet" href="mobile.css">
+</head>
+<body>
+    <!-- Wallet Button -->
+    <div class="wallet-header">
+        <button class="wallet-btn" id="connectWalletBtn">🔌 Connect Wallet</button>
+    </div>
+
+    <!-- Main Menu Container -->
+    <div class="menu-container">
+        <!-- Animated Background -->
+        <div class="bg-animation"></div>
+        
+        <!-- Header -->
+        <header class="game-header">
+            <h1 class="game-title">DUNGEON KNIGHTS</h1>
+            <div class="gold-display">
+                <span class="gold-icon">💰</span>
+                <span id="menuGold">500</span> Gold
+            </div>
+        </header>
+
+        <!-- Main Menu Panels -->
+        <main class="menu-main">
+            <!-- Left Panel - Game Actions -->
+            <section class="menu-panel left-panel">
+                <h2 class="panel-title">⚔️ ADVENTURE</h2>
+                
+                <button class="menu-btn play-btn" id="playGameBtn">
+                    <span class="btn-icon">🎮</span>
+                    <span class="btn-text">ENTER DUNGEON</span>
+                    <span class="btn-subtitle">Deploy Selected Knights</span>
+                </button>
+                
+                <button class="menu-btn back-menu-btn" id="backMenuBtn">
+                    <span class="btn-icon">🏠</span>
+                    <span class="btn-text">MAIN MENU</span>
+                    <span class="btn-subtitle">Return to Landing</span>
+                </button>
+                
+                <div class="quick-actions">
+                    <button class="quick-btn" id="selectAllBtn">
+                        <span>✓ Select All</span>
+                    </button>
+                    <button class="quick-btn" id="deselectAllBtn">
+                        <span>✗ Clear Selection</span>
+                    </button>
+                </div>
+            </section>
+
+            <!-- Right Panel - Knight Management -->
+            <section class="menu-panel right-panel">
+                <div class="panel-header">
+                    <h2 class="panel-title">🛡️ KNIGHT ROSTER</h2>
+                    
+                    <!-- Filter Controls -->
+                    <div class="filter-controls">
+                        <label class="filter-label">Sort By:</label>
+                        <select class="filter-select" id="sortFilter">
+                            <option value="id">Knight ID</option>
+                            <option value="rarity">Rarity</option>
+                            <option value="power">Power</option>
+                            <option value="speed">Speed</option>
+                            <option value="stamina">Stamina</option>
+                        </select>
+                        
+                        <label class="filter-label">Filter:</label>
+                        <select class="filter-select" id="rarityFilter">
+                            <option value="all">All Rarities</option>
+                            <option value="MYTHIC">Mythic</option>
+                            <option value="LEGENDARY">Legendary</option>
+                            <option value="EPIC">Epic</option>
+                            <option value="RARE">Rare</option>
+                            <option value="UNCOMMON">Uncommon</option>
+                            <option value="COMMON">Common</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="troops-info">
+                    <span>Selected: <strong id="activeTroopsCount">0</strong> / 15</span>
+                    <span>Total Knights: <strong id="totalKnightsCount">0</strong></span>
+                </div>
+                
+                <!-- Knight Roster -->
+                <div class="knight-roster" id="knightRoster">
+                    <p class="empty-message">No knights recruited yet. Visit the Summoning Chamber to forge your first knight!</p>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer Info -->
+        <footer class="menu-footer">
+            <p>Select up to 15 knights and deploy them into the dungeons!</p>
+            <p class="music-hint">🎵 Music starts on interaction</p>
+        </footer>
+    </div>
+
+    <!-- Knight Details Modal -->
+    <div class="modal-overlay hidden" id="knightModal">
+        <div class="modal-content">
+            <button class="modal-close" id="modalClose">✕</button>
+            
+            <div class="modal-header">
+                <div class="modal-knight-avatar" id="modalAvatar">
+                    <img id="modalKnightImage" src="" alt="Knight">
+                </div>
+                <div class="modal-knight-info">
+                    <h2 id="modalKnightName">Knight #1</h2>
+                    <div class="modal-rarity" id="modalRarity">Common Knight</div>
+                </div>
+            </div>
+            
+            <div class="modal-body">
+                <div class="modal-stat-group">
+                    <h3>Combat Stats</h3>
+                    <div class="modal-stat">
+                        <span class="stat-label">⚡ Power:</span>
+                        <span class="stat-value" id="modalPower">10</span>
+                    </div>
+                    <div class="modal-stat">
+                        <span class="stat-label">🏃 Speed:</span>
+                        <span class="stat-value" id="modalSpeed">1.0</span>
+                    </div>
+                    <div class="modal-stat">
+                        <span class="stat-label">💪 Max Stamina:</span>
+                        <span class="stat-value" id="modalMaxStamina">100</span>
+                    </div>
+                </div>
+                
+                <div class="modal-stat-group">
+                    <h3>Current Status</h3>
+                    <div class="modal-stamina-bar">
+                        <div class="stamina-label">
+                            <span>Stamina:</span>
+                            <span id="modalStaminaText">100 / 100</span>
+                        </div>
+                        <div class="stamina-bar-bg">
+                            <div class="stamina-bar-fill" id="modalStaminaBar"></div>
+                            <div class="stamina-threshold"></div>
+                        </div>
+                    </div>
+                    <div class="modal-stat">
+                        <span class="stat-label">Status:</span>
+                        <span class="stat-value" id="modalStatus">Ready</span>
+                    </div>
+                    <div class="modal-stat">
+                        <span class="stat-label">Total Earned:</span>
+                        <span class="stat-value" id="modalEarned">0 Gold</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="modal-footer">
+                <button class="modal-btn select-btn" id="modalSelectBtn">Add to Squad</button>
+                <button class="modal-btn close-btn" id="modalCloseBtn">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/@privy-io/privy-browser@0.14.0/dist/privy.umd.js"></script>
+    <script src="config.js"></script>
+    <script src="ethers-5.7.2.umd.min.js"></script>
+    <script src="web3-integration.js"></script>
+    <script src="privy-integration.js"></script>
+    <script src="rainbowkit-integration.js"></script>
+    <script src="wallet-widget.js"></script>
+    <script src="audio.js"></script>
+    <script src="characters.js"></script>
+    <script src="menu.js"></script>
+</body>
+</html>

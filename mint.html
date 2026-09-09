@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#1a1a2e">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Summon Knights - Dungeon Knights</title>
+    <link rel="stylesheet" href="mint.css">
+    <link rel="stylesheet" href="wallet-widget.css">
+    <link rel="stylesheet" href="mobile.css">
+</head>
+<body>
+    <!-- Minting Page Container -->
+    <div class="mint-container">
+        <!-- Background Animation -->
+        <div class="bg-animation"></div>
+        
+        <!-- Header -->
+        <header class="mint-header">
+            <button class="back-btn" id="backBtn">← Back</button>
+            <h1 class="page-title">SUMMON KNIGHTS</h1>
+            <div class="header-right">
+                <button class="wallet-btn" id="connectWalletBtn">🔌 Connect Wallet</button>
+            </div>
+        </header>
+
+        <!-- Main Minting Area -->
+        <main class="mint-main">
+            <!-- Capsule Display -->
+            <section class="capsule-section">
+                <div class="capsule-display">
+                    <div class="capsule-background"></div>
+                    <div class="capsule-glow"></div>
+                    <img src="capsule.png" alt="Summoning Capsule" class="capsule-img" id="capsuleImg">
+                    <div class="capsule-energy" id="capsuleEnergy"></div>
+                    <div class="capsule-particles" id="capsuleParticles"></div>
+                </div>
+                
+                <div class="mint-result" id="mintResult"></div>
+            </section>
+
+            <!-- Minting Controls -->
+            <section class="controls-section">
+                <div class="mint-info">
+                    <h2 id="modeTitle">Forge NFT Knights</h2>
+                    <p id="modeDescription">Mint ERC-721 NFTs on Robinhood Chain</p>
+                </div>
+                
+                <div class="quantity-selector">
+                    <label class="selector-label">Summon Quantity:</label>
+                    <div class="qty-controls">
+                        <button class="qty-btn" id="qtyMinus">-</button>
+                        <input type="number" id="mintQty" class="qty-display" value="1" min="1" max="5" readonly>
+                        <button class="qty-btn" id="qtyPlus">+</button>
+                    </div>
+                </div>
+                
+                <div class="cost-display">
+                    <span class="cost-label">Total Cost:</span>
+                    <span class="cost-value">
+                        <span id="totalMintCost">0.001</span> 
+                        <span id="costCurrency" class="eth-cost">ETH</span>
+                    </span>
+                </div>
+                
+                <button class="mint-action-btn" id="mintBtn">
+                    <span class="btn-icon">⚡</span>
+                    <span class="btn-text">MINT <span id="mintBtnQty">1</span> KNIGHT<span id="mintBtnPlural"></span></span>
+                </button>
+                
+                <div class="nft-info" id="nftInfo">
+                    <p class="nft-notice">
+                        💎 <strong>NFT Minting</strong><br>
+                        Knights will be minted as ERC-721 NFTs on Robinhood Chain<br>
+                        <span id="networkInfo">Testnet • Contract: 0xEA37...e55A</span>
+                    </p>
+                </div>
+                
+                <div class="mint-tips">
+                    <p>💎 Rarity Distribution:</p>
+                    <ul>
+                        <li><span class="rarity-dot common"></span> Common: 65%</li>
+                        <li><span class="rarity-dot uncommon"></span> Uncommon: 20%</li>
+                        <li><span class="rarity-dot rare"></span> Rare: 10%</li>
+                        <li><span class="rarity-dot epic"></span> Epic: 4.5%</li>
+                        <li><span class="rarity-dot legendary"></span> Legendary: 1.2%</li>
+                        <li><span class="rarity-dot mythic"></span> Mythic: 0.3%</li>
+                    </ul>
+                </div>
+            </section>
+        </main>
+
+        <!-- Knights Collection Preview -->
+        <footer class="knights-preview">
+            <h3>Your Knights: <span id="knightCount">0</span></h3>
+            <div class="knights-grid" id="knightsGrid">
+                <p class="empty-msg">No knights summoned yet</p>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/@privy-io/privy-browser@0.14.0/dist/privy.umd.js"></script>
+    <script src="config.js"></script>
+    <script src="ethers-5.7.2.umd.min.js"></script>
+    <script>
+      // Verify ethers loaded
+      if (typeof ethers !== 'undefined') {
+        console.log('✅ ethers.js loaded successfully (local file)');
+        window.ethersLoaded = true;
+      } else {
+        console.error('❌ ethers.js failed to load from local file');
+      }
+    </script>
+    <script src="web3-integration.js"></script>
+    <script src="privy-integration.js"></script>
+    <script src="rainbowkit-integration.js"></script>
+    <script src="wallet-widget.js"></script>
+    <script src="audio.js"></script>
+    <script src="characters.js"></script>
+    <script src="mint.js"></script>
+</body>
+</html>

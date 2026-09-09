@@ -1,0 +1,965 @@
+/* ===========================
+   DUNGEON KNIGHTS - GRITTY THEME
+   =========================== */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Times New Roman', serif;
+    background: url('menu-background.jpg') center center / cover no-repeat fixed;
+    color: #a8a29e;
+    overflow: hidden;
+    height: 100vh;
+    position: relative;
+}
+
+body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(ellipse at center, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.85) 100%);
+    z-index: -1;
+    pointer-events: none;
+}
+
+.game-container {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+/* ===========================
+   HEADER
+   =========================== */
+
+.game-header {
+    background: rgba(10, 15, 20, 0.92);
+    border-bottom: 4px solid;
+    border-bottom-color: #0a0d12;
+    box-shadow: 
+        0 8px 24px rgba(0, 0, 0, 0.8),
+        inset 0 2px 0 rgba(255, 255, 255, 0.03),
+        inset 0 -2px 0 rgba(0, 0, 0, 0.6);
+    padding: 12px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 70px;
+    z-index: 100;
+}
+
+.header-logo h1 {
+    font-size: 22px;
+    color: #a8a29e;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.9);
+    line-height: 1.3;
+    font-weight: bold;
+    letter-spacing: 0.1rem;
+    text-transform: uppercase;
+}
+
+.header-stats {
+    display: flex;
+    gap: 2rem;
+    align-items: center;
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.4);
+    padding: 0.5rem 1.2rem;
+    border: 2px solid;
+    border-top-color: rgba(100, 116, 139, 0.3);
+    border-right-color: rgba(70, 80, 95, 0.4);
+    border-bottom-color: rgba(50, 60, 75, 0.5);
+    border-left-color: rgba(70, 80, 95, 0.4);
+    border-radius: 4px;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6);
+}
+
+.stat-label {
+    font-size: 11px;
+    color: #78716c;
+    text-transform: uppercase;
+    letter-spacing: 0.08rem;
+    margin-bottom: 0.2rem;
+}
+
+.stat-value {
+    font-size: 18px;
+    font-weight: bold;
+    color: #fcd34d;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.dungeon-progress .stat-label {
+    font-size: 13px;
+    color: #a8a29e;
+}
+
+.dungeon-progress .stat-value {
+    font-size: 16px;
+    color: #d4d4d8;
+}
+
+/* ===========================
+   MAIN GAME AREA
+   =========================== */
+
+.game-main {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    overflow: hidden;
+}
+
+#gameCanvas {
+    border: 4px solid;
+    border-top-color: rgba(100, 116, 139, 0.5);
+    border-right-color: rgba(70, 80, 95, 0.6);
+    border-bottom-color: rgba(50, 60, 75, 0.7);
+    border-left-color: rgba(70, 80, 95, 0.6);
+    border-radius: 4px;
+    box-shadow: 
+        0 12px 40px rgba(0, 0, 0, 0.9),
+        inset 0 2px 0 rgba(255, 255, 255, 0.03),
+        inset 0 -2px 0 rgba(0, 0, 0, 0.6);
+    background: #000;
+}
+
+/* Canvas Border Decorations */
+.border-decoration {
+    position: absolute;
+    background: rgba(16, 185, 129, 0.1);
+    pointer-events: none;
+    z-index: 1;
+}
+
+.border-top-left,
+.border-top-right,
+.border-bottom-left,
+.border-bottom-right {
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(16, 185, 129, 0.3);
+    border-radius: 2px;
+}
+
+.border-top-left { top: 0.8rem; left: 0.8rem; }
+.border-top-right { top: 0.8rem; right: 0.8rem; }
+.border-bottom-left { bottom: 5.5rem; left: 0.8rem; }
+.border-bottom-right { bottom: 5.5rem; right: 0.8rem; }
+
+/* ===========================
+   KNIGHT SIDEBAR
+   =========================== */
+
+.knight-sidebar {
+    position: absolute;
+    left: 1rem;
+    top: 1rem;
+    width: 200px;
+    max-height: calc(100% - 2rem);
+    background: rgba(10, 15, 20, 0.92);
+    border: 4px solid;
+    border-top-color: rgba(16, 185, 129, 0.4);
+    border-right-color: rgba(10, 140, 100, 0.5);
+    border-bottom-color: rgba(5, 100, 75, 0.6);
+    border-left-color: rgba(10, 140, 100, 0.5);
+    border-radius: 4px;
+    padding: 1rem;
+    box-shadow: 
+        0 12px 40px rgba(0, 0, 0, 0.9),
+        inset 0 2px 0 rgba(16, 185, 129, 0.05),
+        inset 0 -2px 0 rgba(0, 0, 0, 0.6);
+    overflow-y: auto;
+    z-index: 50;
+}
+
+.sidebar-header {
+    font-size: 14px;
+    font-weight: bold;
+    color: #a8a29e;
+    text-transform: uppercase;
+    letter-spacing: 0.1rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid rgba(168, 162, 158, 0.2);
+    text-align: center;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.9);
+}
+
+.knight-portraits-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+}
+
+.knight-portrait {
+    position: relative;
+    background: rgba(0, 0, 0, 0.5);
+    border: 3px solid;
+    border-radius: 4px;
+    padding: 0.6rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 
+        0 4px 12px rgba(0, 0, 0, 0.8),
+        inset 0 1px 0 rgba(255, 255, 255, 0.02);
+}
+
+.knight-portrait:hover {
+    transform: translateX(5px);
+    box-shadow: 
+        0 6px 16px rgba(0, 0, 0, 0.9),
+        -3px 0 10px rgba(16, 185, 129, 0.2);
+}
+
+.knight-portrait-img {
+    width: 50px;
+    height: 50px;
+    border: 2px solid;
+    border-radius: 4px;
+    object-fit: cover;
+    image-rendering: pixelated;
+    margin-bottom: 0.5rem;
+}
+
+.knight-portrait-name {
+    font-size: 11px;
+    color: #a8a29e;
+    text-align: center;
+    margin-bottom: 0.3rem;
+}
+
+.knight-portrait-stamina {
+    width: 100%;
+    height: 6px;
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(100, 116, 139, 0.4);
+    border-radius: 2px;
+    overflow: hidden;
+    position: relative;
+}
+
+.knight-portrait-stamina-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #10b981, #059669);
+    transition: width 0.3s;
+}
+
+/* ===========================
+   MINIMAP
+   =========================== */
+
+.minimap-container {
+    position: absolute;
+    right: 1rem;
+    top: 1rem;
+    background: rgba(10, 15, 20, 0.92);
+    border: 4px solid;
+    border-top-color: rgba(139, 92, 246, 0.4);
+    border-right-color: rgba(124, 58, 237, 0.5);
+    border-bottom-color: rgba(109, 40, 217, 0.6);
+    border-left-color: rgba(124, 58, 237, 0.5);
+    border-radius: 4px;
+    padding: 0.8rem;
+    box-shadow: 
+        0 12px 40px rgba(0, 0, 0, 0.9),
+        inset 0 2px 0 rgba(139, 92, 246, 0.05),
+        inset 0 -2px 0 rgba(0, 0, 0, 0.6);
+    z-index: 50;
+}
+
+#minimapCanvas {
+    display: block;
+    border: 2px solid rgba(139, 92, 246, 0.3);
+    border-radius: 2px;
+}
+
+/* ===========================
+   ATMOSPHERIC TEXT
+   =========================== */
+
+.atmosphere-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 3rem;
+    font-weight: bold;
+    color: rgba(168, 162, 158, 0.15);
+    text-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+    pointer-events: none;
+    z-index: 2;
+    animation: atmosphereFade 4s ease-in-out infinite;
+    text-align: center;
+    letter-spacing: 0.3rem;
+}
+
+@keyframes atmosphereFade {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 0.6; }
+}
+
+/* ===========================
+   CONTROL PANEL
+   =========================== */
+
+.control-panel {
+    background: rgba(10, 15, 20, 0.92);
+    border-top: 4px solid;
+    border-top-color: #1a2332;
+    box-shadow: 
+        0 -8px 24px rgba(0, 0, 0, 0.8),
+        inset 0 2px 0 rgba(255, 255, 255, 0.03),
+        inset 0 -2px 0 rgba(0, 0, 0, 0.6);
+    padding: 1rem 1.5rem;
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+    justify-content: space-between;
+    z-index: 100;
+}
+
+.control-section {
+    display: flex;
+    gap: 0.8rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+/* Dungeon Selector */
+.dungeon-selector {
+    background: rgba(0, 0, 0, 0.6);
+    border: 3px solid;
+    border-top-color: rgba(139, 92, 246, 0.4);
+    border-right-color: rgba(124, 58, 237, 0.5);
+    border-bottom-color: rgba(109, 40, 217, 0.6);
+    border-left-color: rgba(124, 58, 237, 0.5);
+    border-radius: 4px;
+    color: #a8a29e;
+    padding: 0.7rem 1.2rem;
+    font-size: 14px;
+    font-family: 'Times New Roman', serif;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 
+        0 4px 12px rgba(0, 0, 0, 0.8),
+        inset 0 2px 0 rgba(139, 92, 246, 0.05),
+        inset 0 -2px 0 rgba(0, 0, 0, 0.6);
+}
+
+.dungeon-selector:hover {
+    border-top-color: rgba(139, 92, 246, 0.6);
+    box-shadow: 
+        0 6px 16px rgba(0, 0, 0, 0.9),
+        0 0 15px rgba(139, 92, 246, 0.2);
+}
+
+.dungeon-selector:focus {
+    outline: none;
+}
+
+/* Buttons */
+.btn-action,
+.btn-primary,
+.btn-secondary {
+    background: rgba(10, 15, 20, 0.92);
+    border: 4px solid;
+    border-radius: 4px;
+    color: #a8a29e;
+    padding: 0.7rem 1.5rem;
+    font-size: 14px;
+    font-family: 'Times New Roman', serif;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    letter-spacing: 0.08rem;
+    box-shadow: 
+        0 4px 12px rgba(0, 0, 0, 0.8),
+        inset 0 2px 0 rgba(255, 255, 255, 0.02),
+        inset 0 -2px 0 rgba(0, 0, 0, 0.6);
+}
+
+.btn-start {
+    border-top-color: rgba(16, 185, 129, 0.5);
+    border-right-color: rgba(10, 140, 100, 0.6);
+    border-bottom-color: rgba(5, 100, 75, 0.7);
+    border-left-color: rgba(10, 140, 100, 0.6);
+}
+
+.btn-start:hover {
+    border-top-color: rgba(16, 185, 129, 0.8);
+    box-shadow: 
+        0 6px 16px rgba(0, 0, 0, 0.9),
+        0 0 20px rgba(16, 185, 129, 0.2);
+    transform: translateY(-2px);
+}
+
+.btn-stop {
+    border-top-color: rgba(239, 68, 68, 0.5);
+    border-right-color: rgba(220, 38, 38, 0.6);
+    border-bottom-color: rgba(185, 28, 28, 0.7);
+    border-left-color: rgba(220, 38, 38, 0.6);
+}
+
+.btn-stop:hover {
+    border-top-color: rgba(239, 68, 68, 0.8);
+    box-shadow: 
+        0 6px 16px rgba(0, 0, 0, 0.9),
+        0 0 20px rgba(239, 68, 68, 0.2);
+    transform: translateY(-2px);
+}
+
+.btn-menu,
+.btn-secondary {
+    border-top-color: rgba(100, 116, 139, 0.4);
+    border-right-color: rgba(70, 80, 95, 0.5);
+    border-bottom-color: rgba(50, 60, 75, 0.6);
+    border-left-color: rgba(70, 80, 95, 0.5);
+}
+
+.btn-menu:hover,
+.btn-secondary:hover {
+    border-top-color: rgba(100, 116, 139, 0.6);
+    transform: translateY(-2px);
+}
+
+.btn-primary {
+    border-top-color: rgba(251, 191, 36, 0.5);
+    border-right-color: rgba(245, 158, 11, 0.6);
+    border-bottom-color: rgba(217, 119, 6, 0.7);
+    border-left-color: rgba(245, 158, 11, 0.6);
+}
+
+.btn-primary:hover {
+    border-top-color: rgba(251, 191, 36, 0.8);
+    box-shadow: 
+        0 6px 16px rgba(0, 0, 0, 0.9),
+        0 0 20px rgba(251, 191, 36, 0.2);
+    transform: translateY(-2px);
+}
+
+.btn-mute,
+.btn-mute-music {
+    padding: 0.7rem 1rem;
+    font-size: 18px;
+}
+
+.btn-action:active,
+.btn-primary:active,
+.btn-secondary:active {
+    transform: translateY(0);
+}
+
+.btn-action:disabled,
+.btn-primary:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    filter: grayscale(0.8);
+}
+
+/* Quick Stats */
+.quick-stats {
+    display: flex;
+    gap: 1.5rem;
+    padding: 0.5rem 1rem;
+    background: rgba(0, 0, 0, 0.4);
+    border: 2px solid rgba(100, 116, 139, 0.3);
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+.quick-stats strong {
+    color: #fcd34d;
+    margin-left: 0.3rem;
+}
+
+/* ===========================
+   GAME LOG
+   =========================== */
+
+.game-log-container {
+    position: absolute;
+    bottom: 5.5rem;
+    left: 1rem;
+    width: 350px;
+    max-height: 180px;
+    background: rgba(10, 15, 20, 0.92);
+    border: 4px solid;
+    border-top-color: rgba(100, 116, 139, 0.4);
+    border-right-color: rgba(70, 80, 95, 0.5);
+    border-bottom-color: rgba(50, 60, 75, 0.6);
+    border-left-color: rgba(70, 80, 95, 0.5);
+    border-radius: 4px;
+    padding: 0.8rem;
+    box-shadow: 
+        0 12px 40px rgba(0, 0, 0, 0.9),
+        inset 0 2px 0 rgba(255, 255, 255, 0.02),
+        inset 0 -2px 0 rgba(0, 0, 0, 0.6);
+    overflow-y: auto;
+    z-index: 50;
+}
+
+.game-log {
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.log-entry {
+    margin-bottom: 0.5rem;
+    color: #a8a29e;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+    animation: logFadeIn 0.3s ease-out;
+}
+
+@keyframes logFadeIn {
+    from {
+        opacity: 0;
+        transform: translateX(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.log-entry:last-child {
+    color: #d4d4d8;
+}
+
+/* ===========================
+   COMPLETION MODAL
+   =========================== */
+
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(8px);
+}
+
+.modal.hidden {
+    display: none;
+}
+
+.modal-content {
+    background: rgba(10, 15, 20, 0.98);
+    border: 4px solid;
+    border-top-color: rgba(16, 185, 129, 0.6);
+    border-right-color: rgba(10, 140, 100, 0.7);
+    border-bottom-color: rgba(5, 100, 75, 0.8);
+    border-left-color: rgba(10, 140, 100, 0.7);
+    border-radius: 4px;
+    padding: 2.5rem;
+    min-width: 500px;
+    max-width: 600px;
+    box-shadow: 
+        0 20px 60px rgba(0, 0, 0, 0.95),
+        0 0 40px rgba(16, 185, 129, 0.3),
+        inset 0 2px 0 rgba(16, 185, 129, 0.1),
+        inset 0 -2px 0 rgba(0, 0, 0, 0.6);
+    animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-50px) scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.modal-content h2 {
+    font-size: 2.5rem;
+    color: #10b981;
+    text-align: center;
+    margin-bottom: 1.5rem;
+    text-shadow: 
+        0 0 20px rgba(16, 185, 129, 0.6),
+        0 2px 4px rgba(0, 0, 0, 0.9);
+    letter-spacing: 0.1rem;
+}
+
+.completion-stats {
+    background: rgba(0, 0, 0, 0.5);
+    border: 2px solid rgba(16, 185, 129, 0.3);
+    border-radius: 4px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.completion-stats p {
+    font-size: 1.2rem;
+    color: #a8a29e;
+    margin-bottom: 0.8rem;
+    display: flex;
+    justify-content: space-between;
+}
+
+.completion-stats strong {
+    color: #78716c;
+}
+
+.completion-stats span {
+    color: #fcd34d;
+    font-weight: bold;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 1rem;
+    flex-direction: column;
+}
+
+.modal-actions button {
+    width: 100%;
+    padding: 1rem;
+    font-size: 1.1rem;
+}
+
+/* ===========================
+   SQUAD PANEL (Collapsible)
+   =========================== */
+
+.squad-panel {
+    position: fixed;
+    right: -400px;
+    top: 80px;
+    width: 400px;
+    max-height: calc(100vh - 180px);
+    background: rgba(10, 15, 20, 0.98);
+    border: 4px solid;
+    border-top-color: rgba(139, 92, 246, 0.5);
+    border-right-color: rgba(124, 58, 237, 0.6);
+    border-bottom-color: rgba(109, 40, 217, 0.7);
+    border-left-color: rgba(124, 58, 237, 0.6);
+    border-radius: 4px 0 0 4px;
+    box-shadow: 
+        -12px 0 40px rgba(0, 0, 0, 0.9),
+        inset 0 2px 0 rgba(139, 92, 246, 0.05),
+        inset 0 -2px 0 rgba(0, 0, 0, 0.6);
+    transition: right 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 200;
+}
+
+.squad-panel.open {
+    right: 0;
+}
+
+.panel-toggle {
+    position: absolute;
+    left: -50px;
+    top: 20px;
+    background: rgba(10, 15, 20, 0.98);
+    border: 4px solid;
+    border-top-color: rgba(139, 92, 246, 0.5);
+    border-right-color: rgba(124, 58, 237, 0.6);
+    border-bottom-color: rgba(109, 40, 217, 0.7);
+    border-left-color: rgba(124, 58, 237, 0.6);
+    border-radius: 4px 0 0 4px;
+    border-right: none;
+    padding: 1rem 0.8rem;
+    writing-mode: vertical-rl;
+    cursor: pointer;
+    color: #a8a29e;
+    font-size: 14px;
+    font-weight: bold;
+    font-family: 'Times New Roman', serif;
+    box-shadow: -4px 4px 12px rgba(0, 0, 0, 0.8);
+    transition: all 0.2s;
+}
+
+.panel-toggle:hover {
+    background: rgba(15, 20, 30, 0.98);
+    box-shadow: -6px 6px 16px rgba(0, 0, 0, 0.9);
+}
+
+.panel-content {
+    padding: 1.5rem;
+    overflow-y: auto;
+    max-height: 100%;
+}
+
+.panel-section {
+    margin-bottom: 1.5rem;
+}
+
+.panel-section h3 {
+    font-size: 16px;
+    color: #a8a29e;
+    text-transform: uppercase;
+    letter-spacing: 0.1rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid rgba(168, 162, 158, 0.2);
+}
+
+.knight-roster {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+}
+
+.scrollable-roster {
+    max-height: 300px;
+    overflow-y: auto;
+    padding-right: 0.5rem;
+}
+
+.scrollable-roster::-webkit-scrollbar {
+    width: 8px;
+}
+
+.scrollable-roster::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 4px;
+}
+
+.scrollable-roster::-webkit-scrollbar-thumb {
+    background: rgba(139, 92, 246, 0.5);
+    border-radius: 4px;
+    border: 2px solid rgba(0, 0, 0, 0.3);
+}
+
+.scrollable-roster::-webkit-scrollbar-thumb:hover {
+    background: rgba(139, 92, 246, 0.7);
+}
+
+.placeholder-text {
+    color: #57534e;
+    font-style: italic;
+    text-align: center;
+    padding: 2rem 1rem;
+}
+
+.knight-mini-card {
+    background: rgba(15, 20, 30, 0.8);
+    border-left: 3px solid #8b5cf6;
+    padding: 0.8rem;
+    border-radius: 2px;
+    box-shadow: 
+        0 2px 8px rgba(0, 0, 0, 0.6),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    transition: all 0.2s;
+}
+
+.knight-mini-card:hover {
+    background: rgba(20, 25, 35, 0.9);
+    box-shadow: 
+        0 4px 12px rgba(0, 0, 0, 0.8),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.btn-wake-knight {
+    margin-top: 0.5rem;
+    padding: 0.3rem 0.6rem;
+    background: rgba(139, 92, 246, 0.2);
+    border: 2px solid rgba(139, 92, 246, 0.5);
+    color: #a8a29e;
+    font-family: 'Times New Roman', serif;
+    font-size: 12px;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.2s;
+    width: 100%;
+}
+
+.btn-wake-knight:hover {
+    background: rgba(139, 92, 246, 0.4);
+    border-color: rgba(139, 92, 246, 0.8);
+    color: #d6d3d1;
+}
+
+.squad-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.squad-stats p {
+    display: flex;
+    justify-content: space-between;
+    color: #a8a29e;
+    font-size: 14px;
+}
+
+.squad-stats strong {
+    color: #d6d3d1;
+}
+
+/* ===========================
+   SCROLLBARS
+   =========================== */
+
+.knight-sidebar::-webkit-scrollbar,
+.game-log-container::-webkit-scrollbar,
+.panel-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.knight-sidebar::-webkit-scrollbar-track,
+.game-log-container::-webkit-scrollbar-track,
+.panel-content::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.6);
+}
+
+.knight-sidebar::-webkit-scrollbar-thumb {
+    background: rgba(16, 185, 129, 0.5);
+    border: 2px solid rgba(0, 0, 0, 0.3);
+}
+
+.game-log-container::-webkit-scrollbar-thumb,
+.panel-content::-webkit-scrollbar-thumb {
+    background: rgba(100, 116, 139, 0.5);
+    border: 2px solid rgba(0, 0, 0, 0.3);
+}
+
+.knight-sidebar::-webkit-scrollbar-thumb:hover,
+.game-log-container::-webkit-scrollbar-thumb:hover,
+.panel-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(100, 116, 139, 0.7);
+}
+
+/* ===========================
+   KEYBOARD SHORTCUTS OVERLAY
+   =========================== */
+
+.shortcuts-overlay {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(10, 15, 20, 0.98);
+    border: 4px solid;
+    border-top-color: rgba(100, 116, 139, 0.5);
+    border-right-color: rgba(70, 80, 95, 0.6);
+    border-bottom-color: rgba(50, 60, 75, 0.7);
+    border-left-color: rgba(70, 80, 95, 0.6);
+    border-radius: 4px;
+    padding: 2rem;
+    box-shadow: 
+        0 20px 60px rgba(0, 0, 0, 0.95),
+        inset 0 2px 0 rgba(255, 255, 255, 0.03),
+        inset 0 -2px 0 rgba(0, 0, 0, 0.6);
+    z-index: 2000;
+}
+
+.shortcuts-overlay.hidden {
+    display: none;
+}
+
+.shortcuts-overlay h3 {
+    font-size: 1.5rem;
+    color: #a8a29e;
+    margin-bottom: 1.5rem;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.1rem;
+}
+
+.shortcut-list {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.shortcut-key {
+    background: rgba(0, 0, 0, 0.6);
+    border: 2px solid rgba(100, 116, 139, 0.4);
+    border-radius: 4px;
+    padding: 0.5rem;
+    text-align: center;
+    font-weight: bold;
+    color: #fcd34d;
+    font-family: 'Courier New', monospace;
+}
+
+.shortcut-desc {
+    color: #a8a29e;
+    display: flex;
+    align-items: center;
+}
+
+.shortcuts-close {
+    width: 100%;
+    padding: 0.8rem;
+}
+
+/* ===========================
+   TOOLTIPS
+   =========================== */
+
+.tooltip {
+    position: absolute;
+    background: rgba(10, 15, 20, 0.98);
+    border: 3px solid;
+    border-top-color: rgba(100, 116, 139, 0.5);
+    border-right-color: rgba(70, 80, 95, 0.6);
+    border-bottom-color: rgba(50, 60, 75, 0.7);
+    border-left-color: rgba(70, 80, 95, 0.6);
+    border-radius: 4px;
+    padding: 0.8rem 1rem;
+    color: #a8a29e;
+    font-size: 12px;
+    max-width: 250px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.9);
+    z-index: 3000;
+    pointer-events: none;
+    white-space: nowrap;
+}
+
+.tooltip.hidden {
+    display: none;
+}
+
+/* ===========================
+   RESPONSIVE
+   =========================== */
+
+@media (max-width: 1400px) {
+    #gameCanvas {
+        width: 1000px;
+        height: 700px;
+    }
+}
+
+@media (max-width: 1200px) {
+    #gameCanvas {
+        width: 900px;
+        height: 600px;
+    }
+    
+    .knight-sidebar,
+    .game-log-container {
+        display: none;
+    }
+}
