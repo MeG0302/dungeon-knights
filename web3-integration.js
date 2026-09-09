@@ -495,5 +495,5 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = Web3Manager;
 }
 
-console.log('🔗 Web3 Integration loaded');
+console.log('🔗 Web3 Integration loaded - v1.1');
 console.log('💡 Call web3Manager.connect() to connect MetaMask');
