@@ -1,12 +1,42 @@
 // Character System - Stats, Rarity, and Knight Management
+// Rarity system based on CONFIG (Uncommon = 25 dungeon ROI baseline)
 
 const RARITY = {
-    COMMON: { name: 'Common', multiplier: 1.0, color: '#808080', dropRate: 0.65 },
-    UNCOMMON: { name: 'Uncommon', multiplier: 1.5, color: '#00ff00', dropRate: 0.20 },
-    RARE: { name: 'Rare', multiplier: 2.2, color: '#0080ff', dropRate: 0.10 },
-    EPIC: { name: 'Epic', multiplier: 3.5, color: '#a020f0', dropRate: 0.045 },
-    LEGENDARY: { name: 'Legendary', multiplier: 5.0, color: '#ffa500', dropRate: 0.012 },
-    MYTHIC: { name: 'Mythic', multiplier: 8.0, color: '#ff0000', dropRate: 0.003 }
+    COMMON: { 
+        name: 'Common', 
+        multiplier: 1.0, 
+        color: '#9E9E9E', 
+        dropRate: 0.50, // 50%
+        dungeonReward: 12 // 42 dungeons to ROI
+    },
+    UNCOMMON: { 
+        name: 'Uncommon', 
+        multiplier: 1.5, 
+        color: '#4CAF50', 
+        dropRate: 0.30, // 30%
+        dungeonReward: 20 // 25 dungeons to ROI ✅
+    },
+    RARE: { 
+        name: 'Rare', 
+        multiplier: 2.5, 
+        color: '#2196F3', 
+        dropRate: 0.15, // 15%
+        dungeonReward: 36 // 14 dungeons to ROI
+    },
+    EPIC: { 
+        name: 'Epic', 
+        multiplier: 4.0, 
+        color: '#9C27B0', 
+        dropRate: 0.04, // 4%
+        dungeonReward: 60 // 8 dungeons to ROI
+    },
+    LEGENDARY: { 
+        name: 'Legendary', 
+        multiplier: 7.0, 
+        color: '#FFD700', 
+        dropRate: 0.01, // 1%
+        dungeonReward: 100 // 5 dungeons to ROI
+    }
 };
 
 class Knight {
