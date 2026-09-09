@@ -3,13 +3,13 @@
 
 // Contract ABI (minimal - just the functions we need)
 const CONTRACT_ABI = [
-  "function mintKnight() public returns (uint256)",
-  "function getKnightInfo(uint256 tokenId) public view returns (address owner, uint8 rarity, string memory rarityName)",
+  "function mintKnight() public payable returns (uint256)",
+  "function mintKnights(uint256 amount) public payable",
+  "function getKnight(uint256 tokenId) public view returns (tuple(uint256 tokenId, uint8 rarity, uint256 power, uint256 speed, uint256 maxStamina, uint256 recoveryRate, uint256 range, uint256 mintedAt))",
   "function getKnightsByOwner(address owner) public view returns (uint256[])",
-  "function mintCost() public view returns (uint256)",
-  "function totalMinted() public view returns (uint256)",
+  "function mintPrice() public view returns (uint256)",
   "function balanceOf(address owner) public view returns (uint256)",
-  "function knightRarity(uint256 tokenId) public view returns (uint8)"
+  "function tokenOfOwnerByIndex(address owner, uint256 index) public view returns (uint256)"
 ];
 
 class Web3Manager {
@@ -201,69 +201,6 @@ class Web3Manager {
     return false;
   }
 
-  // Approve $DNG tokens for NFT contract
-  async approveDNG(amount) {
-    if (!this.isConnected) {
-      alert('Please connect your wallet first!');
-      return false;
-    }
-
-    try {
-      // Get token address from config with fallback
-      let tokenAddress = '0xA8D54F6FEeAFaf5C2c546D1D1644aE2f46A2d910'; // Testnet default
-      
-      if (typeof window.DUNGEON_CONFIG !== 'undefined' && window.DUNGEON_CONFIG.getTokenAddress) {
-        const configAddress = window.DUNGEON_CONFIG.getTokenAddress();
-        if (configAddress) {
-          tokenAddress = configAddress;
-        }
-      }
-      
-      console.log('💰 Approving $DNG tokens...');
-      console.log('   Token:', tokenAddress);
-      console.log('   NFT Contract:', this.contractAddress);
-      console.log('   Amount:', amount, '$DNG');
-
-      // ERC20 ABI for approve function
-      const ERC20_ABI = [
-        'function approve(address spender, uint256 amount) public returns (bool)',
-        'function allowance(address owner, address spender) public view returns (uint256)'
-      ];
-
-      const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, this.signer);
-
-      // Check current allowance
-      const walletAddress = await this.signer.getAddress();
-      const currentAllowance = await tokenContract.allowance(walletAddress, this.contractAddress);
-      const requiredAmount = ethers.utils.parseEther(amount.toString());
-
-      console.log('   Wallet:', walletAddress);
-      console.log('   Current allowance:', ethers.utils.formatEther(currentAllowance), '$DNG');
-      console.log('   Required:', ethers.utils.formatEther(requiredAmount), '$DNG');
-
-      if (currentAllowance.gte(requiredAmount)) {
-        console.log('✅ Already approved!');
-        return true;
-      }
-
-      // Request approval
-      console.log('⏳ Requesting approval...');
-      const tx = await tokenContract.approve(this.contractAddress, requiredAmount);
-      
-      console.log('⏳ Waiting for approval confirmation...');
-      console.log('🔗 TX:', tx.hash);
-      
-      const receipt = await tx.wait();
-      console.log('✅ $DNG approved! Block:', receipt.blockNumber);
-      
-      return true;
-    } catch (error) {
-      console.error('❌ Approval failed:', error);
-      alert('Token approval failed: ' + (error.message || 'Unknown error'));
-      return false;
-    }
-  }
-
   // Mint a single knight NFT
   async mintKnight() {
     if (!this.isConnected) {
@@ -272,10 +209,15 @@ class Web3Manager {
     }
 
     try {
+      console.log('💰 Getting mint price...');
+      const mintPrice = await this.contract.mintPrice();
+      console.log('💰 Mint price:', ethers.utils.formatEther(mintPrice), 'ETH');
+
       console.log('📝 Sending mint transaction...');
-      
-      // Call the mintKnight function (no ETH value needed, uses $DNG)
-      const tx = await this.contract.mintKnight();
+      // Send transaction
+      const tx = await this.contract.mintKnight({
+        value: mintPrice
+      });
       
       console.log('⏳ Minting knight... TX:', tx.hash);
       console.log('🔗 View on explorer:', `${this.network.blockExplorerUrls[0]}/tx/${tx.hash}`);
@@ -322,7 +264,7 @@ class Web3Manager {
     }
   }
 
-  // Mint multiple knights (calls single mint multiple times)
+  // Mint multiple knights
   async mintKnights(amount) {
     if (!this.isConnected) {
       alert('Please connect your wallet first!');
@@ -335,58 +277,25 @@ class Web3Manager {
     }
 
     try {
-      console.log(`⏳ Minting ${amount} knights (one by one)...`);
+      const mintPrice = await this.contract.mintPrice();
+      const totalPrice = mintPrice.mul(amount);
       
-      const tokenIds = [];
+      console.log('💰 Total price:', ethers.utils.formatEther(totalPrice), 'ETH');
+
+      const tx = await this.contract.mintKnights(amount, {
+        value: totalPrice
+      });
       
-      for (let i = 0; i < amount; i++) {
-        console.log(`🎲 Minting knight ${i + 1}/${amount}...`);
-        
-        const tx = await this.contract.mintKnight();
-        
-        console.log(`⏳ Waiting for confirmation... TX: ${tx.hash}`);
-        const receipt = await tx.wait();
-        console.log(`✅ Knight ${i + 1}/${amount} minted! Block: ${receipt.blockNumber}`);
-        
-        // Try to get token ID from event
-        const event = receipt.logs.find(log => {
-          try {
-            const parsed = this.contract.interface.parseLog(log);
-            return parsed.name === 'KnightMinted';
-          } catch {
-            return false;
-          }
-        });
-        
-        if (event) {
-          const parsed = this.contract.interface.parseLog(event);
-          const tokenId = parsed.args.tokenId;
-          tokenIds.push(tokenId);
-          console.log(`🎉 Minted Knight #${tokenId}`);
-        }
-        
-        // Small delay between mints
-        if (i < amount - 1) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-      }
+      console.log('⏳ Minting', amount, 'knights... TX:', tx.hash);
       
-      console.log(`✅ All ${amount} knights minted!`, tokenIds);
-      return tokenIds;
+      const receipt = await tx.wait();
+      console.log('✅', amount, 'knights minted! Block:', receipt.blockNumber);
       
+      return receipt;
     } catch (error) {
       console.error('❌ Batch mint failed:', error);
-      
-      let errorMsg = 'Unknown error';
-      if (error.code === 4001) {
-        errorMsg = 'Transaction rejected by user';
-      } else if (error.reason) {
-        errorMsg = error.reason;
-      } else if (error.message) {
-        errorMsg = error.message;
-      }
-      
-      throw new Error(errorMsg);
+      alert('Minting failed: ' + (error.reason || error.message));
+      return null;
     }
   }
 
@@ -471,20 +380,19 @@ class Web3Manager {
 
   // Get mint price
   async getMintPrice() {
-    if (!this.isConnected) return '500';
+    if (!this.isConnected) return '0.001';
     
     try {
-      // New contract uses mintCost instead of mintPrice
-      const cost = await this.contract.mintCost();
-      return ethers.utils.formatEther(cost);
+      const price = await this.contract.mintPrice();
+      return ethers.utils.formatEther(price);
     } catch (error) {
-      console.error('Error getting mint cost:', error);
-      return '500'; // Default 500 $DNG
+      console.error('Failed to get mint price:', error);
+      return '0.001';
     }
   }
 }
 
-// Expose Web3Manager class globally
+// Expose Web3Manager class globally  
 window.Web3Manager = Web3Manager;
 
 // Initialize global Web3 manager
@@ -495,5 +403,5 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = Web3Manager;
 }
 
-console.log('🔗 Web3 Integration loaded - v1.1');
+console.log('🔗 Web3 Integration loaded - v1.2');
 console.log('💡 Call web3Manager.connect() to connect MetaMask');
