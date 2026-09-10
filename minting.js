@@ -353,6 +353,15 @@ class MintingPage {
     
     this.knightsGrid.innerHTML = '';
     
+    // Map rarity to knight images
+    const rarityImages = {
+      common: 'characters/Pixel_knight_holding_wooden_shield_2K_202609041402_jpeg_2K_202609041417.png',
+      uncommon: 'characters/Pixelated_knight_standing_on_tile_2K_202609041402_jpeg_2K_202609041417.png',
+      rare: 'characters/Pixel_knight_standing_on_floor_2K_202609041402_jpeg_2K_202609041417.png',
+      epic: 'characters/Pixel_knight_holding_cosmic_shield_2K_202609041402_jpeg_2K_202609041417.png',
+      legendary: 'characters/Knight_in_golden_armor_stands_2K_202609041404_jpeg_2K_202609041417.png'
+    };
+    
     knights.forEach(knight => {
       const card = document.createElement('div');
       card.className = 'knight-card';
@@ -361,7 +370,9 @@ class MintingPage {
         window.DUNGEON_CONFIG.getRarity(knight.rarity) : 
         { name: knight.rarity, color: '#888', glowColor: 'rgba(136,136,136,0.3)' };
       
-      // Create stunning card with advanced styling
+      const knightImage = rarityImages[knight.rarity.toLowerCase()] || rarityImages.common;
+      
+      // Create stunning card with rarity-specific colors
       card.innerHTML = `
         <style>
           .knight-card {
@@ -407,7 +418,7 @@ class MintingPage {
           .knight-avatar-wrapper {
             position: relative;
             width: 100%;
-            height: 120px;
+            height: 140px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -431,9 +442,11 @@ class MintingPage {
             to { transform: rotate(360deg); }
           }
           
-          .knight-sprite {
+          .knight-image {
             position: relative;
-            font-size: 64px;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
             filter: drop-shadow(0 0 20px ${rarityConfig.color});
             animation: float 3s ease-in-out infinite;
             z-index: 1;
@@ -454,7 +467,7 @@ class MintingPage {
             font-weight: bold;
             color: #fff;
             margin-bottom: 4px;
-            text-shadow: 0 0 10px ${rarityConfig.color};
+            text-shadow: 0 0 10px ${rarityConfig.color}, 0 0 20px ${rarityConfig.color};
           }
           
           .knight-rarity-badge {
@@ -469,7 +482,7 @@ class MintingPage {
             text-transform: uppercase;
             letter-spacing: 1px;
             margin: 4px 0;
-            box-shadow: 0 0 15px ${rarityConfig.glowColor};
+            box-shadow: 0 0 15px ${rarityConfig.glowColor}, inset 0 0 10px ${rarityConfig.glowColor};
           }
           
           .knight-token-id {
@@ -498,6 +511,7 @@ class MintingPage {
             background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05));
             border-color: ${rarityConfig.color};
             transform: scale(1.05);
+            box-shadow: 0 0 10px ${rarityConfig.glowColor};
           }
           
           .stat-label {
@@ -523,7 +537,7 @@ class MintingPage {
         </style>
         
         <div class="knight-avatar-wrapper">
-          <div class="knight-sprite">⚔️</div>
+          <img src="${knightImage}" alt="${rarityConfig.name} Knight" class="knight-image" />
         </div>
         
         <div class="knight-info-section">
@@ -574,7 +588,7 @@ class MintingPage {
       this.knightsGrid.appendChild(card);
     });
     
-    console.log('✅ Rendered', knights.length, 'enhanced knight cards');
+    console.log('✅ Rendered', knights.length, 'enhanced knight cards with rarity-specific images');
   }
 }
 
