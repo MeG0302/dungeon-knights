@@ -51,9 +51,9 @@
                 <div class="quantity-selector">
                     <label class="selector-label">Summon Quantity:</label>
                     <div class="qty-controls">
-                        <button class="qty-btn" id="qtyMinus">-</button>
-                        <input type="number" id="mintQty" class="qty-display" value="1" min="1" max="5" readonly>
-                        <button class="qty-btn" id="qtyPlus">+</button>
+                        <button class="qty-btn" id="qtyDecrease">-</button>
+                        <input type="number" id="mintQty" class="qty-display" value="1" min="1" max="10" readonly>
+                        <button class="qty-btn" id="qtyIncrease">+</button>
                     </div>
                 </div>
                 
@@ -102,24 +102,19 @@
     </div>
 
     <!-- Scripts -->
-    <script src="https://unpkg.com/@privy-io/privy-browser@0.14.0/dist/privy.umd.js"></script>
     <script src="config.js"></script>
     <script src="ethers-5.7.2.umd.min.js"></script>
     <script>
       // Verify ethers loaded
       if (typeof ethers !== 'undefined') {
-        console.log('✅ ethers.js loaded successfully (local file)');
+        console.log('✅ ethers.js loaded successfully');
         window.ethersLoaded = true;
       } else {
-        console.error('❌ ethers.js failed to load from local file');
+        console.error('❌ ethers.js failed to load');
       }
     </script>
-    <script src="web3-integration-v2.js?t=1725483000"></script>
-    <script src="privy-integration.js?t=1725483000"></script>
-    <script src="rainbowkit-integration.js?t=1725483000"></script>
-    <script src="wallet-widget.js?t=1725483000"></script>
-    <script src="audio.js?t=1725483000"></script>
-    <script src="characters.js?t=1725483000"></script>
-    <script src="mint-v2.js?t=1725483000"></script>
+    <script src="web3.js"></script>
+    <script src="characters.js"></script>
+    <script src="minting.js"></script>
 </body>
 </html>
