@@ -12,6 +12,11 @@
     <link rel="stylesheet" href="mobile.css">
 </head>
 <body>
+    <script>
+        console.log('=== MINT PAGE LOADING ===');
+        console.log('Time:', new Date().toISOString());
+        alert('PAGE LOADED - Check if you can click OK');
+    </script>
     <!-- Minting Page Container -->
     <div class="mint-container">
         <!-- Background Animation -->
@@ -22,7 +27,7 @@
             <button class="back-btn" id="backBtn">← Back</button>
             <h1 class="page-title">SUMMON KNIGHTS</h1>
             <div class="header-right">
-                <button class="wallet-btn" id="connectWalletBtn" style="pointer-events: auto !important; cursor: pointer !important; z-index: 9999 !important; position: relative !important;">🔌 Connect Wallet</button>
+                <button class="wallet-btn" id="connectWalletBtn" style="pointer-events: auto !important; cursor: pointer !important; z-index: 9999 !important; position: relative !important;" onclick="alert('Button clicked!'); console.log('BUTTON WORKS!');">🔌 Connect Wallet</button>
             </div>
         </header>
 
