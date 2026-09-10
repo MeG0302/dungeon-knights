@@ -393,10 +393,16 @@ class Web3Manager {
 }
 
 // Expose Web3Manager class globally  
+console.log('🔧 DEBUG: About to expose Web3Manager class...');
+console.log('🔧 DEBUG: Web3Manager class exists?', typeof Web3Manager !== 'undefined');
 window.Web3Manager = Web3Manager;
+console.log('🔧 DEBUG: window.Web3Manager exposed?', typeof window.Web3Manager !== 'undefined');
 
 // Initialize global Web3 manager
+console.log('🔧 DEBUG: About to create web3Manager instance...');
 window.web3Manager = new Web3Manager(true); // true = use testnet
+console.log('🔧 DEBUG: window.web3Manager created?', typeof window.web3Manager !== 'undefined');
+console.log('🔧 DEBUG: window.web3Manager is instance?', window.web3Manager instanceof Web3Manager);
 
 // Export for use in other scripts
 if (typeof module !== 'undefined' && module.exports) {
@@ -405,3 +411,8 @@ if (typeof module !== 'undefined' && module.exports) {
 
 console.log('🔗 Web3 Integration loaded - v1.2.1');
 console.log('💡 Call web3Manager.connect() to connect MetaMask');
+console.log('🔧 DEBUG: ========================================');
+console.log('🔧 DEBUG: web3-integration-v2.js fully loaded');
+console.log('🔧 DEBUG: window.Web3Manager available?', typeof window.Web3Manager !== 'undefined');
+console.log('🔧 DEBUG: window.web3Manager available?', typeof window.web3Manager !== 'undefined');
+console.log('🔧 DEBUG: ========================================');

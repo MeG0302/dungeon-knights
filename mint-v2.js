@@ -1,4 +1,8 @@
 // Minting Page Controller with Web3 Integration
+console.log('🔧 DEBUG: ========================================');
+console.log('🔧 DEBUG: mint-v2.js loading... (VERSION 2 with debug)');
+console.log('🔧 DEBUG: Timestamp:', new Date().toISOString());
+console.log('🔧 DEBUG: ========================================');
 
 class MintingPage {
     constructor() {
@@ -180,27 +184,49 @@ class MintingPage {
     }
     
     async performMint() {
+        console.log('🔧 DEBUG: performMint() called');
+        console.log('🔧 DEBUG: this.isWeb3Connected =', this.isWeb3Connected);
+        
         if (!this.isWeb3Connected) {
             alert('⚠️ Please connect your wallet first to mint NFT knights!');
             return;
         }
         
         // Ensure web3Manager is initialized and connected
+        console.log('🔧 DEBUG: Checking window.web3Manager...');
+        console.log('🔧 DEBUG: typeof window.web3Manager =', typeof window.web3Manager);
+        console.log('🔧 DEBUG: window.web3Manager exists?', !!window.web3Manager);
+        
         if (!window.web3Manager) {
             console.log('🔌 Web3Manager not found, initializing...');
-            window.web3Manager = new Web3Manager();
+            console.log('🔧 DEBUG: typeof window.Web3Manager =', typeof window.Web3Manager);
+            console.log('🔧 DEBUG: window.Web3Manager exists?', !!window.Web3Manager);
+            
+            if (typeof window.Web3Manager === 'undefined') {
+                console.error('❌ CRITICAL: Web3Manager class not available!');
+                alert('❌ Web3Manager class not loaded. Please refresh the page.');
+                return;
+            }
+            
+            window.web3Manager = new window.Web3Manager();
+            console.log('🔧 DEBUG: Created new Web3Manager instance');
             await window.web3Manager.connect();
         }
+        
+        console.log('🔧 DEBUG: Checking web3Manager.isConnected...');
+        console.log('🔧 DEBUG: window.web3Manager.isConnected =', window.web3Manager.isConnected);
         
         if (!window.web3Manager.isConnected) {
             console.log('🔌 Web3Manager not connected, connecting...');
             const connected = await window.web3Manager.connect();
+            console.log('🔧 DEBUG: Connection result =', connected);
             if (!connected) {
                 alert('⚠️ Failed to connect to Web3. Please refresh and try again.');
                 return;
             }
         }
         
+        console.log('🔧 DEBUG: About to call mintNFTKnight()...');
         await this.mintNFTKnight();
     }
     
