@@ -205,9 +205,19 @@ class MintingPage {
       if (results.length > 0) {
         console.log('🎉 Minting complete!', results.length, 'knights minted');
         
-        alert(`🎉 Success!\n\nMinted ${results.length} knight(s)!\n\nRefresh to see your new knights in the game.`);
+        // Fetch knight details from blockchain and add to game
+        for (const result of results) {
+          if (result.tokenId) {
+            await this.addKnightFromBlockchain(result.tokenId);
+          }
+        }
         
-        // Reload knights
+        // Save to localStorage
+        this.saveKnights();
+        
+        alert(`🎉 Success!\n\nMinted ${results.length} knight(s)!\n\nYour knights are ready for battle!`);
+        
+        // Reload display
         await this.loadKnights();
       }
       
@@ -245,6 +255,75 @@ class MintingPage {
     
     if (this.mintBtnPlural) {
       this.mintBtnPlural.textContent = qty > 1 ? 'S' : '';
+    }
+  }
+  
+  // Add knight from blockchain to game
+  async addKnightFromBlockchain(tokenId) {
+    try {
+      console.log('📦 Fetching knight data for token', tokenId);
+      
+      // Get knight info from contract
+      const info = await window.web3Manager.contract.getKnightInfo(tokenId);
+      const rarityIndex = info.rarity; // 0=Common, 1=Uncommon, 2=Rare, 3=Epic, 4=Legendary
+      
+      const rarityNames = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
+      const rarityName = rarityNames[rarityIndex] || 'common';
+      
+      console.log('🎲 Knight rarity:', rarityName);
+      
+      // Get rarity config
+      const rarityConfig = window.DUNGEON_CONFIG ? 
+        window.DUNGEON_CONFIG.getRarity(rarityName) : 
+        { 
+          name: rarityName, 
+          baseStats: { hp: 100, attack: 10, defense: 5, speed: 8 },
+          statsMultiplier: 1.0
+        };
+      
+      // Create knight
+      const knight = new Knight(this.knightManager.nextId++);
+      knight.name = `Knight #${tokenId}`;
+      knight.rarity = rarityName;
+      knight.tokenId = tokenId;
+      knight.fromBlockchain = true;
+      
+      // Set stats based on rarity
+      knight.stats = {
+        hp: Math.floor(rarityConfig.baseStats.hp * rarityConfig.statsMultiplier),
+        attack: Math.floor(rarityConfig.baseStats.attack * rarityConfig.statsMultiplier),
+        defense: Math.floor(rarityConfig.baseStats.defense * rarityConfig.statsMultiplier),
+        speed: Math.floor(rarityConfig.baseStats.speed * rarityConfig.statsMultiplier)
+      };
+      
+      knight.maxHp = knight.stats.hp;
+      knight.stamina = 100;
+      knight.maxStamina = 100;
+      
+      // Add to knights list
+      this.knightManager.knights.push(knight);
+      console.log('✅ Added knight to game:', knight);
+      
+    } catch (error) {
+      console.error('❌ Failed to fetch knight data:', error);
+    }
+  }
+  
+  // Save knights to localStorage
+  saveKnights() {
+    try {
+      const data = {
+        knights: this.knightManager.knights,
+        gold: this.knightManager.gold || 0,
+        dungeonToken: this.knightManager.dungeonToken || 0,
+        nextId: this.knightManager.nextId
+      };
+      
+      localStorage.setItem('dungeonKnights', JSON.stringify(data));
+      console.log('💾 Saved', this.knightManager.knights.length, 'knights to localStorage');
+      
+    } catch (error) {
+      console.error('❌ Failed to save knights:', error);
     }
   }
   
