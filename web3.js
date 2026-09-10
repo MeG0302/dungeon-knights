@@ -35,7 +35,8 @@ class Web3Manager {
       "function mintCost() public view returns (uint256)",
       "function knightRarity(uint256 tokenId) public view returns (uint8)",
       "function getKnightInfo(uint256 tokenId) public view returns (address owner, uint8 rarity, string memory rarityName)",
-      "function balanceOf(address owner) public view returns (uint256)"
+      "function balanceOf(address owner) public view returns (uint256)",
+      "function totalMinted() public view returns (uint256)"
     ];
     
     this.tokenABI = [
@@ -262,6 +263,65 @@ class Web3Manager {
     } catch (error) {
       console.error('Failed to get mint cost:', error);
       return '500'; // Default
+    }
+  }
+  
+  // Get all knights owned by connected wallet
+  async getMyKnights() {
+    if (!this.isConnected) {
+      console.log('Not connected to wallet');
+      return [];
+    }
+    
+    try {
+      console.log('📦 Fetching your knights from blockchain...');
+      
+      // Get balance
+      const balance = await this.contract.balanceOf(this.userAddress);
+      const knightCount = balance.toNumber();
+      
+      console.log('Found', knightCount, 'knights');
+      
+      if (knightCount === 0) {
+        return [];
+      }
+      
+      const knights = [];
+      
+      // For each knight, get details
+      // Note: We need to scan token IDs - this is simplified
+      // In production, you'd want to track this better
+      const totalMinted = await this.contract.totalMinted ? 
+        (await this.contract.totalMinted()).toNumber() : 100;
+      
+      for (let tokenId = 0; tokenId < totalMinted && knights.length < knightCount; tokenId++) {
+        try {
+          const info = await this.contract.getKnightInfo(tokenId);
+          
+          // Check if this wallet owns it
+          if (info.owner.toLowerCase() === this.userAddress.toLowerCase()) {
+            const rarityNames = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
+            const rarityName = rarityNames[info.rarity] || 'common';
+            
+            knights.push({
+              tokenId,
+              rarity: rarityName,
+              owner: info.owner
+            });
+            
+            console.log(`✅ Knight #${tokenId} - ${rarityName}`);
+          }
+        } catch (e) {
+          // Token doesn't exist or error, skip
+        }
+      }
+      
+      console.log('✅ Loaded', knights.length, 'knights from blockchain');
+      return knights;
+      
+    } catch (error) {
+      console.error('❌ Failed to fetch knights:', error);
+      return [];
     }
   }
 }

@@ -205,19 +205,9 @@ class MintingPage {
       if (results.length > 0) {
         console.log('🎉 Minting complete!', results.length, 'knights minted');
         
-        // Fetch knight details from blockchain and add to game
-        for (const result of results) {
-          if (result.tokenId) {
-            await this.addKnightFromBlockchain(result.tokenId);
-          }
-        }
-        
-        // Save to localStorage
-        this.saveKnights();
-        
         alert(`🎉 Success!\n\nMinted ${results.length} knight(s)!\n\nYour knights are ready for battle!`);
         
-        // Reload display
+        // Reload knights from blockchain
         await this.loadKnights();
       }
       
@@ -258,34 +248,57 @@ class MintingPage {
     }
   }
   
-  // Add knight from blockchain to game
-  async addKnightFromBlockchain(tokenId) {
+  async loadKnights() {
     try {
-      console.log('📦 Fetching knight data for token', tokenId);
+      console.log('📦 Loading knights from blockchain...');
       
-      // Get knight info from contract
-      const info = await window.web3Manager.contract.getKnightInfo(tokenId);
-      const rarityIndex = info.rarity; // 0=Common, 1=Uncommon, 2=Rare, 3=Epic, 4=Legendary
+      // Check if connected
+      if (!window.web3Manager || !window.web3Manager.isConnected) {
+        console.log('Not connected, no knights to load');
+        this.knightManager.knights = [];
+        this.updateDisplay();
+        return;
+      }
       
-      const rarityNames = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
-      const rarityName = rarityNames[rarityIndex] || 'common';
+      // Fetch knights from blockchain
+      const blockchainKnights = await window.web3Manager.getMyKnights();
       
-      console.log('🎲 Knight rarity:', rarityName);
+      // Clear existing knights
+      this.knightManager.knights = [];
       
-      // Get rarity config
+      // Convert blockchain knights to game knights
+      for (const bknight of blockchainKnights) {
+        const knight = await this.createKnightFromBlockchain(bknight);
+        if (knight) {
+          this.knightManager.knights.push(knight);
+        }
+      }
+      
+      console.log('✅ Loaded', this.knightManager.knights.length, 'knights');
+      this.updateDisplay();
+      
+    } catch (error) {
+      console.error('Failed to load knights:', error);
+      this.knightManager.knights = [];
+      this.updateDisplay();
+    }
+  }
+  
+  // Create Knight object from blockchain data
+  async createKnightFromBlockchain(blockchainKnight) {
+    try {
       const rarityConfig = window.DUNGEON_CONFIG ? 
-        window.DUNGEON_CONFIG.getRarity(rarityName) : 
+        window.DUNGEON_CONFIG.getRarity(blockchainKnight.rarity) : 
         { 
-          name: rarityName, 
+          name: blockchainKnight.rarity, 
           baseStats: { hp: 100, attack: 10, defense: 5, speed: 8 },
           statsMultiplier: 1.0
         };
       
-      // Create knight
       const knight = new Knight(this.knightManager.nextId++);
-      knight.name = `Knight #${tokenId}`;
-      knight.rarity = rarityName;
-      knight.tokenId = tokenId;
+      knight.name = `Knight #${blockchainKnight.tokenId}`;
+      knight.rarity = blockchainKnight.rarity;
+      knight.tokenId = blockchainKnight.tokenId;
       knight.fromBlockchain = true;
       
       // Set stats based on rarity
@@ -300,49 +313,11 @@ class MintingPage {
       knight.stamina = 100;
       knight.maxStamina = 100;
       
-      // Add to knights list
-      this.knightManager.knights.push(knight);
-      console.log('✅ Added knight to game:', knight);
+      return knight;
       
     } catch (error) {
-      console.error('❌ Failed to fetch knight data:', error);
-    }
-  }
-  
-  // Save knights to localStorage
-  saveKnights() {
-    try {
-      const data = {
-        knights: this.knightManager.knights,
-        gold: this.knightManager.gold || 0,
-        dungeonToken: this.knightManager.dungeonToken || 0,
-        nextId: this.knightManager.nextId
-      };
-      
-      localStorage.setItem('dungeonKnights', JSON.stringify(data));
-      console.log('💾 Saved', this.knightManager.knights.length, 'knights to localStorage');
-      
-    } catch (error) {
-      console.error('❌ Failed to save knights:', error);
-    }
-  }
-  
-  loadKnights() {
-    try {
-      // Load from localStorage
-      const saved = localStorage.getItem('dungeonKnights');
-      if (saved) {
-        const data = JSON.parse(saved);
-        if (data.knights) {
-          this.knightManager.knights = data.knights.map(k => Object.assign(new Knight(), k));
-          console.log('📦 Loaded', this.knightManager.knights.length, 'knights');
-        }
-      }
-      
-      this.updateDisplay();
-      
-    } catch (error) {
-      console.error('Failed to load knights:', error);
+      console.error('Failed to create knight:', error);
+      return null;
     }
   }
   
