@@ -490,50 +490,6 @@ class MintingPage {
             color: #888;
             margin-top: 4px;
           }
-          
-          .knight-stats-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
-            margin-top: 12px;
-          }
-          
-          .stat-box {
-            background: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 8px;
-            padding: 8px;
-            text-align: center;
-            transition: all 0.2s ease;
-          }
-          
-          .stat-box:hover {
-            background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05));
-            border-color: ${rarityConfig.color};
-            transform: scale(1.05);
-            box-shadow: 0 0 10px ${rarityConfig.glowColor};
-          }
-          
-          .stat-label {
-            font-size: 10px;
-            color: #888;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 4px;
-          }
-          
-          .stat-value {
-            font-size: 18px;
-            font-weight: bold;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 4px;
-          }
-          
-          .stat-icon {
-            font-size: 16px;
-          }
         </style>
         
         <div class="knight-avatar-wrapper">
@@ -550,37 +506,13 @@ class MintingPage {
           ${knight.tokenId !== undefined ? `<div class="knight-token-id">NFT Token #${knight.tokenId}</div>` : ''}
         </div>
         
-        <div class="knight-stats-grid">
-          <div class="stat-box">
-            <div class="stat-label">Attack</div>
-            <div class="stat-value" style="color: #ff6b6b;">
-              <span class="stat-icon">⚔️</span>
-              <span>${knight.stats.attack}</span>
-            </div>
+        <div class="stamina-section" style="margin-top: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <span style="font-size: 12px; color: #888; text-transform: uppercase;">Stamina</span>
+            <span style="font-size: 14px; font-weight: bold; color: #ffd43b;">${knight.stamina || 100}%</span>
           </div>
-          
-          <div class="stat-box">
-            <div class="stat-label">Defense</div>
-            <div class="stat-value" style="color: #4dabf7;">
-              <span class="stat-icon">🛡️</span>
-              <span>${knight.stats.defense}</span>
-            </div>
-          </div>
-          
-          <div class="stat-box">
-            <div class="stat-label">Health</div>
-            <div class="stat-value" style="color: #51cf66;">
-              <span class="stat-icon">❤️</span>
-              <span>${knight.stats.hp}</span>
-            </div>
-          </div>
-          
-          <div class="stat-box">
-            <div class="stat-label">Speed</div>
-            <div class="stat-value" style="color: #ffd43b;">
-              <span class="stat-icon">⚡</span>
-              <span>${knight.stats.speed}</span>
-            </div>
+          <div style="width: 100%; height: 8px; background: rgba(0,0,0,0.5); border-radius: 10px; overflow: hidden; border: 1px solid rgba(255,212,59,0.3);">
+            <div style="width: ${knight.stamina || 100}%; height: 100%; background: linear-gradient(90deg, #ffd43b, #ffa94d); border-radius: 10px; transition: width 0.3s ease; box-shadow: 0 0 10px rgba(255,212,59,0.5);"></div>
           </div>
         </div>
       `;
@@ -588,7 +520,7 @@ class MintingPage {
       this.knightsGrid.appendChild(card);
     });
     
-    console.log('✅ Rendered', knights.length, 'enhanced knight cards with rarity-specific images');
+    console.log('✅ Rendered', knights.length, 'enhanced knight cards with stamina bars');
   }
 }
 
