@@ -116,7 +116,11 @@ class MintingPage {
         // Update cost display
         this.updateCost();
         
-        alert(`✅ Connected!\n\nAddress: ${window.web3Manager.userAddress.slice(0, 6)}...${window.web3Manager.userAddress.slice(-4)}\nBalance: ${parseFloat(balance).toFixed(2)} $DNG`);
+        // AUTO-FETCH KNIGHTS FROM BLOCKCHAIN
+        console.log('📦 Auto-fetching knights...');
+        await this.loadKnights();
+        
+        alert(`✅ Connected!\n\nAddress: ${window.web3Manager.userAddress.slice(0, 6)}...${window.web3Manager.userAddress.slice(-4)}\nBalance: ${parseFloat(balance).toFixed(2)} $DNG\nKnights: ${this.knightManager.knights.length}`);
       } else {
         throw new Error('Connection failed');
       }
@@ -254,31 +258,39 @@ class MintingPage {
       
       // Check if connected
       if (!window.web3Manager || !window.web3Manager.isConnected) {
-        console.log('Not connected, no knights to load');
+        console.log('⚠️ Not connected, no knights to load');
         this.knightManager.knights = [];
         this.updateDisplay();
         return;
       }
       
+      // Show loading message
+      if (this.knightsGrid) {
+        this.knightsGrid.innerHTML = '<p class="empty-msg">🔄 Loading knights from blockchain...</p>';
+      }
+      
       // Fetch knights from blockchain
       const blockchainKnights = await window.web3Manager.getMyKnights();
+      console.log('📦 Fetched', blockchainKnights.length, 'knights from blockchain');
       
       // Clear existing knights
       this.knightManager.knights = [];
       
       // Convert blockchain knights to game knights
       for (const bknight of blockchainKnights) {
+        console.log('🎲 Processing knight:', bknight);
         const knight = await this.createKnightFromBlockchain(bknight);
         if (knight) {
           this.knightManager.knights.push(knight);
+          console.log('✅ Added knight:', knight.name, '- Rarity:', knight.rarity, '- Stats:', knight.stats);
         }
       }
       
-      console.log('✅ Loaded', this.knightManager.knights.length, 'knights');
+      console.log('✅ Loaded', this.knightManager.knights.length, 'knights total');
       this.updateDisplay();
       
     } catch (error) {
-      console.error('Failed to load knights:', error);
+      console.error('❌ Failed to load knights:', error);
       this.knightManager.knights = [];
       this.updateDisplay();
     }
@@ -335,7 +347,7 @@ class MintingPage {
     const knights = this.knightManager.knights;
     
     if (knights.length === 0) {
-      this.knightsGrid.innerHTML = '<p class="empty-msg">No knights summoned yet</p>';
+      this.knightsGrid.innerHTML = '<p class="empty-msg">No knights summoned yet. Connect your wallet to see your NFTs!</p>';
       return;
     }
     
@@ -347,30 +359,51 @@ class MintingPage {
       
       const rarityConfig = window.DUNGEON_CONFIG ? 
         window.DUNGEON_CONFIG.getRarity(knight.rarity) : 
-        { name: knight.rarity, color: '#888' };
+        { name: knight.rarity, color: '#888', glowColor: 'rgba(136,136,136,0.3)' };
+      
+      // Add rarity-based styling
+      card.style.borderColor = rarityConfig.color;
+      card.style.boxShadow = `0 0 20px ${rarityConfig.glowColor}`;
       
       card.innerHTML = `
-        <div class="knight-avatar">
-          <div class="knight-sprite" style="background: linear-gradient(135deg, ${rarityConfig.color}33, ${rarityConfig.color}11);">
+        <div class="knight-avatar" style="background: linear-gradient(135deg, ${rarityConfig.color}33, ${rarityConfig.color}11);">
+          <div class="knight-sprite" style="font-size: 48px;">
             ⚔️
           </div>
         </div>
         <div class="knight-info">
-          <div class="knight-name">${knight.name}</div>
-          <div class="knight-rarity" style="color: ${rarityConfig.color}">
-            ${rarityConfig.name}
+          <div class="knight-name" style="color: ${rarityConfig.color}; font-weight: bold;">
+            ${knight.name || `Knight #${knight.tokenId}`}
           </div>
-          ${knight.tokenId ? `<div class="knight-tokenid">Token #${knight.tokenId}</div>` : ''}
+          <div class="knight-rarity" style="color: ${rarityConfig.color}; font-size: 14px; margin: 4px 0;">
+            ✨ ${rarityConfig.name.toUpperCase()}
+          </div>
+          ${knight.tokenId !== undefined ? `<div class="knight-tokenid" style="color: #888; font-size: 12px;">Token #${knight.tokenId}</div>` : ''}
         </div>
-        <div class="knight-stats">
-          <div class="stat">⚔️ ${knight.stats.attack}</div>
-          <div class="stat">🛡️ ${knight.stats.defense}</div>
-          <div class="stat">❤️ ${knight.stats.hp}</div>
+        <div class="knight-stats" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; padding: 8px; background: rgba(0,0,0,0.3); border-radius: 8px;">
+          <div class="stat" style="text-align: center;">
+            <div style="font-size: 10px; color: #888;">ATK</div>
+            <div style="font-weight: bold; color: #ff6b6b;">⚔️ ${knight.stats.attack}</div>
+          </div>
+          <div class="stat" style="text-align: center;">
+            <div style="font-size: 10px; color: #888;">DEF</div>
+            <div style="font-weight: bold; color: #4dabf7;">🛡️ ${knight.stats.defense}</div>
+          </div>
+          <div class="stat" style="text-align: center;">
+            <div style="font-size: 10px; color: #888;">HP</div>
+            <div style="font-weight: bold; color: #51cf66;">❤️ ${knight.stats.hp}</div>
+          </div>
+          <div class="stat" style="text-align: center;">
+            <div style="font-size: 10px; color: #888;">SPD</div>
+            <div style="font-weight: bold; color: #ffd43b;">⚡ ${knight.stats.speed}</div>
+          </div>
         </div>
       `;
       
       this.knightsGrid.appendChild(card);
     });
+    
+    console.log('✅ Rendered', knights.length, 'knight cards with metadata');
   }
 }
 
