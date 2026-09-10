@@ -361,41 +361,212 @@ class MintingPage {
         window.DUNGEON_CONFIG.getRarity(knight.rarity) : 
         { name: knight.rarity, color: '#888', glowColor: 'rgba(136,136,136,0.3)' };
       
-      // Add rarity-based styling
-      card.style.borderColor = rarityConfig.color;
-      card.style.boxShadow = `0 0 20px ${rarityConfig.glowColor}`;
-      
+      // Create stunning card with advanced styling
       card.innerHTML = `
-        <div class="knight-avatar" style="background: linear-gradient(135deg, ${rarityConfig.color}33, ${rarityConfig.color}11);">
-          <div class="knight-sprite" style="font-size: 48px;">
-            ⚔️
-          </div>
+        <style>
+          .knight-card {
+            position: relative;
+            background: linear-gradient(135deg, rgba(26, 26, 46, 0.95), rgba(16, 16, 30, 0.95));
+            border: 2px solid ${rarityConfig.color};
+            border-radius: 16px;
+            padding: 16px;
+            transition: all 0.3s ease;
+            overflow: hidden;
+            cursor: pointer;
+          }
+          
+          .knight-card::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            background: linear-gradient(45deg, ${rarityConfig.color}, transparent, ${rarityConfig.color});
+            border-radius: 16px;
+            z-index: -1;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+          }
+          
+          .knight-card:hover {
+            transform: translateY(-8px) scale(1.02);
+            box-shadow: 0 12px 40px ${rarityConfig.glowColor}, 0 0 60px ${rarityConfig.glowColor};
+          }
+          
+          .knight-card:hover::before {
+            opacity: 0.6;
+            animation: borderGlow 2s ease-in-out infinite;
+          }
+          
+          @keyframes borderGlow {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 0.8; }
+          }
+          
+          .knight-avatar-wrapper {
+            position: relative;
+            width: 100%;
+            height: 120px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 12px;
+            background: radial-gradient(circle, ${rarityConfig.color}22, transparent);
+            border-radius: 12px;
+            overflow: hidden;
+          }
+          
+          .knight-avatar-wrapper::before {
+            content: '';
+            position: absolute;
+            width: 150%;
+            height: 150%;
+            background: conic-gradient(from 0deg, transparent, ${rarityConfig.color}33, transparent);
+            animation: rotate 4s linear infinite;
+          }
+          
+          @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+          
+          .knight-sprite {
+            position: relative;
+            font-size: 64px;
+            filter: drop-shadow(0 0 20px ${rarityConfig.color});
+            animation: float 3s ease-in-out infinite;
+            z-index: 1;
+          }
+          
+          @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+          }
+          
+          .knight-info-section {
+            text-align: center;
+            margin-bottom: 12px;
+          }
+          
+          .knight-name-display {
+            font-size: 16px;
+            font-weight: bold;
+            color: #fff;
+            margin-bottom: 4px;
+            text-shadow: 0 0 10px ${rarityConfig.color};
+          }
+          
+          .knight-rarity-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            background: linear-gradient(135deg, ${rarityConfig.color}44, ${rarityConfig.color}22);
+            border: 1px solid ${rarityConfig.color};
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            color: ${rarityConfig.color};
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin: 4px 0;
+            box-shadow: 0 0 15px ${rarityConfig.glowColor};
+          }
+          
+          .knight-token-id {
+            font-size: 11px;
+            color: #888;
+            margin-top: 4px;
+          }
+          
+          .knight-stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 12px;
+          }
+          
+          .stat-box {
+            background: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            padding: 8px;
+            text-align: center;
+            transition: all 0.2s ease;
+          }
+          
+          .stat-box:hover {
+            background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05));
+            border-color: ${rarityConfig.color};
+            transform: scale(1.05);
+          }
+          
+          .stat-label {
+            font-size: 10px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 4px;
+          }
+          
+          .stat-value {
+            font-size: 18px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+          }
+          
+          .stat-icon {
+            font-size: 16px;
+          }
+        </style>
+        
+        <div class="knight-avatar-wrapper">
+          <div class="knight-sprite">⚔️</div>
         </div>
-        <div class="knight-info">
-          <div class="knight-name" style="color: ${rarityConfig.color}; font-weight: bold;">
+        
+        <div class="knight-info-section">
+          <div class="knight-name-display">
             ${knight.name || `Knight #${knight.tokenId}`}
           </div>
-          <div class="knight-rarity" style="color: ${rarityConfig.color}; font-size: 14px; margin: 4px 0;">
-            ✨ ${rarityConfig.name.toUpperCase()}
+          <div class="knight-rarity-badge">
+            ✨ ${rarityConfig.name}
           </div>
-          ${knight.tokenId !== undefined ? `<div class="knight-tokenid" style="color: #888; font-size: 12px;">Token #${knight.tokenId}</div>` : ''}
+          ${knight.tokenId !== undefined ? `<div class="knight-token-id">NFT Token #${knight.tokenId}</div>` : ''}
         </div>
-        <div class="knight-stats" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; padding: 8px; background: rgba(0,0,0,0.3); border-radius: 8px;">
-          <div class="stat" style="text-align: center;">
-            <div style="font-size: 10px; color: #888;">ATK</div>
-            <div style="font-weight: bold; color: #ff6b6b;">⚔️ ${knight.stats.attack}</div>
+        
+        <div class="knight-stats-grid">
+          <div class="stat-box">
+            <div class="stat-label">Attack</div>
+            <div class="stat-value" style="color: #ff6b6b;">
+              <span class="stat-icon">⚔️</span>
+              <span>${knight.stats.attack}</span>
+            </div>
           </div>
-          <div class="stat" style="text-align: center;">
-            <div style="font-size: 10px; color: #888;">DEF</div>
-            <div style="font-weight: bold; color: #4dabf7;">🛡️ ${knight.stats.defense}</div>
+          
+          <div class="stat-box">
+            <div class="stat-label">Defense</div>
+            <div class="stat-value" style="color: #4dabf7;">
+              <span class="stat-icon">🛡️</span>
+              <span>${knight.stats.defense}</span>
+            </div>
           </div>
-          <div class="stat" style="text-align: center;">
-            <div style="font-size: 10px; color: #888;">HP</div>
-            <div style="font-weight: bold; color: #51cf66;">❤️ ${knight.stats.hp}</div>
+          
+          <div class="stat-box">
+            <div class="stat-label">Health</div>
+            <div class="stat-value" style="color: #51cf66;">
+              <span class="stat-icon">❤️</span>
+              <span>${knight.stats.hp}</span>
+            </div>
           </div>
-          <div class="stat" style="text-align: center;">
-            <div style="font-size: 10px; color: #888;">SPD</div>
-            <div style="font-weight: bold; color: #ffd43b;">⚡ ${knight.stats.speed}</div>
+          
+          <div class="stat-box">
+            <div class="stat-label">Speed</div>
+            <div class="stat-value" style="color: #ffd43b;">
+              <span class="stat-icon">⚡</span>
+              <span>${knight.stats.speed}</span>
+            </div>
           </div>
         </div>
       `;
@@ -403,7 +574,7 @@ class MintingPage {
       this.knightsGrid.appendChild(card);
     });
     
-    console.log('✅ Rendered', knights.length, 'knight cards with metadata');
+    console.log('✅ Rendered', knights.length, 'enhanced knight cards');
   }
 }
 
