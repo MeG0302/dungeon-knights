@@ -19,6 +19,10 @@ class MintingPage {
     this.mintBtn = document.getElementById('mintBtn');
     this.backBtn = document.getElementById('backBtn');
     
+    console.log('🔍 Connect button found:', !!this.connectBtn);
+    console.log('🔍 Mint button found:', !!this.mintBtn);
+    console.log('🔍 Back button found:', !!this.backBtn);
+    
     // Quantity controls
     this.mintQty = document.getElementById('mintQty');
     this.qtyDecrease = document.getElementById('qtyDecrease');
@@ -33,17 +37,38 @@ class MintingPage {
     this.knightsGrid = document.getElementById('knightsGrid');
     
     console.log('✅ Elements initialized');
+    console.log('🔍 All elements:', {
+      connectBtn: !!this.connectBtn,
+      mintBtn: !!this.mintBtn,
+      backBtn: !!this.backBtn,
+      mintQty: !!this.mintQty
+    });
   }
   
   setupEventListeners() {
+    console.log('🎯 Setting up event listeners...');
+    
     // Connect button
     if (this.connectBtn) {
-      this.connectBtn.addEventListener('click', () => this.handleConnect());
+      console.log('✅ Adding click listener to Connect button');
+      this.connectBtn.addEventListener('click', () => {
+        console.log('🖱️ Connect button CLICKED!');
+        this.handleConnect();
+      });
+      
+      // Test if button is clickable
+      this.connectBtn.style.pointerEvents = 'auto';
+      this.connectBtn.style.cursor = 'pointer';
+    } else {
+      console.error('❌ Connect button not found!');
     }
     
     // Mint button
     if (this.mintBtn) {
+      console.log('✅ Adding click listener to Mint button');
       this.mintBtn.addEventListener('click', () => this.handleMint());
+    } else {
+      console.error('❌ Mint button not found!');
     }
     
     // Back button
