@@ -83,9 +83,25 @@ class MintingPage {
   
   async handleConnect() {
     console.log('🔌 Connect button clicked');
+    console.log('🔍 Checking window.ethereum:', typeof window.ethereum);
+    console.log('🔍 Checking window.web3Manager:', typeof window.web3Manager);
+    console.log('🔍 Checking ethers:', typeof ethers);
     
     if (this.connected) {
       console.log('Already connected');
+      return;
+    }
+    
+    // Check if web3Manager exists
+    if (!window.web3Manager) {
+      console.error('❌ window.web3Manager not found!');
+      alert('Error: Web3Manager not loaded. Please refresh the page.');
+      return;
+    }
+    
+    // Check if MetaMask exists
+    if (!window.ethereum) {
+      alert('⚠️ MetaMask not detected!\n\nPlease install MetaMask browser extension to connect your wallet.');
       return;
     }
     
@@ -96,12 +112,17 @@ class MintingPage {
     }
     
     try {
+      console.log('📞 Calling web3Manager.connect()...');
+      
       // Connect using web3Manager
       const success = await window.web3Manager.connect();
+      
+      console.log('📊 Connection result:', success);
       
       if (success) {
         this.connected = true;
         console.log('✅ Connected successfully');
+        console.log('📍 Address:', window.web3Manager.userAddress);
         
         // Update UI
         if (this.connectBtn) {
@@ -110,6 +131,7 @@ class MintingPage {
         }
         
         // Check balance
+        console.log('💰 Checking balance...');
         const balance = await window.web3Manager.checkDNGBalance();
         console.log('💰 Balance:', balance, '$DNG');
         
@@ -122,11 +144,21 @@ class MintingPage {
         
         alert(`✅ Connected!\n\nAddress: ${window.web3Manager.userAddress.slice(0, 6)}...${window.web3Manager.userAddress.slice(-4)}\nBalance: ${parseFloat(balance).toFixed(2)} $DNG\nKnights: ${this.knightManager.knights.length}`);
       } else {
-        throw new Error('Connection failed');
+        throw new Error('Connection returned false');
       }
       
     } catch (error) {
       console.error('❌ Connection error:', error);
+      console.error('❌ Error stack:', error.stack);
+      
+      let errorMessage = 'Failed to connect wallet';
+      if (error.code === 4001) {
+        errorMessage = 'Connection rejected by user';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      alert(`❌ Connection Failed\n\n${errorMessage}`);
       
       // Reset button
       if (this.connectBtn) {
