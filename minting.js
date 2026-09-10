@@ -155,6 +155,9 @@ class MintingPage {
     try {
       this.minting = true;
       
+      // Start capsule animation
+      this.startCapsuleAnimation();
+      
       // Update button
       if (this.mintBtn) {
         this.mintBtn.textContent = 'MINTING...';
@@ -189,6 +192,9 @@ class MintingPage {
           this.mintBtn.textContent = `MINTING ${i + 1}/${qty}...`;
         }
         
+        // Pulse capsule for each mint
+        this.pulseCapsule();
+        
         const result = await window.web3Manager.mintKnight();
         
         if (result && result.success) {
@@ -205,6 +211,9 @@ class MintingPage {
         }
       }
       
+      // Stop capsule animation
+      this.stopCapsuleAnimation();
+      
       // Success!
       if (results.length > 0) {
         console.log('🎉 Minting complete!', results.length, 'knights minted');
@@ -218,6 +227,7 @@ class MintingPage {
     } catch (error) {
       console.error('❌ Minting error:', error);
       alert('❌ Minting failed: ' + error.message);
+      this.stopCapsuleAnimation();
       
     } finally {
       this.minting = false;
@@ -362,9 +372,9 @@ class MintingPage {
       legendary: 'characters/Knight_in_golden_armor_stands_2K_202609041404_jpeg_2K_202609041417.png'
     };
     
-    knights.forEach(knight => {
+    knights.forEach((knight, index) => {
       const card = document.createElement('div');
-      card.className = 'knight-card';
+      card.className = 'knight-card-custom';
       
       const rarityConfig = window.DUNGEON_CONFIG ? 
         window.DUNGEON_CONFIG.getRarity(knight.rarity) : 
@@ -372,77 +382,40 @@ class MintingPage {
       
       const knightImage = rarityImages[knight.rarity.toLowerCase()] || rarityImages.common;
       
-      // Create stunning card with rarity-specific colors
+      // Apply inline styles with unique rarity colors
+      card.style.cssText = `
+        position: relative;
+        background: linear-gradient(135deg, rgba(26, 26, 46, 0.95), rgba(16, 16, 30, 0.95));
+        border: 2px solid ${rarityConfig.color};
+        border-radius: 16px;
+        padding: 16px;
+        transition: all 0.3s ease;
+        overflow: hidden;
+        cursor: pointer;
+      `;
+      
       card.innerHTML = `
-        <style>
-          .knight-card {
-            position: relative;
-            background: linear-gradient(135deg, rgba(26, 26, 46, 0.95), rgba(16, 16, 30, 0.95));
-            border: 2px solid ${rarityConfig.color};
-            border-radius: 16px;
-            padding: 16px;
-            transition: all 0.3s ease;
-            overflow: hidden;
-            cursor: pointer;
-          }
-          
-          .knight-card::before {
-            content: '';
-            position: absolute;
-            top: -2px;
-            left: -2px;
-            right: -2px;
-            bottom: -2px;
-            background: linear-gradient(45deg, ${rarityConfig.color}, transparent, ${rarityConfig.color});
-            border-radius: 16px;
-            z-index: -1;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-          }
-          
-          .knight-card:hover {
-            transform: translateY(-8px) scale(1.02);
-            box-shadow: 0 12px 40px ${rarityConfig.glowColor}, 0 0 60px ${rarityConfig.glowColor};
-          }
-          
-          .knight-card:hover::before {
-            opacity: 0.6;
-            animation: borderGlow 2s ease-in-out infinite;
-          }
-          
-          @keyframes borderGlow {
-            0%, 100% { opacity: 0.3; }
-            50% { opacity: 0.8; }
-          }
-          
-          .knight-avatar-wrapper {
-            position: relative;
-            width: 100%;
-            height: 140px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-bottom: 12px;
-            background: radial-gradient(circle, ${rarityConfig.color}22, transparent);
-            border-radius: 12px;
-            overflow: hidden;
-          }
-          
-          .knight-avatar-wrapper::before {
+        <div class="knight-avatar-wrapper" style="
+          position: relative;
+          width: 100%;
+          height: 140px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-bottom: 12px;
+          background: radial-gradient(circle, ${rarityConfig.color}22, transparent);
+          border-radius: 12px;
+          overflow: hidden;
+        ">
+          <div class="rotating-bg" style="
             content: '';
             position: absolute;
             width: 150%;
             height: 150%;
             background: conic-gradient(from 0deg, transparent, ${rarityConfig.color}33, transparent);
             animation: rotate 4s linear infinite;
-          }
-          
-          @keyframes rotate {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-          }
-          
-          .knight-image {
+          "></div>
+          <img src="${knightImage}" alt="${rarityConfig.name} Knight" style="
             position: relative;
             width: 100%;
             height: 100%;
@@ -450,27 +423,20 @@ class MintingPage {
             filter: drop-shadow(0 0 20px ${rarityConfig.color});
             animation: float 3s ease-in-out infinite;
             z-index: 1;
-          }
-          
-          @keyframes float {
-            0%, 100% { transform: translateY(0px); }
-            50% { transform: translateY(-10px); }
-          }
-          
-          .knight-info-section {
-            text-align: center;
-            margin-bottom: 12px;
-          }
-          
-          .knight-name-display {
+          " />
+        </div>
+        
+        <div style="text-align: center; margin-bottom: 12px;">
+          <div style="
             font-size: 16px;
             font-weight: bold;
             color: #fff;
             margin-bottom: 4px;
             text-shadow: 0 0 10px ${rarityConfig.color}, 0 0 20px ${rarityConfig.color};
-          }
-          
-          .knight-rarity-badge {
+          ">
+            ${knight.name || `Knight #${knight.tokenId}`}
+          </div>
+          <div style="
             display: inline-block;
             padding: 4px 12px;
             background: linear-gradient(135deg, ${rarityConfig.color}44, ${rarityConfig.color}22);
@@ -483,30 +449,13 @@ class MintingPage {
             letter-spacing: 1px;
             margin: 4px 0;
             box-shadow: 0 0 15px ${rarityConfig.glowColor}, inset 0 0 10px ${rarityConfig.glowColor};
-          }
-          
-          .knight-token-id {
-            font-size: 11px;
-            color: #888;
-            margin-top: 4px;
-          }
-        </style>
-        
-        <div class="knight-avatar-wrapper">
-          <img src="${knightImage}" alt="${rarityConfig.name} Knight" class="knight-image" />
-        </div>
-        
-        <div class="knight-info-section">
-          <div class="knight-name-display">
-            ${knight.name || `Knight #${knight.tokenId}`}
-          </div>
-          <div class="knight-rarity-badge">
+          ">
             ✨ ${rarityConfig.name}
           </div>
-          ${knight.tokenId !== undefined ? `<div class="knight-token-id">NFT Token #${knight.tokenId}</div>` : ''}
+          ${knight.tokenId !== undefined ? `<div style="font-size: 11px; color: #888; margin-top: 4px;">NFT Token #${knight.tokenId}</div>` : ''}
         </div>
         
-        <div class="stamina-section" style="margin-top: 12px;">
+        <div style="margin-top: 12px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
             <span style="font-size: 12px; color: #888; text-transform: uppercase;">Stamina</span>
             <span style="font-size: 14px; font-weight: bold; color: #ffd43b;">${knight.stamina || 100}%</span>
@@ -517,10 +466,21 @@ class MintingPage {
         </div>
       `;
       
+      // Add hover effect
+      card.addEventListener('mouseenter', function() {
+        this.style.transform = 'translateY(-8px) scale(1.02)';
+        this.style.boxShadow = `0 12px 40px ${rarityConfig.glowColor}, 0 0 60px ${rarityConfig.glowColor}`;
+      });
+      
+      card.addEventListener('mouseleave', function() {
+        this.style.transform = '';
+        this.style.boxShadow = '';
+      });
+      
       this.knightsGrid.appendChild(card);
     });
     
-    console.log('✅ Rendered', knights.length, 'enhanced knight cards with stamina bars');
+    console.log('✅ Rendered', knights.length, 'knight cards with unique rarity colors');
   }
 }
 
@@ -536,3 +496,46 @@ if (document.readyState === 'loading') {
 }
 
 console.log('✅ minting.js loaded');
+
+  
+  // Capsule animation functions
+  startCapsuleAnimation() {
+    const capsuleImg = document.getElementById('capsuleImg');
+    const capsuleGlow = document.querySelector('.capsule-glow');
+    
+    if (capsuleImg) {
+      capsuleImg.classList.add('minting-active');
+      capsuleImg.style.animation = 'shake 0.5s infinite, glow 1.5s ease-in-out infinite';
+    }
+    
+    if (capsuleGlow) {
+      capsuleGlow.style.opacity = '1';
+      capsuleGlow.style.animation = 'pulse 1s ease-in-out infinite';
+    }
+  }
+  
+  pulseCapsule() {
+    const capsuleImg = document.getElementById('capsuleImg');
+    if (capsuleImg) {
+      capsuleImg.style.transform = 'scale(1.2)';
+      setTimeout(() => {
+        capsuleImg.style.transform = 'scale(1)';
+      }, 300);
+    }
+  }
+  
+  stopCapsuleAnimation() {
+    const capsuleImg = document.getElementById('capsuleImg');
+    const capsuleGlow = document.querySelector('.capsule-glow');
+    
+    if (capsuleImg) {
+      capsuleImg.classList.remove('minting-active');
+      capsuleImg.style.animation = '';
+      capsuleImg.style.transform = '';
+    }
+    
+    if (capsuleGlow) {
+      capsuleGlow.style.opacity = '0';
+      capsuleGlow.style.animation = '';
+    }
+  }
