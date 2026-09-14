@@ -35,6 +35,12 @@ const CONFIG = {
     mainnet: '0xYOUR_MAINNET_NFT_CONTRACT' // TODO: Deploy NFT to mainnet
   },
   
+  // Game Contract Addresses
+  GAME_CONTRACTS: {
+    testnet: '0xd6D40B6C0D22f43866F6FBab3cf0DddDba05cFd5', // DungeonKnightsGameV2 deployed!
+    mainnet: '0xYOUR_MAINNET_GAME_CONTRACT' // TODO: Deploy to mainnet
+  },
+  
   // Network Details
   NETWORKS: {
     testnet: {
@@ -67,55 +73,6 @@ const CONFIG = {
   MINT_PRICE: {
     testnet: '500', // 500 $DNG tokens on testnet
     mainnet: '500'  // 500 $DNG tokens on mainnet
-  },
-  
-  // Rarity System - Uncommon = 25 dungeon ROI baseline
-  RARITY: {
-    common: {
-      name: 'Common',
-      color: '#9E9E9E',
-      glowColor: 'rgba(158, 158, 158, 0.5)',
-      dropRate: 0.50, // 50% chance
-      dungeonReward: 12, // 500 / 12 = 41.67 dungeons to ROI
-      statsMultiplier: 1.0,
-      baseStats: { hp: 100, attack: 10, defense: 5, speed: 8 }
-    },
-    uncommon: {
-      name: 'Uncommon',
-      color: '#4CAF50',
-      glowColor: 'rgba(76, 175, 80, 0.5)',
-      dropRate: 0.30, // 30% chance
-      dungeonReward: 20, // 500 / 20 = 25 dungeons to ROI ✅ BASELINE
-      statsMultiplier: 1.5,
-      baseStats: { hp: 150, attack: 15, defense: 8, speed: 10 }
-    },
-    rare: {
-      name: 'Rare',
-      color: '#2196F3',
-      glowColor: 'rgba(33, 150, 243, 0.5)',
-      dropRate: 0.15, // 15% chance
-      dungeonReward: 36, // 500 / 36 = 13.89 dungeons to ROI (1.8x faster)
-      statsMultiplier: 2.5,
-      baseStats: { hp: 250, attack: 25, defense: 13, speed: 12 }
-    },
-    epic: {
-      name: 'Epic',
-      color: '#9C27B0',
-      glowColor: 'rgba(156, 39, 176, 0.5)',
-      dropRate: 0.04, // 4% chance
-      dungeonReward: 60, // 500 / 60 = 8.33 dungeons to ROI (3x faster)
-      statsMultiplier: 4.0,
-      baseStats: { hp: 400, attack: 40, defense: 20, speed: 15 }
-    },
-    legendary: {
-      name: 'Legendary',
-      color: '#FFD700',
-      glowColor: 'rgba(255, 215, 0, 0.8)',
-      dropRate: 0.01, // 1% chance
-      dungeonReward: 100, // 500 / 100 = 5 dungeons to ROI (5x faster!)
-      statsMultiplier: 7.0,
-      baseStats: { hp: 700, attack: 70, defense: 35, speed: 20 }
-    }
   }
 };
 
@@ -134,6 +91,11 @@ CONFIG.getNFTContract = function() {
   return this.NFT_CONTRACTS[this.getCurrentNetwork()];
 };
 
+// Helper function to get current game contract
+CONFIG.getGameContract = function() {
+  return this.GAME_CONTRACTS[this.getCurrentNetwork()];
+};
+
 // Helper function to get current token address
 CONFIG.getTokenAddress = function() {
   return this.USE_MAINNET ? this.TOKEN.mainnetAddress : this.TOKEN.testnetAddress;
@@ -142,31 +104,6 @@ CONFIG.getTokenAddress = function() {
 // Helper function to check if using custom token
 CONFIG.usesCustomToken = function() {
   return this.USE_MAINNET && this.getTokenAddress() !== null;
-};
-
-// Helper function to get rarity by name
-CONFIG.getRarity = function(rarityName) {
-  return this.RARITY[rarityName.toLowerCase()];
-};
-
-// Helper function to roll random rarity
-CONFIG.rollRarity = function() {
-  const rand = Math.random();
-  let cumulative = 0;
-  
-  for (const [key, rarity] of Object.entries(this.RARITY)) {
-    cumulative += rarity.dropRate;
-    if (rand < cumulative) {
-      return key;
-    }
-  }
-  return 'common'; // Fallback
-};
-
-// Helper function to get reward for rarity
-CONFIG.getRewardForRarity = function(rarityName) {
-  const rarity = this.getRarity(rarityName);
-  return rarity ? rarity.dungeonReward : 20; // Default to uncommon
 };
 
 // Export for use in other files

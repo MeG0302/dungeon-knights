@@ -7,41 +7,47 @@ const RARITY = {
         multiplier: 1.0, 
         color: '#9E9E9E', 
         dropRate: 0.50, // 50%
-        dungeonReward: 12 // 42 dungeons to ROI
+        dungeonReward: 10, // 50 dungeons to ROI (10-day @ 5/day)
+        dailyRuns: 5 // 5 runs/day = 50 DNG/day = 10 day ROI
     },
     UNCOMMON: { 
         name: 'Uncommon', 
-        multiplier: 1.5, 
+        multiplier: 1.7, 
         color: '#4CAF50', 
         dropRate: 0.30, // 30%
-        dungeonReward: 20 // 25 dungeons to ROI ✅
+        dungeonReward: 17, // Must match contract V2
+        dailyRuns: 5 // 5 runs/day = 85 DNG/day
     },
     RARE: { 
         name: 'Rare', 
-        multiplier: 2.5, 
+        multiplier: 3.0, 
         color: '#2196F3', 
         dropRate: 0.15, // 15%
-        dungeonReward: 36 // 14 dungeons to ROI
+        dungeonReward: 30, // ~17 dungeons to ROI
+        dailyRuns: 4 // 4 runs/day = 120 DNG/day = 4.2 day ROI
     },
     EPIC: { 
         name: 'Epic', 
-        multiplier: 4.0, 
+        multiplier: 7.5, 
         color: '#9C27B0', 
         dropRate: 0.04, // 4%
-        dungeonReward: 60 // 8 dungeons to ROI
+        dungeonReward: 75, // ~7 dungeons to ROI
+        dailyRuns: 3 // 3 runs/day = 225 DNG/day = 2.2 day ROI
     },
     LEGENDARY: { 
         name: 'Legendary', 
-        multiplier: 7.0, 
+        multiplier: 15.0, 
         color: '#FFD700', 
         dropRate: 0.01, // 1%
-        dungeonReward: 100 // 5 dungeons to ROI
+        dungeonReward: 150, // ~3 dungeons to ROI (15x Common)
+        dailyRuns: 4 // 4 runs/day = 600 DNG/day = 0.8 day ROI
     }
 };
 
 class Knight {
     constructor(id) {
         this.id = id;
+        this.tokenId = id; // Alias for blockchain compatibility
         this.rarity = this.rollRarity();
         this.stats = this.generateStats();
         this.position = { x: 0, y: 0 };
@@ -66,6 +72,26 @@ class Knight {
         this.maxTrailLength = 15;
         this.trailUpdateCooldown = 0;
     }
+    
+    /**
+     * Get remaining daily runs for this knight
+     */
+    getRemainingRuns() {
+        if (window.dungeonSession) {
+            return window.dungeonSession.getRemainingRuns(this.tokenId, this.rarity.tier);
+        }
+        return RARITY[this.rarity.tier]?.dailyRuns || 5;
+    }
+    
+    /**
+     * Check if knight can be deployed (has runs remaining)
+     */
+    canDeploy() {
+        if (window.dungeonSession) {
+            return window.dungeonSession.canDeploy(this.tokenId, this.rarity.tier);
+        }
+        return true; // Default to true if session manager not available
+    }
 
     rollRarity() {
         const roll = Math.random();
@@ -85,27 +111,25 @@ class Knight {
         const mult = this.rarity.multiplier;
         const variance = () => 0.8 + Math.random() * 0.4; // 80-120% variance
         
-        // Speed scale for 1:2:5:7:10:15 ratio (Mythic alone = 15 min)
-        // Mythic(1)=15min, Legendary(2)=30min, Epic(5)=75min, Rare(7)=105min, Uncommon(10)=150min, Common(15)=225min
+        // Speed scale matching earning power (1:1.7:3:7.5:15 ratio)
+        // Legendary(15x) = fastest, Common(1x) = slowest
+        // Speed directly affects clear time
         let baseSpeed;
         switch(this.rarity.tier) {
-            case 'MYTHIC':
-                baseSpeed = 15; // Ratio 1 - fastest (15 min alone)
-                break;
             case 'LEGENDARY':
-                baseSpeed = 7.5; // Ratio 2 - (30 min alone)
+                baseSpeed = 15; // 15x - fastest
                 break;
             case 'EPIC':
-                baseSpeed = 3; // Ratio 5 - (75 min alone)
+                baseSpeed = 7.5; // 7.5x
                 break;
             case 'RARE':
-                baseSpeed = 2.14; // Ratio 7 - (105 min alone)
+                baseSpeed = 3; // 3x
                 break;
             case 'UNCOMMON':
-                baseSpeed = 1.5; // Ratio 10 - (150 min alone)
+                baseSpeed = 1.7; // 1.7x
                 break;
             case 'COMMON':
-                baseSpeed = 1; // Ratio 15 - slowest (225 min alone)
+                baseSpeed = 1; // 1x - slowest (baseline)
                 break;
             default:
                 baseSpeed = 1;
@@ -293,4 +317,9 @@ class KnightManager {
     update(deltaTime) {
         this.knights.forEach(knight => knight.update(deltaTime));
     }
+}
+
+// Export RARITY to global scope for use in other modules
+if (typeof window !== 'undefined') {
+    window.RARITY = RARITY;
 }

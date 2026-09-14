@@ -172,6 +172,34 @@ class Game {
     }
 
     // Game Actions
+    
+    /**
+     * Begin a new dungeon run with proper session management
+     * @param {Array} knights - Array of knight objects with tokenId
+     * @returns {boolean} Success status
+     */
+    beginRun(knights) {
+        if (!window.dungeonSession || knights.length === 0) return false;
+
+        // Always clear a stale session before starting a new one
+        window.dungeonSession.abandonSession();
+
+        const knightIds = knights.map(k => k.tokenId || k.id);
+        const ok = window.dungeonSession.startDungeon(
+            knightIds,
+            this.selectedDungeon,
+            this.dungeon.config.name
+        );
+        
+        if (!ok) {
+            console.error('Failed to start dungeon session — rewards will not accrue');
+            this.logMessage('⚠️ Could not start run tracking. Recall and redeploy.');
+        }
+        
+        this.dungeonStartTime = Date.now();
+        return ok;
+    }
+    
     startDungeon() {
         if (this.isRunning) return;
 
@@ -191,6 +219,14 @@ class Game {
 
         this.isRunning = true;
         this.dungeonStartTime = Date.now(); // Track start time
+        
+        // Start blockchain session with all deployed knights
+        if (window.dungeonSession && availableKnights.length > 0) {
+            const deployedKnights = availableKnights.slice(0, deployCount);
+            this.beginRun(deployedKnights);
+            console.log(`🎮 Started blockchain session for ${deployCount} knight(s)`);
+        }
+        
         this.logMessage(`⚔️ Deployed ${deployCount} knight(s) into ${this.dungeon.config.name}!`);
         
         // Play deploy sound
@@ -203,6 +239,11 @@ class Game {
 
     stopDungeon() {
         if (!this.isRunning) return;
+
+        // Abandon any active blockchain session
+        if (window.dungeonSession) {
+            window.dungeonSession.abandonSession();
+        }
 
         // Recall all knights
         const deployedKnights = this.knightManager.getDeployedKnights();
@@ -237,6 +278,32 @@ class Game {
         const goldEarned = this.combat.getTotalEarned();
         
         this.logMessage(`🎉 Dungeon cleared! Earned ${goldEarned.toFixed(2)} gold in ${timeString}!`);
+        
+        // Complete blockchain session
+        if (window.dungeonSession && window.dungeonSession.currentSession) {
+            const deployedKnights = this.knightManager.getDeployedKnights();
+            if (deployedKnights.length > 0) {
+                // Check if contract is deployed
+                console.log('✅ Game contract deployed and ready!');
+                // Pass full knight objects (with tokenId and rarity)
+                window.dungeonSession.completeDungeon(deployedKnights)
+                    .then(completion => {
+                        if (completion) {
+                            console.log(`💰 Earned ${completion.reward} $DNG (unclaimed)`);
+                            this.logMessage(`💰 Earned ${completion.reward} $DNG! Click widget to claim.`);
+                            // Update reward UI
+                            if (window.rewardClaimUI) {
+                                window.rewardClaimUI.updateDisplay();
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Failed to complete blockchain session:', error);
+                    });
+            }
+        } else {
+            console.warn('⚠️ Blockchain session not started or dungeonSession not available');
+        }
         
         // Play completion sound but keep music going for auto-continue
         if (window.audioManager) {
@@ -342,7 +409,7 @@ class Game {
             });
             
             this.isRunning = true;
-            this.dungeonStartTime = Date.now();
+            this.beginRun(deployedKnights); // Start new session for next dungeon
             this.logMessage(`⚔️ ${deployedKnights.length} knight(s) automatically deployed!`);
             
             // Keep music playing
@@ -373,7 +440,7 @@ class Game {
             });
             
             this.isRunning = true;
-            this.dungeonStartTime = Date.now();
+            this.beginRun(deployedKnights); // Start new session for replay
             this.logMessage(`⚔️ ${deployedKnights.length} knight(s) automatically deployed!`);
             
             // Keep music playing
@@ -463,14 +530,57 @@ class Game {
 
     // Getters for UI
     getGameState() {
+        const deployedKnights = this.knightManager ? this.knightManager.getDeployedKnights() : [];
+        const activeLoot = this.dungeon ? this.dungeon.getActiveLootNodes().length : 0;
+        
+        // Calculate DNG/min based on deployed knights' rarities
+        let dngPerMinute = 0;
+        if (deployedKnights.length > 0) {
+            const totalDngPerRun = deployedKnights.reduce((sum, knight) => {
+                const rarityData = window.RARITY?.[knight.rarity.tier];
+                return sum + (rarityData?.dungeonReward || 10);
+            }, 0);
+            
+            // Estimate ~1-2 minutes per dungeon based on knight power
+            const avgMinutesPerDungeon = 1.5;
+            dngPerMinute = totalDngPerRun / avgMinutesPerDungeon;
+        }
+        
+        // Calculate estimated time to finish
+        let estimatedTime = '--';
+        if (this.isRunning && deployedKnights.length > 0 && activeLoot > 0) {
+            // Calculate average team stats
+            const avgSpeed = deployedKnights.reduce((sum, knight) => sum + (knight.stats.speed || 1), 0) / deployedKnights.length;
+            const totalPower = deployedKnights.reduce((sum, knight) => sum + (knight.stats.power || 50), 0);
+            
+            // Loot node stats
+            const avgLootHP = 100; // Average HP per loot node
+            const avgDistance = 5; // Average distance between loot nodes
+            
+            // Time calculations
+            const movementTimePerLoot = avgDistance / avgSpeed; // seconds to move between nodes
+            const combatTimePerLoot = avgLootHP / totalPower; // seconds to kill one node
+            const attackCooldown = 1.0; // 1 second between attacks
+            
+            // Total time = (movement + combat + cooldown overhead) * remaining loot
+            const timePerLoot = movementTimePerLoot + combatTimePerLoot + (attackCooldown * 2);
+            const totalSeconds = Math.ceil(timePerLoot * activeLoot);
+            
+            // Format as MM:SS
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            estimatedTime = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        }
+        
         return {
             goldBalance: Math.floor(this.goldBalance),
-            activeKnights: this.knightManager.getDeployedKnights().length,
-            totalKnights: this.knightManager.knights.length,
+            activeKnights: deployedKnights.length,
+            totalKnights: this.knightManager ? this.knightManager.knights.length : 0,
             isRunning: this.isRunning,
-            goldPerMinute: this.combat.getGoldPerMinute(),
-            dungeonName: this.dungeon.config.name,
-            activeLootNodes: this.dungeon.getActiveLootNodes().length
+            dngPerMinute: dngPerMinute,
+            estimatedTime: estimatedTime,
+            dungeonName: this.dungeon ? this.dungeon.config.name : 'Unknown',
+            activeLootNodes: activeLoot
         };
     }
 }

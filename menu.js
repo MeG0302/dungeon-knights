@@ -42,33 +42,98 @@ class MenuSystem {
     }
     
     loadGameData() {
-        // Load gold from localStorage
+        // Load gold from localStorage (temporary - can be removed later)
         const savedGold = localStorage.getItem('gameGold');
         if (savedGold) {
             this.goldBalance = parseInt(savedGold);
         }
         
-        // Load all knights from localStorage
-        const savedKnights = localStorage.getItem('allKnights');
-        if (savedKnights) {
-            try {
-                const knightsData = JSON.parse(savedKnights);
-                knightsData.forEach(data => {
-                    const knight = new Knight(data.id);
-                    knight.rarity = data.rarity;
-                    knight.stats = data.stats;
-                    knight.stamina = data.stamina !== undefined ? data.stamina : data.stats.maxStamina;
-                    knight.state = data.state || 'idle';
-                    knight.totalEarned = data.totalEarned || 0;
-                    this.knightManager.knights.push(knight);
-                    if (data.id >= this.knightManager.nextId) {
-                        this.knightManager.nextId = data.id + 1;
-                    }
-                });
-                console.log(`✅ Loaded ${knightsData.length} knights from storage`);
-            } catch (e) {
-                console.error('Failed to load knights:', e);
+        // Always load from blockchain when wallet is connected
+        if (window.walletManager && window.walletManager.isConnected) {
+            console.log('🔌 Wallet connected, loading knights from blockchain...');
+            this.loadKnightsFromBlockchain();
+        } else {
+            // Listen for wallet connection
+            window.addEventListener('walletConnected', () => {
+                console.log('🔌 Wallet connected event received, loading knights...');
+                this.loadKnightsFromBlockchain();
+            });
+        }
+    }
+    
+    
+    async loadKnightsFromBlockchain() {
+        if (!window.walletManager || !window.walletManager.isConnected) {
+            console.log('⚠️ Wallet not connected, cannot load knights from blockchain');
+            return;
+        }
+        
+        try {
+            console.log('📦 Fetching knights from blockchain...');
+            const nftKnights = await window.walletManager.getMyKnights();
+            console.log('✅ Fetched', nftKnights.length, 'knights from blockchain');
+            
+            if (nftKnights.length === 0) {
+                console.log('No knights found on blockchain');
+                this.updateDisplay();
+                return;
             }
+            
+            // Clear existing knights
+            this.knightManager.knights = [];
+            
+            // Rarity config
+            const RARITY_MAP = {
+                'common': 'COMMON',
+                'uncommon': 'UNCOMMON', 
+                'rare': 'RARE',
+                'epic': 'EPIC',
+                'legendary': 'LEGENDARY'
+            };
+            
+            // Convert NFT knights to game knights
+            nftKnights.forEach((nft) => {
+                const knight = new Knight(nft.tokenId);
+                
+                // Override rarity with blockchain data using global RARITY table
+                const rarityTier = RARITY_MAP[nft.rarity.toLowerCase()] || 'COMMON';
+                const rarityInfo = window.RARITY?.[rarityTier] || RARITY[rarityTier];
+                
+                if (!rarityInfo) {
+                    console.error(`Unknown rarity tier: ${rarityTier}`);
+                    return;
+                }
+                
+                knight.rarity = {
+                    ...rarityInfo,
+                    tier: rarityTier
+                };
+                
+                // Regenerate stats with correct rarity
+                knight.stats = knight.generateStats();
+                
+                knight.state = 'idle';
+                knight.stamina = knight.stats.maxStamina;
+                knight.totalEarned = 0;
+                
+                console.log(`Knight #${nft.tokenId}: ${knight.rarity.name} (${knight.rarity.tier}) - Power: ${knight.stats.power}, Speed: ${knight.stats.speed}`);
+                
+                this.knightManager.knights.push(knight);
+            });
+            
+            // Update next ID
+            if (nftKnights.length > 0) {
+                const maxId = Math.max(...nftKnights.map(k => k.tokenId));
+                this.knightManager.nextId = maxId + 1;
+            }
+            
+            console.log(`✅ Loaded ${nftKnights.length} knights from blockchain`);
+            
+            // Update display
+            this.updateDisplay();
+            
+        } catch (error) {
+            console.error('❌ Failed to load knights from blockchain:', error);
         }
     }
     
@@ -123,29 +188,32 @@ class MenuSystem {
                 return;
             }
             
-            // Save selected knights and gold to localStorage
+            // Check if any selected knights have no runs left
             const selectedKnightIds = Array.from(this.selectedKnights);
-            const knightsData = this.knightManager.knights
-                .filter(k => selectedKnightIds.includes(k.id))
-                .map(k => ({
-                    id: k.id,
-                    rarity: k.rarity,
-                    stats: k.stats,
-                    stamina: k.stamina,
-                    state: k.state,
-                    totalEarned: k.totalEarned || 0
-                }));
+            const selectedKnightObjects = this.knightManager.knights.filter(k => selectedKnightIds.includes(k.id));
+            const exhaustedKnights = selectedKnightObjects.filter(k => {
+                const remaining = k.getRemainingRuns ? k.getRemainingRuns() : 999;
+                return remaining === 0;
+            });
             
-            localStorage.setItem('gameGold', this.goldBalance);
-            localStorage.setItem('selectedKnights', JSON.stringify(knightsData));
-            localStorage.setItem('allKnights', JSON.stringify(this.knightManager.knights.map(k => ({
+            if (exhaustedKnights.length > 0) {
+                alert(`⚠️ ${exhaustedKnights.length} knight(s) have no runs left today!\n\nThey need to rest until 12 PM UTC.\n\nPlease deselect them or choose other knights.`);
+                return;
+            }
+            
+            // Save selected knights and gold to localStorage
+            const knightsData = selectedKnightObjects.map(k => ({
                 id: k.id,
                 rarity: k.rarity,
                 stats: k.stats,
                 stamina: k.stamina,
                 state: k.state,
                 totalEarned: k.totalEarned || 0
-            }))));
+            }));
+            
+            localStorage.setItem('gameGold', this.goldBalance);
+            localStorage.setItem('selectedKnights', JSON.stringify(knightsData));
+            // No longer save knights to localStorage - blockchain is source of truth
             
             // Play sound and STOP menu music
             if (window.audioManager) {
@@ -365,22 +433,29 @@ class MenuSystem {
             if (this.selectedKnights.has(knight.id)) {
                 card.classList.add('selected');
             }
-            if (knight.state === 'resting' || knight.stamina < knight.stats.maxStamina * 0.5) {
+            
+            const remainingRuns = knight.getRemainingRuns ? knight.getRemainingRuns() : (window.dungeonSession ? window.dungeonSession.getRemainingRuns(knight.id || knight.tokenId, knight.rarity.tier) : 5);
+            const maxRuns = RARITY[knight.rarity.tier]?.dailyRuns || 5;
+            const hasNoRuns = remainingRuns === 0;
+            
+            if (knight.state === 'resting' || knight.stamina < knight.stats.maxStamina * 0.5 || hasNoRuns) {
                 card.classList.add('sleeping');
             }
             
             // Get knight image
             const knightImg = this.knightImages[knight.rarity.tier];
             const imgHtml = knightImg && knightImg.complete ? 
-                `<img src="${knightImg.src}" alt="Knight ${knight.id}">` : 
-                '⚔️';
+                `<img src="${knightImg.src}" alt="Knight ${knight.id}" ${hasNoRuns ? 'style="opacity: 0.5; filter: grayscale(0.8);"' : ''}>` : 
+                hasNoRuns ? '😴' : '⚔️';
             
             // Calculate stamina percentage
             const staminaPercent = (knight.stamina / knight.stats.maxStamina) * 100;
+            const runsColor = remainingRuns === 0 ? '#ef4444' : remainingRuns <= 1 ? '#f59e0b' : '#10b981';
             
             card.innerHTML = `
-                <div class="knight-avatar rarity-${knight.rarity.tier}" style="border-color: ${knight.rarity.color}">
+                <div class="knight-avatar rarity-${knight.rarity.tier}" style="border-color: ${knight.rarity.color}; ${hasNoRuns ? 'opacity: 0.6;' : ''}">
                     ${imgHtml}
+                    ${hasNoRuns ? '<div style="position: absolute; bottom: -5px; right: -5px; background: #1f2937; border-radius: 50%; padding: 2px 6px; font-size: 16px;">😴</div>' : ''}
                 </div>
                 <div class="knight-info">
                     <div class="knight-name">Knight #${knight.id}</div>
@@ -401,6 +476,11 @@ class MenuSystem {
                             <div class="stamina-fill" style="width: ${staminaPercent}%"></div>
                             <div class="stamina-threshold"></div>
                         </div>
+                    </div>
+                    <div style="margin-top: 8px; padding: 4px 8px; background: ${hasNoRuns ? '#7f1d1d' : '#1f2937'}; border-radius: 4px; text-align: center;">
+                        <span style="color: ${runsColor}; font-weight: bold; font-size: 12px;">
+                            🎯 ${remainingRuns}/${maxRuns} runs today
+                        </span>
                     </div>
                 </div>
             `;
@@ -455,15 +535,7 @@ class MenuSystem {
             
             if (updated) {
                 this.updateDisplay();
-                // Save to localStorage
-                localStorage.setItem('allKnights', JSON.stringify(this.knightManager.knights.map(k => ({
-                    id: k.id,
-                    rarity: k.rarity,
-                    stats: k.stats,
-                    stamina: k.stamina,
-                    state: k.state,
-                    totalEarned: k.totalEarned || 0
-                }))));
+                // No longer save to localStorage - blockchain is source of truth
             }
         }, 1000); // Update every second
     }
