@@ -374,38 +374,89 @@
 /* Main Content */
 .points-main {
     flex: 1;
-    padding: 20px 32px;
+    padding: 24px 32px;
     overflow-y: auto;
     align-self: stretch;
+    background: var(--bg-dark, #0a0f1a);
+}
+
+/* Stats Row */
+.stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 24px;
+}
+
+.stat-card {
+    background: var(--bg-panel, rgba(15, 20, 35, 0.8));
+    border: 1px solid var(--border-base);
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+}
+
+.stat-value {
+    display: block;
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--accent-gold, #d4a843);
+    font-family: 'Cinzel', serif;
+    line-height: 1.2;
+}
+
+.stat-label {
+    display: block;
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-top: 4px;
+}
+
+/* Content Panel */
+.content-panel {
+    background: var(--bg-panel, rgba(15, 20, 35, 0.8));
+    border: 1px solid var(--border-base);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.panel-content {
+    padding: 0;
 }
 
 /* Tabs */
 .tabs {
     display: flex;
-    gap: 4px;
-    margin-bottom: 20px;
+    gap: 0;
     border-bottom: 1px solid var(--border-base);
+    background: rgba(8, 12, 20, 0.5);
 }
 
 .tab {
-    padding: 10px 24px;
+    padding: 14px 28px;
     background: none;
     border: none;
     border-bottom: 2px solid transparent;
     color: var(--text-muted);
-    font-size: 14px;
-    font-weight: 600;
+    font-size: 13px;
+    font-weight: 700;
     cursor: pointer;
     transition: all 0.2s;
+    letter-spacing: 1px;
+    text-transform: uppercase;
 }
 
 .tab:hover {
-    color: var(--text-primary);
+    color: var(--text-primary, #e0e0e0);
+    background: rgba(255, 255, 255, 0.03);
 }
 
 .tab.active {
-    color: var(--accent-gold);
-    border-bottom-color: var(--accent-gold);
+    color: var(--accent-gold, #d4a843);
+    border-bottom-color: var(--accent-gold, #d4a843);
+    background: rgba(212, 168, 67, 0.05);
 }
 
 /* Leaderboard Table */
@@ -471,10 +522,25 @@
 }
 
 .lb-empty {
-    padding: 40px;
+    padding: 60px 40px;
     text-align: center;
     color: var(--text-muted);
-    font-style: italic;
+}
+
+.empty-icon {
+    width: 48px;
+    height: 48px;
+    image-rendering: pixelated;
+    opacity: 0.4;
+    margin-bottom: 16px;
+    filter: brightness(1.5);
+}
+
+.empty-sub {
+    font-size: 12px;
+    color: var(--text-muted);
+    opacity: 0.7;
+    margin-top: 4px;
 }
 
 /* Referrals List */

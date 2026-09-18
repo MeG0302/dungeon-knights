@@ -198,53 +198,86 @@ export default function PointsPage() {
                     </aside>
 
                     <main className="points-main">
-                        <div className="tabs">
-                            <button className={`tab ${tab === 'leaderboard' ? 'active' : ''}`} onClick={() => setTab('leaderboard')}>
-                                Leaderboard
-                            </button>
-                            <button className={`tab ${tab === 'referrals' ? 'active' : ''}`} onClick={() => setTab('referrals')}>
-                                My Referrals
-                            </button>
+                        {/* Stats Cards */}
+                        <div className="stats-row">
+                            <div className="stat-card">
+                                <span className="stat-value">{points.toLocaleString()}</span>
+                                <span className="stat-label">Total PTS</span>
+                            </div>
+                            <div className="stat-card">
+                                <span className="stat-value">{runs}/5</span>
+                                <span className="stat-label">Daily Runs</span>
+                            </div>
+                            <div className="stat-card">
+                                <span className="stat-value">{multiplier}x</span>
+                                <span className="stat-label">Multiplier</span>
+                            </div>
+                            <div className="stat-card">
+                                <span className="stat-value">{referralStats.totalRefs}</span>
+                                <span className="stat-label">Referrals</span>
+                            </div>
                         </div>
 
-                        {tab === 'leaderboard' && (
-                            <div className="leaderboard-table">
-                                <div className="lb-header">
-                                    <span className="lb-rank">#</span>
-                                    <span className="lb-name">Player</span>
-                                    <span className="lb-points">Points</span>
-                                    <span className="lb-refs">Refs</span>
-                                </div>
-                                {leaderboard.length === 0 ? (
-                                    <p className="lb-empty">No players yet. Be the first!</p>
-                                ) : (
-                                    leaderboard.map((entry, i) => (
-                                        <div key={i} className={`lb-row ${i < 3 ? 'top-' + (i + 1) : ''}`}>
-                                            <span className="lb-rank">{i + 1}</span>
-                                            <span className="lb-name">{entry.shortAddr}</span>
-                                            <span className="lb-points">{entry.points.toLocaleString()}</span>
-                                            <span className="lb-refs">{entry.refs}</span>
-                                        </div>
-                                    ))
-                                )}
+                        {/* Leaderboard Panel */}
+                        <div className="content-panel">
+                            <div className="tabs">
+                                <button className={`tab ${tab === 'leaderboard' ? 'active' : ''}`} onClick={() => setTab('leaderboard')}>
+                                    Leaderboard
+                                </button>
+                                <button className={`tab ${tab === 'referrals' ? 'active' : ''}`} onClick={() => setTab('referrals')}>
+                                    My Referrals
+                                </button>
                             </div>
-                        )}
 
-                        {tab === 'referrals' && (
-                            <div className="referrals-list">
-                                {refEarnings.details.length === 0 ? (
-                                    <p className="lb-empty">No referrals yet. Share your code!</p>
-                                ) : (
-                                    refEarnings.details.map((ref, i) => (
-                                        <div key={i} className="ref-row">
-                                            <span className="ref-addr">{ref.address.slice(0, 8)}...{ref.address.slice(-4)}</span>
-                                            <span className="ref-pts">{ref.theirPoints} PTS</span>
-                                            <span className="ref-earned">+{ref.earned} PTS</span>
+                            <div className="panel-content">
+                                {tab === 'leaderboard' && (
+                                    <div className="leaderboard-table">
+                                        <div className="lb-header">
+                                            <span className="lb-rank">#</span>
+                                            <span className="lb-name">Player</span>
+                                            <span className="lb-points">Points</span>
+                                            <span className="lb-refs">Refs</span>
                                         </div>
-                                    ))
+                                        {leaderboard.length === 0 ? (
+                                            <div className="lb-empty">
+                                                <img src={`${ASSETS}Golden_trophy_pixel_art_icon_2K_20260919011419-autocrop-hair.png`} alt="" className="empty-icon" />
+                                                <p>No players yet.</p>
+                                                <p className="empty-sub">Be the first to earn points!</p>
+                                            </div>
+                                        ) : (
+                                            leaderboard.map((entry, i) => (
+                                                <div key={i} className={`lb-row ${i < 3 ? 'top-' + (i + 1) : ''}`}>
+                                                    <span className="lb-rank">{i + 1}</span>
+                                                    <span className="lb-name">{entry.shortAddr}</span>
+                                                    <span className="lb-points">{entry.points.toLocaleString()}</span>
+                                                    <span className="lb-refs">{entry.refs}</span>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                )}
+
+                                {tab === 'referrals' && (
+                                    <div className="referrals-list">
+                                        {refEarnings.details.length === 0 ? (
+                                            <div className="lb-empty">
+                                                <img src={`${ASSETS}Silver_chain_link_icon_referrals_2K_20260919011442-autocrop-hair.png`} alt="" className="empty-icon" />
+                                                <p>No referrals yet.</p>
+                                                <p className="empty-sub">Share your code to earn 15% of their points!</p>
+                                            </div>
+                                        ) : (
+                                            refEarnings.details.map((ref, i) => (
+                                                <div key={i} className="ref-row">
+                                                    <span className="ref-addr">{ref.address.slice(0, 8)}...{ref.address.slice(-4)}</span>
+                                                    <span className="ref-pts">{ref.theirPoints} PTS</span>
+                                                    <span className="ref-earned">+{ref.earned} PTS</span>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
                                 )}
                             </div>
-                        )}
+                        </div>
                     </main>
                 </div>
             </div>
