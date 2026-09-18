@@ -916,7 +916,7 @@ class DungeonRenderer {
         
         if (node.type === 'chest') {
             // Draw pixel art chest
-            const chestSize = tileSize * 0.7;
+            const chestSize = tileSize * 1.75;
             const chestX = centerX - chestSize / 2;
             const chestY = centerY - chestSize / 2;
             
@@ -1087,7 +1087,7 @@ class DungeonRenderer {
         const ctx = this.ctx;
         const centerX = x + tileSize / 2;
         const centerY = y + tileSize / 2;
-        const knightSize = tileSize * 0.8;
+        const knightSize = tileSize * 2.0;
         
         // Apply attack animation offset
         let offsetX = 0;
