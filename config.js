@@ -37,7 +37,7 @@ const CONFIG = {
   
   // Game Contract Addresses
   GAME_CONTRACTS: {
-    testnet: '0xd6D40B6C0D22f43866F6FBab3cf0DddDba05cFd5', // DungeonKnightsGameV2 deployed!
+    testnet: '0xD8de9385Db7DfE925882E76849B6e067e47236e5', // DungeonKnightsGameV3 deployed! (Batch Claims)
     mainnet: '0xYOUR_MAINNET_GAME_CONTRACT' // TODO: Deploy to mainnet
   },
   

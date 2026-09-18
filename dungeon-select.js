@@ -1,12 +1,10 @@
 // Dungeon Selection Screen Logic
 
 document.addEventListener('DOMContentLoaded', () => {
-    const dungeonCards = document.querySelectorAll('.dungeon-card');
-    const backToMenuBtn = document.getElementById('backToMenuBtn');
+    const questScrollCards = document.querySelectorAll('.quest-scroll-card');
     const loadingTransition = document.getElementById('loadingTransition');
     const loadingDungeonName = document.getElementById('loadingDungeonName');
-    
-    // Dungeon names mapping
+
     const dungeonNames = {
         'crypts': 'Forgotten Crypts',
         'mines': 'Goblin Mines',
@@ -14,50 +12,36 @@ document.addEventListener('DOMContentLoaded', () => {
         'magma': 'Magma Chambers',
         'void': 'Void Rift'
     };
-    
-    // Handle dungeon card clicks
-    dungeonCards.forEach(card => {
-        card.addEventListener('click', () => {
+
+    questScrollCards.forEach(card => {
+        const acceptBtn = card.querySelector('.accept-quest-btn');
+
+        card.addEventListener('click', (e) => {
+            if (e.target === acceptBtn || acceptBtn.contains(e.target)) return;
+            acceptBtn.click();
+        });
+
+        acceptBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
             const dungeonType = card.dataset.dungeon;
             const dungeonName = dungeonNames[dungeonType];
-            
-            // Save selected dungeon to localStorage
+
             localStorage.setItem('selectedDungeon', dungeonType);
-            
-            // Show loading transition
             loadingDungeonName.textContent = `Entering ${dungeonName}...`;
             loadingTransition.classList.remove('hidden');
-            
-            // Play sound if available
-            if (window.audioManager) {
-                window.audioManager.play('button_click');
-            }
-            
-            // Transition to game after animation
+
+            if (window.audioManager) window.audioManager.play('button_click');
+
             setTimeout(() => {
                 window.location.href = 'index.html';
-            }, 2000);
+            }, 1500);
         });
-        
-        // Hover sound effect
+
         card.addEventListener('mouseenter', () => {
-            if (window.audioManager) {
-                window.audioManager.play('hover');
-            }
+            if (window.audioManager) window.audioManager.play('hover');
         });
     });
-    
-    // Back to menu button
-    if (backToMenuBtn) {
-        backToMenuBtn.addEventListener('click', () => {
-            if (window.audioManager) {
-                window.audioManager.play('button_click');
-            }
-            window.location.href = 'menu.html';
-        });
-    }
-    
-    // Load audio if available
+
     if (typeof AudioManager !== 'undefined') {
         window.audioManager = new AudioManager();
     }

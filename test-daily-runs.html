@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Run System Test</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 { color: #fbbf24; }
+        h2 { color: #60a5fa; margin-top: 30px; }
+        .test-section {
+            background: #1e293b;
+            border: 2px solid #334155;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .test-result {
+            padding: 10px;
+            margin: 10px 0;
+            border-left: 4px solid;
+            background: #1e293b;
+        }
+        .test-result.pass { border-color: #10b981; }
+        .test-result.fail { border-color: #ef4444; }
+        .test-result.info { border-color: #3b82f6; }
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            margin: 10px 5px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        button:hover { background: #2563eb; }
+        button.danger { background: #ef4444; }
+        button.danger:hover { background: #dc2626; }
+        button.success { background: #10b981; }
+        button.success:hover { background: #059669; }
+        .knight-display {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .knight-card {
+            background: #1e293b;
+            border: 2px solid;
+            border-radius: 8px;
+            padding: 15px;
+        }
+        .knight-card.exhausted { opacity: 0.5; border-color: #ef4444; }
+        .knight-card.active { border-color: #10b981; }
+        .knight-header { font-weight: bold; margin-bottom: 10px; }
+        .runs-display {
+            font-size: 18px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .runs-display.zero { color: #ef4444; }
+        .runs-display.low { color: #f59e0b; }
+        .runs-display.good { color: #10b981; }
+        code { background: #0f172a; padding: 2px 6px; border-radius: 4px; }
+        .time-info { color: #94a3b8; font-size: 14px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Daily Run System Test Suite</h1>
+    
+    <div class="test-section">
+        <h2>📋 System Status</h2>
+        <div id="systemStatus"></div>
+        <div class="time-info">
+            <strong>Current Time:</strong> <span id="currentTime"></span><br>
+            <strong>Next Reset (12 PM UTC):</strong> <span id="nextReset"></span><br>
+            <strong>Last Reset:</strong> <span id="lastReset"></span>
+        </div>
+        <button onclick="checkSystem()">🔄 Refresh Status</button>
+        <button class="danger" onclick="clearLocalStorage()">🗑️ Clear localStorage</button>
+        <button class="success" onclick="simulateReset()">⏰ Simulate Reset (12 PM UTC)</button>
+    </div>
+
+    <div class="test-section">
+        <h2>🎮 Test Controls</h2>
+        <button onclick="runAllTests()">▶️ Run All Tests</button>
+        <button onclick="testRewardCalculation()">💰 Test Reward Calculation</button>
+        <button onclick="testRunTracking()">🏃 Test Run Tracking</button>
+        <button onclick="testResetLogic()">⏰ Test Reset Logic</button>
+        <button onclick="testMultiKnight()">👥 Test Multi-Knight Team</button>
+    </div>
+
+    <div class="test-section">
+        <h2>⚔️ Mock Knights</h2>
+        <button onclick="createMockKnights()">➕ Create Mock Knights</button>
+        <button onclick="simulateRunUse()">🎯 Use 1 Run (All Knights)</button>
+        <button onclick="simulateCompletion()">✅ Simulate Dungeon Completion</button>
+        <div id="knightsDisplay" class="knight-display"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>📊 Test Results</h2>
+        <div id="testResults"></div>
+    </div>
+
+    <script src="characters.js"></script>
+    <script src="dungeon-session.js"></script>
+    <script>
+        // Initialize session manager
+        const sessionManager = new DungeonSessionManager();
+        let mockKnights = [];
+
+        // Update time display
+        function updateTimeDisplay() {
+            const now = new Date();
+            document.getElementById('currentTime').textContent = now.toUTCString();
+            
+            const nextReset = new Date(sessionManager.getNext12PMUTC(Date.now()));
+            document.getElementById('nextReset').textContent = nextReset.toUTCString();
+            
+            const lastReset = new Date(sessionManager.getLastReset12PMUTC(Date.now()));
+            document.getElementById('lastReset').textContent = lastReset.toUTCString();
+        }
+
+        function logResult(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `test-result ${type}`;
+            div.innerHTML = `<strong>${type.toUpperCase()}:</strong> ${message}`;
+            document.getElementById('testResults').prepend(div);
+        }
+
+        function checkSystem() {
+            updateTimeDisplay();
+            const status = document.getElementById('systemStatus');
+            const stored = localStorage.getItem('knight_daily_runs');
+            
+            if (stored) {
+                const data = JSON.parse(stored);
+                const knightCount = Object.keys(data.knights).length;
+                status.innerHTML = `
+                    ✅ <strong>System Active</strong><br>
+                    Knights tracked: ${knightCount}<br>
+                    Last reset time: ${new Date(data.lastResetTime).toUTCString()}
+                `;
+            } else {
+                status.innerHTML = `⚠️ <strong>No data yet</strong> - Create mock knights to begin`;
+            }
+        }
+
+        function createMockKnights() {
+            mockKnights = [];
+            const rarities = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY'];
+            
+            rarities.forEach((rarity, idx) => {
+                const knight = {
+                    tokenId: idx + 1,
+                    rarity: { tier: rarity, name: rarity, dailyRuns: RARITY[rarity].dailyRuns },
+                    stats: { power: 50, speed: 5 }
+                };
+                mockKnights.push(knight);
+            });
+            
+            displayKnights();
+            logResult(`Created ${mockKnights.length} mock knights (one of each rarity)`, 'pass');
+        }
+
+        function displayKnights() {
+            const container = document.getElementById('knightsDisplay');
+            container.innerHTML = '';
+            
+            mockKnights.forEach(knight => {
+                const remaining = sessionManager.getRemainingRuns(knight.tokenId, knight.rarity.tier);
+                const max = knight.rarity.dailyRuns;
+                const exhausted = remaining === 0;
+                
+                const runsClass = remaining === 0 ? 'zero' : remaining <= 1 ? 'low' : 'good';
+                
+                const card = document.createElement('div');
+                card.className = `knight-card ${exhausted ? 'exhausted' : 'active'}`;
+                card.innerHTML = `
+                    <div class="knight-header" style="color: ${RARITY[knight.rarity.tier].color}">
+                        Knight #${knight.tokenId}
+                    </div>
+                    <div>${knight.rarity.name}</div>
+                    <div class="runs-display ${runsClass}">
+                        ${exhausted ? '😴' : '⚔️'} ${remaining}/${max} runs
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function simulateRunUse() {
+            if (mockKnights.length === 0) {
+                logResult('Create mock knights first!', 'fail');
+                return;
+            }
+            
+            mockKnights.forEach(knight => {
+                sessionManager.useRun(knight.tokenId, knight.rarity.tier);
+            });
+            
+            displayKnights();
+            logResult('Used 1 run for all knights', 'info');
+        }
+
+        function simulateCompletion() {
+            if (mockKnights.length === 0) {
+                logResult('Create mock knights first!', 'fail');
+                return;
+            }
+            
+            // Filter knights with runs remaining
+            const availableKnights = mockKnights.filter(k => {
+                return sessionManager.canDeploy(k.tokenId, k.rarity.tier);
+            });
+            
+            if (availableKnights.length === 0) {
+                logResult('All knights exhausted! Simulate reset to continue.', 'fail');
+                return;
+            }
+            
+            // Simulate completion
+            availableKnights.forEach(knight => {
+                sessionManager.useRun(knight.tokenId, knight.rarity.tier);
+            });
+            
+            displayKnights();
+            logResult(`Completed dungeon with ${availableKnights.length} knights`, 'pass');
+        }
+
+        function simulateReset() {
+            // Force reset by setting lastResetTime to yesterday
+            const yesterday = Date.now() - (25 * 60 * 60 * 1000); // 25 hours ago
+            sessionManager.knightRuns.lastResetTime = yesterday;
+            sessionManager.saveRunTracking();
+            
+            // Trigger reset check
+            sessionManager.checkDailyReset();
+            
+            displayKnights();
+            checkSystem();
+            logResult('Simulated 12 PM UTC reset - all runs restored!', 'pass');
+        }
+
+        function clearLocalStorage() {
+            localStorage.removeItem('knight_daily_runs');
+            sessionManager.initializeRunTracking();
+            mockKnights = [];
+            document.getElementById('knightsDisplay').innerHTML = '';
+            checkSystem();
+            logResult('Cleared all data', 'info');
+        }
+
+        // Test functions
+        function testRewardCalculation() {
+            logResult('🧪 Testing reward calculation...', 'info');
+            
+            // Test 1: Single Common
+            const test1 = [{rarity: {tier: 'COMMON'}}];
+            sessionManager.currentSession = {enemiesKilled: 0};
+            const reward1 = sessionManager.calculateReward(test1.map(k => k.rarity.tier));
+            const expected1 = 10;
+            logResult(`1 Common: ${reward1} DNG (expected: ${expected1})`, reward1 === expected1 ? 'pass' : 'fail');
+            
+            // Test 2: 5 Commons
+            const test2 = Array(5).fill({rarity: {tier: 'COMMON'}});
+            const reward2 = sessionManager.calculateReward(test2.map(k => k.rarity.tier));
+            const expected2 = 50;
+            logResult(`5 Commons: ${reward2} DNG (expected: ${expected2})`, reward2 === expected2 ? 'pass' : 'fail');
+            
+            // Test 3: 1 Legendary
+            const test3 = [{rarity: {tier: 'LEGENDARY'}}];
+            const reward3 = sessionManager.calculateReward(test3.map(k => k.rarity.tier));
+            const expected3 = 150;
+            logResult(`1 Legendary: ${reward3} DNG (expected: ${expected3})`, reward3 === expected3 ? 'pass' : 'fail');
+            
+            // Test 4: Mixed team
+            const test4 = [{rarity: {tier: 'LEGENDARY'}}, ...Array(14).fill({rarity: {tier: 'COMMON'}})];
+            const reward4 = sessionManager.calculateReward(test4.map(k => k.rarity.tier));
+            const expected4 = 290; // 150 + 140
+            logResult(`1 Legendary + 14 Commons: ${reward4} DNG (expected: ${expected4})`, reward4 === expected4 ? 'pass' : 'fail');
+            
+            sessionManager.currentSession = null;
+        }
+
+        function testRunTracking() {
+            logResult('🧪 Testing run tracking...', 'info');
+            
+            // Create test knight
+            const testId = 999;
+            const testRarity = 'COMMON';
+            
+            // Initial state
+            const initial = sessionManager.getRemainingRuns(testId, testRarity);
+            logResult(`Initial runs: ${initial}/5`, initial === 5 ? 'pass' : 'fail');
+            
+            // Use a run
+            sessionManager.useRun(testId, testRarity);
+            const after1 = sessionManager.getRemainingRuns(testId, testRarity);
+            logResult(`After 1 use: ${after1}/5`, after1 === 4 ? 'pass' : 'fail');
+            
+            // Use all remaining
+            for (let i = 0; i < 4; i++) {
+                sessionManager.useRun(testId, testRarity);
+            }
+            const afterAll = sessionManager.getRemainingRuns(testId, testRarity);
+            logResult(`After all uses: ${afterAll}/5`, afterAll === 0 ? 'pass' : 'fail');
+            
+            // Try to use when exhausted
+            const canDeploy = sessionManager.canDeploy(testId, testRarity);
+            logResult(`Can deploy when exhausted: ${canDeploy}`, !canDeploy ? 'pass' : 'fail');
+        }
+
+        function testResetLogic() {
+            logResult('🧪 Testing reset logic...', 'info');
+            
+            // Test getNext12PMUTC
+            const now = new Date('2024-01-15T10:00:00Z'); // 10 AM UTC
+            const next1 = new Date(sessionManager.getNext12PMUTC(now.getTime()));
+            const shouldBe1 = new Date('2024-01-15T12:00:00Z');
+            logResult(`Next reset from 10 AM: ${next1.toUTCString()}`, 
+                next1.getTime() === shouldBe1.getTime() ? 'pass' : 'fail');
+            
+            // Test after 12 PM
+            const now2 = new Date('2024-01-15T14:00:00Z'); // 2 PM UTC
+            const next2 = new Date(sessionManager.getNext12PMUTC(now2.getTime()));
+            const shouldBe2 = new Date('2024-01-16T12:00:00Z');
+            logResult(`Next reset from 2 PM: ${next2.toUTCString()}`, 
+                next2.getTime() === shouldBe2.getTime() ? 'pass' : 'fail');
+            
+            // Test getLastReset12PMUTC
+            const last1 = new Date(sessionManager.getLastReset12PMUTC(now.getTime()));
+            const shouldBeLast1 = new Date('2024-01-14T12:00:00Z'); // Yesterday
+            logResult(`Last reset from 10 AM: ${last1.toUTCString()}`, 
+                last1.getTime() === shouldBeLast1.getTime() ? 'pass' : 'fail');
+        }
+
+        function testMultiKnight() {
+            logResult('🧪 Testing multi-knight scenarios...', 'info');
+            
+            // Test different rarity limits
+            const rarityLimits = {
+                'COMMON': 5,
+                'UNCOMMON': 5,
+                'RARE': 4,
+                'EPIC': 3,
+                'LEGENDARY': 4
+            };
+            
+            Object.entries(rarityLimits).forEach(([rarity, expectedLimit]) => {
+                const testId = 1000 + Object.keys(rarityLimits).indexOf(rarity);
+                const actual = sessionManager.getRemainingRuns(testId, rarity);
+                logResult(`${rarity} daily limit: ${actual} (expected: ${expectedLimit})`, 
+                    actual === expectedLimit ? 'pass' : 'fail');
+            });
+        }
+
+        function runAllTests() {
+            document.getElementById('testResults').innerHTML = '';
+            logResult('🚀 Running all tests...', 'info');
+            testRewardCalculation();
+            testRunTracking();
+            testResetLogic();
+            testMultiKnight();
+            logResult('✅ All tests completed!', 'pass');
+        }
+
+        // Initialize on load
+        window.onload = () => {
+            checkSystem();
+            updateTimeDisplay();
+            setInterval(updateTimeDisplay, 1000);
+        };
+    </script>
+</body>
+</html>

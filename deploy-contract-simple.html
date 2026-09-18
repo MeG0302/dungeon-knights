@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deploy Game Contract</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            color: white;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            color: #8B5CF6;
+            margin-bottom: 30px;
+        }
+        .card {
+            background: rgba(30, 30, 50, 0.95);
+            border: 2px solid #8B5CF6;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(139, 92, 246, 0.3);
+        }
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            text-align: center;
+            font-weight: bold;
+        }
+        .status.info { background: rgba(33, 150, 243, 0.2); border: 1px solid #2196F3; }
+        .status.success { background: rgba(76, 175, 80, 0.2); border: 1px solid #4CAF50; }
+        .status.error { background: rgba(244, 67, 54, 0.2); border: 1px solid #F44336; }
+        button {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #8B5CF6, #6D28D9);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-weight: bold;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px 0;
+            transition: all 0.3s;
+        }
+        button:hover:not(:disabled) {
+            background: linear-gradient(135deg, #7C3AED, #5B21B6);
+            transform: translateY(-2px);
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .address-box {
+            background: rgba(139, 92, 246, 0.2);
+            border: 2px solid #8B5CF6;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+            word-break: break-all;
+        }
+        .log {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .log div {
+            padding: 5px;
+            border-left: 3px solid #8B5CF6;
+            padding-left: 10px;
+            margin: 5px 0;
+        }
+        .log .success { border-left-color: #4CAF50; color: #4CAF50; }
+        .log .error { border-left-color: #F44336; color: #F44336; }
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 6px;
+            margin: 8px 0;
+            font-size: 14px;
+        }
+        .label { color: #aaa; }
+        .value { color: white; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Deploy DungeonKnightsGame Contract</h1>
+        
+        <div class="card">
+            <h3>📋 Step 1: Connect Wallet</h3>
+            <div class="info-item">
+                <span class="label">Network:</span>
+                <span class="value">Robinhood Chain Testnet (46630)</span>
+            </div>
+            <div class="info-item">
+                <span class="label">Knight NFT:</span>
+                <span class="value">0x06c7D4b0C35858c78c3B213fbf50fB4A25f20512</span>
+            </div>
+            <div class="info-item">
+                <span class="label">$DNG Token:</span>
+                <span class="value">0xA8D54F6FEeAFaf5C2c546D1D1644aE2f46A2d910</span>
+            </div>
+            <button id="connectBtn" onclick="connectWallet()">Connect MetaMask</button>
+            <div id="walletInfo" style="display:none;" class="status success"></div>
+        </div>
+
+        <div class="card" id="deployCard" style="display:none;">
+            <h3>🚀 Step 2: Deploy Contract</h3>
+            <p style="color: #aaa; margin: 15px 0;">
+                This will deploy the game contract that handles dungeon completions and reward claiming.
+                Estimated gas: ~2-3M gas units
+            </p>
+            <button id="deployBtn" onclick="deployContract()">Deploy Contract</button>
+        </div>
+
+        <div class="card" id="successCard" style="display:none;">
+            <h3>✅ Step 3: Contract Deployed!</h3>
+            <div class="address-box">
+                <div style="color: #aaa; margin-bottom: 10px;">Game Contract Address:</div>
+                <div id="contractAddress" style="color: #8B5CF6; font-size: 18px; font-weight: bold;"></div>
+            </div>
+            <button onclick="copyAddress()">📋 Copy Address</button>
+            <button onclick="updateCode()">📝 Update dungeon-session.js</button>
+            <button onclick="openExplorer()">🔍 View on Explorer</button>
+            
+            <div style="margin-top: 20px; padding: 15px; background: rgba(255, 193, 7, 0.1); border: 1px solid #FFC107; border-radius: 8px;">
+                <strong style="color: #FFC107;">⚠️ Next Steps:</strong>
+                <ol style="margin-left: 20px; margin-top: 10px; line-height: 1.8;">
+                    <li>Copy the contract address</li>
+                    <li>Update <code>dungeon-session.js</code> line 8</li>
+                    <li>Fund contract with $DNG tokens</li>
+                    <li>Test the claiming flow!</li>
+                </ol>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>📋 Deployment Log</h3>
+            <div id="log" class="log">
+                <div>Waiting to connect wallet...</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="ethers-5.7.2.umd.min.js"></script>
+    <script>
+        let provider, signer, address;
+        let deployedAddress = null;
+
+        const KNIGHT_NFT = '0x06c7D4b0C35858c78c3B213fbf50fB4A25f20512';
+        const DNG_TOKEN = '0xA8D54F6FEeAFaf5C2c546D1D1644aE2f46A2d910';
+
+        // Simplified contract (removed OpenZeppelin imports for browser deployment)
+        // This is a minimal version that works
+        const CONTRACT_ABI = [
+            "constructor(address _knightNFT, address _dngToken)",
+            "function completeDungeon(uint256 knightId, uint256 dungeonId, uint256 timeSpent, uint256 reward, uint256 timestamp, bytes signature) external",
+            "function getKnightStats(uint256 knightId) view returns (uint256 totalClaimed, uint256 lastClaimTime)",
+            "event DungeonCompleted(address indexed player, uint256 indexed knightId, uint256 dungeonId, uint256 timeSpent, uint256 reward, uint256 timestamp)"
+        ];
+
+        // NOTE: This is a placeholder - you need to compile the actual contract
+        // Use Remix IDE (https://remix.ethereum.org) to compile and get the bytecode
+        const CONTRACT_BYTECODE = "NEEDS_COMPILATION";
+
+        function log(message, type = 'info') {
+            const logEl = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = type;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logEl.appendChild(entry);
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        async function connectWallet() {
+            try {
+                log('Connecting to MetaMask...');
+                
+                if (typeof window.ethereum === 'undefined') {
+                    throw new Error('MetaMask not installed!');
+                }
+
+                provider = new ethers.providers.Web3Provider(window.ethereum);
+                await provider.send('eth_requestAccounts', []);
+                
+                const network = await provider.getNetwork();
+                if (network.chainId !== 46630) {
+                    log('Wrong network! Switching to Robinhood Chain Testnet...', 'error');
+                    try {
+                        await window.ethereum.request({
+                            method: 'wallet_switchEthereumChain',
+                            params: [{ chainId: '0xB616' }],
+                        });
+                    } catch (switchError) {
+                        if (switchError.code === 4902) {
+                            await window.ethereum.request({
+                                method: 'wallet_addEthereumChain',
+                                params: [{
+                                    chainId: '0xB616',
+                                    chainName: 'Robinhood Chain Testnet',
+                                    nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+                                    rpcUrls: ['https://rpc.testnet.chain.robinhood.com'],
+                                    blockExplorerUrls: ['https://explorer.testnet.chain.robinhood.com']
+                                }],
+                            });
+                        }
+                    }
+                    provider = new ethers.providers.Web3Provider(window.ethereum);
+                }
+
+                signer = provider.getSigner();
+                address = await signer.getAddress();
+
+                log(`✅ Connected: ${address}`, 'success');
+                
+                document.getElementById('walletInfo').textContent = `Connected: ${address.slice(0,6)}...${address.slice(-4)}`;
+                document.getElementById('walletInfo').style.display = 'block';
+                document.getElementById('connectBtn').style.display = 'none';
+                document.getElementById('deployCard').style.display = 'block';
+
+            } catch (error) {
+                log(`❌ Connection failed: ${error.message}`, 'error');
+                alert('Connection failed: ' + error.message);
+            }
+        }
+
+        async function deployContract() {
+            log('⚠️ IMPORTANT: This contract needs to be compiled first!');
+            log('Please use Remix IDE to compile and deploy:');
+            log('1. Go to https://remix.ethereum.org');
+            log('2. Upload contracts/DungeonKnightsGame.sol');
+            log('3. Compile with Solidity 0.8.20+');
+            log('4. Deploy with constructor parameters:');
+            log(`   - _knightNFT: ${KNIGHT_NFT}`);
+            log(`   - _dngToken: ${DNG_TOKEN}`);
+            log('5. Copy the deployed address and paste it in the input below');
+            
+            const contractAddress = prompt('Paste the deployed contract address from Remix:');
+            
+            if (contractAddress && ethers.utils.isAddress(contractAddress)) {
+                deployedAddress = contractAddress;
+                log(`✅ Contract address set: ${deployedAddress}`, 'success');
+                
+                document.getElementById('contractAddress').textContent = deployedAddress;
+                document.getElementById('successCard').style.display = 'block';
+                document.getElementById('deployCard').style.display = 'none';
+                
+                localStorage.setItem('gameContractAddress', deployedAddress);
+            } else {
+                log('❌ Invalid address', 'error');
+            }
+        }
+
+        function copyAddress() {
+            navigator.clipboard.writeText(deployedAddress);
+            log('📋 Address copied to clipboard!', 'success');
+            alert('Contract address copied!');
+        }
+
+        function updateCode() {
+            const code = `this.gameContractAddress = '${deployedAddress}';`;
+            navigator.clipboard.writeText(deployedAddress);
+            
+            alert(`Update dungeon-session.js line 8 with:\n\n${code}\n\nAddress copied to clipboard!`);
+            log('📝 Update dungeon-session.js with the copied address');
+        }
+
+        function openExplorer() {
+            window.open(`https://explorer.testnet.chain.robinhood.com/address/${deployedAddress}`, '_blank');
+        }
+
+        // Show Remix instructions
+        log('');
+        log('='.repeat(50));
+        log('📝 DEPLOYMENT INSTRUCTIONS:');
+        log('='.repeat(50));
+        log('1. Open https://remix.ethereum.org in a new tab');
+        log('2. Create new file: DungeonKnightsGame.sol');
+        log('3. Copy the contract code from contracts/DungeonKnightsGame.sol');
+        log('4. Install OpenZeppelin: Remix → Plugin Manager → "OpenZeppelin"');
+        log('5. Compile: Compiler tab → Solidity 0.8.20+ → Compile');
+        log('6. Deploy: Deploy tab → Environment: Injected Provider');
+        log('7. Constructor parameters:');
+        log(`   _knightNFT: ${KNIGHT_NFT}`);
+        log(`   _dngToken: ${DNG_TOKEN}`);
+        log('8. Click "Deploy" and confirm in MetaMask');
+        log('9. Copy deployed address and paste here');
+        log('='.repeat(50));
+        log('');
+        log('💡 TIP: Make sure you have ETH on Robinhood Testnet for gas!');
+    </script>
+</body>
+</html>

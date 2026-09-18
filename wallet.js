@@ -338,6 +338,75 @@ class WalletManager {
       return null;
     }
   }
+
+  // Batch mint knights (up to 10 in parallel)
+  async batchMintKnights(quantity) {
+    if (!this.isConnected) {
+      alert('Please connect your wallet first!');
+      return null;
+    }
+
+    if (quantity < 1 || quantity > 10) {
+      alert('Can only mint 1-10 knights at a time');
+      return null;
+    }
+
+    try {
+      console.log(`⚔️ Batch minting ${quantity} knights...`);
+      
+      const nftABI = [
+        'function mintKnight() returns (uint256)'
+      ];
+      
+      const provider = new ethers.providers.Web3Provider(this.provider);
+      const signer = provider.getSigner();
+      const contract = new ethers.Contract(
+        this.nftContractAddress,
+        nftABI,
+        signer
+      );
+
+      const results = [];
+      const promises = [];
+      
+      // Send all transactions in parallel
+      for (let i = 0; i < quantity; i++) {
+        console.log(`📝 Sending mint transaction ${i + 1}/${quantity}...`);
+        promises.push(contract.mintKnight());
+      }
+
+      // Wait for all transactions to be sent
+      const transactions = await Promise.all(promises);
+      console.log(`✅ All ${quantity} transactions sent!`);
+
+      // Wait for all confirmations
+      for (let i = 0; i < transactions.length; i++) {
+        console.log(`⏳ Waiting for confirmation ${i + 1}/${quantity}... (tx: ${transactions[i].hash})`);
+        const receipt = await transactions[i].wait();
+        results.push({
+          success: true,
+          txHash: transactions[i].hash,
+          blockNumber: receipt.blockNumber
+        });
+        console.log(`✅ Knight ${i + 1}/${quantity} minted!`);
+      }
+
+      console.log(`🎉 All ${quantity} knights minted successfully!`);
+      
+      return {
+        success: true,
+        count: quantity,
+        results: results
+      };
+      
+    } catch (error) {
+      console.error('❌ Batch mint failed:', error);
+      if (error.code !== 4001) {
+        alert('Batch mint failed: ' + error.message);
+      }
+      return null;
+    }
+  }
   
   // Get knights from blockchain
   async getMyKnights() {

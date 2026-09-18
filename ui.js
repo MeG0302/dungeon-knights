@@ -65,7 +65,12 @@ class UI {
         // Modals
         this.completionModal = document.getElementById('completionModal');
         this.shortcutsOverlay = document.getElementById('shortcutsOverlay');
-        
+
+        // Initialize wallet UI state
+        if (window.walletManager?.isConnected) {
+            this.updateWalletUI();
+        }
+
         console.log('✅ UI Elements initialized');
     }
 
@@ -83,6 +88,23 @@ class UI {
                 this.game.stopDungeon();
             });
         }
+
+        // Disconnect button
+        if (this.disconnectBtn) {
+            this.disconnectBtn.addEventListener('click', async () => {
+                if (window.walletManager) {
+                    await window.walletManager.disconnect();
+                }
+            });
+        }
+
+        // Wallet connect / disconnect events
+        window.addEventListener('walletConnected', () => {
+            this.updateWalletUI();
+        });
+        window.addEventListener('walletDisconnected', () => {
+            this.updateWalletUI();
+        });
         
         // Menu button
         if (this.menuBtn) {
@@ -110,24 +132,36 @@ class UI {
         // Claim All button
         if (this.claimAllBtn) {
             this.claimAllBtn.addEventListener('click', async () => {
-                if (window.dungeonSession) {
-                    // Trigger chest animation before claiming
-                    this.animateChestClaim();
-                    
-                    // Wait a moment for animation to start
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                    
-                    await window.dungeonSession.claimAllRewards();
-                    this.updateRewardsDisplay();
+                console.log('🎁 Claim button clicked!');
+                console.log('window.dungeonSession:', window.dungeonSession);
+                
+                if (!window.dungeonSession) {
+                    console.error('❌ dungeonSession not initialized');
+                    alert('Session not initialized. Please refresh the page.');
+                    return;
                 }
+                
+                console.log('📦 Pending runs:', window.dungeonSession.pendingRuns?.length || 0);
+                
+                // Trigger chest animation before claiming
+                this.animateChestClaim();
+                
+                // Wait a moment for animation to start
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
+                console.log('🚀 Calling claimAllRewards()...');
+                const success = await window.dungeonSession.claimAllRewards();
+                console.log('✅ Claim result:', success);
+                
+                this.updateRewardsDisplay();
             });
         }
         
         // View History button
         if (this.viewHistoryBtn) {
             this.viewHistoryBtn.addEventListener('click', () => {
-                console.log('History:', window.dungeonSession ? window.dungeonSession.getHistory() : []);
-                alert('History feature coming soon! Check console for now.');
+                console.log('📜 Opening Claim History page...');
+                window.location.href = 'claim-history.html';
             });
         }
         
@@ -207,6 +241,10 @@ class UI {
         if (this.activeKnights) this.activeKnights.textContent = `${state.activeKnights}/15`;
         if (this.activeLoot) this.activeLoot.textContent = state.activeLootNodes;
         if (this.estimatedTime) this.estimatedTime.textContent = state.estimatedTime;
+
+        // Sync header DNG with game gold
+        const headerDng = document.getElementById('headerDngBalance');
+        if (headerDng) headerDng.textContent = Math.floor(state.goldBalance) + ' DNG';
 
         // Update squad list
         this.updateSquadList();
@@ -291,6 +329,24 @@ class UI {
         }
     }
 
+    updateWalletUI() {
+        const addressDisplay = document.getElementById('walletAddressDisplay');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const isConnected = window.walletManager?.isConnected;
+
+        if (isConnected) {
+            const shortAddress = window.walletManager.userAddress.slice(0, 6) + '...' + window.walletManager.userAddress.slice(-4);
+            if (addressDisplay) {
+                addressDisplay.textContent = shortAddress;
+                addressDisplay.style.display = 'inline';
+            }
+            if (disconnectBtn) disconnectBtn.style.display = 'inline-flex';
+        } else {
+            if (addressDisplay) addressDisplay.style.display = 'none';
+            if (disconnectBtn) disconnectBtn.style.display = 'none';
+        }
+    }
+
     updateSquadList() {
         if (!this.squadList) return;
         
@@ -332,14 +388,26 @@ class UI {
         });
     }
     
-    updateRewardsDisplay() {
-        if (!window.dungeonSession) return;
+    async updateRewardsDisplay() {
+        if (!window.dungeonSession) {
+            console.log('⚠️ updateRewardsDisplay: dungeonSession not initialized');
+            return;
+        }
         
-        const unclaimed = window.dungeonSession.getUnclaimedRewards();
-        const completions = window.dungeonSession.getHistory().filter(d => !d.claimed);
+        const unclaimed = await window.dungeonSession.getUnclaimedRewards();
+        const history = window.dungeonSession.getHistory();
+        const completions = history.filter(d => !d.claimed);
+        
+        console.log('📊 Rewards Display Update:');
+        console.log('  - Unclaimed amount:', unclaimed);
+        console.log('  - History items:', history.length);
+        console.log('  - Completions (unclaimed):', completions.length);
+        console.log('  - Button exists:', !!this.claimAllBtn);
+        console.log('  - Button disabled:', this.claimAllBtn?.disabled);
         
         if (this.rewardsTotal) {
-            this.rewardsTotal.textContent = `${unclaimed.toFixed(2)} $DNG`;
+            const unclaimedNum = typeof unclaimed === 'number' ? unclaimed : 0;
+            this.rewardsTotal.textContent = `${unclaimedNum.toFixed(2)} $DNG`;
         }
         
         if (this.rewardsCompletions) {
@@ -347,7 +415,9 @@ class UI {
         }
         
         if (this.claimAllBtn) {
-            this.claimAllBtn.disabled = completions.length === 0;
+            const shouldDisable = completions.length === 0;
+            this.claimAllBtn.disabled = shouldDisable;
+            console.log('  - Setting button disabled to:', shouldDisable);
         }
     }
 

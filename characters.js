@@ -77,9 +77,6 @@ class Knight {
      * Get remaining daily runs for this knight
      */
     getRemainingRuns() {
-        if (window.dungeonSession) {
-            return window.dungeonSession.getRemainingRuns(this.tokenId, this.rarity.tier);
-        }
         return RARITY[this.rarity.tier]?.dailyRuns || 5;
     }
     

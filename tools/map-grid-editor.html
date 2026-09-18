@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Dungeon Map Grid Editor</title>
+<style>
+  :root { --gold:#d4af37; --ink:#1a1410; }
+  html,body{margin:0;background:#141210;color:#e8ddc8;font:14px/1.45 "Segoe UI",system-ui,sans-serif}
+  header{display:flex;gap:14px;align-items:center;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid #3d3428;background:#1c1814}
+  h1{font-size:15px;margin:0;color:var(--gold);letter-spacing:.06em;text-transform:uppercase}
+  button,select{background:#2a241c;color:#e8ddc8;border:1px solid #4a4032;border-radius:3px;padding:6px 11px;font:inherit;cursor:pointer}
+  button:hover{background:#38301f;border-color:var(--gold)}
+  button.on{background:var(--gold);color:var(--ink);border-color:var(--gold);font-weight:600}
+  #wrap{padding:14px}
+  #stage{position:relative;display:inline-block;border:1px solid #4a4032;line-height:0}
+  canvas{display:block;cursor:crosshair}
+  #out{width:100%;height:170px;margin-top:12px;background:#0e0c0a;color:#9fd39f;
+       border:1px solid #3d3428;border-radius:3px;font:12px/1.4 Consolas,monospace;padding:8px;resize:vertical}
+  .hint{color:#9a8f7d;font-size:12.5px}
+  .sw{display:inline-block;width:11px;height:11px;margin-right:5px;vertical-align:-1px;border:1px solid #000}
+</style>
+</head>
+<body>
+<header>
+  <h1>Map Grid Editor</h1>
+  <select id="mapSel"></select>
+  <span class="hint">Brush:</span>
+  <button class="brush on" data-v="0"><i class="sw" style="background:#3fbf6f"></i>Floor</button>
+  <button class="brush" data-v="1"><i class="sw" style="background:#e04040"></i>Wall</button>
+  <button class="brush" data-v="2"><i class="sw" style="background:#c98a2e"></i>Obstacle</button>
+  <button class="brush" data-v="3"><i class="sw" style="background:#7a5cd6"></i>Breakable</button>
+  <button id="toggleOverlay">Hide overlay</button>
+  <button id="borderBtn">Fill border</button>
+  <button id="clearBtn">Clear</button>
+  <button id="exportBtn">Export all &rarr; textarea</button>
+  <span class="hint">Drag to paint &middot; right-click erases to floor</span>
+</header>
+
+<div id="wrap">
+  <div id="stage"><canvas id="cv"></canvas></div>
+  <textarea id="out" spellcheck="false" placeholder="Export output appears here. Paste it into maps/map-grids.js"></textarea>
+</div>
+
+<script src="../maps/map-grids.js"></script>
+<script>
+// Grid geometry must stay in step with dungeon.js and tools/derive-map-grid.js.
+// 36x20 is the tile pitch the map art is actually drawn on.
+const GW = 36, GH = 20;
+// Frames are 1280x720 (1.778); the 36x20 world is 1.8, so the art is drawn
+// across the whole grid - a 1.2% stretch, which is invisible on this artwork.
+const SRC_W = 1280, SRC_H = 720;
+const CELL = 30, PAD = 22;
+
+const THEMES = ['crypts', 'magma', 'mines', 'temple', 'void'];
+const COLORS = { 1: 'rgba(224,64,64,.42)', 2: 'rgba(201,138,46,.42)', 3: 'rgba(122,92,214,.42)' };
+
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+cv.width = GW * CELL + PAD; cv.height = GH * CELL + PAD;
+
+const grids = {};
+THEMES.forEach(t => {
+  const src = (window.MAP_GRIDS || {})[t];
+  grids[t] = src ? src.map(r => r.slice())
+                 : Array.from({ length: GH }, () => Array(GW).fill(0));
+});
+
+const sel = document.getElementById('mapSel');
+THEMES.forEach(t => sel.add(new Option(t, t)));
+let theme = THEMES[0], brush = 0, showOverlay = true, painting = false;
+
+const img = new Image();
+function loadTheme() {
+  img.onload = draw;
+  img.src = '../maps/' + theme + '.png?' + Date.now();
+}
+
+function draw() {
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  ctx.fillStyle = '#0e0c0a'; ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.imageSmoothingEnabled = false;
+  if (img.complete && img.naturalWidth) {
+    ctx.drawImage(img, 0, 0, SRC_W, SRC_H, PAD, PAD, GW * CELL, GH * CELL);
+  }
+  const g = grids[theme];
+  for (let y = 0; y < GH; y++) {
+    for (let x = 0; x < GW; x++) {
+      const px = PAD + x * CELL, py = PAD + y * CELL;
+      if (showOverlay && g[y][x]) { ctx.fillStyle = COLORS[g[y][x]]; ctx.fillRect(px, py, CELL, CELL); }
+      if (showOverlay) {
+        ctx.strokeStyle = 'rgba(255,255,255,.16)'; ctx.lineWidth = 1;
+        ctx.strokeRect(px + .5, py + .5, CELL, CELL);
+      }
+    }
+  }
+  // axis labels
+  ctx.fillStyle = '#d4af37'; ctx.font = '11px Consolas,monospace';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (let x = 0; x < GW; x++) ctx.fillText(x, PAD + x * CELL + CELL / 2, PAD / 2);
+  ctx.textAlign = 'right';
+  for (let y = 0; y < GH; y++) ctx.fillText(y, PAD - 5, PAD + y * CELL + CELL / 2);
+}
+
+function cellAt(ev) {
+  const r = cv.getBoundingClientRect();
+  const x = Math.floor((ev.clientX - r.left - PAD) / CELL);
+  const y = Math.floor((ev.clientY - r.top - PAD) / CELL);
+  return (x >= 0 && x < GW && y >= 0 && y < GH) ? { x, y } : null;
+}
+function paint(ev, val) {
+  const c = cellAt(ev); if (!c) return;
+  if (grids[theme][c.y][c.x] === val) return;
+  grids[theme][c.y][c.x] = val; draw();
+}
+
+cv.addEventListener('contextmenu', e => e.preventDefault());
+cv.addEventListener('mousedown', e => { painting = true; paint(e, e.button === 2 ? 0 : brush); });
+window.addEventListener('mouseup', () => painting = false);
+cv.addEventListener('mousemove', e => { if (painting) paint(e, (e.buttons & 2) ? 0 : brush); });
+
+document.querySelectorAll('.brush').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.brush').forEach(o => o.classList.remove('on'));
+  b.classList.add('on'); brush = +b.dataset.v;
+});
+sel.onchange = () => { theme = sel.value; loadTheme(); };
+document.getElementById('toggleOverlay').onclick = e => {
+  showOverlay = !showOverlay; e.target.textContent = showOverlay ? 'Hide overlay' : 'Show overlay'; draw();
+};
+document.getElementById('borderBtn').onclick = () => {
+  const g = grids[theme];
+  for (let x = 0; x < GW; x++) { g[0][x] = 1; g[GH - 1][x] = 1; }
+  for (let y = 0; y < GH; y++) { g[y][0] = 1; g[y][GW - 1] = 1; }
+  draw();
+};
+document.getElementById('clearBtn').onclick = () => {
+  grids[theme] = Array.from({ length: GH }, () => Array(GW).fill(0)); draw();
+};
+document.getElementById('exportBtn').onclick = () => {
+  let s = '// Collision grids for the painted dungeon maps (maps/<theme>.png).\n';
+  s += '// 0 = floor, 1 = wall, 2 = permanent obstacle, 3 = breakable obstacle.\n';
+  s += '// Authored with tools/map-grid-editor.html - keep ' + GW + 'x' + GH + ' in step with dungeon.js.\n';
+  s += 'const MAP_GRIDS = {\n';
+  THEMES.forEach((t, i) => {
+    s += '    ' + t + ': [\n';
+    s += grids[t].map(r => '        [' + r.join(',') + ']').join(',\n');
+    s += '\n    ]' + (i < THEMES.length - 1 ? ',' : '') + '\n';
+  });
+  s += '};\n\nif (typeof window !== \'undefined\') window.MAP_GRIDS = MAP_GRIDS;\n';
+  const out = document.getElementById('out');
+  out.value = s; out.select();
+};
+
+// exposed so the grids can be driven programmatically during authoring
+window.editor = { grids, THEMES, draw, get theme() { return theme; },
+                  set theme(t) { theme = t; sel.value = t; loadTheme(); } };
+
+loadTheme();
+</script>
+</body>
+</html>

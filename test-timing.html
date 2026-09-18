@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Timing Test - Dungeon Knights</title>
+    <style>
+        body {
+            font-family: monospace;
+            background: #1a1a1a;
+            color: #00ff00;
+            padding: 20px;
+        }
+        .test-section {
+            background: #2a2a2a;
+            padding: 20px;
+            margin: 20px 0;
+            border: 2px solid #00ff00;
+            border-radius: 8px;
+        }
+        button {
+            background: #00ff00;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            font-family: monospace;
+            font-weight: bold;
+        }
+        button:hover {
+            background: #00cc00;
+        }
+        .log {
+            background: #000;
+            padding: 10px;
+            margin-top: 10px;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #333;
+        }
+        .log-entry {
+            margin: 5px 0;
+        }
+        .success { color: #00ff00; }
+        .warning { color: #ffaa00; }
+        .error { color: #ff0000; }
+        .info { color: #00aaff; }
+    </style>
+</head>
+<body>
+    <h1>⏱️ Dungeon Knights - Timing Test</h1>
+    
+    <div class="test-section">
+        <h2>🎮 Session Timer Test</h2>
+        <p>This tests the dungeon session timing mechanism:</p>
+        <button onclick="startTest()">Start Test Session</button>
+        <button onclick="completeAfter(5)">Complete After 5s</button>
+        <button onclick="completeAfter(30)">Complete After 30s</button>
+        <button onclick="completeAfter(60)">Complete After 60s</button>
+        <button onclick="completeNow()">Complete Now (Instant)</button>
+        <button onclick="clearLog()">Clear Log</button>
+        
+        <div class="log" id="testLog"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>📊 Expected Time Calculations</h2>
+        <p>Expected minimum times based on knight count:</p>
+        <div id="calculations"></div>
+    </div>
+
+    <script>
+        let sessionStartTime = null;
+
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('testLog');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            const timestamp = new Date().toLocaleTimeString();
+            entry.textContent = `[${timestamp}] ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(message);
+        }
+
+        function clearLog() {
+            document.getElementById('testLog').innerHTML = '';
+        }
+
+        function getExpectedMinimumTime(knightCount) {
+            const baseTime = 300; // 5 minutes
+            const calculatedTime = baseTime / Math.sqrt(knightCount);
+            const minimumTime = Math.max(30, calculatedTime);
+            return Math.floor(minimumTime);
+        }
+
+        function startTest() {
+            sessionStartTime = Date.now();
+            log('🎮 Test session started!', 'success');
+            log(`📅 Start time: ${sessionStartTime}`, 'info');
+        }
+
+        function completeAfter(seconds) {
+            if (!sessionStartTime) {
+                log('❌ No active session! Click "Start Test Session" first.', 'error');
+                return;
+            }
+
+            log(`⏳ Waiting ${seconds} seconds before completion...`, 'info');
+            
+            setTimeout(() => {
+                completeNow();
+            }, seconds * 1000);
+        }
+
+        function completeNow() {
+            if (!sessionStartTime) {
+                log('❌ No active session! Click "Start Test Session" first.', 'error');
+                return;
+            }
+
+            const completionTime = Date.now() - sessionStartTime;
+            const timeSpentSeconds = Math.floor(completionTime / 1000);
+            
+            log('━━━━━━━━━━━━━━━━━━━━━━', 'info');
+            log('🏁 COMPLETION TRIGGERED', 'success');
+            log(`📊 Time spent: ${timeSpentSeconds} seconds`, 'info');
+            log(`📊 Raw completion time: ${completionTime}ms`, 'info');
+
+            // Test with different knight counts
+            [1, 2, 5, 10, 15].forEach(count => {
+                const expectedMin = getExpectedMinimumTime(count);
+                const valid = timeSpentSeconds >= expectedMin;
+                const status = valid ? '✅' : '⚠️';
+                const logType = valid ? 'success' : 'warning';
+                
+                log(`${status} ${count} knight(s): ${timeSpentSeconds}s ${valid ? '≥' : '<'} ${expectedMin}s expected`, logType);
+            });
+
+            log('━━━━━━━━━━━━━━━━━━━━━━', 'info');
+            
+            // Reset session
+            sessionStartTime = null;
+            log('🔄 Session reset. Start a new test.', 'info');
+        }
+
+        // Calculate and display expected times
+        window.addEventListener('DOMContentLoaded', () => {
+            const calcDiv = document.getElementById('calculations');
+            let html = '<table style="width: 100%; color: #fff; margin-top: 10px;">';
+            html += '<tr><th>Knights</th><th>Base Formula</th><th>Expected Min Time</th></tr>';
+            
+            [1, 2, 3, 4, 5, 10, 15].forEach(count => {
+                const baseTime = 300;
+                const calculated = baseTime / Math.sqrt(count);
+                const expectedMin = getExpectedMinimumTime(count);
+                
+                html += `<tr>
+                    <td style="padding: 5px;">${count}</td>
+                    <td style="padding: 5px;">300 / √${count} = ${calculated.toFixed(1)}s</td>
+                    <td style="padding: 5px; color: #00ff00; font-weight: bold;">${expectedMin}s (${(expectedMin/60).toFixed(2)} min)</td>
+                </tr>`;
+            });
+            
+            html += '</table>';
+            calcDiv.innerHTML = html;
+        });
+    </script>
+</body>
+</html>
