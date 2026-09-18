@@ -124,7 +124,7 @@ export default function PointsPage() {
                     <aside className="points-sidebar">
                         <div className="panel vault-dungeon-panel">
                             <div className="panel-header">
-                                <img src={`${ASSETS}Treasure_chest_overflowing_with_ΓÇª_2K_20260919012043-autocrop-hair.png`} alt="" className="panel-icon" />
+                                <img src={`${ASSETS}treasure-chest.png`} alt="" className="panel-icon" />
                                 <span>Points Vault</span>
                             </div>
                             <p className="panel-desc">Enter the vault to earn daily points (100 + 300 + 500)</p>
