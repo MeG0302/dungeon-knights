@@ -1,5 +1,11 @@
 /* Points Page — uses theme.css for base styles */
 
+/* Scale sidebar icons 2x */
+.points-left-panel .panel-header-icon {
+    width: 40px;
+    height: 40px;
+}
+
 /* Points-specific overrides */
 .wallet-pill #headerDngText {
     font-weight: 700;

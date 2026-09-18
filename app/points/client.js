@@ -111,7 +111,7 @@ export default function PointsPage() {
                     <div className="header-title">POINTS PROGRAM</div>
                     <div className="header-actions">
                         <div className="wallet-pill" id="headerDngBalance">
-                            <img src={`${ASSETS}Gold_coin_badge_with_PTS_2K_20260919011438-autocrop-hair.png`} alt="" style={{ width: 18, height: 18, imageRendering: 'pixelated' }} />
+                            <img src={`${ASSETS}Gold_coin_badge_with_PTS_2K_20260919011438-autocrop-hair.png`} alt="" style={{ width: 36, height: 36, imageRendering: 'pixelated' }} />
                             <span id="headerDngText">{points.toLocaleString()} PTS</span>
                         </div>
                     </div>
@@ -121,7 +121,7 @@ export default function PointsPage() {
                 <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
 
                     {/* LEFT: Points Actions */}
-                    <aside className="side-panel" style={{ width: 340 }}>
+                    <aside className="side-panel points-left-panel" style={{ width: 400 }}>
                         <div className="side-panel-header">
                             <img src={`${ASSETS}Treasure_chest_overflowing_with_ΓÇª_2K_20260919012043-autocrop-hair.png`} alt="" className="panel-header-icon" style={{ imageRendering: 'pixelated' }} />
                             Points Vault
@@ -227,7 +227,7 @@ export default function PointsPage() {
                                     </div>
                                     {leaderboard.length === 0 ? (
                                         <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
-                                            <img src={`${ASSETS}Golden_trophy_pixel_art_icon_2K_20260919011419-autocrop-hair.png`} alt="" style={{ width: 40, height: 40, imageRendering: 'pixelated', opacity: 0.3, marginBottom: 12 }} />
+                                            <img src={`${ASSETS}Golden_trophy_pixel_art_icon_2K_20260919011419-autocrop-hair.png`} alt="" style={{ width: 80, height: 80, imageRendering: 'pixelated', opacity: 0.3, marginBottom: 12 }} />
                                             <p style={{ fontStyle: 'italic' }}>No players yet. Be the first!</p>
                                         </div>
                                     ) : (
@@ -247,7 +247,7 @@ export default function PointsPage() {
                                 <div className="referrals-list" style={{ marginTop: 12 }}>
                                     {refEarnings.details.length === 0 ? (
                                         <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
-                                            <img src={`${ASSETS}Silver_chain_link_icon_referrals_2K_20260919011442-autocrop-hair.png`} alt="" style={{ width: 40, height: 40, imageRendering: 'pixelated', opacity: 0.3, marginBottom: 12 }} />
+                                            <img src={`${ASSETS}Silver_chain_link_icon_referrals_2K_20260919011442-autocrop-hair.png`} alt="" style={{ width: 80, height: 80, imageRendering: 'pixelated', opacity: 0.3, marginBottom: 12 }} />
                                             <p style={{ fontStyle: 'italic' }}>No referrals yet. Share your code!</p>
                                         </div>
                                     ) : (
