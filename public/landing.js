@@ -29,6 +29,7 @@ class LandingPage {
         this.enterDungeonBtn.addEventListener('mouseenter', startMusic, { once: true });
         this.summonKnightBtn.addEventListener('mouseenter', startMusic, { once: true });
         this.marketplaceBtn.addEventListener('mouseenter', startMusic, { once: true });
+        this.pointsBtn.addEventListener('mouseenter', startMusic, { once: true });
         this.leaderboardBtn.addEventListener('mouseenter', startMusic, { once: true });
         
         // Also try on any click
@@ -177,6 +178,15 @@ class LandingPage {
         this.marketplaceBtn.addEventListener('click', () => {
             alert('🏪 Marketplace coming soon!');
         });
+        
+        // Points Program
+        this.pointsBtn.addEventListener('click', () => {
+            if (window.audioManager) {
+                window.audioManager.play('button_click');
+            }
+            window.location.href = '/points';
+        });
+
         
         // Leaderboard - Show leaderboard modal
         this.leaderboardBtn.addEventListener('click', () => {
