@@ -1,9 +1,35 @@
 /* Points Page — uses theme.css for base styles */
 
-/* Scale sidebar icons 2x */
+/* All point page icons - properly sized pixel art */
+.points-icon {
+    image-rendering: pixelated;
+    flex-shrink: 0;
+}
+
+/* All point page icons - properly sized pixel art */
+.points-icon {
+    image-rendering: pixelated;
+    flex-shrink: 0;
+    max-width: 28px;
+    max-height: 28px;
+}
+
+/* Panel header icons */
 .points-left-panel .panel-header-icon {
-    width: 40px;
-    height: 40px;
+    width: 28px;
+    height: 28px;
+    max-width: 28px;
+    max-height: 28px;
+}
+
+/* Empty state icons */
+.lb-empty .points-icon, .ref-empty .points-icon {
+    width: 48px;
+    height: 48px;
+    max-width: 48px;
+    max-height: 48px;
+    opacity: 0.35;
+    margin-bottom: 12px;
 }
 
 /* Points-specific overrides */

@@ -111,7 +111,7 @@ export default function PointsPage() {
                     <div className="header-title">POINTS PROGRAM</div>
                     <div className="header-actions">
                         <div className="wallet-pill" id="headerDngBalance">
-                            <img src={`${ASSETS}Gold_coin_badge_with_PTS_2K_20260919011438-autocrop-hair.png`} alt="" style={{ width: 36, height: 36, imageRendering: 'pixelated' }} />
+                            <img src={`${ASSETS}Gold_coin_badge_with_PTS_2K_20260919011438-autocrop-hair.png`} alt="" className="points-icon" style={{ width: 22, height: 22 }} />
                             <span id="headerDngText">{points.toLocaleString()} PTS</span>
                         </div>
                     </div>
@@ -123,7 +123,7 @@ export default function PointsPage() {
                     {/* LEFT: Points Actions */}
                     <aside className="side-panel points-left-panel" style={{ width: 400 }}>
                         <div className="side-panel-header">
-                            <img src={`${ASSETS}Treasure_chest_overflowing_with_ΓÇª_2K_20260919012043-autocrop-hair.png`} alt="" className="panel-header-icon" style={{ imageRendering: 'pixelated' }} />
+                            <img src={`${ASSETS}Treasure_chest_overflowing_with_ΓÇª_2K_20260919012043-autocrop-hair.png`} alt="" className="panel-header-icon points-icon" />
                             Points Vault
                         </div>
                         <div className="side-panel-body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -148,7 +148,7 @@ export default function PointsPage() {
                                 <div key={i} className="stat-row" style={{ opacity: i <= runs ? 0.6 : 1 }}>
                                     <span className="stat-label">Vault Run {i}</span>
                                     <span className="stat-value" style={{ fontSize: 12 }}>
-                                        {i <= runs ? <img src={`${ASSETS}Green_checkmark_icon_for_tasks_2K_20260919011426-autocrop-hair.png`} alt="" style={{ width: 16, height: 16, imageRendering: 'pixelated' }} /> : `+${POINTS_PER_DUNGEON} PTS`}
+                                        {i <= runs ? <img src={`${ASSETS}Green_checkmark_icon_for_tasks_2K_20260919011426-autocrop-hair.png`} alt="" className="points-icon" style={{ width: 18, height: 18 }} /> : `+${POINTS_PER_DUNGEON} PTS`}
                                     </span>
                                 </div>
                             ))}
@@ -157,7 +157,7 @@ export default function PointsPage() {
 
                             {/* X Share */}
                             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-gold)', letterSpacing: 1, textTransform: 'uppercase', padding: '4px 4px 8px', display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <img src={`${ASSETS}White_logo_on_black_background_2K_20260919011421-autocrop-hair.png`} alt="" style={{ width: 16, height: 16, imageRendering: 'pixelated', filter: 'brightness(0) invert(1)' }} />
+                                <img src={`${ASSETS}White_logo_on_black_background_2K_20260919011421-autocrop-hair.png`} alt="" className="points-icon" style={{ width: 22, height: 22, filter: 'brightness(0) invert(1)' }} />
                                 Daily Share
                             </div>
                             <p style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 8, padding: '0 4px' }}>
@@ -227,8 +227,10 @@ export default function PointsPage() {
                                     </div>
                                     {leaderboard.length === 0 ? (
                                         <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
-                                            <img src={`${ASSETS}Golden_trophy_pixel_art_icon_2K_20260919011419-autocrop-hair.png`} alt="" style={{ width: 80, height: 80, imageRendering: 'pixelated', opacity: 0.3, marginBottom: 12 }} />
-                                            <p style={{ fontStyle: 'italic' }}>No players yet. Be the first!</p>
+                                            <div className="lb-empty">
+                                                <img src={`${ASSETS}Golden_trophy_pixel_art_icon_2K_20260919011419-autocrop-hair.png`} alt="" className="points-icon" />
+                                                <p style={{ fontStyle: 'italic' }}>No players yet. Be the first!</p>
+                                            </div>
                                         </div>
                                     ) : (
                                         leaderboard.map((entry, i) => (
@@ -247,8 +249,10 @@ export default function PointsPage() {
                                 <div className="referrals-list" style={{ marginTop: 12 }}>
                                     {refEarnings.details.length === 0 ? (
                                         <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
-                                            <img src={`${ASSETS}Silver_chain_link_icon_referrals_2K_20260919011442-autocrop-hair.png`} alt="" style={{ width: 80, height: 80, imageRendering: 'pixelated', opacity: 0.3, marginBottom: 12 }} />
-                                            <p style={{ fontStyle: 'italic' }}>No referrals yet. Share your code!</p>
+                                            <div className="ref-empty">
+                                                <img src={`${ASSETS}Silver_chain_link_icon_referrals_2K_20260919011442-autocrop-hair.png`} alt="" className="points-icon" />
+                                                <p style={{ fontStyle: 'italic' }}>No referrals yet. Share your code!</p>
+                                            </div>
                                         </div>
                                     ) : (
                                         refEarnings.details.map((ref, i) => (
