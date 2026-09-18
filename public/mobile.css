@@ -1,0 +1,604 @@
+/* Mobile Responsive Styles for Dungeon Knights */
+
+/* Base Mobile Optimizations */
+@media (max-width: 768px) {
+  * {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    user-select: none;
+  }
+  
+  body {
+    font-size: 14px;
+    overflow-x: hidden;
+  }
+  
+  /* Prevent zoom on input focus */
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+  
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* Landing Page Mobile */
+@media (max-width: 768px) {
+  .landing-container {
+    padding: 20px 10px;
+  }
+  
+  .game-logo {
+    margin-top: 40px;
+  }
+  
+  .title-dungeon, .title-knights {
+    font-size: 2.5rem;
+  }
+  
+  .action-buttons {
+    flex-direction: column;
+    gap: 15px;
+    width: 100%;
+    max-width: 350px;
+  }
+  
+  .action-btn {
+    width: 100%;
+    padding: 20px;
+    font-size: 16px;
+  }
+  
+  .btn-icon-box {
+    width: 50px;
+    height: 50px;
+    font-size: 28px;
+  }
+  
+  .rune-border {
+    display: none;
+  }
+}
+
+/* Menu Page Mobile */
+@media (max-width: 768px) {
+  .menu-container {
+    padding: 10px;
+  }
+  
+  .game-header {
+    flex-direction: column;
+    gap: 10px;
+    padding: 15px 10px;
+  }
+  
+  .game-title {
+    font-size: 1.5rem;
+  }
+  
+  .gold-display {
+    font-size: 14px;
+  }
+  
+  .menu-main {
+    flex-direction: column;
+    gap: 20px;
+  }
+  
+  .menu-panel {
+    width: 100%;
+    max-width: none;
+    padding: 15px;
+  }
+  
+  .left-panel, .right-panel {
+    min-height: auto;
+  }
+  
+  .menu-btn {
+    padding: 15px;
+    font-size: 14px;
+  }
+  
+  .quick-actions {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .quick-btn {
+    width: 100%;
+  }
+  
+  .filter-controls {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .filter-select {
+    width: 100%;
+  }
+  
+  .knights-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  
+  .knight-card {
+    padding: 10px;
+  }
+  
+  /* Modal responsive */
+  .modal-content {
+    width: 95%;
+    margin: 10px;
+    padding: 20px;
+  }
+  
+  .modal-header {
+    flex-direction: column;
+    gap: 15px;
+  }
+  
+  .modal-knight-avatar {
+    width: 80px;
+    height: 80px;
+  }
+  
+  .modal-body {
+    flex-direction: column;
+  }
+}
+
+/* Mint Page Mobile */
+@media (max-width: 768px) {
+  .mint-container {
+    padding: 10px;
+  }
+  
+  .mint-header {
+    flex-direction: column;
+    gap: 10px;
+    padding: 15px 10px;
+  }
+  
+  .page-title {
+    font-size: 1.5rem;
+  }
+  
+  .header-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .mint-main {
+    flex-direction: column;
+    gap: 20px;
+  }
+  
+  .capsule-section, .controls-section {
+    width: 100%;
+    max-width: none;
+  }
+  
+  .capsule-display {
+    width: 200px;
+    height: 200px;
+    margin: 20px auto;
+  }
+  
+  .capsule-img {
+    width: 150px;
+    height: 150px;
+  }
+  
+  .mint-result {
+    font-size: 14px;
+    padding: 12px;
+  }
+  
+  .controls-section {
+    padding: 20px 15px;
+  }
+  
+  #modeTitle {
+    font-size: 1.3rem;
+  }
+  
+  #modeDescription {
+    font-size: 12px;
+  }
+  
+  .quantity-selector {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .qty-controls {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .qty-btn {
+    width: 50px;
+    height: 50px;
+    font-size: 24px;
+  }
+  
+  .qty-display {
+    width: 80px;
+    font-size: 24px;
+  }
+  
+  .cost-display {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .mint-action-btn {
+    padding: 18px;
+    font-size: 16px;
+  }
+  
+  .mint-tips ul {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  
+  .knights-preview {
+    padding: 15px;
+  }
+  
+  .knights-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  
+  .knight-mini {
+    padding: 8px;
+  }
+}
+
+/* Game Page Mobile */
+@media (max-width: 768px) {
+  .game-container {
+    padding: 10px;
+  }
+  
+  .game-header {
+    padding: 10px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  
+  .header-left, .header-center, .header-right {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+  
+  .resource-display {
+    font-size: 14px;
+    padding: 8px 12px;
+  }
+  
+  .game-content {
+    flex-direction: column;
+    gap: 15px;
+  }
+  
+  .left-sidebar, .main-game, .right-sidebar {
+    width: 100%;
+  }
+  
+  .panel {
+    padding: 15px;
+  }
+  
+  .panel-title {
+    font-size: 1rem;
+  }
+  
+  .squad-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  
+  .squad-slot {
+    width: 60px;
+    height: 60px;
+    font-size: 20px;
+  }
+  
+  .progress-section {
+    padding: 15px;
+  }
+  
+  .progress-bar {
+    height: 20px;
+  }
+  
+  .dungeon-info {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .action-buttons-game {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .game-btn {
+    width: 100%;
+    padding: 15px;
+    font-size: 14px;
+  }
+  
+  .loot-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+}
+
+/* Dungeon Select Mobile */
+@media (max-width: 768px) {
+  .dungeon-select-container {
+    padding: 10px;
+  }
+  
+  .dungeon-grid {
+    grid-template-columns: 1fr;
+    gap: 15px;
+    padding: 15px;
+  }
+  
+  .dungeon-card {
+    padding: 15px;
+  }
+  
+  .dungeon-image {
+    height: 200px;
+  }
+  
+  .dungeon-info h2 {
+    font-size: 1.3rem;
+  }
+  
+  .dungeon-stats {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .stat-item {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
+/* Wallet Widget Mobile */
+@media (max-width: 768px) {
+  .wallet-header {
+    top: 10px;
+    right: 10px;
+  }
+  
+  .wallet-btn {
+    padding: 10px 16px;
+    font-size: 12px;
+  }
+  
+  .wallet-dropdown {
+    min-width: 250px;
+    right: 0;
+    left: auto;
+  }
+  
+  .wallet-dropdown-item {
+    padding: 12px;
+  }
+  
+  .wallet-dropdown-item .value {
+    font-size: 12px;
+    word-break: break-all;
+  }
+}
+
+/* Wallet Selector Modal Mobile */
+@media (max-width: 768px) {
+  #walletSelectorOverlay {
+    padding: 20px;
+  }
+  
+  #walletSelectorOverlay > div {
+    max-width: 100% !important;
+    width: 100% !important;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  
+  .wallet-option {
+    padding: 12px !important;
+  }
+  
+  .wallet-icon {
+    width: 35px !important;
+    height: 35px !important;
+    font-size: 28px !important;
+    margin-right: 12px !important;
+  }
+  
+  .wallet-name {
+    font-size: 14px !important;
+  }
+  
+  .wallet-desc {
+    font-size: 11px !important;
+  }
+  
+  .installed-badge {
+    font-size: 9px !important;
+    padding: 2px 6px !important;
+  }
+}
+
+/* Touch-Friendly Buttons */
+@media (max-width: 768px) {
+  button, .btn, a.btn {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  .back-btn, .close-btn {
+    padding: 12px 20px;
+    font-size: 16px;
+  }
+}
+
+/* Hide scrollbars but keep scrolling */
+@media (max-width: 768px) {
+  .modal-content,
+  .knights-grid,
+  .loot-grid {
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+  }
+}
+
+/* Landscape Mode Adjustments */
+@media (max-width: 768px) and (orientation: landscape) {
+  .game-logo {
+    margin-top: 20px;
+  }
+  
+  .title-dungeon, .title-knights {
+    font-size: 2rem;
+  }
+  
+  .action-buttons {
+    flex-direction: row;
+    flex-wrap: wrap;
+    max-width: 600px;
+  }
+  
+  .action-btn {
+    width: calc(50% - 10px);
+  }
+  
+  .capsule-display {
+    width: 180px;
+    height: 180px;
+  }
+  
+  .mint-main {
+    flex-direction: row;
+  }
+  
+  .capsule-section {
+    width: 40%;
+  }
+  
+  .controls-section {
+    width: 60%;
+  }
+}
+
+/* Small phones (< 375px) */
+@media (max-width: 374px) {
+  .title-dungeon, .title-knights {
+    font-size: 2rem;
+  }
+  
+  .action-btn {
+    padding: 15px;
+    font-size: 14px;
+  }
+  
+  .knights-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .squad-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .wallet-btn {
+    padding: 8px 12px;
+    font-size: 11px;
+  }
+}
+
+/* Tablet (768px - 1024px) */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .knights-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  
+  .squad-grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+  
+  .dungeon-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .action-buttons {
+    max-width: 500px;
+  }
+}
+
+/* PWA Safe Areas (iPhone X notch, etc.) */
+@supports (padding: max(0px)) {
+  body {
+    padding-left: max(10px, env(safe-area-inset-left));
+    padding-right: max(10px, env(safe-area-inset-right));
+    padding-top: max(0px, env(safe-area-inset-top));
+    padding-bottom: max(0px, env(safe-area-inset-bottom));
+  }
+  
+  .wallet-header {
+    top: max(10px, env(safe-area-inset-top));
+    right: max(10px, env(safe-area-inset-right));
+  }
+}
+
+/* Loading States Mobile */
+@media (max-width: 768px) {
+  .loading-spinner {
+    width: 40px;
+    height: 40px;
+  }
+  
+  .mint-action-btn.loading {
+    pointer-events: none;
+    opacity: 0.7;
+  }
+}
+
+/* Better touch feedback */
+@media (max-width: 768px) {
+  button:active, .btn:active {
+    transform: scale(0.95);
+    transition: transform 0.1s;
+  }
+  
+  .wallet-option:active {
+    background: rgba(102, 126, 234, 0.3) !important;
+  }
+  
+  .action-btn:active {
+    transform: translateY(2px);
+  }
+}

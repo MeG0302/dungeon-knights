@@ -1,0 +1,94 @@
+/* ==========================================================
+   Landing page — mobile / iPhone
+   Loaded only on the landing route, after the legacy inline
+   styles so these rules win at equal specificity.
+   ========================================================== */
+@media (max-width: 900px) {
+  html,
+  body {
+    height: auto;
+    min-height: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .page {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
+  .header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    padding: 10px 14px;
+    gap: 8px;
+  }
+
+  .header-title {
+    font-size: 13px;
+    letter-spacing: 1px;
+    white-space: nowrap;
+  }
+
+  .wallet-pill {
+    font-size: 11px;
+    padding: 5px 10px;
+  }
+
+  /* Stack the hero copy above the action panel */
+  .landing-wrapper {
+    flex-direction: column;
+    flex: 1 1 auto;
+    overflow: visible;
+  }
+
+  /* Keep the video/overlay as a fixed backdrop while the page scrolls */
+  .landing-wrapper video,
+  .landing-wrapper .video-overlay {
+    position: fixed;
+  }
+
+  .landing-wrapper main {
+    order: -1;
+    width: 100%;
+    align-self: auto;
+    padding: 34px 18px 10px;
+  }
+
+  .landing-wrapper main h1 {
+    font-size: 2rem !important;
+    letter-spacing: 3px !important;
+  }
+
+  .landing-wrapper .side-panel {
+    width: 100%;
+    max-width: 100%;
+    align-self: auto;
+    border-left: none;
+    border-right: none;
+  }
+
+  .landing-wrapper .side-panel-body {
+    flex: 0 0 auto;
+    overflow: visible;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@media (max-width: 420px) {
+  .landing-wrapper main {
+    padding: 26px 14px 6px;
+  }
+
+  .landing-wrapper main h1 {
+    font-size: 1.7rem !important;
+    letter-spacing: 2px !important;
+  }
+
+  .landing-wrapper main p {
+    font-size: 12px;
+  }
+}
