@@ -509,6 +509,15 @@ class Dungeon {
                 
                 // Must be walkable and not occupied
                 if (this.grid[y][x] === 0 && !this.hasLootNodeAt(x, y)) {
+                    // Ensure minimum spacing between entities (3 tiles apart to prevent overlap at large sizes)
+                    const minDist = 3;
+                    const tooClose = this.lootNodes.some(n => {
+                        const dx = n.gridX - x;
+                        const dy = n.gridY - y;
+                        return Math.abs(dx) < minDist && Math.abs(dy) < minDist;
+                    });
+                    if (tooClose) continue;
+
                     // Quick reachability check: verify at least one adjacent tile is walkable
                     const directions = [
                         {dx: 0, dy: -1}, {dx: 1, dy: 0}, {dx: 0, dy: 1}, {dx: -1, dy: 0}
@@ -621,11 +630,11 @@ class DungeonRenderer {
         // Load chest images for each dungeon type
         this.chestImages = {};
         const chestMap = {
-            'crypts': 'map obstacles/New folder/Pixel_art_treasure_chest_2K_20260911012912-autocrop-hair.png',
-            'mines': 'map obstacles/gobline mines/goblin chest.png',
-            'temple': 'map obstacles/overgrown temple/temple chest.png',
-            'magma': 'map obstacles/magma/magma chest.png',
-            'void': 'map obstacles/void rift/void chest.png'
+            'crypts': 'assets/crypts/chest.png',
+            'mines': 'assets/mines/chest.png',
+            'temple': 'assets/temple/chest.png',
+            'magma': 'assets/magma/chest.png',
+            'void': 'assets/void/chest.png'
         };
         Object.entries(chestMap).forEach(([key, path]) => {
             const img = new Image();
@@ -638,11 +647,11 @@ class DungeonRenderer {
 
     loadDecorationSprites() {
         const sprites = {
-            'crypts': 'map obstacles/Crypt_decorations_pixel_art_asset_2K_202609041548.jpeg',
-            'mines': 'map obstacles/Underwater_goblin_mines_pixel_art_2K_202609041548.jpeg',
-            'temple': 'map obstacles/Pixel_art_temple_decorations_2K_202609041548.jpeg',
-            'magma': 'map obstacles/Pixel_art_magma_chamber_decorations_2K_202609041548.jpeg',
-            'void': 'map obstacles/Pixel_art_void_rift_decorations_2K_202609041548.jpeg'
+            'crypts': 'assets/crypts/crypts-sheet.jpeg',
+            'mines': 'assets/mines/mines-sheet.jpeg',
+            'temple': 'assets/temple/temple-sheet.jpeg',
+            'magma': 'assets/magma/magma-sheet.jpeg',
+            'void': 'assets/void/void-sheet.jpeg'
         };
 
         Object.entries(sprites).forEach(([key, path]) => {
@@ -934,7 +943,7 @@ class DungeonRenderer {
         if (node.type === 'chest') {
             // Draw chest using actual image if loaded
             const chestImg = this.chestImages[this.dungeon.type];
-            const chestSize = tileSize * 0.7;
+            const chestSize = tileSize * 1.75; // 2.5x scale
 
             // Floating animation
             const floatOffset = Math.sin(node.animationTime * 2) * 3;
@@ -960,7 +969,7 @@ class DungeonRenderer {
             
         } else {
             // Draw monster with individual PNG image
-            const monsterSize = tileSize * 0.9;
+            const monsterSize = tileSize * 2.7;
             
             // Idle animation - bounce up and down
             const bounceOffset = Math.sin(node.animationTime * 3) * 4;
@@ -1076,7 +1085,7 @@ class DungeonRenderer {
         const ctx = this.ctx;
         const centerX = x + tileSize / 2;
         const centerY = y + tileSize / 2;
-        const knightSize = tileSize * 0.8;
+        const knightSize = tileSize * 2.0; // 2.5x scale (was 0.8)
         
         // Apply attack animation offset
         let offsetX = 0;

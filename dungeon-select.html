@@ -17,20 +17,18 @@
         </a>
         <div class="header-title">QUEST BOARD</div>
         <div class="header-actions">
-            <div class="wallet-pill" id="walletWidgetQuest">
-                <span id="questDngBalance">0 DNG</span>
-            </div>
         </div>
     </header>
 
     <!-- Content -->
     <div class="page-content">
-        <div style="text-align:center;margin-bottom:32px">
+        <div style="text-align:center;margin-bottom:38px">
             <h1 style="font-family:var(--font-display);font-size:2rem;color:var(--accent-gold);letter-spacing:3px;text-transform:uppercase">Choose Your Quest</h1>
             <p style="color:var(--text-secondary);font-size:13px;margin-top:8px;letter-spacing:1px">
                 Select your destiny. After the first quest, dungeons will appear randomly.
             </p>
         </div>
+
 
         <!-- Dungeon Grid -->
         <div class="quest-scrolls-grid" id="questBoard">
@@ -44,10 +42,7 @@
                 <div style="padding:14px 16px">
                     <div style="font-family:var(--font-heading);font-size:14px;font-weight:700;color:var(--accent-gold);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Forgotten Crypts</div>
                     <p style="font-size:12px;color:var(--text-secondary);line-height:1.5;margin-bottom:10px">Ancient tombs filled with restless spirits and cursed treasures await brave souls.</p>
-                    <div style="display:flex;align-items:center;justify-content:space-between">
-                        <div style="display:flex;gap:4px">
-                            <span style="color:var(--accent-gold-dim);font-size:14px">&#9733;&#9733;&#9734;&#9734;&#9734;</span>
-                        </div>
+                    <div style="display:flex;justify-content:flex-end">
                         <button class="accept-quest-btn btn btn-primary btn-sm">
                             <img src="assets/ui/sword.png" class="btn-icon-img" alt=""> Accept
                         </button>
@@ -64,10 +59,7 @@
                 <div style="padding:14px 16px">
                     <div style="font-family:var(--font-heading);font-size:14px;font-weight:700;color:var(--accent-gold);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Goblin Mines</div>
                     <p style="font-size:12px;color:var(--text-secondary);line-height:1.5;margin-bottom:10px">Deep caverns where goblins hoard stolen gems and gleaming gold.</p>
-                    <div style="display:flex;align-items:center;justify-content:space-between">
-                        <div style="display:flex;gap:4px">
-                            <span style="color:var(--accent-gold-dim);font-size:14px">&#9733;&#9733;&#9734;&#9734;&#9734;</span>
-                        </div>
+                    <div style="display:flex;justify-content:flex-end">
                         <button class="accept-quest-btn btn btn-primary btn-sm">
                             <img src="assets/ui/sword.png" class="btn-icon-img" alt=""> Accept
                         </button>
@@ -84,10 +76,7 @@
                 <div style="padding:14px 16px">
                     <div style="font-family:var(--font-heading);font-size:14px;font-weight:700;color:var(--accent-gold);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Overgrown Temple</div>
                     <p style="font-size:12px;color:var(--text-secondary);line-height:1.5;margin-bottom:10px">Sacred ruins reclaimed by nature, guarded by vengeful plant spirits.</p>
-                    <div style="display:flex;align-items:center;justify-content:space-between">
-                        <div style="display:flex;gap:4px">
-                            <span style="color:var(--accent-gold-dim);font-size:14px">&#9733;&#9733;&#9734;&#9734;&#9734;</span>
-                        </div>
+                    <div style="display:flex;justify-content:flex-end">
                         <button class="accept-quest-btn btn btn-primary btn-sm">
                             <img src="assets/ui/sword.png" class="btn-icon-img" alt=""> Accept
                         </button>
@@ -104,10 +93,7 @@
                 <div style="padding:14px 16px">
                     <div style="font-family:var(--font-heading);font-size:14px;font-weight:700;color:var(--tint-magma);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Magma Chambers</div>
                     <p style="font-size:12px;color:var(--text-secondary);line-height:1.5;margin-bottom:10px">Scorching caverns where fire elementals dance among rivers of molten rock.</p>
-                    <div style="display:flex;align-items:center;justify-content:space-between">
-                        <div style="display:flex;gap:4px">
-                            <span style="color:var(--tint-magma);font-size:14px">&#9733;&#9733;&#9733;&#9734;&#9734;</span>
-                        </div>
+                    <div style="display:flex;justify-content:flex-end">
                         <button class="accept-quest-btn btn btn-primary btn-sm">
                             <img src="assets/ui/sword.png" class="btn-icon-img" alt=""> Accept
                         </button>
@@ -124,10 +110,7 @@
                 <div style="padding:14px 16px">
                     <div style="font-family:var(--font-heading);font-size:14px;font-weight:700;color:var(--accent-gold);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Void Rift</div>
                     <p style="font-size:12px;color:var(--text-secondary);line-height:1.5;margin-bottom:10px">A tear in reality where cosmic horrors lurk beyond mortal comprehension.</p>
-                    <div style="display:flex;align-items:center;justify-content:space-between">
-                        <div style="display:flex;gap:4px">
-                            <span style="color:var(--accent-gold-dim);font-size:14px">&#9733;&#9733;&#9733;&#9733;&#9734;</span>
-                        </div>
+                    <div style="display:flex;justify-content:flex-end">
                         <button class="accept-quest-btn btn btn-primary btn-sm">
                             <img src="assets/ui/sword.png" class="btn-icon-img" alt=""> Accept
                         </button>
@@ -148,39 +131,10 @@
         </div>
     </div>
 
-    <!-- Knight Details Modal -->
-    <div id="knightModal" class="modal-overlay hidden">
-        <div class="modal">
-            <div class="modal-title" id="modalKnightName">Knight #1</div>
-            <div style="color:var(--text-muted);font-size:13px;margin-bottom:16px" id="modalRarity">Common</div>
-            <div class="modal-stats">
-                <p><strong>Power</strong> <span id="modalPower">10</span></p>
-                <p><strong>Speed</strong> <span id="modalSpeed">1.0</span></p>
-                <p><strong>Max Stamina</strong> <span id="modalMaxStamina">100</span></p>
-                <p><strong>Status</strong> <span id="modalStatus">Ready</span></p>
-                <p><strong>Total Earned</strong> <span id="modalEarned">0</span></p>
-            </div>
-            <div style="margin-bottom:16px">
-                <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
-                    <span style="color:var(--text-muted)">Stamina</span>
-                    <span id="modalStaminaText" style="color:var(--text-secondary)">100 / 100</span>
-                </div>
-                <div class="stat-bar-track">
-                    <div class="stat-bar-fill" id="modalStaminaBar" style="width:100%"></div>
-                </div>
-            </div>
-            <div class="modal-actions">
-                <button class="btn btn-primary btn-md" id="modalSelectBtn" style="flex:1">Add to Squad</button>
-                <button class="btn btn-secondary btn-md" id="modalCloseBtn" style="flex:1">Close</button>
-            </div>
-        </div>
-    </div>
-
     <script src="ethers-5.7.2.umd.min.js"></script>
     <script src="config.js"></script>
     <script src="wallet.js"></script>
     <script src="audio.js"></script>
-    <script src="shared-header.js"></script>
     <script src="dungeon-select.js"></script>
 </body>
 </html>

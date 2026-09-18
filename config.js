@@ -110,3 +110,40 @@ CONFIG.usesCustomToken = function() {
 if (typeof window !== 'undefined') {
   window.DUNGEON_CONFIG = CONFIG;
 }
+
+
+// Rarity Configuration for Knight NFTs
+window.RARITY_CONFIG = {
+  common: {
+    color: '#9E9E9E',
+    name: 'Common',
+    image: 'characters/Pixel_knight_holding_wooden_shield_2K_202609041402_jpeg_2K_202609041417.png'
+  },
+  uncommon: {
+    color: '#4CAF50',
+    name: 'Uncommon',
+    image: 'characters/Pixel_knight_standing_on_floor_2K_202609041402_jpeg_2K_202609041417.png'
+  },
+  rare: {
+    color: '#2196F3',
+    name: 'Rare',
+    image: 'characters/Pixelated_knight_standing_on_tile_2K_202609041402_jpeg_2K_202609041417.png'
+  },
+  epic: {
+    color: '#9C27B0',
+    name: 'Epic',
+    image: 'characters/Pixel_knight_holding_cosmic_shield_2K_202609041402_jpeg_2K_202609041417.png'
+  },
+  legendary: {
+    color: '#FFD700',
+    name: 'Legendary',
+    image: 'characters/Knight_in_golden_armor_stands_2K_202609041404_jpeg_2K_202609041417.png'
+  },
+  mythic: {
+    color: '#00E5FF',
+    name: 'Mythic',
+    image: 'characters/Knight_in_golden_armor_stands_2K_202609041404_jpeg_2K_202609041417.png'
+  }
+};
+
+console.log('✅ RARITY_CONFIG loaded:', window.RARITY_CONFIG);

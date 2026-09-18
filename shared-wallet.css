@@ -1,13 +1,10 @@
-/* Shared Wallet Header Styles */
+/* Shared Wallet Header Styles - Dark Tactical Theme */
 
 .shared-wallet-header {
   display: flex;
   align-items: center;
   gap: 15px;
   padding: 10px;
-  background: rgba(20, 20, 40, 0.9);
-  border-radius: 12px;
-  backdrop-filter: blur(10px);
 }
 
 .wallet-info {
@@ -82,25 +79,53 @@
   transform: translateY(0);
 }
 
-/* Mobile responsive */
-@media (max-width: 768px) {
-  .shared-wallet-header {
-    flex-direction: column;
-    gap: 10px;
-  }
-  
-  .wallet-info {
-    flex-direction: column;
-    width: 100%;
-    gap: 8px;
-  }
-  
-  .wallet-info > div {
-    width: 100%;
-    justify-content: center;
-  }
-  
-  .shared-wallet-btn {
-    width: 100%;
-  }
+/* ==========================================================
+   WALLET PILL - Dark Tactical Theme (landing + dungeon-select)
+   ========================================================== */
+.wallet-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-bronze);
+  border-radius: var(--radius-md);
+  font-family: var(--font-heading);
+  font-size: 13px;
+  color: var(--accent-gold);
+  letter-spacing: 1px;
+}
+
+.wallet-pill.connected {
+  border-color: var(--border-gold);
+}
+
+#walletAddressDisplay {
+  color: var(--text-secondary);
+  font-size: 12px;
+  letter-spacing: 0.5px;
+}
+
+/* Disconnect button */
+.btn-disconnect {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: var(--danger);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  font-family: var(--font-heading);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.btn-disconnect:hover {
+  background: var(--danger-hover);
+  border-color: var(--danger);
 }
