@@ -617,6 +617,23 @@ class DungeonRenderer {
         // Load knight images
         this.knightImages = {};
         this.loadKnightImages();
+
+        // Load chest images for each dungeon type
+        this.chestImages = {};
+        const chestMap = {
+            'crypts': 'map obstacles/New folder/Pixel_art_treasure_chest_2K_20260911012912-autocrop-hair.png',
+            'mines': 'map obstacles/gobline mines/goblin chest.png',
+            'temple': 'map obstacles/overgrown temple/temple chest.png',
+            'magma': 'map obstacles/magma/magma chest.png',
+            'void': 'map obstacles/void rift/void chest.png'
+        };
+        Object.entries(chestMap).forEach(([key, path]) => {
+            const img = new Image();
+            img.onload = () => console.log(`✅ Loaded ${key} chest`);
+            img.onerror = () => console.warn(`⚠️ Failed to load ${key} chest: ${path}`);
+            img.src = path;
+            this.chestImages[key] = img;
+        });
     }
 
     loadDecorationSprites() {
@@ -915,57 +932,29 @@ class DungeonRenderer {
         node.animationTime += 0.016; // Roughly 60fps
         
         if (node.type === 'chest') {
-            // Draw pixel art chest
+            // Draw chest using actual image if loaded
+            const chestImg = this.chestImages[this.dungeon.type];
             const chestSize = tileSize * 0.7;
-            const chestX = centerX - chestSize / 2;
-            const chestY = centerY - chestSize / 2;
-            
+
             // Floating animation
             const floatOffset = Math.sin(node.animationTime * 2) * 3;
-            const finalY = chestY + floatOffset;
-            
-            // Shadow beneath chest
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-            ctx.beginPath();
-            ctx.ellipse(centerX, centerY + chestSize * 0.5, chestSize * 0.4, chestSize * 0.15, 0, 0, Math.PI * 2);
-            ctx.fill();
-            
-            // Chest base (dark brown)
-            ctx.fillStyle = '#3d2817';
-            ctx.fillRect(chestX + chestSize * 0.1, finalY + chestSize * 0.4, chestSize * 0.8, chestSize * 0.5);
-            
-            // Chest lid (rounded top - pixel art style)
-            ctx.fillStyle = '#4a2f1a';
-            ctx.fillRect(chestX + chestSize * 0.15, finalY + chestSize * 0.25, chestSize * 0.7, chestSize * 0.2);
-            ctx.fillRect(chestX + chestSize * 0.2, finalY + chestSize * 0.15, chestSize * 0.6, chestSize * 0.1);
-            ctx.fillRect(chestX + chestSize * 0.25, finalY + chestSize * 0.05, chestSize * 0.5, chestSize * 0.1);
-            
-            // Gold trim (pixel art)
-            ctx.fillStyle = '#d4af37';
-            // Horizontal bands
-            ctx.fillRect(chestX + chestSize * 0.1, finalY + chestSize * 0.5, chestSize * 0.8, chestSize * 0.08);
-            ctx.fillRect(chestX + chestSize * 0.1, finalY + chestSize * 0.75, chestSize * 0.8, chestSize * 0.08);
-            // Vertical bands
-            ctx.fillRect(chestX + chestSize * 0.15, finalY + chestSize * 0.4, chestSize * 0.08, chestSize * 0.5);
-            ctx.fillRect(chestX + chestSize * 0.77, finalY + chestSize * 0.4, chestSize * 0.08, chestSize * 0.5);
-            
-            // Lock plate
-            ctx.fillStyle = '#d4af37';
-            ctx.fillRect(chestX + chestSize * 0.42, finalY + chestSize * 0.6, chestSize * 0.16, chestSize * 0.2);
-            
-            // Keyhole (dark)
-            ctx.fillStyle = '#1a1410';
-            ctx.fillRect(chestX + chestSize * 0.47, finalY + chestSize * 0.65, chestSize * 0.06, chestSize * 0.08);
-            ctx.fillRect(chestX + chestSize * 0.485, finalY + chestSize * 0.73, chestSize * 0.03, chestSize * 0.05);
-            
-            // Glow effect
-            const glowIntensity = 0.3 + Math.sin(node.animationTime * 3) * 0.15;
-            ctx.shadowColor = '#ffd700';
-            ctx.shadowBlur = 10;
-            ctx.globalAlpha = glowIntensity;
-            ctx.strokeStyle = '#ffd700';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(chestX + chestSize * 0.1, finalY + chestSize * 0.4, chestSize * 0.8, chestSize * 0.5);
+
+            if (chestImg && chestImg.complete && chestImg.naturalWidth > 0) {
+                ctx.imageSmoothingEnabled = false;
+                ctx.drawImage(
+                    chestImg,
+                    centerX - chestSize / 2,
+                    centerY - chestSize / 2 + floatOffset,
+                    chestSize, chestSize
+                );
+            } else {
+                // Fallback: simple gold square
+                ctx.fillStyle = '#d4af37';
+                ctx.fillRect(centerX - chestSize / 2, centerY - chestSize / 2 + floatOffset, chestSize, chestSize);
+                ctx.strokeStyle = '#8B6914';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(centerX - chestSize / 2, centerY - chestSize / 2 + floatOffset, chestSize, chestSize);
+            }
             ctx.shadowBlur = 0;
             ctx.globalAlpha = 1.0;
             
