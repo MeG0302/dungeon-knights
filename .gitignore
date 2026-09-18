@@ -41,6 +41,7 @@ yarn-error.log*
 dist/
 build/
 out/
+.next/
 
 # Temporary files
 *.tmp

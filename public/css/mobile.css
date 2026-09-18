@@ -1,0 +1,594 @@
+/* ============================================================
+   Dungeon Knights — mobile layer (loaded LAST, wins cascades)
+   Targets: iPhone Safari (notch, toolbar, tap) + Android Chrome
+   Only real selectors from current markup — no dead rules.
+   ============================================================ */
+
+/* ---------- 1. Global touch baseline (all viewports) ---------- */
+
+button,
+a,
+select,
+.knight-card,
+.dungeon-card,
+.qty-btn {
+  touch-action: manipulation; /* kills 300ms tap delay + double-tap zoom */
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  -webkit-text-size-adjust: 100%; /* stop iOS auto-growing small text */
+  text-size-adjust: 100%;
+}
+
+input,
+select,
+textarea {
+  font-size: 16px !important; /* stops iOS focus-zoom */
+}
+
+/* Text stays selectable where it matters (addresses, logs).
+   Everything else keeps the game-like no-select feel on touch. */
+.game-log,
+.wallet-dropdown-item .value {
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+
+/* ---------- 2. Phones (portrait + landscape) ---------- */
+@media (max-width: 768px) {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    font-size: 14px;
+    overflow-x: hidden;
+    overscroll-behavior-y: contain;
+  }
+
+  /* Full-height containers: dvh tracks the iOS Safari toolbar,
+     vh fallback for older browsers. */
+  .landing-container,
+  .menu-container,
+  .mint-container,
+  .selection-container {
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
+  /* iPhone notch / Android gesture bar: side + bottom safe areas.
+     Top is handled per fixed header below. */
+  body {
+    padding-left: max(0px, env(safe-area-inset-left));
+    padding-right: max(0px, env(safe-area-inset-right));
+    padding-bottom: max(0px, env(safe-area-inset-bottom));
+  }
+
+  /* --- Wallet button: clear of notch, big enough to tap --- */
+  .wallet-header {
+    top: max(10px, env(safe-area-inset-top));
+    right: max(10px, env(safe-area-inset-right));
+  }
+
+  .wallet-btn {
+    padding: 12px 18px;
+    font-size: 13px;
+    min-height: 44px;
+  }
+
+  .wallet-dropdown {
+    min-width: min(270px, calc(100vw - 20px));
+    right: 0;
+  }
+
+  /* --- Landing --- */
+  .landing-container {
+    height: auto; /* base uses 100vh: unlock so content never clips */
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: 20px 12px calc(20px + env(safe-area-inset-bottom));
+  }
+
+  .game-logo {
+    margin-top: 56px; /* clears absolute wallet button */
+  }
+
+  .title-dungeon,
+  .title-knights {
+    font-size: clamp(2.2rem, 13vw, 3rem);
+    line-height: 1.05;
+  }
+
+  .action-buttons {
+    flex-direction: column;
+    gap: 14px;
+    width: 100%;
+    max-width: 350px;
+  }
+
+  .action-btn {
+    width: 100%;
+    min-height: 64px;
+    padding: 14px 18px;
+  }
+
+  .btn-label {
+    font-size: 1.15rem;
+  }
+
+  .rune-border {
+    display: none;
+  }
+
+  /* --- Menu --- */
+  .menu-container {
+    padding: 10px 10px calc(20px + env(safe-area-inset-bottom));
+  }
+
+  .game-header {
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 10px;
+    padding-top: calc(12px + env(safe-area-inset-top));
+  }
+
+  .game-title {
+    font-size: 1.4rem;
+  }
+
+  .menu-main {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .menu-panel {
+    width: 100%;
+    max-width: none;
+    padding: 14px;
+  }
+
+  .menu-btn {
+    width: 100%;
+    min-height: 52px;
+    padding: 14px;
+  }
+
+  .quick-actions {
+    flex-direction: row;
+    gap: 10px;
+  }
+
+  .quick-btn {
+    flex: 1;
+    min-height: 44px;
+  }
+
+  .filter-controls {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .filter-select {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  /* Roster is a vertical card list: tighten, keep tap targets big */
+  .knight-roster {
+    max-height: 55vh;
+    max-height: 55dvh;
+    padding: 0.5rem;
+  }
+
+  .knight-card {
+    padding: 0.9rem;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+    min-height: 76px;
+  }
+
+  /* Never translate cards on touch — no hover state on phones */
+  .knight-card:hover {
+    transform: none;
+  }
+
+  /* Menu modal: fit + scroll inside */
+  .modal-overlay {
+    padding: 12px;
+    align-items: flex-start;
+    overflow-y: auto;
+  }
+
+  .modal-content {
+    width: 100%;
+    max-height: calc(100vh - 24px);
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+    margin: 0;
+    padding: 18px;
+  }
+
+  .modal-header {
+    flex-direction: column;
+    gap: 12px;
+    text-align: center;
+  }
+
+  .modal-footer {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .modal-btn {
+    width: 100%;
+    min-height: 48px;
+  }
+
+  /* --- Mint --- */
+  .mint-container {
+    padding: 10px 10px calc(20px + env(safe-area-inset-bottom));
+  }
+
+  .mint-header {
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 10px;
+    padding-top: calc(12px + env(safe-area-inset-top));
+  }
+
+  .page-title {
+    font-size: 1.4rem;
+    order: -1; /* title above wallet/back row, never overlapped */
+  }
+
+  .mint-main {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .capsule-section,
+  .controls-section {
+    width: 100%;
+    max-width: none;
+  }
+
+  .capsule-display {
+    width: min(220px, 60vw);
+    height: min(220px, 60vw);
+    margin: 12px auto;
+  }
+
+  .capsule-img {
+    width: 70%;
+    height: 70%;
+  }
+
+  .controls-section {
+    padding: 18px 14px;
+  }
+
+  .qty-controls {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .qty-btn {
+    width: 56px;
+    height: 56px;
+    font-size: 26px;
+  }
+
+  .qty-display {
+    width: 84px;
+    height: 56px;
+    font-size: 24px;
+  }
+
+  .mint-action-btn {
+    width: 100%;
+    min-height: 56px;
+    padding: 16px;
+  }
+
+  .mint-tips ul {
+    grid-template-columns: 1fr;
+  }
+
+  .knights-preview {
+    padding: 14px;
+  }
+
+  .knights-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+
+  /* --- Dungeon select --- */
+  .selection-container {
+    padding: 12px 12px calc(20px + env(safe-area-inset-bottom));
+  }
+
+  .selection-header {
+    padding-top: max(0px, env(safe-area-inset-top));
+  }
+
+  .selection-header h1 {
+    font-size: 1.7rem;
+  }
+
+  .dungeon-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+    padding: 0;
+  }
+
+  .dungeon-card {
+    max-width: 500px;
+    margin: 0 auto;
+    width: 100%;
+    min-height: 44px;
+  }
+
+  /* Kill the infinite hover glow on touch (battery + distraction) */
+  .dungeon-card:hover {
+    animation: none;
+  }
+
+  .dungeon-card:active {
+    transform: scale(0.98);
+  }
+
+  .dungeon-image {
+    height: 180px;
+    width: 100%;
+    object-fit: cover;
+  }
+
+  .dungeon-stats {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+  }
+
+  .btn-back {
+    width: 100%;
+    min-height: 48px;
+  }
+
+  .loading-transition {
+    padding: 20px;
+  }
+
+  /* --- Game (canvas) --- */
+  .game-container {
+    padding: 0 0 env(safe-area-inset-bottom);
+    height: 100vh;
+    height: 100dvh;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overscroll-behavior: none; /* game owns the gestures here */
+  }
+
+  .game-container .game-header {
+    flex-direction: row;
+    flex-wrap: wrap;
+    height: auto;
+    gap: 6px 10px;
+    padding: 8px 10px;
+    padding-top: calc(8px + env(safe-area-inset-top));
+  }
+
+  .header-logo h1 {
+    font-size: 1rem;
+  }
+
+  .header-stats {
+    flex: 1;
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .stat-item {
+    font-size: 12px;
+  }
+
+  .game-main {
+    padding: 8px;
+    padding-left: calc(8px + env(safe-area-inset-left));
+    padding-right: calc(8px + env(safe-area-inset-right));
+  }
+
+  /* Fluid canvas: fits any phone width, keeps 3:2 ratio.
+     Engine keeps rendering at 1200x800 internally. */
+  #gameCanvas {
+    width: 100% !important;
+    height: auto !important;
+    aspect-ratio: 3 / 2;
+    max-height: 52vh;
+    max-height: 52dvh;
+    touch-action: none;
+  }
+
+  .minimap-container,
+  .border-decoration {
+    display: none;
+  }
+
+  .control-panel {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  }
+
+  .control-panel .control-section {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+
+  .btn-action {
+    flex: 1;
+    min-height: 48px;
+    padding: 12px 8px;
+    font-size: 13px;
+  }
+
+  .quick-stats {
+    display: flex;
+    gap: 14px;
+    font-size: 12px;
+  }
+
+  /* Squad panel becomes bottom sheet */
+  .squad-panel {
+    max-height: 45vh;
+    max-height: 45dvh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Game modals fit + scroll */
+  .modal {
+    padding: 12px;
+  }
+
+  .modal .modal-content,
+  .shortcuts-overlay {
+    width: 100%;
+    max-height: calc(100vh - 24px);
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+  }
+
+  .modal-actions {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .modal-actions button {
+    width: 100%;
+    min-height: 48px;
+  }
+
+  /* --- Touch feedback (replaces hover) --- */
+  button:active,
+  .action-btn:active,
+  .menu-btn:active,
+  .mint-action-btn:active {
+    transform: scale(0.97);
+  }
+
+  .knight-card:active,
+  .qty-btn:active {
+    transform: scale(0.98);
+  }
+
+  /* Slim scrollbars, momentum scrolling */
+  .knight-roster,
+  .knights-grid,
+  .modal-content,
+  .squad-panel {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+}
+
+/* ---------- 3. Small phones (iPhone SE, old Android) ---------- */
+@media (max-width: 380px) {
+  .title-dungeon,
+  .title-knights {
+    font-size: clamp(2rem, 14vw, 2.4rem);
+  }
+
+  .action-btn {
+    min-height: 60px;
+    padding: 12px;
+  }
+
+  .btn-icon-box {
+    width: 42px;
+    height: 42px;
+    font-size: 24px;
+  }
+
+  .knights-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .wallet-btn {
+    padding: 10px 14px;
+    font-size: 12px;
+  }
+
+  .quick-actions {
+    flex-direction: column;
+  }
+
+  .dungeon-image {
+    height: 150px;
+  }
+}
+
+/* ---------- 4. Landscape phones ---------- */
+@media (max-width: 768px) and (orientation: landscape) {
+  .game-logo {
+    margin-top: 12px;
+  }
+
+  .action-buttons {
+    flex-direction: row;
+    flex-wrap: wrap;
+    max-width: 560px;
+  }
+
+  .action-btn {
+    width: calc(50% - 7px);
+  }
+
+  .mint-main {
+    flex-direction: row;
+  }
+
+  .capsule-section {
+    width: 38%;
+  }
+
+  .controls-section {
+    width: 62%;
+  }
+
+  #gameCanvas {
+    max-height: 62vh;
+    max-height: 62dvh;
+  }
+
+  .knight-roster {
+    max-height: 40vh;
+    max-height: 40dvh;
+  }
+}
+
+/* ---------- 5. Tablets ---------- */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .dungeon-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .knights-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .action-buttons {
+    max-width: 500px;
+  }
+
+  #gameCanvas {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 3 / 2;
+  }
+}

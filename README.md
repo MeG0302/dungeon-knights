@@ -1,206 +1,183 @@
-# 🏰 Dungeon Knights - Blockchain Idle RPG
+# Dungeon Knights — Blockchain Idle RPG
 
-An NFT-based idle RPG game where players mint knight NFTs, battle through dungeons, and earn $DNG tokens on Robinhood Chain.
+An NFT-based idle RPG. Mint knight NFTs in six rarity tiers, deploy squads of up to
+15 knights, clear five themed dungeons, and earn **$DNG** tokens on Robinhood Chain.
 
-![Game Banner](https://dungeon-knights.vercel.app)
+- **Live:** https://dungeon-knights.vercel.app
+- **Stack:** Next.js 14 (App Router) · React 18 · vanilla-JS canvas game engine ·
+  ethers.js v5 (vendored) · Vercel
 
-## 🎮 Features
+## Features
 
-- **NFT Knights**: Mint unique knight NFTs with 5 rarity tiers
-- **Idle Gameplay**: Knights automatically battle through dungeons
-- **Play-to-Earn**: Earn $DNG tokens by completing dungeons
-- **Rarity System**: Common, Uncommon, Rare, Epic, Legendary
-- **Squad Management**: Deploy up to 5 knights simultaneously
-- **Web3 Integration**: Multi-wallet support (MetaMask, Coinbase, WalletConnect, etc.)
-- **Mobile Responsive**: Play on any device
+- **NFT knights** — six rarity tiers (Common → Mythic) with stat multipliers
+- **Idle gameplay** — knights pathfind (A\*), melee-attack loot nodes, earn gold per kill
+- **Squad management** — sort/filter by rarity, power, speed, stamina; deploy up to 15
+- **Five dungeons** — Forgotten Crypts, Goblin Mines, Overgrown Temple,
+  Magma Chambers, Void Rift
+- **Play-to-earn** — $DNG token rewards per dungeon clear (see Tokenomics)
+- **Wallet-ready** — MetaMask / RainbowKit / Privy integration code staged in
+  `public/js/web3/` (wiring into React UI is on the roadmap)
+- **SEO** — per-route metadata, Open Graph, sitemap, robots, JSON-LD, PWA manifest
+- **Mobile-first phones** — `viewport-fit=cover` notch support, `dvh` toolbar-safe
+  heights, 44px+ touch targets, `touch-action` (no tap delay), fluid canvas,
+  bottom-sheet squad panel (`public/css/mobile.css`)
 
-## 🪙 Tokenomics
-
-- **Token**: $DNG (Dungeon Token)
-- **Total Supply**: 1,000,000 $DNG
-- **Network**: Robinhood Chain (Mainnet)
-- **Mint Cost**: 500 $DNG per knight (random rarity)
-- **ROI**: 25 dungeons for Uncommon knights
-- **No Burning**: Sustainable recirculation model
-
-### Token Distribution
-- 35% - Reward Pool (player earnings)
-- 30% - Liquidity (DEX)
-- 15% - Treasury (development)
-- 10% - Marketing
-- 10% - Team (vested)
-
-## 🎯 Rarity & Rewards
-
-| Rarity | Drop Rate | Dungeon Reward | Dungeons to ROI |
-|--------|-----------|----------------|-----------------|
-| Common | 50% | 12 $DNG | 42 |
-| Uncommon | 30% | 20 $DNG | 25 ✅ |
-| Rare | 15% | 36 $DNG | 14 |
-| Epic | 4% | 60 $DNG | 9 |
-| Legendary | 1% | 100 $DNG | 5 |
-
-## 🚀 Tech Stack
-
-- **Frontend**: Vanilla JavaScript, HTML5, CSS3
-- **Blockchain**: Solidity, ethers.js v5
-- **Wallet**: RainbowKit (multi-wallet support)
-- **Network**: Robinhood Chain
-- **Deployment**: Vercel
-- **Audio**: Web Audio API
-
-## 🎨 Game Assets
-
-- Custom pixel art characters
-- Dungeon map tiles
-- Sound effects & music
-- Animated sprites
-
-## 📦 Project Structure
-
-```
-dungeon-knights/
-├── landing.html          # Landing page
-├── menu.html            # Squad management
-├── mint.html            # NFT minting
-├── game.js              # Game logic
-├── web3-integration.js  # Web3 functionality
-├── config.js            # Network configuration
-├── rainbowkit-integration.js  # Multi-wallet support
-├── mobile.css           # Responsive design
-└── assets/              # Game assets
-```
-
-## 🔧 Setup & Installation
-
-### Prerequisites
-- Node.js 16+
-- MetaMask or compatible Web3 wallet
-- Robinhood Chain testnet/mainnet ETH
-
-### Local Development
+## Quickstart
 
 ```bash
-# Clone repository
-git clone https://github.com/YOUR_USERNAME/dungeon-knights.git
-cd dungeon-knights
-
-# Serve locally (use any static server)
-npx http-server .
-
-# Or use Python
-python -m http.server 8000
-
-# Open http://localhost:8000
+npm install
+npm run dev      # http://localhost:3000
+npm run build    # production build
+npm start        # serve production build
 ```
 
-### Deploy to Vercel
+No Python server, no static `.html` files. Routes are clean by default:
 
-```bash
-# Install Vercel CLI
-npm i -g vercel
+| Route       | Page                                     |
+| ----------- | ---------------------------------------- |
+| `/`         | Landing (enter / summon)                 |
+| `/mint`     | Summon knights (qty 1–5, off-chain)      |
+| `/menu`     | Squad management + deploy                |
+| `/dungeons` | Dungeon select                           |
+| `/game`     | Canvas battle (requires selected squad)  |
 
-# Deploy
-vercel --prod
+Legacy `.html` URLs (`/menu.html`, …) permanently redirect to the clean routes
+(see `next.config.js`).
+
+### Environment
+
+| Variable                | Default                              | Purpose                                    |
+| ----------------------- | ------------------------------------ | ------------------------------------------ |
+| `NEXT_PUBLIC_SITE_URL`  | `https://dungeon-knights.vercel.app` | Canonicals, OG URLs, sitemap, robots       |
+
+Game state persists in browser `localStorage` (no backend yet):
+
+| Key                | Content                              | Written by       |
+| ------------------ | ------------------------------------ | ---------------- |
+| `allKnights`       | Full knight collection (JSON)        | `/mint`          |
+| `selectedKnights`  | Deployed squad (JSON)                | `/menu` → Play   |
+| `selectedDungeon`  | Chosen dungeon id                    | `/dungeons`      |
+| `gameGold`         | Gold balance                         | `/menu`, `/game` |
+
+## Architecture
+
+Next.js App Router shell around the battle-tested canvas engine. Each route is a
+**server component** (`page.js`, crawler-visible metadata) rendering a
+**client component** (`client.js`, interactivity):
+
+```
+app/
+├── layout.js            # root layout, global metadata, viewport
+├── page.js              # /           (metadata + VideoGame JSON-LD)
+├── landing-client.js    # /           (router.push navigation, menu music)
+├── menu/page.js         # /menu       (metadata)
+├── menu/client.js       # /menu       (roster, sort/filter, squad select)
+├── mint/page.js         # /mint       (metadata)
+├── mint/client.js       # /mint       (qty selector, rarity roll, collection)
+├── dungeons/page.js     # /dungeons   (metadata)
+├── dungeons/client.js   # /dungeons   (cards → localStorage → /game)
+├── game/page.js         # /game       (metadata)
+├── game/client.js       # /game       (canvas markup + engine boot)
+├── sitemap.js           # /sitemap.xml
+├── robots.js            # /robots.txt
+└── manifest.js          # /manifest.webmanifest
+
+lib/
+├── site.js              # SITE_URL, names, description, keywords, OG image
+└── knights.js           # rarity roll + stat gen (mirrors engine math)
+
+public/                  # served verbatim at /
+├── assets/              # images/{characters,monsters,maps,obstacles}, audio/*.mp3
+├── css/                 # legacy stylesheets, loaded per-page via <link>
+└── js/
+    ├── core/            # canvas engine: audio, characters, dungeon,
+    │                    # pathfinding, combat, ui, game (classic scripts)
+    ├── web3/            # staged wallet integrations (config, web3, rainbowkit,
+    │                    # privy, wallet-widget) — not yet wired to React UI
+    ├── vendor/          # ethers-5.7.2.umd.min.js (pinned, offline-capable)
+    └── window-bridge.js # exposes engine globals as window.* for React
 ```
 
-## 🎮 How to Play
+### Key design decisions
 
-1. **Connect Wallet**: Click "Connect Wallet" and choose your wallet
-2. **Mint Knights**: Pay 500 $DNG to mint a random rarity knight
-3. **Deploy Squad**: Add knights to your squad (max 5)
-4. **Enter Dungeon**: Choose a dungeon and start battling
-5. **Earn Rewards**: Complete dungeons to earn $DNG tokens
-6. **ROI in 25 Dungeons**: Uncommon knights break even after 25 clears
+1. **Engine reuse, not rewrite.** `/game` renders the exact DOM ids the engine
+   expects (`gameCanvas`, `gameLog`, …), injects the seven `core/` scripts in
+   order, then re-fires `DOMContentLoaded` (dynamically injected scripts miss the
+   real event) so the engine's own boot code runs `new Game()` → `new UI(game)`.
+   Unmount sets `game.isRunning = false` and drops `window.game` so re-entry
+   boots cleanly.
+2. **Global-CSS rule compliance.** App Router allows global CSS only from
+   layouts; to preserve the original cascade exactly, each page loads its legacy
+   stylesheets via `<link href="/css/…">` from `public/`.
+3. **Absolute asset paths.** Engine `Audio`/`Image` sources use `/assets/…` so
+   they resolve identically from every nested route.
+4. **No backend (yet).** There is no API layer; `localStorage` is the store and
+   `lib/knights.js` replicates `Knight` roll/stat math so mint/menu behave
+   identically to the engine.
 
-## 🔗 Smart Contracts
+### Data flow
 
-### Robinhood Chain Testnet
-- **NFT Contract**: `0xEA37B1D036a880DfF372bCdd8b2A3AEeEe01e55A`
-- **ChainID**: 46630
-
-### Robinhood Chain Mainnet
-- **Token Contract**: TBD (to be deployed)
-- **NFT Contract**: TBD (to be deployed)
-- **ChainID**: 4663
-
-## 🌐 Links
-
-- **Live Game**: [dungeon-knights.vercel.app](https://dungeon-knights.vercel.app)
-- **Robinhood Chain Explorer**: [robinhoodchain.blockscout.com](https://robinhoodchain.blockscout.com)
-- **Documentation**: See `/docs` folder
-
-## 🛠️ Configuration
-
-Edit `config.js` to switch between testnet and mainnet:
-
-```javascript
-USE_MAINNET: false  // Set to true for mainnet
+```
+/ → /mint → allKnights ─┐
+/ → /menu → selectedKnights (+ gameGold) → /dungeons → selectedDungeon → /game
+                                                                    (engine reads
+                                                                     all three keys)
 ```
 
-## 🔐 Security
+## Game design (code-canonical)
 
-- Private keys never stored in code
-- Web3 wallet integration (non-custodial)
-- Audited smart contracts (recommended before mainnet)
-- Treasury multi-sig wallet (recommended)
+Rarity distribution and multipliers are defined once in the engine
+(`public/js/core/characters.js`, mirrored in `lib/knights.js`):
 
-## 📄 License
+| Rarity    | Drop rate | Power × | Base speed |
+| --------- | --------- | ------- | ---------- |
+| Common    | 65%       | 1.0     | 1          |
+| Uncommon  | 20%       | 1.5     | 1.5        |
+| Rare      | 10%       | 2.2     | 2.14       |
+| Epic      | 4.5%      | 3.5     | 3          |
+| Legendary | 1.2%      | 5.0     | 7.5        |
+| Mythic    | 0.3%      | 8.0     | 15         |
 
-MIT License - see LICENSE file
+- Power: `(10 + rand·15) · multiplier · variance(0.8–1.2)`
+- Stamina: `(300 + rand·100) · multiplier`; recovery `(5 + rand·5) · multiplier`
+- Melee only (range 1), 1s attack cooldown; monsters 500 HP, chests 250 HP
+- Squad cap: **15** knights; starting gold: **500**
 
-## 🤝 Contributing
+## Tokenomics
 
-Contributions welcome! Please:
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Open a pull request
+- **Token:** $DNG · **Supply:** 1,000,000 · **Network:** Robinhood Chain
+- **Distribution:** 35% rewards · 30% liquidity · 15% treasury · 10% marketing ·
+  10% team (vested)
+- Testnet mint price: `0.001` ETH/knight · Mainnet pricing: `100` $DNG/knight
+  (`public/js/web3/config.js`, `USE_MAINNET: false` default)
+- Full breakdown: [`tokenomics.md`](./tokenomics.md)
 
-## 📞 Support
+## Smart contracts
 
-- GitHub Issues: [Report bugs](https://github.com/YOUR_USERNAME/dungeon-knights/issues)
-- Discord: [Join community](#)
-- Twitter: [@DungeonKnights](#)
+| Network | Chain ID | NFT contract |
+| ------- | -------- | ------------ |
+| Robinhood Chain testnet | 46630 (`0xb626`) | `0xEA37B1D036a880DfF372bCdd8b2A3AEeEe01e55A` |
+| Robinhood Chain mainnet | 4663 (`0x1237`) | TBD |
 
-## 🎯 Roadmap
+Explorer: https://robinhoodchain.blockscout.com · Operational guides: [`docs/`](./docs)
 
-### Phase 1 (Current)
-- ✅ NFT minting system
-- ✅ Basic dungeon gameplay
-- ✅ $DNG token integration
-- ✅ Multi-wallet support
-- ✅ Mobile responsive design
+## Deployment
 
-### Phase 2 (Q1 2027)
-- [ ] PvP tournaments
-- [ ] Equipment system
-- [ ] Stat upgrades
-- [ ] Marketplace trading
-- [ ] Staking rewards
+Vercel auto-detects Next.js (`vercel.json` pins `framework: nextjs`).
+`NEXT_PUBLIC_SITE_URL` should match the production domain.
 
-### Phase 3 (Q2 2027)
-- [ ] Guild system
-- [ ] Seasonal events
-- [ ] Advanced dungeons
-- [ ] Achievement system
-- [ ] Leaderboards
+## Roadmap
 
-## 💎 Why Play Dungeon Knights?
+- [ ] Wire wallet integrations (`public/js/web3/`) into React UI
+- [ ] Backend API (`/api/*`) replacing `localStorage` persistence
+- [ ] Marketplace, PvP tournaments, equipment, staking
+- [ ] Guilds, seasons, leaderboards
 
-- **Fair Economics**: All players can ROI in 25 dungeons
-- **No Pay-to-Win**: Skill and strategy matter
-- **True Ownership**: NFTs are yours forever
-- **Sustainable**: Reward pool recirculates from minting
-- **Mobile-Friendly**: Play anywhere, anytime
-- **Community-Driven**: Player feedback shapes development
+## Contributing
 
-## 🏆 Credits
+1. Fork · 2. feature branch · 3. commit · 4. pull request.
+Run `npm run build` before opening a PR.
 
-Developed with ❤️ by the Dungeon Knights team
+## License
 
----
-
-**Start your adventure today!** 🗡️⚔️🛡️
-
-[Play Now](https://dungeon-knights.vercel.app) | [Join Discord](#) | [Follow Twitter](#)
+MIT
