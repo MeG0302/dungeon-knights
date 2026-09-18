@@ -58,15 +58,21 @@ export default function PointsPage() {
         setInDungeon(true);
     };
 
-    const handleDungeonComplete = (earnedPoints) => {
+    const handleDungeonComplete = () => {
         setInDungeon(false);
-        for (let i = 0; i < 3; i++) {
-            recordDungeonRun();
+        recordDungeonRun();
+        const currentRuns = getTodayDungeonRuns();
+        let earned = 0;
+        for (const tier of DAILY_TIERS) {
+            if (currentRuns >= tier.runs) earned = tier.total;
+            else break;
         }
         const mult = getShareMultiplier();
-        const finalPoints = Math.floor(earnedPoints * mult);
-        addPoints(finalPoints, 'points_vault_dungeon');
-        recordPointsForWallet(getWalletAddress() || 'local', finalPoints);
+        const finalPoints = Math.floor(earned * mult);
+        if (finalPoints > 0) {
+            addPoints(finalPoints, 'points_vault_dungeon');
+            recordPointsForWallet(getWalletAddress() || 'local', finalPoints);
+        }
         loadState();
     };
 
