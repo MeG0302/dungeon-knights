@@ -92,12 +92,8 @@ export default function PointsPage() {
         setTimeout(() => setCopied(false), 2000);
     };
 
-    const progressPercent = Math.min((runs / 5) * 100, 100);
-    const currentTier = DAILY_TIERS.find(t => runs >= t.runs);
-    const nextTier = DAILY_TIERS.find(t => runs < t.runs);
-
     if (inDungeon) {
-        return <PointsDungeon onExit={handleDungeonComplete} onComplete={handleDungeonComplete} />;
+        return <PointsDungeon onExit={handleDungeonComplete} />;
     }
 
     return (
@@ -105,181 +101,176 @@ export default function PointsPage() {
             <link rel="stylesheet" href="/css/theme.css" />
             <link rel="stylesheet" href="/css/points.css" />
             <link rel="stylesheet" href="/css/wallet-widget.css" />
-            <div className="points-page">
-                <header className="points-header">
-                    <div className="points-header-left">
-                        <button className="back-btn" onClick={() => navigateTo('/')}>
-                            Back
-                        </button>
-                        <h1>Points Program</h1>
-                    </div>
-                    <div className="points-balance">
-                        <img src={`${ASSETS}Gold_coin_badge_with_PTS_2K_20260919011438-autocrop-hair.png`} alt="" className="points-icon" />
-                        <span className="points-amount">{points.toLocaleString()}</span>
-                        <span className="points-label">PTS</span>
-                        {multiplier > 1 && <span className="multiplier-badge">x{multiplier}</span>}
+            <div className="page" style={{ background: 'var(--bg-dark)' }}>
+
+                {/* Header */}
+                <header className="header">
+                    <button className="btn btn-ghost btn-sm" onClick={() => navigateTo('/')}>
+                        <img src="assets/ui/exit cross.png" className="btn-icon-img" alt="" /> Kingdom Gate
+                    </button>
+                    <div className="header-title">POINTS PROGRAM</div>
+                    <div className="header-actions">
+                        <div className="wallet-pill" id="headerDngBalance">
+                            <img src={`${ASSETS}Gold_coin_badge_with_PTS_2K_20260919011438-autocrop-hair.png`} alt="" style={{ width: 18, height: 18, imageRendering: 'pixelated' }} />
+                            <span id="headerDngText">{points.toLocaleString()} PTS</span>
+                        </div>
                     </div>
                 </header>
 
-                <div className="points-layout">
-                    <aside className="points-sidebar">
-                        <div className="panel vault-dungeon-panel">
-                            <div className="panel-header">
-                                <img src={`${ASSETS}treasure-chest.png`} alt="" className="panel-icon" />
-                                <span>Points Vault</span>
-                            </div>
-                            <p className="panel-desc">Enter the vault to earn daily points (100 + 300 + 500)</p>
-                            <button className="vault-enter-btn" onClick={handleEnterDungeon} disabled={runs >= 5}>
-                                {runs >= 5 ? 'Daily Complete' : 'Enter Vault'}
-                            </button>
-                        </div>
+                {/* Two-panel layout */}
+                <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
 
-                        <div className="panel">
-                            <div className="panel-header">
-                                <img src={`${ASSETS}Crossed_sword_and_shield_icon_2K_20260919011419-autocrop-hair.png`} alt="" className="panel-icon" />
-                                <span>Daily Progress</span>
-                            </div>
-                            <div className="dungeon-tracker">
-                                {[1, 2, 3, 4, 5].map((i) => (
-                                    <div key={i} className={`dungeon-step ${i <= runs ? 'completed' : ''}`}>
-                                        <div className="step-circle">
-                                            {i <= runs
-                                                ? <img src={`${ASSETS}Green_checkmark_icon_for_tasks_2K_20260919011426-autocrop-hair.png`} alt="" className="check-icon" />
-                                                : <span className="step-num">{i}</span>}
-                                        </div>
-                                        <div className="step-info">
-                                            <span className="step-label">Vault Run {i}</span>
-                                            <span className="step-pts">+{POINTS_PER_DUNGEON} PTS</span>
-                                        </div>
+                    {/* LEFT: Points Actions */}
+                    <aside className="side-panel" style={{ width: 340 }}>
+                        <div className="side-panel-header">
+                            <img src={`${ASSETS}Treasure_chest_overflowing_with_ΓÇª_2K_20260919012043-autocrop-hair.png`} alt="" className="panel-header-icon" style={{ imageRendering: 'pixelated' }} />
+                            Points Vault
+                        </div>
+                        <div className="side-panel-body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+
+                            <button className="btn btn-primary btn-md w-full" onClick={handleEnterDungeon} disabled={runs >= 5} style={{ justifyContent: 'flex-start', gap: 10 }}>
+                                <img src="assets/ui/sword.png" className="btn-icon-img" alt="" />
+                                <div style={{ textAlign: 'left' }}>
+                                    <div>Enter Vault</div>
+                                    <div style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-muted)', letterSpacing: 0.5 }}>
+                                        Earn {100 + 300 + 500} PTS per run
                                     </div>
-                                ))}
-                            </div>
-                            <div className="progress-bar-container">
-                                <div className="progress-bar-fill" style={{ width: `${progressPercent}%` }} />
-                            </div>
-                            <div className="milestone-info">
-                                {currentTier && <span className="milestone-achieved">{currentTier.total} PTS earned</span>}
-                                {nextTier && <span className="milestone-next">{nextTier.runs - runs} more for {nextTier.total} PTS</span>}
-                                {!nextTier && <span className="milestone-max">MAX DAILY</span>}
-                            </div>
-                        </div>
-
-                        <div className="panel">
-                            <div className="panel-header">
-                                <img src={`${ASSETS}White_logo_on_black_background_2K_20260919011421-autocrop-hair.png`} alt="" className="panel-icon x-icon" />
-                                <span>Daily Share</span>
-                            </div>
-                            <p className="panel-desc">Share on X for 2x multiplier</p>
-                            <button className={`share-btn ${sharedToday ? 'active' : ''}`} onClick={handleShareX} disabled={sharedToday}>
-                                {sharedToday ? 'Shared (x2 Active)' : 'Share on X'}
+                                </div>
                             </button>
-                        </div>
 
-                        <div className="panel">
-                            <div className="panel-header">
-                                <img src={`${ASSETS}Silver_chain_link_icon_referrals_2K_20260919011442-autocrop-hair.png`} alt="" className="panel-icon" />
-                                <span>Refer & Earn</span>
+                            <div style={{ borderTop: '1px solid var(--border-base)', margin: '4px 0' }} />
+
+                            {/* Daily Progress */}
+                            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-gold)', letterSpacing: 1, textTransform: 'uppercase', padding: '4px 4px 8px' }}>
+                                Daily Progress ({runs}/5)
                             </div>
-                            <p className="panel-desc">15% from 1st degree, 5% from 2nd degree</p>
-                            <div className="referral-code-box">
-                                <code className="referral-code">{referralCode || 'Connect Wallet'}</code>
-                                <button className="copy-btn" onClick={handleCopyReferral}>
+                            {[1, 2, 3, 4, 5].map((i) => (
+                                <div key={i} className="stat-row" style={{ opacity: i <= runs ? 0.6 : 1 }}>
+                                    <span className="stat-label">Vault Run {i}</span>
+                                    <span className="stat-value" style={{ fontSize: 12 }}>
+                                        {i <= runs ? <img src={`${ASSETS}Green_checkmark_icon_for_tasks_2K_20260919011426-autocrop-hair.png`} alt="" style={{ width: 16, height: 16, imageRendering: 'pixelated' }} /> : `+${POINTS_PER_DUNGEON} PTS`}
+                                    </span>
+                                </div>
+                            ))}
+
+                            <div style={{ borderTop: '1px solid var(--border-base)', margin: '4px 0' }} />
+
+                            {/* X Share */}
+                            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-gold)', letterSpacing: 1, textTransform: 'uppercase', padding: '4px 4px 8px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <img src={`${ASSETS}White_logo_on_black_background_2K_20260919011421-autocrop-hair.png`} alt="" style={{ width: 16, height: 16, imageRendering: 'pixelated', filter: 'brightness(0) invert(1)' }} />
+                                Daily Share
+                            </div>
+                            <p style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 8, padding: '0 4px' }}>
+                                Share on X for 2x multiplier
+                            </p>
+                            <button className={`btn ${sharedToday ? 'btn-primary' : 'btn-secondary'} btn-sm w-full`} onClick={handleShareX} disabled={sharedToday}>
+                                {sharedToday ? 'Shared Today (x2)' : 'Share on X'}
+                            </button>
+
+                            <div style={{ borderTop: '1px solid var(--border-base)', margin: '4px 0' }} />
+
+                            {/* Referral */}
+                            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-gold)', letterSpacing: 1, textTransform: 'uppercase', padding: '4px 4px 8px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <img src={`${ASSETS}Silver_chain_link_icon_referrals_2K_20260919011442-autocrop-hair.png`} alt="" className="panel-header-icon" />
+                                Refer & Earn
+                            </div>
+                            <p style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 8, padding: '0 4px' }}>
+                                15% from 1st degree, 5% from 2nd degree
+                            </p>
+                            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                                <code className="referral-code" style={{ flex: 1 }}>{referralCode || 'Connect Wallet'}</code>
+                                <button className="btn btn-secondary btn-sm" onClick={handleCopyReferral} style={{ padding: '4px 12px' }}>
                                     {copied ? 'Copied' : 'Copy'}
                                 </button>
                             </div>
-                            <p className="ref-stats">{referralStats.totalRefs} referrals</p>
-                            {refEarnings.details.length > 0 && (
-                                <div className="ref-earnings">
-                                    <span className="ref-earnings-label">Referral Earnings:</span>
+                            <p style={{ fontSize: 11, color: 'var(--text-muted)', padding: '0 4px' }}>
+                                {referralStats.totalRefs} referrals
+                            </p>
+                            {refEarnings.total > 0 && (
+                                <div className="ref-earnings" style={{ marginTop: 8 }}>
+                                    <span className="ref-earnings-label">Earned:</span>
                                     <span className="ref-earnings-value">+{refEarnings.total} PTS</span>
                                 </div>
                             )}
                         </div>
                     </aside>
 
-                    <main className="points-main">
-                        {/* Stats Cards */}
-                        <div className="stats-row">
-                            <div className="stat-card">
-                                <span className="stat-value">{points.toLocaleString()}</span>
-                                <span className="stat-label">Total PTS</span>
+                    {/* RIGHT: Leaderboard / Referrals */}
+                    <main className="side-panel" style={{ flex: 1, borderRight: 'none' }}>
+                        <div className="side-panel-header" style={{ justifyContent: 'space-between' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <img src={`${ASSETS}Golden_trophy_pixel_art_icon_2K_20260919011419-autocrop-hair.png`} alt="" className="panel-header-icon" />
+                                Rankings
                             </div>
-                            <div className="stat-card">
-                                <span className="stat-value">{runs}/5</span>
-                                <span className="stat-label">Daily Runs</span>
-                            </div>
-                            <div className="stat-card">
-                                <span className="stat-value">{multiplier}x</span>
-                                <span className="stat-label">Multiplier</span>
-                            </div>
-                            <div className="stat-card">
-                                <span className="stat-value">{referralStats.totalRefs}</span>
-                                <span className="stat-label">Referrals</span>
-                            </div>
-                        </div>
-
-                        {/* Leaderboard Panel */}
-                        <div className="content-panel">
-                            <div className="tabs">
-                                <button className={`tab ${tab === 'leaderboard' ? 'active' : ''}`} onClick={() => setTab('leaderboard')}>
+                            <div style={{ display: 'flex', gap: 4 }}>
+                                <button className={`btn btn-sm ${tab === 'leaderboard' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setTab('leaderboard')} style={{ fontSize: 11, padding: '4px 12px', letterSpacing: 0.5 }}>
                                     Leaderboard
                                 </button>
-                                <button className={`tab ${tab === 'referrals' ? 'active' : ''}`} onClick={() => setTab('referrals')}>
+                                <button className={`btn btn-sm ${tab === 'referrals' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setTab('referrals')} style={{ fontSize: 11, padding: '4px 12px', letterSpacing: 0.5 }}>
                                     My Referrals
                                 </button>
                             </div>
-
-                            <div className="panel-content">
-                                {tab === 'leaderboard' && (
-                                    <div className="leaderboard-table">
-                                        <div className="lb-header">
-                                            <span className="lb-rank">#</span>
-                                            <span className="lb-name">Player</span>
-                                            <span className="lb-points">Points</span>
-                                            <span className="lb-refs">Refs</span>
-                                        </div>
-                                        {leaderboard.length === 0 ? (
-                                            <div className="lb-empty">
-                                                <img src={`${ASSETS}Golden_trophy_pixel_art_icon_2K_20260919011419-autocrop-hair.png`} alt="" className="empty-icon" />
-                                                <p>No players yet.</p>
-                                                <p className="empty-sub">Be the first to earn points!</p>
-                                            </div>
-                                        ) : (
-                                            leaderboard.map((entry, i) => (
-                                                <div key={i} className={`lb-row ${i < 3 ? 'top-' + (i + 1) : ''}`}>
-                                                    <span className="lb-rank">{i + 1}</span>
-                                                    <span className="lb-name">{entry.shortAddr}</span>
-                                                    <span className="lb-points">{entry.points.toLocaleString()}</span>
-                                                    <span className="lb-refs">{entry.refs}</span>
-                                                </div>
-                                            ))
-                                        )}
-                                    </div>
-                                )}
-
-                                {tab === 'referrals' && (
-                                    <div className="referrals-list">
-                                        {refEarnings.details.length === 0 ? (
-                                            <div className="lb-empty">
-                                                <img src={`${ASSETS}Silver_chain_link_icon_referrals_2K_20260919011442-autocrop-hair.png`} alt="" className="empty-icon" />
-                                                <p>No referrals yet.</p>
-                                                <p className="empty-sub">Share your code to earn 15% of their points!</p>
-                                            </div>
-                                        ) : (
-                                            refEarnings.details.map((ref, i) => (
-                                                <div key={i} className="ref-row">
-                                                    <span className="ref-addr">{ref.address.slice(0, 8)}...{ref.address.slice(-4)}</span>
-                                                    <span className="ref-pts">{ref.theirPoints} PTS</span>
-                                                    <span className="ref-earned">+{ref.earned} PTS</span>
-                                                </div>
-                                            ))
-                                        )}
-                                    </div>
-                                )}
+                        </div>
+                        <div className="side-panel-body">
+                            <div className="stat-row">
+                                <span className="stat-label">Total Points</span>
+                                <span className="stat-value" style={{ color: 'var(--accent-gold)' }}>{points.toLocaleString()} PTS</span>
                             </div>
+
+                            {tab === 'leaderboard' && (
+                                <div className="leaderboard-table" style={{ marginTop: 12 }}>
+                                    <div className="lb-header">
+                                        <span className="lb-rank">#</span>
+                                        <span className="lb-name">Player</span>
+                                        <span className="lb-points">Points</span>
+                                        <span className="lb-refs">Refs</span>
+                                    </div>
+                                    {leaderboard.length === 0 ? (
+                                        <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
+                                            <img src={`${ASSETS}Golden_trophy_pixel_art_icon_2K_20260919011419-autocrop-hair.png`} alt="" style={{ width: 40, height: 40, imageRendering: 'pixelated', opacity: 0.3, marginBottom: 12 }} />
+                                            <p style={{ fontStyle: 'italic' }}>No players yet. Be the first!</p>
+                                        </div>
+                                    ) : (
+                                        leaderboard.map((entry, i) => (
+                                            <div key={i} className={`lb-row ${i < 3 ? 'top-' + (i + 1) : ''}`}>
+                                                <span className="lb-rank">{i + 1}</span>
+                                                <span className="lb-name">{entry.shortAddr}</span>
+                                                <span className="lb-points">{entry.points.toLocaleString()}</span>
+                                                <span className="lb-refs">{entry.refs}</span>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            )}
+
+                            {tab === 'referrals' && (
+                                <div className="referrals-list" style={{ marginTop: 12 }}>
+                                    {refEarnings.details.length === 0 ? (
+                                        <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
+                                            <img src={`${ASSETS}Silver_chain_link_icon_referrals_2K_20260919011442-autocrop-hair.png`} alt="" style={{ width: 40, height: 40, imageRendering: 'pixelated', opacity: 0.3, marginBottom: 12 }} />
+                                            <p style={{ fontStyle: 'italic' }}>No referrals yet. Share your code!</p>
+                                        </div>
+                                    ) : (
+                                        refEarnings.details.map((ref, i) => (
+                                            <div key={i} className="ref-row">
+                                                <span className="ref-addr">{ref.address.slice(0, 8)}...{ref.address.slice(-4)}</span>
+                                                <span className="ref-pts">{ref.theirPoints} PTS</span>
+                                                <span className="ref-earned">+{ref.earned} PTS</span>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </main>
                 </div>
+
+                {/* Footer */}
+                <footer style={{ height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-dark)', borderTop: '1px solid var(--border-base)', flexShrink: 0 }}>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: 0.5 }}>
+                        Earn points by completing vault runs, sharing on X, and referring friends
+                    </span>
+                </footer>
             </div>
         </>
     );
