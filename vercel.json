@@ -1,43 +1,41 @@
 {
-  "version": 2,
-  "builds": [
+  "headers": [
     {
-      "src": "**/*.html",
-      "use": "@vercel/static"
+      "source": "/(.*).js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
     },
     {
-      "src": "**/*.js",
-      "use": "@vercel/static"
+      "source": "/(.*).html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
     },
     {
-      "src": "**/*.css",
-      "use": "@vercel/static"
-    },
-    {
-      "src": "**/*.png",
-      "use": "@vercel/static"
-    },
-    {
-      "src": "**/*.jpg",
-      "use": "@vercel/static"
-    },
-    {
-      "src": "**/*.jpeg",
-      "use": "@vercel/static"
-    },
-    {
-      "src": "**/*.mp3",
-      "use": "@vercel/static"
+      "source": "/(.*).mp4",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "video/mp4"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
     }
   ],
   "routes": [
     {
       "src": "/",
       "dest": "/landing.html"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/$1"
     }
   ]
 }

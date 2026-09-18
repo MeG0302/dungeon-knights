@@ -1,0 +1,624 @@
+/* ========================================
+   DUNGEON KNIGHTS - MEDIEVAL GAME PAGE
+   Additional medieval styling for game page
+   ======================================== */
+
+/* ========================================
+   HEADER ENHANCEMENTS
+   ======================================== */
+.game-header {
+    background: linear-gradient(
+        180deg,
+        var(--medieval-stone-light) 0%,
+        var(--medieval-stone) 100%
+    ) !important;
+    border-bottom: 6px solid var(--medieval-gold) !important;
+}
+
+.header-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.header-title-icon {
+    font-size: 32px;
+    filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.6));
+}
+
+.header-title-text {
+    font-family: var(--font-title);
+    font-size: 28px;
+    color: var(--medieval-gold);
+    text-shadow: 
+        2px 2px 0 var(--medieval-red),
+        4px 4px 8px rgba(0, 0, 0, 0.8);
+    letter-spacing: 3px;
+}
+
+/* ========================================
+   MAIN GAME AREA
+   ======================================== */
+.game-main {
+    display: grid;
+    grid-template-columns: 280px 1fr 320px;
+    gap: 20px;
+    flex: 1;
+    padding: 20px;
+    overflow: hidden;
+    position: relative;
+    align-items: start;
+}
+
+/* Stone dungeon background */
+.game-main::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: 
+        radial-gradient(ellipse at 50% 0%, rgba(255, 107, 0, 0.1) 0%, transparent 50%),
+        var(--dungeon-dark);
+    z-index: -1;
+    pointer-events: none;
+}
+
+/* ========================================
+   SIDE PANELS
+   ======================================== */
+.squad-panel,
+.info-panel {
+    /* Override old fixed positioning */
+    position: relative !important;
+    right: auto !important;
+    top: auto !important;
+    width: auto !important;
+    
+    border: 4px solid var(--medieval-brown-dark);
+    border-radius: 12px;
+    padding: 20px;
+    overflow-y: auto;
+    box-shadow: 
+        0 8px 24px rgba(0, 0, 0, 0.8),
+        inset 0 0 60px rgba(0, 0, 0, 0.05);
+    height: auto;
+    max-height: 600px;
+}
+
+/* Hide old toggle button */
+.panel-toggle {
+    display: none !important;
+}
+
+/* Aged parchment texture */
+.squad-panel::before,
+.info-panel::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: 
+        repeating-linear-gradient(
+            90deg,
+            transparent,
+            transparent 2px,
+            rgba(0, 0, 0, 0.03) 2px,
+            rgba(0, 0, 0, 0.03) 4px
+        ),
+        repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 2px,
+            rgba(0, 0, 0, 0.03) 2px,
+            rgba(0, 0, 0, 0.03) 4px
+        );
+    opacity: 0.5;
+    pointer-events: none;
+    border-radius: 8px;
+}
+
+.panel-header {
+    font-size: 20px;
+    color: var(--medieval-brown-dark);
+    text-align: center;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--medieval-gold-dark);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.panel-icon {
+    font-size: 24px;
+    filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+/* ========================================
+   SQUAD LIST (Knight Cards)
+   ======================================== */
+.squad-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.knight-card-mini {
+    background: linear-gradient(
+        135deg,
+        rgba(92, 92, 92, 0.3) 0%,
+        rgba(58, 58, 58, 0.3) 100%
+    );
+    border: 3px solid var(--medieval-gold-dark);
+    border-radius: 8px;
+    padding: 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+
+.knight-card-mini::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(
+        circle,
+        rgba(212, 175, 55, 0.1) 0%,
+        transparent 70%
+    );
+    pointer-events: none;
+}
+
+.knight-card-mini:hover {
+    transform: translateX(4px);
+    border-color: var(--medieval-gold);
+    box-shadow: 0 4px 12px rgba(212, 175, 55, 0.3);
+}
+
+.knight-portrait-mini {
+    width: 50px;
+    height: 50px;
+    border: 2px solid var(--medieval-gold-dark);
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    flex-shrink: 0;
+}
+
+.knight-info-mini {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.knight-name-mini {
+    font-family: var(--font-medieval);
+    font-size: 14px;
+    color: var(--medieval-gold);
+    font-weight: bold;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.knight-rarity-mini {
+    font-family: var(--font-body);
+    font-size: 11px;
+    color: var(--medieval-brown-dark);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* ========================================
+   INFO SECTIONS
+   ======================================== */
+.info-section {
+    margin-bottom: 20px;
+}
+
+.info-section:last-child {
+    margin-bottom: 0;
+}
+
+/* ========================================
+   CHEST DISPLAY
+   ======================================== */
+.chest-display {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    margin: 20px 0;
+}
+
+.chest-image {
+    width: 120px;
+    height: 120px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    filter: drop-shadow(0 0 20px rgba(255, 107, 0, 0.5));
+    transition: all 0.3s ease;
+}
+
+.chest-image:hover {
+    transform: scale(1.1);
+    filter: drop-shadow(0 0 30px rgba(255, 107, 0, 0.7));
+}
+
+/* ========================================
+   REWARDS PANEL
+   ======================================== */
+.rewards-total {
+    font-family: var(--font-title);
+    font-size: 32px;
+    color: var(--medieval-gold);
+    text-align: center;
+    font-weight: bold;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.6);
+    margin: 16px 0;
+}
+
+.rewards-meta {
+    font-family: var(--font-body);
+    font-size: 14px;
+    color: var(--medieval-brown-dark);
+    text-align: center;
+    margin-bottom: 16px;
+}
+
+/* ========================================
+   CANVAS WRAPPER
+   ======================================== */
+.canvas-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--dungeon-shadow);
+    border: 8px solid var(--medieval-stone-dark);
+    border-radius: 12px;
+    box-shadow: 
+        0 12px 32px rgba(0, 0, 0, 0.9),
+        inset 0 0 60px rgba(0, 0, 0, 0.8);
+    overflow: hidden;
+}
+
+/* Decorative corners */
+.border-corner {
+    position: absolute;
+    width: 40px;
+    height: 40px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    z-index: 10;
+    pointer-events: none;
+    filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.6));
+}
+
+.corner-tl {
+    top: -4px;
+    left: -4px;
+}
+
+.corner-tr {
+    top: -4px;
+    right: -4px;
+    transform: rotate(90deg);
+}
+
+.corner-bl {
+    bottom: -4px;
+    left: -4px;
+    transform: rotate(-90deg);
+}
+
+.corner-br {
+    bottom: -4px;
+    right: -4px;
+    transform: rotate(180deg);
+}
+
+/* Decorative borders */
+.border-tile {
+    position: absolute;
+    background-size: contain;
+    background-repeat: repeat;
+    z-index: 10;
+    pointer-events: none;
+}
+
+.border-top,
+.border-bottom {
+    left: 40px;
+    right: 40px;
+    height: 8px;
+}
+
+.border-top {
+    top: 0;
+}
+
+.border-bottom {
+    bottom: 0;
+}
+
+.border-left,
+.border-right {
+    top: 40px;
+    bottom: 40px;
+    width: 8px;
+}
+
+.border-left {
+    left: 0;
+}
+
+.border-right {
+    right: 0;
+}
+
+/* Atmosphere text */
+.atmosphere-text {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: var(--font-decorative);
+    font-size: 24px;
+    color: var(--torch-glow);
+    text-shadow: 
+        0 0 20px var(--torch-flame),
+        2px 2px 4px rgba(0, 0, 0, 0.8);
+    opacity: 0.7;
+    pointer-events: none;
+    z-index: 5;
+    letter-spacing: 4px;
+    animation: flicker 3s ease-in-out infinite;
+}
+
+/* ========================================
+   PARCHMENT NOTE
+   ======================================== */
+.parchment-note {
+    position: absolute;
+    bottom: 20px;
+    left: 300px;
+    max-width: 350px;
+    padding: 20px;
+    z-index: 20;
+    animation: note-slide-in 0.5s ease;
+}
+
+@keyframes note-slide-in {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.parchment-title {
+    font-size: 16px;
+    font-weight: bold;
+    margin-bottom: 8px;
+    color: var(--medieval-red);
+}
+
+.parchment-text {
+    font-size: 13px;
+    margin: 4px 0;
+    line-height: 1.6;
+}
+
+/* ========================================
+   CONTROL BAR
+   ======================================== */
+.control-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 24px;
+    border-top: 4px solid var(--medieval-gold-dark);
+    box-shadow: 
+        0 -8px 24px rgba(0, 0, 0, 0.8),
+        inset 0 2px 0 rgba(255, 255, 255, 0.1);
+    gap: 20px;
+}
+
+.control-buttons {
+    display: flex;
+    gap: 12px;
+}
+
+.game-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 24px;
+    font-size: 16px;
+}
+
+.game-btn-icon {
+    font-size: 20px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.game-btn-icon img {
+    width: 20px;
+    height: 20px;
+    filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.6));
+}
+
+.panel-icon {
+    font-size: 24px;
+    filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.3));
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.panel-icon img {
+    filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.5));
+}
+
+/* ========================================
+   STATUS DISPLAY
+   ======================================== */
+.status-display {
+    display: flex;
+    gap: 24px;
+    align-items: center;
+    flex: 1;
+    justify-content: center;
+}
+
+.status-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: rgba(0, 0, 0, 0.4);
+    border: 2px solid var(--medieval-gold-dark);
+    border-radius: 8px;
+    font-family: var(--font-body);
+    font-size: 14px;
+    color: var(--parchment-light);
+}
+
+.stat-highlight {
+    font-family: var(--font-medieval);
+    color: var(--medieval-gold);
+    font-size: 16px;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+/* ========================================
+   MODAL STYLING
+   ======================================== */
+.modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.9);
+    z-index: 10000;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.modal.hidden {
+    display: none;
+}
+
+.modal:not(.hidden) {
+    display: flex;
+}
+
+.modal-content {
+    background: var(--parchment-base);
+    border: 6px solid var(--medieval-gold);
+    border-radius: 12px;
+    padding: 40px;
+    max-width: 600px;
+    width: 100%;
+    position: relative;
+    box-shadow: 
+        0 20px 60px rgba(0, 0, 0, 0.9),
+        inset 0 0 60px rgba(0, 0, 0, 0.05);
+    animation: modal-appear 0.3s ease;
+}
+
+.modal-content h2 {
+    font-family: var(--font-title);
+    color: var(--medieval-red);
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.completion-stats {
+    font-family: var(--font-body);
+    color: var(--medieval-brown-dark);
+    margin-bottom: 30px;
+}
+
+.completion-stats p {
+    margin: 8px 0;
+    font-size: 16px;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+}
+
+/* ========================================
+   RESPONSIVE DESIGN
+   ======================================== */
+@media (max-width: 1400px) {
+    .game-main {
+        grid-template-columns: 250px 1fr 280px;
+    }
+}
+
+@media (max-width: 1024px) {
+    .game-main {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto 1fr auto;
+    }
+    
+    .squad-panel,
+    .info-panel {
+        max-height: 300px;
+    }
+    
+    .parchment-note {
+        left: 20px;
+        right: 20px;
+        max-width: none;
+    }
+}
+
+@media (max-width: 768px) {
+    .control-bar {
+        flex-wrap: wrap;
+        padding: 12px 16px;
+    }
+    
+    .control-buttons {
+        flex-wrap: wrap;
+    }
+    
+    .game-btn {
+        padding: 10px 16px;
+        font-size: 14px;
+    }
+    
+    .status-display {
+        width: 100%;
+        order: 3;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    
+    .status-item {
+        padding: 6px 12px;
+        font-size: 12px;
+    }
+}

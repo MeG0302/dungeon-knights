@@ -1,0 +1,12 @@
+{
+  "name": "dungeon-knights",
+  "version": "1.0.0",
+  "description": "Dungeon Knights - Blockchain Game",
+  "scripts": {
+    "deploy": "node deploy-game-contract.js"
+  },
+  "dependencies": {
+    "ethers": "^6.13.0",
+    "dotenv": "^16.4.5"
+  }
+}

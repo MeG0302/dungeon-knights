@@ -676,30 +676,45 @@ body::before {
 
 .panel-toggle {
     position: absolute;
-    left: -50px;
+    left: -60px;
     top: 20px;
-    background: rgba(10, 15, 20, 0.98);
-    border: 4px solid;
-    border-top-color: rgba(139, 92, 246, 0.5);
-    border-right-color: rgba(124, 58, 237, 0.6);
-    border-bottom-color: rgba(109, 40, 217, 0.7);
-    border-left-color: rgba(124, 58, 237, 0.6);
-    border-radius: 4px 0 0 4px;
+    background: linear-gradient(135deg, rgba(15, 20, 30, 0.98), rgba(20, 25, 35, 0.98));
+    border: 2px solid rgba(139, 92, 246, 0.3);
     border-right: none;
-    padding: 1rem 0.8rem;
+    padding: 1rem 0.6rem;
     writing-mode: vertical-rl;
     cursor: pointer;
-    color: #a8a29e;
-    font-size: 14px;
-    font-weight: bold;
+    color: #d6d3d1;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.15rem;
+    text-transform: uppercase;
     font-family: 'Times New Roman', serif;
-    box-shadow: -4px 4px 12px rgba(0, 0, 0, 0.8);
-    transition: all 0.2s;
+    box-shadow: -4px 4px 20px rgba(0, 0, 0, 0.9);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
 }
 
 .panel-toggle:hover {
-    background: rgba(15, 20, 30, 0.98);
-    box-shadow: -6px 6px 16px rgba(0, 0, 0, 0.9);
+    background: linear-gradient(135deg, rgba(20, 25, 35, 0.98), rgba(25, 30, 40, 0.98));
+    border-color: rgba(139, 92, 246, 0.6);
+    box-shadow: -6px 6px 24px rgba(139, 92, 246, 0.3);
+    transform: translateX(-2px);
+}
+
+.panel-toggle-icon {
+    font-size: 10px;
+    transition: transform 0.3s;
+}
+
+.squad-panel.open .panel-toggle-icon {
+    transform: rotate(90deg);
+}
+
+.panel-toggle-text {
+    writing-mode: vertical-rl;
 }
 
 .panel-content {
@@ -709,7 +724,70 @@ body::before {
 }
 
 .panel-section {
-    margin-bottom: 1.5rem;
+    margin-bottom: 2rem;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(139, 92, 246, 0.15);
+    border-radius: 4px;
+    padding: 1rem;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid rgba(139, 92, 246, 0.2);
+}
+
+.section-title {
+    font-size: 12px;
+    color: #a8a29e;
+    text-transform: uppercase;
+    letter-spacing: 0.15rem;
+    font-weight: 700;
+    margin: 0;
+    font-family: 'Times New Roman', serif;
+}
+
+.section-count {
+    background: rgba(139, 92, 246, 0.2);
+    color: #d6d3d1;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 700;
+    border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+.panel-section.active-squad-section {
+    border-color: rgba(16, 185, 129, 0.3);
+}
+
+.panel-section.active-squad-section .section-title {
+    color: #10b981;
+}
+
+.panel-section.active-squad-section .section-count {
+    background: rgba(16, 185, 129, 0.2);
+    border-color: rgba(16, 185, 129, 0.3);
+}
+
+.panel-section.resting-section {
+    border-color: rgba(239, 68, 68, 0.2);
+}
+
+.panel-section.resting-section .section-title {
+    color: #ef4444;
+}
+
+.panel-section.stats-section {
+    border-color: rgba(59, 130, 246, 0.2);
+}
+
+.panel-section.stats-section .section-title {
+    color: #3b82f6;
 }
 
 .panel-section h3 {
@@ -725,11 +803,16 @@ body::before {
 .knight-roster {
     display: flex;
     flex-direction: column;
-    gap: 0.8rem;
+    gap: 0.6rem;
+}
+
+.knight-roster-compact {
+    max-height: 200px;
+    overflow-y: auto;
 }
 
 .scrollable-roster {
-    max-height: 300px;
+    max-height: calc(100vh - 280px);
     overflow-y: auto;
     padding-right: 0.5rem;
 }
@@ -801,7 +884,32 @@ body::before {
 .squad-stats {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.75rem;
+}
+
+.stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
+    background: rgba(0, 0, 0, 0.3);
+    border-left: 2px solid rgba(59, 130, 246, 0.4);
+    border-radius: 2px;
+}
+
+.stat-label {
+    color: #78716c;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05rem;
+    font-weight: 600;
+}
+
+.stat-value {
+    color: #d6d3d1;
+    font-size: 14px;
+    font-weight: 700;
+    font-family: monospace;
 }
 
 .squad-stats p {

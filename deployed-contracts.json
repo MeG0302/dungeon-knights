@@ -1,0 +1,12 @@
+{
+  "gameContractAddress": "0xD8de9385Db7DfE925882E76849B6e067e47236e5",
+  "knightNFTAddress": "0x06c7D4b0C35858c78c3B213fbf50fB4A25f20512",
+  "dngTokenAddress": "0xA8D54F6FEeAFaf5C2c546D1D1644aE2f46A2d910",
+  "deployedAt": "2026-09-12T00:00:00.000Z",
+  "deployer": "0x038d75aDb74d8e5Db82E6c6797f90dCdF82ef4C9",
+  "txHash": "0xd167e7fca0af84a0ba6e614d3db161fd4cff8a132f2283dfc7373deb78875610",
+  "network": "Robinhood Chain Testnet",
+  "chainId": 46630,
+  "version": "V3-Simple (Batch Claims, No Cooldowns)",
+  "treasury": "5000 DNG (funded)"
+}

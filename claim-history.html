@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rewards Chronicle - Dungeon Knights</title>
+    <link rel="stylesheet" href="medieval-theme.css">
+    <link rel="stylesheet" href="medieval-components.css">
+    <link rel="stylesheet" href="medieval-effects.css">
+    <link rel="stylesheet" href="claim-history.css">
+    <link rel="stylesheet" href="wallet-widget.css">
+</head>
+<body>
+    <!-- Castle Header -->
+    <header class="castle-header">
+        <button class="medieval-btn medieval-btn-stone" onclick="history.back()" style="padding: 10px 20px; font-size: 14px;">
+            ← Back
+        </button>
+        <div class="castle-logo">
+            📜 REWARDS CHRONICLE 📜
+        </div>
+        <div class="treasure-pouch" id="walletWidget">
+            <span class="treasure-amount">0 DNG</span>
+        </div>
+    </header>
+    
+    <!-- Main Content -->
+    <main class="claim-container">
+        <!-- Summary Scroll -->
+        <section class="summary-card scroll-card">
+            <div class="card-header">
+                <h2 class="medieval-subtitle">💰 Unclaimed Treasures</h2>
+            </div>
+            <div class="card-body">
+                <div class="reward-display rune-stone" data-rune="💰">
+                    <div class="rune-value reward-amount" id="totalUnclaimedAmount">0.00 DNG</div>
+                </div>
+                <div class="reward-stats">
+                    <div class="stat-item">
+                        <span class="stat-value" id="pendingRunsCount">0</span>
+                        <span class="stat-label medieval-body">Pending Quests</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="totalKnightsCount">0</span>
+                        <span class="stat-label medieval-body">Knights Victorious</span>
+                    </div>
+                </div>
+                <button class="medieval-btn claim-all-btn" id="claimAllButton">
+                    🎁 Claim All Treasures
+                </button>
+            </div>
+        </section>
+        
+        <!-- Pending Runs List -->
+        <section class="runs-section notice-board">
+            <h2 class="section-title medieval-subtitle">📜 Quest Completions</h2>
+            <div class="runs-list" id="pendingRunsList">
+                <!-- Populated by JavaScript -->
+            </div>
+            <div class="empty-state scroll-card" id="emptyState" style="display: none;">
+                <div class="empty-icon">🏰</div>
+                <div class="empty-text medieval-title" style="font-size: 24px;">No Pending Rewards</div>
+                <div class="empty-subtext medieval-body">Complete dungeons to earn DNG treasures!</div>
+                <a href="dungeon-select.html" class="medieval-btn back-to-game-btn" style="margin-top: 20px; display: inline-block;">
+                    🎮 Embark on Quest
+                </a>
+            </div>
+        </section>
+        
+        <!-- Claimed History -->
+        <section class="history-section">
+            <h2 class="section-title">✅ Claim History</h2>
+            <div class="history-list" id="claimedHistoryList">
+                <!-- Populated by JavaScript -->
+            </div>
+        </section>
+    </main>
+    
+    <!-- Back Button -->
+    <a href="menu.html" class="back-button">
+        ← Back to Menu
+    </a>
+    
+    <!-- Scripts -->
+    <script src="ethers-5.7.2.umd.min.js"></script>
+    <script src="config.js"></script>
+    <script src="contract-addresses.js?v=3"></script>
+    <script src="wallet.js"></script>
+    <script src="dungeon-session.js?v=3"></script>
+    <script src="medieval-effects.js"></script>
+    <script src="claim-history.js"></script>
+</body>
+</html>

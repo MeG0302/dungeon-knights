@@ -56,3 +56,6 @@ typechain-types/
 # Coverage
 coverage/
 .nyc_output/
+
+.vercel
+.env*

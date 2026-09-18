@@ -3,123 +3,206 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#1a1a2e">
+    <meta name="theme-color" content="#1a1410">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>Summon Knights - Dungeon Knights</title>
+    <title>Summoning Chamber - Dungeon Knights</title>
+    <link rel="stylesheet" href="medieval-theme.css">
+    <link rel="stylesheet" href="medieval-components.css">
+    <link rel="stylesheet" href="medieval-effects.css">
     <link rel="stylesheet" href="mint.css">
-    <link rel="stylesheet" href="wallet-widget.css">
     <link rel="stylesheet" href="mobile.css">
+    <link rel="stylesheet" href="shared-wallet.css">
+    <style>
+        /* Mystical Portal Animation */
+        .portal-animation {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 10000;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+        
+        .portal-animation.active {
+            display: flex;
+        }
+        
+        .summoning-text {
+            font-family: var(--font-title);
+            color: var(--medieval-gold);
+            font-size: 32px;
+            margin-top: 30px;
+            text-shadow: 0 0 20px var(--medieval-gold);
+            animation: rune-glow 2s ease-in-out infinite;
+            letter-spacing: 4px;
+        }
+    </style>
 </head>
 <body>
-    <script>
-        console.log('=== MINT PAGE LOADING ===');
-        console.log('Time:', new Date().toISOString());
-        alert('PAGE LOADED - Check if you can click OK');
-    </script>
+    <!-- Castle Header -->
+    <header class="castle-header">
+        <button class="medieval-btn medieval-btn-stone back-btn" onclick="window.location.href='landing.html'">
+            ← Back to Kingdom
+        </button>
+        <div class="castle-logo">
+            SUMMONING CHAMBER
+        </div>
+        <div class="treasure-pouch" id="walletWidget">
+            <span class="treasure-amount" id="dng-balance">0 DNG</span>
+            <button class="medieval-btn medieval-btn-stone" id="connect-wallet" style="padding: 8px 16px; font-size: 14px; margin-left: 12px;">
+                Connect Wallet
+            </button>
+        </div>
+    </header>
+
     <!-- Minting Page Container -->
     <div class="mint-container">
-        <!-- Background Animation -->
-        <div class="bg-animation"></div>
-        
-        <!-- Header -->
-        <header class="mint-header">
-            <button class="back-btn" id="backBtn">← Back</button>
-            <h1 class="page-title">SUMMON KNIGHTS</h1>
-            <div class="header-right">
-                <button class="wallet-btn" id="connectWalletBtn" style="pointer-events: auto !important; cursor: pointer !important; z-index: 9999 !important; position: relative !important;" onclick="alert('Button clicked!'); console.log('BUTTON WORKS!');">🔌 Connect Wallet</button>
+        <!-- Mystical Portal Animation -->
+        <div class="portal-animation" id="portalAnimation">
+            <div class="mystical-portal">
+                <div class="portal-ring"></div>
+                <div class="portal-ring"></div>
+                <div class="portal-ring"></div>
+                <div class="portal-center">
+                    <img src="assets/ui/sword.png" alt="Sword" style="width: 64px; height: 64px;">
+                </div>
             </div>
-        </header>
-
-        <!-- Main Minting Area -->
-        <main class="mint-main">
-            <!-- Capsule Display -->
-            <section class="capsule-section">
-                <div class="capsule-display">
-                    <div class="capsule-background"></div>
-                    <div class="capsule-glow"></div>
-                    <img src="capsule.png" alt="Summoning Capsule" class="capsule-img" id="capsuleImg">
-                    <div class="capsule-energy" id="capsuleEnergy"></div>
-                    <div class="capsule-particles" id="capsuleParticles"></div>
+            <p class="summoning-text">Summoning Knights...</p>
+        </div>
+        
+        <!-- Main Content -->
+        <main class="forge-main">
+            <!-- Left Panel: Summoning Altar -->
+            <section class="altar-section">
+                <div class="altar-title">
+                    <h2 class="medieval-title" style="font-size: 28px; margin-bottom: 20px;">
+                        FORGE KNIGHTS
+                    </h2>
+                    <p class="medieval-subtitle" style="font-size: 16px;">
+                        Summon legendary warriors to join your quest
+                    </p>
+                </div>
+                
+                <!-- Summoning Portal Display -->
+                <div class="summoning-portal">
+                    <div class="portal-frame">
+                        <div class="portal-inner torch-glow">
+                            <img src="capsule.png" alt="Summoning Capsule" class="capsule-img" id="capsuleImg">
+                            <div class="portal-runes">
+                                <span class="rune">ᚱ</span>
+                                <span class="rune">ᚦ</span>
+                                <span class="rune">ᚨ</span>
+                                <span class="rune">ᛏ</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 
                 <div class="mint-result" id="mintResult"></div>
             </section>
 
-            <!-- Minting Controls -->
-            <section class="controls-section">
-                <div class="mint-info">
-                    <h2 id="modeTitle">Forge NFT Knights</h2>
-                    <p id="modeDescription">Mint ERC-721 NFTs on Robinhood Chain</p>
-                </div>
-                
-                <div class="quantity-selector">
-                    <label class="selector-label">Summon Quantity:</label>
-                    <div class="qty-controls">
-                        <button class="qty-btn" id="qtyDecrease">-</button>
-                        <input type="number" id="mintQty" class="qty-display" value="1" min="1" max="10" readonly>
-                        <button class="qty-btn" id="qtyIncrease">+</button>
+            <!-- Right Panel: Forge Controls -->
+            <section class="forge-controls">
+                <!-- Forge Counter -->
+                <div class="control-panel parchment-bg parchment-edges">
+                    <h3 class="panel-title medieval-subtitle">Quantity to Summon</h3>
+                    <div class="forge-counter">
+                        <button class="forge-btn" id="decrease-quantity">−</button>
+                        <div class="forge-display" id="quantity-display">1</div>
+                        <button class="forge-btn" id="increase-quantity">+</button>
                     </div>
                 </div>
                 
-                <div class="cost-display">
-                    <span class="cost-label">Total Cost:</span>
-                    <span class="cost-value">
-                        <span id="totalMintCost">0.001</span> 
-                        <span id="costCurrency" class="eth-cost">ETH</span>
-                    </span>
+                <!-- Cost Display -->
+                <div class="cost-panel stone-bg">
+                    <div class="cost-row">
+                        <span class="cost-label medieval-body">Cost per Knight:</span>
+                        <span class="cost-value">500 DNG</span>
+                    </div>
+                    <div class="divider-ornate"></div>
+                    <div class="cost-row total">
+                        <span class="cost-label medieval-subtitle">Total Cost:</span>
+                        <span class="cost-value-total" id="total-cost">500 DNG</span>
+                    </div>
                 </div>
                 
-                <button class="mint-action-btn" id="mintBtn">
-                    <span class="btn-icon">⚡</span>
-                    <span class="btn-text">MINT <span id="mintBtnQty">1</span> KNIGHT<span id="mintBtnPlural"></span></span>
+                <!-- Summon Button -->
+                <button class="medieval-btn summon-btn" id="mint-knight">
+                    <span class="btn-icon">
+                        <img src="assets/ui/sword.png" alt="Summon" style="width: 20px; height: 20px;">
+                    </span>
+                    <span class="btn-text">SUMMON KNIGHTS</span>
                 </button>
                 
-                <div class="nft-info" id="nftInfo">
-                    <p class="nft-notice">
-                        💎 <strong>NFT Minting</strong><br>
-                        Knights will be minted as ERC-721 NFTs on Robinhood Chain<br>
-                        <span id="networkInfo">Testnet • Contract: 0xEA37...e55A</span>
-                    </p>
+                <!-- Rarity Info -->
+                <div class="rarity-scroll scroll-card">
+                    <h4 class="scroll-title medieval-subtitle">Rarity Chances</h4>
+                    <div class="rarity-list">
+                        <div class="rarity-item">
+                            <span class="rarity-dot rarity-common"></span>
+                            <span class="rarity-name">Common</span>
+                            <span class="rarity-chance">65%</span>
+                        </div>
+                        <div class="rarity-item">
+                            <span class="rarity-dot rarity-uncommon"></span>
+                            <span class="rarity-name">Uncommon</span>
+                            <span class="rarity-chance">20%</span>
+                        </div>
+                        <div class="rarity-item">
+                            <span class="rarity-dot rarity-rare"></span>
+                            <span class="rarity-name">Rare</span>
+                            <span class="rarity-chance">10%</span>
+                        </div>
+                        <div class="rarity-item">
+                            <span class="rarity-dot rarity-epic"></span>
+                            <span class="rarity-name">Epic</span>
+                            <span class="rarity-chance">4.5%</span>
+                        </div>
+                        <div class="rarity-item">
+                            <span class="rarity-dot rarity-legendary"></span>
+                            <span class="rarity-name">Legendary</span>
+                            <span class="rarity-chance">1.2%</span>
+                        </div>
+                        <div class="rarity-item">
+                            <span class="rarity-dot rarity-mythic"></span>
+                            <span class="rarity-name">Mythic</span>
+                            <span class="rarity-chance">0.3%</span>
+                        </div>
+                    </div>
                 </div>
                 
-                <div class="mint-tips">
-                    <p>💎 Rarity Distribution:</p>
-                    <ul>
-                        <li><span class="rarity-dot common"></span> Common: 65%</li>
-                        <li><span class="rarity-dot uncommon"></span> Uncommon: 20%</li>
-                        <li><span class="rarity-dot rare"></span> Rare: 10%</li>
-                        <li><span class="rarity-dot epic"></span> Epic: 4.5%</li>
-                        <li><span class="rarity-dot legendary"></span> Legendary: 1.2%</li>
-                        <li><span class="rarity-dot mythic"></span> Mythic: 0.3%</li>
-                    </ul>
+                <!-- Network Info -->
+                <div class="network-badge medieval-badge">
+                    Robinhood Chain Testnet
                 </div>
             </section>
         </main>
 
-        <!-- Knights Collection Preview -->
-        <footer class="knights-preview">
-            <h3>Your Knights: <span id="knightCount">0</span></h3>
-            <div class="knights-grid" id="knightsGrid">
-                <p class="empty-msg">No knights summoned yet</p>
+        <!-- Knights Gallery -->
+        <footer class="knights-gallery">
+            <div class="gallery-header">
+                <h3 class="medieval-title" style="font-size: 32px;">
+                    YOUR KNIGHTS: <span class="knight-count" id="knight-count">0</span>
+                </h3>
+            </div>
+            <div class="knights-grid" id="knights-container">
+                <p class="empty-msg">Connect wallet to view your knights</p>
             </div>
         </footer>
     </div>
 
     <!-- Scripts -->
-    <script src="config.js"></script>
     <script src="ethers-5.7.2.umd.min.js"></script>
-    <script>
-      // Verify ethers loaded
-      if (typeof ethers !== 'undefined') {
-        console.log('✅ ethers.js loaded successfully');
-        window.ethersLoaded = true;
-      } else {
-        console.error('❌ ethers.js failed to load');
-      }
-    </script>
-    <script src="web3.js"></script>
-    <script src="characters.js"></script>
-    <script src="minting.js"></script>
+    <script src="config.js"></script>
+    <script src="wallet.js"></script>
+    <script src="shared-header.js"></script>
+    <script src="medieval-effects.js"></script>
+    <script src="mint-page.js"></script>
 </body>
 </html>

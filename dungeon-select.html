@@ -3,127 +3,205 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#1a1a2e">
+    <meta name="theme-color" content="#1a1410">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>Select Your Dungeon - Dungeon Knights</title>
+    <title>Quest Board - Dungeon Knights</title>
+    <link rel="stylesheet" href="medieval-theme.css">
+    <link rel="stylesheet" href="medieval-components.css">
+    <link rel="stylesheet" href="medieval-effects.css">
     <link rel="stylesheet" href="dungeon-select.css">
     <link rel="stylesheet" href="shared-wallet.css">
     <link rel="stylesheet" href="mobile.css">
 </head>
 <body>
     <div class="selection-container">
-        <!-- Header -->
-        <header class="selection-header">
-            <h1>Choose Your Dungeon</h1>
-            <p class="subtitle">Select your starting dungeon. After completion, dungeons will cycle randomly.</p>
+        <!-- Castle Header -->
+        <header class="castle-header">
+            <button class="medieval-btn medieval-btn-stone" onclick="window.location.href='menu.html'" style="padding: 10px 20px; font-size: 14px;">
+                ← Back to Hall
+            </button>
+            <div class="castle-logo">
+                📜 QUEST BOARD 📜
+            </div>
+            <div class="treasure-pouch" id="walletWidgetQuest">
+                <span class="treasure-amount" id="questDngBalance">0 DNG</span>
+            </div>
         </header>
 
-        <!-- Dungeon Grid -->
-        <main class="dungeon-grid">
-            <!-- Forgotten Crypts -->
-            <div class="dungeon-card" data-dungeon="crypts">
-                <div class="dungeon-image-wrapper">
-                    <img src="maps/crypts.png" alt="Forgotten Crypts" class="dungeon-image">
-                    <div class="dungeon-overlay">
-                        <span class="dungeon-icon">🏰</span>
-                    </div>
-                </div>
-                <div class="dungeon-info">
-                    <h2 class="dungeon-name">Forgotten Crypts</h2>
-                    <p class="dungeon-desc">Ancient tombs filled with restless spirits and cursed treasures.</p>
-                    <div class="dungeon-stats">
-                        <span>💀 Undead</span>
-                        <span>⚔️ Difficulty: ★★☆☆☆</span>
-                    </div>
-                </div>
-            </div>
+        <!-- Quest Board Title -->
+        <div class="board-title">
+            <h1 class="medieval-title" style="font-size: 48px; text-align: center; margin: 30px 0 10px;">
+                CHOOSE YOUR QUEST
+            </h1>
+            <p class="medieval-subtitle" style="text-align: center; font-size: 18px; margin-bottom: 30px;">
+                Select your destiny. After the first quest, dungeons will appear randomly.
+            </p>
+            <div class="divider-ornate"></div>
+        </div>
 
-            <!-- Goblin Mines -->
-            <div class="dungeon-card" data-dungeon="mines">
-                <div class="dungeon-image-wrapper">
-                    <img src="maps/goblin.png" alt="Goblin Mines" class="dungeon-image">
-                    <div class="dungeon-overlay">
-                        <span class="dungeon-icon">⛏️</span>
+        <!-- Wooden Quest Board -->
+        <main class="quest-board notice-board">
+            <!-- Quest Scrolls (Dungeons) -->
+            <div class="quest-scrolls-grid">
+                <!-- Forgotten Crypts -->
+                <div class="quest-scroll-card" data-dungeon="crypts">
+                    <div class="scroll-header">
+                        <div class="quest-seal">🏰</div>
+                        <h2 class="quest-scroll-title">Forgotten Crypts</h2>
                     </div>
-                </div>
-                <div class="dungeon-info">
-                    <h2 class="dungeon-name">Goblin Mines</h2>
-                    <p class="dungeon-desc">Deep caverns where goblins hoard stolen gems and gold.</p>
-                    <div class="dungeon-stats">
-                        <span>👺 Goblins</span>
-                        <span>⚔️ Difficulty: ★★☆☆☆</span>
+                    <div class="dungeon-map-preview">
+                        <img src="maps/map/Spirits_floating_in_ancient_crypts_2K_20260916214556.jpeg" alt="Forgotten Crypts" class="map-image">
+                        <div class="map-overlay"></div>
                     </div>
+                    <div class="quest-details">
+                        <p class="quest-lore">Ancient tombs filled with restless spirits and cursed treasures await brave souls.</p>
+                        <div class="quest-meta">
+                            <div class="meta-badge">
+                                <span class="badge-icon">💀</span>
+                                <span class="badge-text">Undead</span>
+                            </div>
+                            <div class="meta-badge difficulty">
+                                <span class="badge-icon">⚔️</span>
+                                <span class="badge-text">★★☆☆☆</span>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="accept-quest-btn medieval-btn">
+                        <span>⚔️ Accept Quest</span>
+                    </button>
                 </div>
-            </div>
 
-            <!-- Overgrown Temple -->
-            <div class="dungeon-card" data-dungeon="temple">
-                <div class="dungeon-image-wrapper">
-                    <img src="maps/temple.png" alt="Overgrown Temple" class="dungeon-image">
-                    <div class="dungeon-overlay">
-                        <span class="dungeon-icon">🌿</span>
+                <!-- Goblin Mines -->
+                <div class="quest-scroll-card" data-dungeon="mines">
+                    <div class="scroll-header">
+                        <div class="quest-seal">⛏️</div>
+                        <h2 class="quest-scroll-title">Goblin Mines</h2>
                     </div>
-                </div>
-                <div class="dungeon-info">
-                    <h2 class="dungeon-name">Overgrown Temple</h2>
-                    <p class="dungeon-desc">Ruins reclaimed by nature, guarded by plant creatures.</p>
-                    <div class="dungeon-stats">
-                        <span>🌱 Nature</span>
-                        <span>⚔️ Difficulty: ★★☆☆☆</span>
+                    <div class="dungeon-map-preview">
+                        <img src="maps/map/Goblin_Mines_environment_art_2K_20260916214551.jpeg" alt="Goblin Mines" class="map-image">
+                        <div class="map-overlay"></div>
                     </div>
+                    <div class="quest-details">
+                        <p class="quest-lore">Deep caverns where goblins hoard stolen gems and gleaming gold.</p>
+                        <div class="quest-meta">
+                            <div class="meta-badge">
+                                <span class="badge-icon">👺</span>
+                                <span class="badge-text">Goblins</span>
+                            </div>
+                            <div class="meta-badge difficulty">
+                                <span class="badge-icon">⚔️</span>
+                                <span class="badge-text">★★☆☆☆</span>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="accept-quest-btn medieval-btn">
+                        <span>⚔️ Accept Quest</span>
+                    </button>
                 </div>
-            </div>
 
-            <!-- Magma Chambers -->
-            <div class="dungeon-card" data-dungeon="magma">
-                <div class="dungeon-image-wrapper">
-                    <img src="maps/magma.png" alt="Magma Chambers" class="dungeon-image">
-                    <div class="dungeon-overlay">
-                        <span class="dungeon-icon">🔥</span>
+                <!-- Overgrown Temple -->
+                <div class="quest-scroll-card" data-dungeon="temple">
+                    <div class="scroll-header">
+                        <div class="quest-seal">🌿</div>
+                        <h2 class="quest-scroll-title">Overgrown Temple</h2>
                     </div>
-                </div>
-                <div class="dungeon-info">
-                    <h2 class="dungeon-name">Magma Chambers</h2>
-                    <p class="dungeon-desc">Scorching caverns inhabited by fire elementals and lava beasts.</p>
-                    <div class="dungeon-stats">
-                        <span>🔥 Fire</span>
-                        <span>⚔️ Difficulty: ★★☆☆☆</span>
+                    <div class="dungeon-map-preview">
+                        <img src="maps/map/Overgrown_temple_in_jungle_ruins_2K_20260916214542.jpeg" alt="Overgrown Temple" class="map-image">
+                        <div class="map-overlay"></div>
                     </div>
+                    <div class="quest-details">
+                        <p class="quest-lore">Sacred ruins reclaimed by nature, guarded by vengeful plant spirits.</p>
+                        <div class="quest-meta">
+                            <div class="meta-badge">
+                                <span class="badge-icon">🌱</span>
+                                <span class="badge-text">Nature</span>
+                            </div>
+                            <div class="meta-badge difficulty">
+                                <span class="badge-icon">⚔️</span>
+                                <span class="badge-text">★★☆☆☆</span>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="accept-quest-btn medieval-btn">
+                        <span>⚔️ Accept Quest</span>
+                    </button>
                 </div>
-            </div>
 
-            <!-- Void Rift -->
-            <div class="dungeon-card" data-dungeon="void">
-                <div class="dungeon-image-wrapper">
-                    <img src="maps/void rift.png" alt="Void Rift" class="dungeon-image">
-                    <div class="dungeon-overlay">
-                        <span class="dungeon-icon">🌌</span>
+                <!-- Magma Chambers -->
+                <div class="quest-scroll-card" data-dungeon="magma">
+                    <div class="scroll-header">
+                        <div class="quest-seal">🔥</div>
+                        <h2 class="quest-scroll-title">Magma Chambers</h2>
                     </div>
+                    <div class="dungeon-map-preview">
+                        <img src="maps/map/Magma_chambers_with_glowing_lava_2K_20260916214549.jpeg" alt="Magma Chambers" class="map-image">
+                        <div class="map-overlay"></div>
+                    </div>
+                    <div class="quest-details">
+                        <p class="quest-lore">Scorching caverns where fire elementals dance among rivers of molten rock.</p>
+                        <div class="quest-meta">
+                            <div class="meta-badge">
+                                <span class="badge-icon">🔥</span>
+                                <span class="badge-text">Fire</span>
+                            </div>
+                            <div class="meta-badge difficulty">
+                                <span class="badge-icon">⚔️</span>
+                                <span class="badge-text">★★☆☆☆</span>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="accept-quest-btn medieval-btn">
+                        <span>⚔️ Accept Quest</span>
+                    </button>
                 </div>
-                <div class="dungeon-info">
-                    <h2 class="dungeon-name">Void Rift</h2>
-                    <p class="dungeon-desc">A tear in reality where cosmic horrors lurk in the darkness.</p>
-                    <div class="dungeon-stats">
-                        <span>🌌 Cosmic</span>
-                        <span>⚔️ Difficulty: ★★☆☆☆</span>
+
+                <!-- Void Rift -->
+                <div class="quest-scroll-card" data-dungeon="void">
+                    <div class="scroll-header">
+                        <div class="quest-seal">🌌</div>
+                        <h2 class="quest-scroll-title">Void Rift</h2>
                     </div>
+                    <div class="dungeon-map-preview">
+                        <img src="maps/map/Cosmic_rift_in_reality_2K_20260916214543.jpeg" alt="Void Rift" class="map-image">
+                        <div class="map-overlay"></div>
+                    </div>
+                    <div class="quest-details">
+                        <p class="quest-lore">A tear in reality where cosmic horrors lurk beyond mortal comprehension.</p>
+                        <div class="quest-meta">
+                            <div class="meta-badge">
+                                <span class="badge-icon">🌌</span>
+                                <span class="badge-text">Cosmic</span>
+                            </div>
+                            <div class="meta-badge difficulty">
+                                <span class="badge-icon">⚔️</span>
+                                <span class="badge-text">★★☆☆☆</span>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="accept-quest-btn medieval-btn">
+                        <span>⚔️ Accept Quest</span>
+                    </button>
                 </div>
             </div>
         </main>
-
-        <!-- Footer -->
-        <footer class="selection-footer">
-            <button id="backToMenuBtn" class="btn-back">🏠 Back to Menu</button>
-        </footer>
     </div>
 
     <!-- Loading Transition -->
-    <div id="loadingTransition" class="loading-transition hidden">
-        <div class="loading-content">
-            <h2 id="loadingDungeonName">Entering Dungeon...</h2>
-            <div class="loading-spinner"></div>
-            <p class="loading-text">Preparing your knights...</p>
+    <div id="loadingTransition" class="loading-transition medieval-modal hidden">
+        <div class="modal-content loading-content">
+            <h2 class="medieval-title" id="loadingDungeonName" style="font-size: 36px; margin-bottom: 30px;">
+                Entering Quest...
+            </h2>
+            <div class="mystical-portal" style="margin: 30px auto;">
+                <div class="portal-ring"></div>
+                <div class="portal-ring"></div>
+                <div class="portal-ring"></div>
+                <div class="portal-center">⚔️</div>
+            </div>
+            <p class="medieval-subtitle loading-text" style="margin-top: 30px;">
+                Gathering your knights...
+            </p>
         </div>
     </div>
 
@@ -133,6 +211,7 @@
     <script src="wallet.js"></script>
     <script src="audio.js"></script>
     <script src="shared-header.js"></script>
+    <script src="medieval-effects.js"></script>
     <script src="dungeon-select.js"></script>
 </body>
 </html>

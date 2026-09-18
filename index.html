@@ -47,21 +47,21 @@
                     <!-- Dynamically populated knight cards -->
                 </div>
             </aside>
-            
+
             <!-- CENTER: GAME CANVAS WITH FRAME -->
             <div class="canvas-wrapper">
                 <!-- VIDEO BACKGROUND -->
                 <video id="dungeonBackground" autoplay loop muted playsinline class="dungeon-video-bg">
                     <source src="maps/map/animated/crypts-map-animated.mp4" type="video/mp4">
                 </video>
-                
+
                 <!-- GAME CANVAS (Center) -->
                 <canvas id="gameCanvas" width="1140" height="600"></canvas>
-                
+
                 <!-- ATMOSPHERIC TEXT OVERLAY -->
                 <div class="atmosphere-text" id="atmosphereText">DARK DEPTHS...</div>
             </div>
-            
+
             <!-- RIGHT PANEL: INFO DISPLAY -->
             <aside class="info-panel parchment-bg">
                 <!-- WALLET BALANCE -->
@@ -71,7 +71,7 @@
                         <div class="rune-value" id="ownerMark">0 DNG</div>
                     </div>
                 </section>
-                
+
                 <!-- TOTAL CLAIMED -->
                 <section class="info-section">
                     <div class="rune-stone">
@@ -79,12 +79,12 @@
                         <div class="rune-value" id="resourceAmount">0 DNG</div>
                     </div>
                 </section>
-                
+
                 <!-- CHEST DISPLAY -->
                 <section class="chest-display">
                     <div class="chest-image torch-glow" id="chestImage"></div>
                 </section>
-                
+
                 <!-- UNCLAIMED REWARDS -->
                 <section class="info-section">
                     <div class="rewards-panel scroll-card">
@@ -106,7 +106,7 @@
                     </div>
                 </section>
             </aside>
-            
+
             <!-- PARCHMENT NOTIFICATION -->
             <div class="parchment-note scroll-card" id="parchmentNote">
                 <div class="parchment-title medieval-subtitle">Welcome Adventurer!</div>
@@ -138,7 +138,7 @@
                     <span>MENU</span>
                 </button>
             </div>
-            
+
             <!-- Center: Status Display -->
             <div class="status-display">
                 <div class="status-item">
@@ -158,7 +158,7 @@
                     <strong id="estimatedTime" class="stat-highlight">--</strong>
                 </div>
             </div>
-            
+
             <!-- Right: Stats Button -->
             <div class="control-buttons">
                 <button class="medieval-btn medieval-btn-stone game-btn" id="statsBtn">
@@ -211,17 +211,17 @@
     <script src="contract-addresses.js?v=3"></script>
     <script src="wallet.js?v=1789100900"></script>
     <script src="shared-header.js?v=1789100900"></script>
-    
+
     <!-- Transaction Modal -->
     <script src="transaction-modal.js?v=2"></script>
-    
+
     <!-- Leaderboard -->
     <script src="leaderboard.js?v=2"></script>
-    
+
     <!-- Dungeon Session System -->
     <script src="dungeon-session.js?v=3"></script>
     <script src="reward-claim-ui.js?v=2"></script>
-    
+
     <!-- Game Scripts -->
     <script src="maps/map-grids.js"></script>
     <script src="audio.js?v=1789100900"></script>
