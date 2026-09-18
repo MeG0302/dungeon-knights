@@ -2,208 +2,151 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#1a1410">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>Knight's Hall - Dungeon Knights</title>
-    <link rel="stylesheet" href="medieval-theme.css">
-    <link rel="stylesheet" href="medieval-components.css">
-    <link rel="stylesheet" href="medieval-effects.css">
-    <link rel="stylesheet" href="medieval-menu.css">
-    <link rel="stylesheet" href="menu.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Knight's Hall — Dungeon Knights</title>
+    <link rel="stylesheet" href="theme.css">
     <link rel="stylesheet" href="shared-wallet.css">
-    <link rel="stylesheet" href="mobile.css">
 </head>
 <body>
-    <!-- Castle Header -->
-    <header class="castle-header">
-        <button class="medieval-btn medieval-btn-stone" onclick="window.location.href='landing.html'" style="padding: 10px 20px; font-size: 14px;">
-            ← Kingdom Gate
-        </button>
-        <div class="castle-logo">
-            🛡️ KNIGHT'S HALL 🛡️
-        </div>
-        <div class="treasure-pouch" id="walletWidgetMenu">
-            <span class="treasure-amount" id="menuGold">0 DNG</span>
-            <button class="medieval-btn medieval-btn-stone" id="connectWalletBtn" style="padding: 8px 16px; font-size: 14px; margin-left: 12px;">
-                Connect Wallet
-            </button>
+<div class="page">
+
+    <!-- Header -->
+    <header class="header">
+        <a href="landing.html" class="btn btn-ghost btn-sm">
+            <img src="assets/ui/exit cross.png" class="btn-icon-img" alt=""> Kingdom Gate
+        </a>
+        <div class="header-title">KNIGHT'S HALL</div>
+        <div class="header-actions">
+            <div class="wallet-pill" id="walletWidgetMenu">
+                <span id="menuGold">0 DNG</span>
+            </div>
         </div>
     </header>
 
-    <!-- Main Menu Container -->
-    <div class="menu-container">
-        <!-- Main Menu Panels -->
-        <main class="menu-main">
-            <!-- Left Panel - Game Actions -->
-            <section class="menu-panel left-panel parchment-bg parchment-edges">
-                <h2 class="panel-title medieval-subtitle">
-                    <span class="panel-icon">⚔️</span>
-                    EMBARK ON QUEST
-                </h2>
-                
-                <button class="medieval-btn play-btn" id="playGameBtn">
-                    <span class="btn-icon">🗡️</span>
-                    <div class="btn-content">
-                        <span class="btn-text">ENTER DUNGEON</span>
-                        <span class="btn-subtitle">Deploy Selected Knights</span>
-                    </div>
-                </button>
-                
-                <button class="medieval-btn medieval-btn-stone back-menu-btn" id="backMenuBtn">
-                    <span class="btn-icon">🏰</span>
-                    <div class="btn-content">
-                        <span class="btn-text">RETURN TO GATE</span>
-                        <span class="btn-subtitle">Main Menu</span>
-                    </div>
-                </button>
-                
-                <div class="divider-ornate"></div>
-                
-                <div class="quick-actions">
-                    <button class="medieval-btn medieval-btn-stone quick-btn" id="selectAllBtn">
-                        <span>✓ Select All</span>
-                    </button>
-                    <button class="medieval-btn medieval-btn-red quick-btn" id="deselectAllBtn">
-                        <span>✗ Clear All</span>
-                    </button>
-                </div>
-                
-                <div class="selection-info rune-stone" data-rune="⚔">
-                    <div class="rune-label">Selected Knights</div>
-                    <div class="rune-value"><span id="activeTroopsCount">0</span> / 15</div>
-                </div>
-            </section>
+    <!-- Two-panel layout -->
+    <div style="flex:1;display:flex;overflow:hidden">
 
-            <!-- Right Panel - Knight Management -->
-            <section class="menu-panel right-panel notice-board">
-                <div class="panel-header">
-                    <h2 class="panel-title medieval-subtitle">
-                        <span class="panel-icon">🛡️</span>
-                        KNIGHT ROSTER
-                    </h2>
-                    
-                    <!-- Filter Controls -->
-                    <div class="filter-controls">
-                        <div class="filter-group">
-                            <label class="filter-label medieval-body">Sort By:</label>
-                            <select class="filter-select medieval-badge" id="sortFilter">
-                                <option value="id">Knight ID</option>
-                                <option value="rarity">Rarity</option>
-                                <option value="power">Power</option>
-                                <option value="speed">Speed</option>
-                                <option value="stamina">Stamina</option>
-                            </select>
-                        </div>
-                        
-                        <div class="filter-group">
-                            <label class="filter-label medieval-body">Filter:</label>
-                            <select class="filter-select medieval-badge" id="rarityFilter">
-                                <option value="all">All Rarities</option>
-                                <option value="MYTHIC">Mythic</option>
-                                <option value="LEGENDARY">Legendary</option>
-                                <option value="EPIC">Epic</option>
-                                <option value="RARE">Rare</option>
-                                <option value="UNCOMMON">Uncommon</option>
-                                <option value="COMMON">Common</option>
-                            </select>
-                        </div>
+        <!-- LEFT: Actions -->
+        <aside class="side-panel" style="width:300px">
+            <div class="side-panel-header">
+                <img src="assets/ui/sword.png" class="panel-header-icon" alt="">
+                Embark on Quest
+            </div>
+            <div class="side-panel-body" style="display:flex;flex-direction:column;gap:10px">
+
+                <button class="btn btn-primary btn-md w-full" id="playGameBtn" style="justify-content:flex-start;gap:10px">
+                    <img src="assets/ui/sword.png" class="btn-icon-img" alt="">
+                    <div style="text-align:left">
+                        <div>Enter Dungeon</div>
+                        <div style="font-size:10px;font-weight:400;color:var(--text-muted);letter-spacing:0.5px">Deploy selected knights</div>
                     </div>
+                </button>
+
+                <button class="btn btn-secondary btn-md w-full" id="backMenuBtn" style="justify-content:flex-start;gap:10px">
+                    <img src="assets/ui/castle.png" class="btn-icon-img" alt="">
+                    <div>Return to Gate</div>
+                </button>
+
+                <div style="border-top:1px solid var(--border-base);margin:6px 0"></div>
+
+                <div style="display:flex;gap:8px">
+                    <button class="btn btn-secondary btn-sm" style="flex:1" id="selectAllBtn">
+                        <img src="assets/ui/right tick.png" class="btn-icon-img" alt=""> Select All
+                    </button>
+                    <button class="btn btn-danger btn-sm" style="flex:1" id="deselectAllBtn">
+                        <img src="assets/ui/exit cross.png" class="btn-icon-img" alt=""> Clear
+                    </button>
                 </div>
-                
-                <div class="troops-info">
-                    <span class="medieval-body">Total Knights: <strong class="highlight" id="totalKnightsCount">0</strong></span>
+
+                <div class="stat-row" style="margin-top:4px">
+                    <span class="stat-label">Selected Knights</span>
+                    <span class="stat-value stat-value-gold"><span id="activeTroopsCount">0</span> / 15</span>
                 </div>
-                
-                <!-- Knight Roster -->
-                <div class="knight-roster" id="knightRoster">
-                    <p class="empty-message scroll-card">
-                        <span class="medieval-subtitle" style="display: block; margin-bottom: 12px;">⚔️ No Knights Recruited ⚔️</span>
-                        <span class="medieval-body">Visit the Summoning Chamber to forge your first knight!</span>
+            </div>
+        </aside>
+
+        <!-- RIGHT: Knight Roster -->
+        <main class="side-panel" style="flex:1;border-right:none">
+            <div class="side-panel-header" style="justify-content:space-between">
+                <div style="display:flex;align-items:center;gap:8px">
+                    <img src="assets/ui/shield.png" class="panel-header-icon" alt="">
+                    Knight Roster
+                </div>
+                <div style="display:flex;gap:8px">
+                    <select class="select" id="sortFilter" style="font-size:11px;padding:4px 24px 4px 8px">
+                        <option value="id">Sort: ID</option>
+                        <option value="rarity">Rarity</option>
+                        <option value="power">Power</option>
+                        <option value="stamina">Stamina</option>
+                    </select>
+                    <select class="select" id="rarityFilter" style="font-size:11px;padding:4px 24px 4px 8px">
+                        <option value="all">All</option>
+                        <option value="MYTHIC">Mythic</option>
+                        <option value="LEGENDARY">Legendary</option>
+                        <option value="EPIC">Epic</option>
+                        <option value="RARE">Rare</option>
+                        <option value="UNCOMMON">Uncommon</option>
+                        <option value="COMMON">Common</option>
+                    </select>
+                </div>
+            </div>
+            <div class="side-panel-body">
+                <div class="stat-row">
+                    <span class="stat-label">Total Knights</span>
+                    <span class="stat-value" id="totalKnightsCount">0</span>
+                </div>
+                <div id="knightRoster" style="margin-top:10px">
+                    <p style="color:var(--text-muted);font-style:italic;text-align:center;padding:40px 20px">
+                        No knights recruited yet. Visit the Summoning Chamber to forge your first knight.
                     </p>
                 </div>
-            </section>
+            </div>
         </main>
-
-        <!-- Footer Info -->
-        <footer class="menu-footer">
-            <p>Select up to 15 knights and deploy them into the dungeons!</p>
-            <p class="music-hint">🎵 Music starts on interaction</p>
-        </footer>
     </div>
 
-    <!-- Knight Details Modal -->
-    <div class="modal-overlay hidden" id="knightModal">
-        <div class="modal-content">
-            <button class="modal-close" id="modalClose">✕</button>
-            
-            <div class="modal-header">
-                <div class="modal-knight-avatar" id="modalAvatar">
-                    <img id="modalKnightImage" src="" alt="Knight">
-                </div>
-                <div class="modal-knight-info">
-                    <h2 id="modalKnightName">Knight #1</h2>
-                    <div class="modal-rarity" id="modalRarity">Common Knight</div>
-                </div>
+    <!-- Footer -->
+    <footer style="height:36px;display:flex;align-items:center;justify-content:center;background:var(--bg-dark);border-top:1px solid var(--border-base);flex-shrink:0">
+        <span style="font-size:11px;color:var(--text-muted);letter-spacing:0.5px">
+            Select up to 15 knights and deploy them into the dungeons
+        </span>
+    </footer>
+</div>
+
+<!-- Knight Detail Modal -->
+<div id="knightModal" class="modal-backdrop hidden">
+    <div class="modal">
+        <div class="modal-title" id="modalKnightName">Knight #1</div>
+        <div class="modal-stats" id="modalRarity" style="color:var(--text-muted);font-size:13px;margin-bottom:16px">Common</div>
+        <div class="modal-stats">
+            <p><strong>Power</strong> <span id="modalPower">10</span></p>
+            <p><strong>Speed</strong> <span id="modalSpeed">1.0</span></p>
+            <p><strong>Max Stamina</strong> <span id="modalMaxStamina">100</span></p>
+            <p><strong>Status</strong> <span id="modalStatus">Ready</span></p>
+            <p><strong>Total Earned</strong> <span id="modalEarned">0</span></p>
+        </div>
+        <div style="margin-bottom:16px">
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+                <span style="color:var(--text-muted)">Stamina</span>
+                <span id="modalStaminaText" style="color:var(--text-secondary)">100 / 100</span>
             </div>
-            
-            <div class="modal-body">
-                <div class="modal-stat-group">
-                    <h3>Combat Stats</h3>
-                    <div class="modal-stat">
-                        <span class="stat-label">⚡ Power:</span>
-                        <span class="stat-value" id="modalPower">10</span>
-                    </div>
-                    <div class="modal-stat">
-                        <span class="stat-label">🏃 Speed:</span>
-                        <span class="stat-value" id="modalSpeed">1.0</span>
-                    </div>
-                    <div class="modal-stat">
-                        <span class="stat-label">💪 Max Stamina:</span>
-                        <span class="stat-value" id="modalMaxStamina">100</span>
-                    </div>
-                </div>
-                
-                <div class="modal-stat-group">
-                    <h3>Current Status</h3>
-                    <div class="modal-stamina-bar">
-                        <div class="stamina-label">
-                            <span>Stamina:</span>
-                            <span id="modalStaminaText">100 / 100</span>
-                        </div>
-                        <div class="stamina-bar-bg">
-                            <div class="stamina-bar-fill" id="modalStaminaBar"></div>
-                            <div class="stamina-threshold"></div>
-                        </div>
-                    </div>
-                    <div class="modal-stat">
-                        <span class="stat-label">Status:</span>
-                        <span class="stat-value" id="modalStatus">Ready</span>
-                    </div>
-                    <div class="modal-stat">
-                        <span class="stat-label">Total Earned:</span>
-                        <span class="stat-value" id="modalEarned">0 Gold</span>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="modal-footer">
-                <button class="modal-btn select-btn" id="modalSelectBtn">Add to Squad</button>
-                <button class="modal-btn close-btn" id="modalCloseBtn">Close</button>
+            <div class="stat-bar-track">
+                <div class="stat-bar-fill" id="modalStaminaBar" style="width:100%"></div>
             </div>
         </div>
+        <div class="modal-actions">
+            <button class="btn btn-primary btn-md" id="modalSelectBtn" style="flex:1">Add to Squad</button>
+            <button class="btn btn-secondary btn-md" id="modalCloseBtn" style="flex:1">Close</button>
+        </div>
     </div>
+</div>
 
-    <!-- Scripts -->
-    <script src="ethers-5.7.2.umd.min.js"></script>
-    <script src="config.js?v=1789096800"></script>
-    <script src="wallet.js?v=1789096800"></script>
-    <script src="dungeon-session.js?v=1789096800"></script>
-    <script src="shared-header.js?v=1789096800"></script>
-    <script src="audio.js?v=1789096800"></script>
-    <script src="characters.js?v=1789096800"></script>
-    <script src="medieval-effects.js"></script>
-    <script src="menu.js?v=1789096800"></script>
+<script src="ethers-5.7.2.umd.min.js"></script>
+<script src="config.js"></script>
+<script src="wallet.js"></script>
+<script src="dungeon-session.js"></script>
+<script src="shared-header.js"></script>
+<script src="audio.js"></script>
+<script src="characters.js"></script>
+<script src="menu.js"></script>
 </body>
 </html>

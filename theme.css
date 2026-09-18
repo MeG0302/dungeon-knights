@@ -435,3 +435,115 @@ html, body {
 .items-center { align-items: center; }
 .justify-between { justify-content: space-between; }
 .w-full { width: 100%; }
+
+/* ==========================================================
+   SIDE PANELS (menu, dungeon-select, mint)
+   ========================================================== */
+.side-panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-base);
+  border-right: none;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.side-panel-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 18px;
+  background: var(--bg-dark);
+  border-bottom: 1px solid var(--border-base);
+  font-family: var(--font-heading);
+  font-size: 12px; font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+.side-panel-body {
+  padding: 18px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* ==========================================================
+   CONTROL PANEL (mint quantity, rarity)
+   ========================================================== */
+.control-panel {
+  background: var(--bg-raised);
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-md);
+  padding: 16px;
+}
+
+/* ==========================================================
+   BADGES (dungeon type, rarity on cards)
+   ========================================================== */
+.badge {
+  display: inline-flex; align-items: center;
+  padding: 3px 10px;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 1px; text-transform: uppercase;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-heading);
+}
+.badge-mythic { background: rgba(176,124,216,0.15); color: #B07CD8; border: 1px solid rgba(176,124,216,0.3); }
+.badge-legendary { background: rgba(212,175,55,0.15); color: var(--accent-gold); border: 1px solid rgba(212,175,55,0.3); }
+.badge-epic { background: rgba(232,93,58,0.15); color: #E85D3A; border: 1px solid rgba(232,93,58,0.3); }
+.badge-rare { background: rgba(74,222,128,0.15); color: #4ADE80; border: 1px solid rgba(74,222,128,0.3); }
+.badge-common { background: rgba(168,154,134,0.15); color: var(--text-secondary); border: 1px solid rgba(168,154,134,0.2); }
+.badge-stone { background: var(--bg-raised); color: var(--text-muted); border: 1px solid var(--border-base); }
+
+/* ==========================================================
+   RARITY DOTS (mint page)
+   ========================================================== */
+.dot {
+  width: 10px; height: 10px;
+  border-radius: 2px;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.dot-common { background: #9CA3AF; }
+.dot-uncommon { background: #4ADE80; }
+.dot-rare { background: #3B82F6; }
+.dot-epic { background: #A855F7; }
+.dot-legendary { background: var(--accent-gold); }
+.dot-mythic { background: #B07CD8; }
+
+/* ==========================================================
+   QUEST CARDS (dungeon-select grid)
+   ========================================================== */
+.quest-scrolls-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+.quest-scroll-card {
+  background: var(--bg-raised);
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: border-color 0.15s;
+  cursor: pointer;
+}
+.quest-scroll-card:hover {
+  border-color: var(--border-bronze);
+}
+.accept-quest-btn {
+  margin-top: 12px;
+}
+
+/* ==========================================================
+   LOADING OVERLAY
+   ========================================================== */
+.loading-transition {
+  position: fixed; inset: 0; z-index: 2000;
+  background: rgba(0,0,0,0.9);
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* ==========================================================
+   ANIMATIONS
+   ========================================================== */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}

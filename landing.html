@@ -2,73 +2,97 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#1a1a2e">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>Dungeon Knights - Enter</title>
-    <link rel="stylesheet" href="landing.css">
-    <link rel="stylesheet" href="wallet-widget.css">
-    <link rel="stylesheet" href="mobile.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dungeon Knights — Kingdom Gate</title>
+    <link rel="stylesheet" href="theme.css">
+    <link rel="stylesheet" href="shared-wallet.css">
 </head>
 <body>
-    <!-- Wallet Button -->
-    <div class="wallet-header">
-        <button class="wallet-btn" id="connectWalletBtn">🔌 Connect Wallet</button>
-    </div>
+<div class="page">
+    <!-- Background -->
+    <div class="page-bg" style="background-image:url('assets/ui/reference-design.jpeg')"></div>
 
-    <!-- Main Landing Container -->
-    <div class="landing-container">
-        <!-- Animated Background -->
-        <div class="bg-animation"></div>
-        
-        <!-- Rune Borders -->
-        <div class="rune-border rune-left"></div>
-        <div class="rune-border rune-right"></div>
-        
-        <!-- Main Title -->
-        <div class="game-logo">
-            <h1 class="title-dungeon">Dungeon</h1>
-            <h1 class="title-knights">Knights</h1>
+    <div class="page-content">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-brand">
+                <span class="header-title">DUNGEON KNIGHTS</span>
+            </div>
+            <div class="header-actions">
+                <div class="wallet-pill" id="walletWidget">
+                    <span id="dngBalanceHeader">0 DNG</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Center Content -->
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:40px;padding:40px 20px">
+
+            <!-- Title -->
+            <div style="text-align:center">
+                <h1 style="font-family:var(--font-display);font-size:3.5rem;color:var(--accent-gold);letter-spacing:4px;text-transform:uppercase;text-shadow:2px 2px 0 rgba(0,0,0,0.8),0 0 30px rgba(212,175,55,0.3)">
+                    Dungeon Knights
+                </h1>
+                <p style="font-family:var(--font-heading);color:var(--text-secondary);letter-spacing:2px;margin-top:8px;font-size:15px">
+                    ~ Embark on Your Quest ~
+                </p>
+            </div>
+
+            <!-- Action Cards -->
+            <div style="display:flex;flex-direction:column;gap:14px;width:100%;max-width:440px">
+
+                <button class="card card-accent-left" id="enterDungeonBtn" style="display:flex;align-items:center;gap:16px;padding:18px 22px;text-align:left">
+                    <img src="assets/ui/sword.png" style="width:36px;height:36px;image-rendering:pixelated;filter:brightness(1.3) sepia(0.5) hue-rotate(5deg);flex-shrink:0" alt="">
+                    <div style="flex:1">
+                        <div style="font-family:var(--font-heading);font-size:15px;font-weight:700;color:var(--accent-gold);letter-spacing:1px;text-transform:uppercase">Enter Dungeon</div>
+                        <div style="font-size:12px;color:var(--text-muted);margin-top:2px">Deploy selected knights</div>
+                    </div>
+                    <span style="color:var(--accent-gold-dim);font-size:20px;font-weight:700">&#10230;</span>
+                </button>
+
+                <button class="card card-accent-left" id="summonKnightBtn" style="display:flex;align-items:center;gap:16px;padding:18px 22px;text-align:left;border-left-color:var(--tint-magma)">
+                    <img src="assets/ui/shield.png" style="width:36px;height:36px;image-rendering:pixelated;filter:brightness(1.3);flex-shrink:0" alt="">
+                    <div style="flex:1">
+                        <div style="font-family:var(--font-heading);font-size:15px;font-weight:700;color:var(--text-primary);letter-spacing:1px;text-transform:uppercase">Summon Knight</div>
+                        <div style="font-size:12px;color:var(--text-muted);margin-top:2px">Forge a new hero</div>
+                    </div>
+                    <span style="color:var(--text-muted);font-size:20px;font-weight:700">&#10230;</span>
+                </button>
+
+                <button class="card" id="leaderboardLandingBtn" style="display:flex;align-items:center;gap:16px;padding:18px 22px;text-align:left">
+                    <img src="assets/ui/castle.png" style="width:36px;height:36px;image-rendering:pixelated;filter:brightness(1.3);flex-shrink:0" alt="">
+                    <div style="flex:1">
+                        <div style="font-family:var(--font-heading);font-size:15px;font-weight:700;color:var(--text-primary);letter-spacing:1px;text-transform:uppercase">Hall of Fame</div>
+                        <div style="font-size:12px;color:var(--text-muted);margin-top:2px">View legendary warriors</div>
+                    </div>
+                    <span style="color:var(--text-muted);font-size:20px;font-weight:700">&#10230;</span>
+                </button>
+
+                <button class="card" id="marketplaceBtn" disabled style="display:flex;align-items:center;gap:16px;padding:18px 22px;text-align:left;opacity:0.35;cursor:not-allowed">
+                    <div style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                        <span style="font-size:20px;color:var(--text-muted)">&#128736;</span>
+                    </div>
+                    <div style="flex:1">
+                        <div style="font-family:var(--font-heading);font-size:15px;font-weight:700;color:var(--text-secondary);letter-spacing:1px;text-transform:uppercase">Marketplace</div>
+                        <div style="font-size:12px;color:var(--text-muted);margin-top:2px">Coming soon</div>
+                    </div>
+                    <span style="color:var(--text-muted);font-size:18px">&#128720;</span>
+                </button>
+            </div>
         </div>
 
-        <!-- Action Buttons -->
-        <div class="action-buttons">
-            <button class="action-btn enter-btn" id="enterDungeonBtn">
-                <div class="btn-icon-container">
-                    <div class="btn-icon-box">🏰</div>
-                </div>
-                <span class="btn-label">Enter Dungeon</span>
-                <span class="btn-arrow">⟫</span>
-            </button>
-            
-            <button class="action-btn summon-btn" id="summonKnightBtn">
-                <div class="btn-icon-container">
-                    <div class="btn-icon-box">🔮</div>
-                </div>
-                <span class="btn-label">Summon Knight</span>
-                <span class="btn-arrow">⟫</span>
-            </button>
-            
-            <button class="action-btn marketplace-btn" id="marketplaceBtn" disabled>
-                <div class="btn-icon-container">
-                    <div class="btn-icon-box">💰</div>
-                </div>
-                <span class="btn-label">Marketplace</span>
-                <span class="btn-arrow">🚧</span>
-            </button>
-        </div>
+        <!-- Footer -->
+        <footer style="padding:16px;text-align:center;color:var(--text-muted);font-size:11px;letter-spacing:1px;flex-shrink:0">
+            Robinhood Chain Testnet
+        </footer>
     </div>
+</div>
 
-    <!-- Scripts -->
-    <script src="https://unpkg.com/@privy-io/privy-browser@0.14.0/dist/privy.umd.js"></script>
-    <script src="config.js"></script>
-    <script src="ethers-5.7.2.umd.min.js"></script>
-    <script src="web3-integration.js"></script>
-    <script src="privy-integration.js"></script>
-    <script src="rainbowkit-integration.js"></script>
-    <script src="wallet-widget.js"></script>
-    <script src="audio.js"></script>
-    <script src="landing.js"></script>
+<script src="ethers-5.7.2.umd.min.js"></script>
+<script src="config.js"></script>
+<script src="wallet.js"></script>
+<script src="shared-header.js"></script>
+<script src="audio.js"></script>
+<script src="landing.js"></script>
 </body>
 </html>

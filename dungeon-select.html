@@ -2,216 +2,185 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#1a1410">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>Quest Board - Dungeon Knights</title>
-    <link rel="stylesheet" href="medieval-theme.css">
-    <link rel="stylesheet" href="medieval-components.css">
-    <link rel="stylesheet" href="medieval-effects.css">
-    <link rel="stylesheet" href="dungeon-select.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quest Board — Dungeon Knights</title>
+    <link rel="stylesheet" href="theme.css">
     <link rel="stylesheet" href="shared-wallet.css">
-    <link rel="stylesheet" href="mobile.css">
 </head>
 <body>
-    <div class="selection-container">
-        <!-- Castle Header -->
-        <header class="castle-header">
-            <button class="medieval-btn medieval-btn-stone" onclick="window.location.href='menu.html'" style="padding: 10px 20px; font-size: 14px;">
-                ← Back to Hall
-            </button>
-            <div class="castle-logo">
-                📜 QUEST BOARD 📜
-            </div>
-            <div class="treasure-pouch" id="walletWidgetQuest">
-                <span class="treasure-amount" id="questDngBalance">0 DNG</span>
-            </div>
-        </header>
+<div class="page">
 
-        <!-- Quest Board Title -->
-        <div class="board-title">
-            <h1 class="medieval-title" style="font-size: 48px; text-align: center; margin: 30px 0 10px;">
-                CHOOSE YOUR QUEST
-            </h1>
-            <p class="medieval-subtitle" style="text-align: center; font-size: 18px; margin-bottom: 30px;">
+    <!-- Header -->
+    <header class="header">
+        <a href="menu.html" class="btn btn-ghost btn-sm">
+            <img src="assets/ui/exit cross.png" class="btn-icon-img" alt=""> Back to Hall
+        </a>
+        <div class="header-title">QUEST BOARD</div>
+        <div class="header-actions">
+            <div class="wallet-pill" id="walletWidgetQuest">
+                <span id="questDngBalance">0 DNG</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Content -->
+    <div class="page-content">
+        <div style="text-align:center;margin-bottom:32px">
+            <h1 style="font-family:var(--font-display);font-size:2rem;color:var(--accent-gold);letter-spacing:3px;text-transform:uppercase">Choose Your Quest</h1>
+            <p style="color:var(--text-secondary);font-size:13px;margin-top:8px;letter-spacing:1px">
                 Select your destiny. After the first quest, dungeons will appear randomly.
             </p>
-            <div class="divider-ornate"></div>
         </div>
 
-        <!-- Wooden Quest Board -->
-        <main class="quest-board notice-board">
-            <!-- Quest Scrolls (Dungeons) -->
-            <div class="quest-scrolls-grid">
-                <!-- Forgotten Crypts -->
-                <div class="quest-scroll-card" data-dungeon="crypts">
-                    <div class="scroll-header">
-                        <div class="quest-seal">🏰</div>
-                        <h2 class="quest-scroll-title">Forgotten Crypts</h2>
-                    </div>
-                    <div class="dungeon-map-preview">
-                        <img src="maps/map/Spirits_floating_in_ancient_crypts_2K_20260916214556.jpeg" alt="Forgotten Crypts" class="map-image">
-                        <div class="map-overlay"></div>
-                    </div>
-                    <div class="quest-details">
-                        <p class="quest-lore">Ancient tombs filled with restless spirits and cursed treasures await brave souls.</p>
-                        <div class="quest-meta">
-                            <div class="meta-badge">
-                                <span class="badge-icon">💀</span>
-                                <span class="badge-text">Undead</span>
-                            </div>
-                            <div class="meta-badge difficulty">
-                                <span class="badge-icon">⚔️</span>
-                                <span class="badge-text">★★☆☆☆</span>
-                            </div>
-                        </div>
-                    </div>
-                    <button class="accept-quest-btn medieval-btn">
-                        <span>⚔️ Accept Quest</span>
-                    </button>
-                </div>
+        <!-- Dungeon Grid -->
+        <div class="quest-scrolls-grid" id="questBoard">
 
-                <!-- Goblin Mines -->
-                <div class="quest-scroll-card" data-dungeon="mines">
-                    <div class="scroll-header">
-                        <div class="quest-seal">⛏️</div>
-                        <h2 class="quest-scroll-title">Goblin Mines</h2>
-                    </div>
-                    <div class="dungeon-map-preview">
-                        <img src="maps/map/Goblin_Mines_environment_art_2K_20260916214551.jpeg" alt="Goblin Mines" class="map-image">
-                        <div class="map-overlay"></div>
-                    </div>
-                    <div class="quest-details">
-                        <p class="quest-lore">Deep caverns where goblins hoard stolen gems and gleaming gold.</p>
-                        <div class="quest-meta">
-                            <div class="meta-badge">
-                                <span class="badge-icon">👺</span>
-                                <span class="badge-text">Goblins</span>
-                            </div>
-                            <div class="meta-badge difficulty">
-                                <span class="badge-icon">⚔️</span>
-                                <span class="badge-text">★★☆☆☆</span>
-                            </div>
-                        </div>
-                    </div>
-                    <button class="accept-quest-btn medieval-btn">
-                        <span>⚔️ Accept Quest</span>
-                    </button>
+            <!-- Crypts -->
+            <div class="quest-scroll-card" data-dungeon="crypts">
+                <div style="position:relative">
+                    <img src="maps/map/Spirits_floating_in_ancient_crypts_2K_20260916214556.jpeg" style="width:100%;height:140px;object-fit:cover;border-radius:4px 4px 0 0;image-rendering:pixelated" alt="">
+                    <div style="position:absolute;top:8px;right:8px" class="badge badge-mythic">Undead</div>
                 </div>
-
-                <!-- Overgrown Temple -->
-                <div class="quest-scroll-card" data-dungeon="temple">
-                    <div class="scroll-header">
-                        <div class="quest-seal">🌿</div>
-                        <h2 class="quest-scroll-title">Overgrown Temple</h2>
-                    </div>
-                    <div class="dungeon-map-preview">
-                        <img src="maps/map/Overgrown_temple_in_jungle_ruins_2K_20260916214542.jpeg" alt="Overgrown Temple" class="map-image">
-                        <div class="map-overlay"></div>
-                    </div>
-                    <div class="quest-details">
-                        <p class="quest-lore">Sacred ruins reclaimed by nature, guarded by vengeful plant spirits.</p>
-                        <div class="quest-meta">
-                            <div class="meta-badge">
-                                <span class="badge-icon">🌱</span>
-                                <span class="badge-text">Nature</span>
-                            </div>
-                            <div class="meta-badge difficulty">
-                                <span class="badge-icon">⚔️</span>
-                                <span class="badge-text">★★☆☆☆</span>
-                            </div>
+                <div style="padding:14px 16px">
+                    <div style="font-family:var(--font-heading);font-size:14px;font-weight:700;color:var(--accent-gold);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Forgotten Crypts</div>
+                    <p style="font-size:12px;color:var(--text-secondary);line-height:1.5;margin-bottom:10px">Ancient tombs filled with restless spirits and cursed treasures await brave souls.</p>
+                    <div style="display:flex;align-items:center;justify-content:space-between">
+                        <div style="display:flex;gap:4px">
+                            <span style="color:var(--accent-gold-dim);font-size:14px">&#9733;&#9733;&#9734;&#9734;&#9734;</span>
                         </div>
+                        <button class="accept-quest-btn btn btn-primary btn-sm">
+                            <img src="assets/ui/sword.png" class="btn-icon-img" alt=""> Accept
+                        </button>
                     </div>
-                    <button class="accept-quest-btn medieval-btn">
-                        <span>⚔️ Accept Quest</span>
-                    </button>
-                </div>
-
-                <!-- Magma Chambers -->
-                <div class="quest-scroll-card" data-dungeon="magma">
-                    <div class="scroll-header">
-                        <div class="quest-seal">🔥</div>
-                        <h2 class="quest-scroll-title">Magma Chambers</h2>
-                    </div>
-                    <div class="dungeon-map-preview">
-                        <img src="maps/map/Magma_chambers_with_glowing_lava_2K_20260916214549.jpeg" alt="Magma Chambers" class="map-image">
-                        <div class="map-overlay"></div>
-                    </div>
-                    <div class="quest-details">
-                        <p class="quest-lore">Scorching caverns where fire elementals dance among rivers of molten rock.</p>
-                        <div class="quest-meta">
-                            <div class="meta-badge">
-                                <span class="badge-icon">🔥</span>
-                                <span class="badge-text">Fire</span>
-                            </div>
-                            <div class="meta-badge difficulty">
-                                <span class="badge-icon">⚔️</span>
-                                <span class="badge-text">★★☆☆☆</span>
-                            </div>
-                        </div>
-                    </div>
-                    <button class="accept-quest-btn medieval-btn">
-                        <span>⚔️ Accept Quest</span>
-                    </button>
-                </div>
-
-                <!-- Void Rift -->
-                <div class="quest-scroll-card" data-dungeon="void">
-                    <div class="scroll-header">
-                        <div class="quest-seal">🌌</div>
-                        <h2 class="quest-scroll-title">Void Rift</h2>
-                    </div>
-                    <div class="dungeon-map-preview">
-                        <img src="maps/map/Cosmic_rift_in_reality_2K_20260916214543.jpeg" alt="Void Rift" class="map-image">
-                        <div class="map-overlay"></div>
-                    </div>
-                    <div class="quest-details">
-                        <p class="quest-lore">A tear in reality where cosmic horrors lurk beyond mortal comprehension.</p>
-                        <div class="quest-meta">
-                            <div class="meta-badge">
-                                <span class="badge-icon">🌌</span>
-                                <span class="badge-text">Cosmic</span>
-                            </div>
-                            <div class="meta-badge difficulty">
-                                <span class="badge-icon">⚔️</span>
-                                <span class="badge-text">★★☆☆☆</span>
-                            </div>
-                        </div>
-                    </div>
-                    <button class="accept-quest-btn medieval-btn">
-                        <span>⚔️ Accept Quest</span>
-                    </button>
                 </div>
             </div>
-        </main>
+
+            <!-- Mines -->
+            <div class="quest-scroll-card" data-dungeon="mines">
+                <div style="position:relative">
+                    <img src="maps/map/Goblin_Mines_environment_art_2K_20260916214551.jpeg" style="width:100%;height:140px;object-fit:cover;border-radius:4px 4px 0 0;image-rendering:pixelated" alt="">
+                    <div style="position:absolute;top:8px;right:8px" class="badge badge-epic">Goblins</div>
+                </div>
+                <div style="padding:14px 16px">
+                    <div style="font-family:var(--font-heading);font-size:14px;font-weight:700;color:var(--accent-gold);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Goblin Mines</div>
+                    <p style="font-size:12px;color:var(--text-secondary);line-height:1.5;margin-bottom:10px">Deep caverns where goblins hoard stolen gems and gleaming gold.</p>
+                    <div style="display:flex;align-items:center;justify-content:space-between">
+                        <div style="display:flex;gap:4px">
+                            <span style="color:var(--accent-gold-dim);font-size:14px">&#9733;&#9733;&#9734;&#9734;&#9734;</span>
+                        </div>
+                        <button class="accept-quest-btn btn btn-primary btn-sm">
+                            <img src="assets/ui/sword.png" class="btn-icon-img" alt=""> Accept
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Temple -->
+            <div class="quest-scroll-card" data-dungeon="temple">
+                <div style="position:relative">
+                    <img src="maps/map/Overgrown_temple_in_jungle_ruins_2K_20260916214542.jpeg" style="width:100%;height:140px;object-fit:cover;border-radius:4px 4px 0 0;image-rendering:pixelated" alt="">
+                    <div style="position:absolute;top:8px;right:8px" class="badge badge-rare">Nature</div>
+                </div>
+                <div style="padding:14px 16px">
+                    <div style="font-family:var(--font-heading);font-size:14px;font-weight:700;color:var(--accent-gold);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Overgrown Temple</div>
+                    <p style="font-size:12px;color:var(--text-secondary);line-height:1.5;margin-bottom:10px">Sacred ruins reclaimed by nature, guarded by vengeful plant spirits.</p>
+                    <div style="display:flex;align-items:center;justify-content:space-between">
+                        <div style="display:flex;gap:4px">
+                            <span style="color:var(--accent-gold-dim);font-size:14px">&#9733;&#9733;&#9734;&#9734;&#9734;</span>
+                        </div>
+                        <button class="accept-quest-btn btn btn-primary btn-sm">
+                            <img src="assets/ui/sword.png" class="btn-icon-img" alt=""> Accept
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Magma -->
+            <div class="quest-scroll-card" data-dungeon="magma">
+                <div style="position:relative">
+                    <img src="maps/map/Magma_chambers_with_glowing_lava_2K_20260916214549.jpeg" style="width:100%;height:140px;object-fit:cover;border-radius:4px 4px 0 0;image-rendering:pixelated" alt="">
+                    <div style="position:absolute;top:8px;right:8px" class="badge badge-legendary">Fire</div>
+                </div>
+                <div style="padding:14px 16px">
+                    <div style="font-family:var(--font-heading);font-size:14px;font-weight:700;color:var(--tint-magma);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Magma Chambers</div>
+                    <p style="font-size:12px;color:var(--text-secondary);line-height:1.5;margin-bottom:10px">Scorching caverns where fire elementals dance among rivers of molten rock.</p>
+                    <div style="display:flex;align-items:center;justify-content:space-between">
+                        <div style="display:flex;gap:4px">
+                            <span style="color:var(--tint-magma);font-size:14px">&#9733;&#9733;&#9733;&#9734;&#9734;</span>
+                        </div>
+                        <button class="accept-quest-btn btn btn-primary btn-sm">
+                            <img src="assets/ui/sword.png" class="btn-icon-img" alt=""> Accept
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Void -->
+            <div class="quest-scroll-card" data-dungeon="void">
+                <div style="position:relative">
+                    <img src="maps/map/Cosmic_rift_in_reality_2K_20260916214543.jpeg" style="width:100%;height:140px;object-fit:cover;border-radius:4px 4px 0 0;image-rendering:pixelated" alt="">
+                    <div style="position:absolute;top:8px;right:8px" class="badge badge-mythic">Cosmic</div>
+                </div>
+                <div style="padding:14px 16px">
+                    <div style="font-family:var(--font-heading);font-size:14px;font-weight:700;color:var(--accent-gold);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Void Rift</div>
+                    <p style="font-size:12px;color:var(--text-secondary);line-height:1.5;margin-bottom:10px">A tear in reality where cosmic horrors lurk beyond mortal comprehension.</p>
+                    <div style="display:flex;align-items:center;justify-content:space-between">
+                        <div style="display:flex;gap:4px">
+                            <span style="color:var(--accent-gold-dim);font-size:14px">&#9733;&#9733;&#9733;&#9733;&#9734;</span>
+                        </div>
+                        <button class="accept-quest-btn btn btn-primary btn-sm">
+                            <img src="assets/ui/sword.png" class="btn-icon-img" alt=""> Accept
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Loading Transition -->
-    <div id="loadingTransition" class="loading-transition medieval-modal hidden">
-        <div class="modal-content loading-content">
-            <h2 class="medieval-title" id="loadingDungeonName" style="font-size: 36px; margin-bottom: 30px;">
-                Entering Quest...
-            </h2>
-            <div class="mystical-portal" style="margin: 30px auto;">
-                <div class="portal-ring"></div>
-                <div class="portal-ring"></div>
-                <div class="portal-ring"></div>
-                <div class="portal-center">⚔️</div>
+    <div id="loadingTransition" class="loading-transition hidden">
+        <div class="modal">
+            <div class="modal-title" id="loadingDungeonName">Entering Quest...</div>
+            <div style="text-align:center;margin:30px 0">
+                <div style="font-size:48px;animation:spin 2s linear infinite">&#9874;</div>
             </div>
-            <p class="medieval-subtitle loading-text" style="margin-top: 30px;">
-                Gathering your knights...
-            </p>
+            <p style="color:var(--text-muted);font-size:13px;letter-spacing:1px;text-align:center">Gathering your knights...</p>
         </div>
     </div>
 
-    <!-- Scripts -->
+    <!-- Knight Details Modal -->
+    <div id="knightModal" class="modal-overlay hidden">
+        <div class="modal">
+            <div class="modal-title" id="modalKnightName">Knight #1</div>
+            <div style="color:var(--text-muted);font-size:13px;margin-bottom:16px" id="modalRarity">Common</div>
+            <div class="modal-stats">
+                <p><strong>Power</strong> <span id="modalPower">10</span></p>
+                <p><strong>Speed</strong> <span id="modalSpeed">1.0</span></p>
+                <p><strong>Max Stamina</strong> <span id="modalMaxStamina">100</span></p>
+                <p><strong>Status</strong> <span id="modalStatus">Ready</span></p>
+                <p><strong>Total Earned</strong> <span id="modalEarned">0</span></p>
+            </div>
+            <div style="margin-bottom:16px">
+                <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+                    <span style="color:var(--text-muted)">Stamina</span>
+                    <span id="modalStaminaText" style="color:var(--text-secondary)">100 / 100</span>
+                </div>
+                <div class="stat-bar-track">
+                    <div class="stat-bar-fill" id="modalStaminaBar" style="width:100%"></div>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-primary btn-md" id="modalSelectBtn" style="flex:1">Add to Squad</button>
+                <button class="btn btn-secondary btn-md" id="modalCloseBtn" style="flex:1">Close</button>
+            </div>
+        </div>
+    </div>
+
     <script src="ethers-5.7.2.umd.min.js"></script>
     <script src="config.js"></script>
     <script src="wallet.js"></script>
     <script src="audio.js"></script>
     <script src="shared-header.js"></script>
-    <script src="medieval-effects.js"></script>
     <script src="dungeon-select.js"></script>
 </body>
 </html>
