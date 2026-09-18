@@ -1,12 +1,34 @@
 {
   "name": "dungeon-knights",
   "version": "1.0.0",
-  "description": "Dungeon Knights - Blockchain Game",
-  "scripts": {
-    "deploy": "node deploy-game-contract.js"
+  "description": "An NFT-based idle RPG game where players mint knight NFTs, battle through dungeons, and earn $DNG tokens on Robinhood Chain.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
   },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/amardeepio/dungeon-knights.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/amardeepio/dungeon-knights/issues"
+  },
+  "homepage": "https://github.com/amardeepio/dungeon-knights#readme",
   "dependencies": {
-    "ethers": "^6.13.0",
-    "dotenv": "^16.4.5"
+    "ethers": "^5.7.2",
+    "next": "^14.2.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "eslint-config-next": "^14.2.5"
   }
 }
