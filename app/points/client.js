@@ -1,22 +1,29 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import {
     getPoints, addPoints, getTodayDungeonRuns, recordDungeonRun,
     getShareMultiplier, recordShare, getReferralCode, getReferralStats,
     registerReferral, calculateReferralPoints, getGlobalLeaderboard,
-    getNextDungeonMilestone, getMilestoneReward, POINTS_PER_DUNGEON, DAILY_TIERS,
-    getWalletAddress
+    POINTS_PER_DUNGEON, DAILY_TIERS,
+    getWalletAddress, recordPointsForWallet
 } from '../../lib/points';
+import PointsDungeon from './dungeon';
 
 const ASSETS = '/assets/points/';
 
+function getUrlParam(name) {
+    if (typeof window === 'undefined') return null;
+    return new URLSearchParams(window.location.search).get(name);
+}
+
+function navigateTo(path) {
+    window.location.href = path;
+}
+
 export default function PointsPage() {
-    const router = useRouter();
     const [points, setPoints] = useState(0);
     const [runs, setRuns] = useState(0);
-    const [milestone, setMilestone] = useState(null);
     const [multiplier, setMultiplier] = useState(1);
     const [sharedToday, setSharedToday] = useState(false);
     const [referralCode, setReferralCode] = useState('');
@@ -25,16 +32,19 @@ export default function PointsPage() {
     const [leaderboard, setLeaderboard] = useState([]);
     const [tab, setTab] = useState('leaderboard');
     const [copied, setCopied] = useState(false);
+    const [inDungeon, setInDungeon] = useState(false);
 
     useEffect(() => {
+        const ref = getUrlParam('ref');
+        if (ref && ref.length >= 4) {
+            registerReferral(getWalletAddress() || 'local', ref.toUpperCase());
+        }
         loadState();
     }, []);
 
     const loadState = () => {
         setPoints(getPoints());
-        const r = getTodayDungeonRuns();
-        setRuns(r);
-        setMilestone(getNextDungeonMilestone());
+        setRuns(getTodayDungeonRuns());
         setMultiplier(getShareMultiplier());
         setSharedToday(getShareMultiplier() >= 2);
         setReferralCode(getReferralCode());
@@ -43,18 +53,25 @@ export default function PointsPage() {
         setLeaderboard(getGlobalLeaderboard());
     };
 
-    const handleClaimRewards = () => {
-        const earned = getMilestoneReward(runs);
-        if (earned <= 0) return;
+    const handleEnterDungeon = () => {
+        if (runs >= 5) return;
+        setInDungeon(true);
+    };
+
+    const handleDungeonComplete = (earnedPoints) => {
+        setInDungeon(false);
+        for (let i = 0; i < 3; i++) {
+            recordDungeonRun();
+        }
         const mult = getShareMultiplier();
-        const finalPoints = Math.floor(earned * mult);
-        addPoints(finalPoints, `dungeon_${runs}_runs`);
+        const finalPoints = Math.floor(earnedPoints * mult);
+        addPoints(finalPoints, 'points_vault_dungeon');
         recordPointsForWallet(getWalletAddress() || 'local', finalPoints);
         loadState();
     };
 
     const handleShareX = () => {
-        const text = encodeURIComponent(`I just earned ${getMilestoneReward(runs)} points in Dungeon Knights! 🏰⚔️`);
+        const text = encodeURIComponent(`I just earned ${getPoints()} points in Dungeon Knights!`);
         window.open(`https://twitter.com/intent/tweet?text=${text}`, '_blank');
         recordShare();
         setSharedToday(true);
@@ -69,27 +86,24 @@ export default function PointsPage() {
         setTimeout(() => setCopied(false), 2000);
     };
 
-    const handleActivateReferral = (code) => {
-        if (code && code.length >= 4) {
-            registerReferral(getWalletAddress() || 'local', code.toUpperCase());
-            loadState();
-            alert('Referral activated! 🎉');
-        }
-    };
-
     const progressPercent = Math.min((runs / 5) * 100, 100);
     const currentTier = DAILY_TIERS.find(t => runs >= t.runs);
     const nextTier = DAILY_TIERS.find(t => runs < t.runs);
+
+    if (inDungeon) {
+        return <PointsDungeon onExit={handleDungeonComplete} onComplete={handleDungeonComplete} />;
+    }
 
     return (
         <>
             <link rel="stylesheet" href="/css/points.css" />
             <link rel="stylesheet" href="/css/wallet-widget.css" />
             <div className="points-page">
-                {/* Header */}
                 <header className="points-header">
                     <div className="points-header-left">
-                        <button className="back-btn" onClick={() => router.push('/')}>← Back</button>
+                        <button className="back-btn" onClick={() => navigateTo('/')}>
+                            Back
+                        </button>
                         <h1>Points Program</h1>
                     </div>
                     <div className="points-balance">
@@ -101,13 +115,22 @@ export default function PointsPage() {
                 </header>
 
                 <div className="points-layout">
-                    {/* LEFT SIDEBAR */}
                     <aside className="points-sidebar">
-                        {/* Daily Dungeon Tracker */}
+                        <div className="panel vault-dungeon-panel">
+                            <div className="panel-header">
+                                <img src={`${ASSETS}Treasure_chest_overflowing_with_ΓÇª_2K_20260919012043-autocrop-hair.png`} alt="" className="panel-icon" />
+                                <span>Points Vault</span>
+                            </div>
+                            <p className="panel-desc">Enter the vault to earn daily points (100 + 300 + 500)</p>
+                            <button className="vault-enter-btn" onClick={handleEnterDungeon} disabled={runs >= 5}>
+                                {runs >= 5 ? 'Daily Complete' : 'Enter Vault'}
+                            </button>
+                        </div>
+
                         <div className="panel">
                             <div className="panel-header">
                                 <img src={`${ASSETS}Crossed_sword_and_shield_icon_2K_20260919011419-autocrop-hair.png`} alt="" className="panel-icon" />
-                                <span>Daily Dungeons</span>
+                                <span>Daily Progress</span>
                             </div>
                             <div className="dungeon-tracker">
                                 {[1, 2, 3, 4, 5].map((i) => (
@@ -118,59 +141,43 @@ export default function PointsPage() {
                                                 : <span className="step-num">{i}</span>}
                                         </div>
                                         <div className="step-info">
-                                            <span className="step-label">Dungeon {i}</span>
+                                            <span className="step-label">Vault Run {i}</span>
                                             <span className="step-pts">+{POINTS_PER_DUNGEON} PTS</span>
                                         </div>
                                     </div>
                                 ))}
                             </div>
-
-                            {/* Progress bar */}
                             <div className="progress-bar-container">
                                 <div className="progress-bar-fill" style={{ width: `${progressPercent}%` }} />
                             </div>
                             <div className="milestone-info">
-                                {currentTier && <span className="milestone-achieved">✓ {currentTier.total} PTS earned</span>}
+                                {currentTier && <span className="milestone-achieved">{currentTier.total} PTS earned</span>}
                                 {nextTier && <span className="milestone-next">{nextTier.runs - runs} more for {nextTier.total} PTS</span>}
-                                {!nextTier && <span className="milestone-max">🏆 MAX DAILY REACHED</span>}
+                                {!nextTier && <span className="milestone-max">MAX DAILY</span>}
                             </div>
-
-                            <button
-                                className="claim-btn"
-                                onClick={handleClaimRewards}
-                                disabled={!currentTier || runs === 0}
-                            >
-                                {runs === 0 ? 'Complete Dungeons to Claim' : `Claim ${getMilestoneReward(runs) * multiplier} PTS`}
-                            </button>
                         </div>
 
-                        {/* X Share */}
                         <div className="panel">
                             <div className="panel-header">
                                 <img src={`${ASSETS}White_logo_on_black_background_2K_20260919011421-autocrop-hair.png`} alt="" className="panel-icon x-icon" />
                                 <span>Daily Share</span>
                             </div>
-                            <p className="panel-desc">Share your run on X to activate 2x multiplier</p>
-                            <button
-                                className={`share-btn ${sharedToday ? 'active' : ''}`}
-                                onClick={handleShareX}
-                                disabled={sharedToday}
-                            >
-                                {sharedToday ? '✓ Shared Today (x2 Active)' : '𝕏 Share on X'}
+                            <p className="panel-desc">Share on X for 2x multiplier</p>
+                            <button className={`share-btn ${sharedToday ? 'active' : ''}`} onClick={handleShareX} disabled={sharedToday}>
+                                {sharedToday ? 'Shared (x2 Active)' : 'Share on X'}
                             </button>
                         </div>
 
-                        {/* Referral */}
                         <div className="panel">
                             <div className="panel-header">
                                 <img src={`${ASSETS}Silver_chain_link_icon_referrals_2K_20260919011442-autocrop-hair.png`} alt="" className="panel-icon" />
                                 <span>Refer & Earn</span>
                             </div>
-                            <p className="panel-desc">15% from 1st degree, 5% from 2nd degree referrals</p>
+                            <p className="panel-desc">15% from 1st degree, 5% from 2nd degree</p>
                             <div className="referral-code-box">
                                 <code className="referral-code">{referralCode || 'Connect Wallet'}</code>
                                 <button className="copy-btn" onClick={handleCopyReferral}>
-                                    {copied ? '✓' : 'Copy'}
+                                    {copied ? 'Copied' : 'Copy'}
                                 </button>
                             </div>
                             <p className="ref-stats">{referralStats.totalRefs} referrals</p>
@@ -183,15 +190,13 @@ export default function PointsPage() {
                         </div>
                     </aside>
 
-                    {/* RIGHT MAIN CONTENT */}
                     <main className="points-main">
-                        {/* Leaderboard Tabs */}
                         <div className="tabs">
                             <button className={`tab ${tab === 'leaderboard' ? 'active' : ''}`} onClick={() => setTab('leaderboard')}>
-                                🏆 Leaderboard
+                                Leaderboard
                             </button>
                             <button className={`tab ${tab === 'referrals' ? 'active' : ''}`} onClick={() => setTab('referrals')}>
-                                👥 My Referrals
+                                My Referrals
                             </button>
                         </div>
 
