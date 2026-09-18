@@ -102,6 +102,7 @@ export default function PointsPage() {
 
     return (
         <>
+            <link rel="stylesheet" href="/css/theme.css" />
             <link rel="stylesheet" href="/css/points.css" />
             <link rel="stylesheet" href="/css/wallet-widget.css" />
             <div className="points-page">
