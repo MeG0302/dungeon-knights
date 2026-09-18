@@ -3,180 +3,234 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dungeon Knights - Idle RPG</title>
+    <title>Dungeon Knights - Adventure</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="themed-styles-centered.css?v=1789100900">
+    <link rel="stylesheet" href="shared-wallet.css">
+    <link rel="stylesheet" href="transaction-modal.css">
+    <link rel="stylesheet" href="leaderboard.css">
+    <link rel="stylesheet" href="medieval-theme.css">
+    <link rel="stylesheet" href="medieval-components.css">
+    <link rel="stylesheet" href="medieval-game.css">
+    <link rel="stylesheet" href="medieval-effects.css">
 </head>
-<body>
+<body data-dungeon-theme="crypts">
     <div class="game-container">
-        <!-- Top Header -->
-        <header class="game-header">
-            <div class="header-logo">
-                <h1>Dungeon<br>Knights</h1>
+        <!-- CASTLE HEADER -->
+        <header class="castle-header game-header">
+            <button class="medieval-btn medieval-btn-stone" onclick="window.location.href='menu.html'" style="padding: 10px 20px; font-size: 14px; display: flex; align-items: center; gap: 8px;">
+                <img src="assets/ui/sword.png" alt="Sword" style="width: 20px; height: 20px; filter: brightness(1.2);">
+                Select Knights
+            </button>
+            <div class="castle-logo header-title">
+                <div class="header-title-icon">
+                    <img src="assets/ui/castle.png" alt="Castle" style="width: 32px; height: 32px;">
+                </div>
+                <div class="header-title-text">DUNGEON KNIGHTS</div>
             </div>
-            <div class="header-stats">
-                <div class="stat-item dungeon-progress">
-                    <span class="stat-label" id="dungeonNameDisplay">Forgotten Crypts</span>
-                    <span class="stat-value" id="dungeonProgress">Loot: 0</span>
-                </div>
-                <div class="stat-item knights-count">
-                    <span class="stat-label">Knights</span>
-                    <span class="stat-value" id="knightsCount">0</span>
-                </div>
-                <div class="stat-item treasure-count">
-                    <span class="stat-label">Gold</span>
-                    <span class="stat-value" id="treasureAmount">500</span>
-                </div>
+            <div class="treasure-pouch" id="walletWidgetGame">
+                <span class="treasure-amount" id="headerDngBalance">0 DNG</span>
             </div>
         </header>
 
-        <!-- Main Game Area -->
-        <main class="game-main" id="gameMain">
-            <!-- Border Decorations -->
-            <div class="border-decoration border-top-left"></div>
-            <div class="border-decoration border-top-right"></div>
-            <div class="border-decoration border-bottom-left"></div>
-            <div class="border-decoration border-bottom-right"></div>
-            
-            <!-- Game Canvas -->
-            <canvas id="gameCanvas" width="1200" height="800"></canvas>
-            
-            <!-- Atmospheric Text -->
-            <div class="atmosphere-text" id="atmosphereText"></div>
-            
-            <!-- Knight Portraits Sidebar -->
-            <aside class="knight-sidebar">
-                <div class="sidebar-header">Active Squad</div>
-                <div id="activeKnightPortraits" class="knight-portraits-container">
-                    <!-- Dynamically populated -->
+        <!-- MAIN GAME AREA WITH DECORATIVE BORDERS -->
+        <main class="game-main">
+            <!-- LEFT PANEL: ACTIVE SQUAD -->
+            <aside class="squad-panel parchment-bg">
+                <div class="panel-header medieval-subtitle">
+                    <span class="panel-icon">
+                        <img src="assets/ui/sword.png" alt="Sword" style="width: 24px; height: 24px;">
+                    </span>
+                    <span id="squadPanelTitle">Active Squad</span>
+                </div>
+                <div class="squad-list" id="squadList">
+                    <!-- Dynamically populated knight cards -->
                 </div>
             </aside>
             
-            <!-- Minimap -->
-            <div class="minimap-container">
-                <canvas id="minimapCanvas" width="150" height="150"></canvas>
+            <!-- CENTER: GAME CANVAS WITH FRAME -->
+            <div class="canvas-wrapper">
+                <!-- VIDEO BACKGROUND -->
+                <video id="dungeonBackground" autoplay loop muted playsinline class="dungeon-video-bg">
+                    <source src="maps/map/animated/crypts-map-animated.mp4" type="video/mp4">
+                </video>
+                
+                <!-- GAME CANVAS (Center) -->
+                <canvas id="gameCanvas" width="1140" height="600"></canvas>
+                
+                <!-- ATMOSPHERIC TEXT OVERLAY -->
+                <div class="atmosphere-text" id="atmosphereText">DARK DEPTHS...</div>
             </div>
             
-            <!-- Game Log -->
-            <div class="game-log-container">
-                <div id="gameLog" class="game-log">
-                    <p class="log-entry">🎮 Welcome to Dungeon Knights!</p>
-                    <p class="log-entry">💡 Press 'H' for keyboard shortcuts</p>
-                </div>
+            <!-- RIGHT PANEL: INFO DISPLAY -->
+            <aside class="info-panel parchment-bg">
+                <!-- WALLET BALANCE -->
+                <section class="info-section">
+                    <div class="rune-stone">
+                        <div class="rune-label" id="ownerMarkTitle">Wallet Balance</div>
+                        <div class="rune-value" id="ownerMark">0 DNG</div>
+                    </div>
+                </section>
+                
+                <!-- TOTAL CLAIMED -->
+                <section class="info-section">
+                    <div class="rune-stone">
+                        <div class="rune-label" id="resourcePoolTitle">Total Claimed</div>
+                        <div class="rune-value" id="resourceAmount">0 DNG</div>
+                    </div>
+                </section>
+                
+                <!-- CHEST DISPLAY -->
+                <section class="chest-display">
+                    <div class="chest-image torch-glow" id="chestImage"></div>
+                </section>
+                
+                <!-- UNCLAIMED REWARDS -->
+                <section class="info-section">
+                    <div class="rewards-panel scroll-card">
+                        <div class="scroll-title medieval-subtitle">Unclaimed Rewards</div>
+                        <div class="rewards-total" id="rewardsTotal">0.00 DNG</div>
+                        <div class="rewards-meta">
+                            <span id="rewardsCompletions">Completions: 0</span>
+                        </div>
+                        <button class="medieval-btn" id="claimAllBtn" style="width: 100%; margin: 8px 0; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                            <img src="assets/ui/right tick.png" alt="Claim" style="width: 16px; height: 16px;">
+                            Claim All
+                        </button>
+                        <button class="medieval-btn medieval-btn-stone" id="viewHistoryBtn" style="width: 100%; margin: 8px 0;">
+                            History
+                        </button>
+                        <button class="medieval-btn medieval-btn-stone" id="leaderboardBtn" style="width: 100%; margin: 8px 0;">
+                            Leaderboard
+                        </button>
+                    </div>
+                </section>
+            </aside>
+            
+            <!-- PARCHMENT NOTIFICATION -->
+            <div class="parchment-note scroll-card" id="parchmentNote">
+                <div class="parchment-title medieval-subtitle">Welcome Adventurer!</div>
+                <div class="parchment-text medieval-body">Press 'H' for shortcuts</div>
+                <div class="parchment-text medieval-body">Deploy knights to begin!</div>
             </div>
         </main>
 
-        <!-- Bottom Control Panel -->
-        <footer class="control-panel">
-            <div class="control-section">
-                <button id="startDungeon" class="btn-action btn-start" title="Deploy Knights (Space)">⚔️ Deploy</button>
-                <button id="stopDungeon" class="btn-action btn-stop" title="Recall Knights (Esc)">🛡️ Recall</button>
-                <button id="returnMenuBtn" class="btn-action btn-menu" title="Return to Menu">🏠 Menu</button>
+        <!-- BOTTOM CONTROL BAR -->
+        <footer class="control-bar stone-bg">
+            <!-- Left: Action Buttons -->
+            <div class="control-buttons">
+                <button class="medieval-btn medieval-btn-gold game-btn" id="deployBtn">
+                    <span class="game-btn-icon">
+                        <img src="assets/ui/sword.png" alt="Deploy" style="width: 20px; height: 20px;">
+                    </span>
+                    <span>DEPLOY</span>
+                </button>
+                <button class="medieval-btn medieval-btn-red game-btn" id="recallBtn">
+                    <span class="game-btn-icon">
+                        <img src="assets/ui/exit cross.png" alt="Recall" style="width: 20px; height: 20px;">
+                    </span>
+                    <span>RECALL</span>
+                </button>
+                <button class="medieval-btn medieval-btn-stone game-btn" id="menuBtn">
+                    <span class="game-btn-icon">
+                        <img src="assets/ui/castle.png" alt="Menu" style="width: 20px; height: 20px;">
+                    </span>
+                    <span>MENU</span>
+                </button>
             </div>
             
-            <div class="control-section">
-                <div class="quick-stats">
-                    <span>Gold/min: <strong id="goldRate">0</strong></span>
-                    <span>Active: <strong id="activeKnights">0/15</strong></span>
-                    <span>Loot: <strong id="activeLoot">0</strong></span>
+            <!-- Center: Status Display -->
+            <div class="status-display">
+                <div class="status-item">
+                    <span class="medieval-body">DNG/min: </span>
+                    <strong id="dngRate" class="stat-highlight">0</strong>
+                </div>
+                <div class="status-item">
+                    <span class="medieval-body">Active: </span>
+                    <strong id="activeKnights" class="stat-highlight">0/15</strong>
+                </div>
+                <div class="status-item">
+                    <span class="medieval-body">Loot: </span>
+                    <strong id="activeLoot" class="stat-highlight">0</strong>
+                </div>
+                <div class="status-item">
+                    <span class="medieval-body">Est. Time: </span>
+                    <strong id="estimatedTime" class="stat-highlight">--</strong>
                 </div>
             </div>
             
-            <div class="control-section">
-                <button id="muteBtn" class="btn-action btn-mute" title="Toggle Sound Effects (S)">🔊</button>
-                <button id="muteMusicBtn" class="btn-action btn-mute-music" title="Toggle Music (M)">🎵</button>
-                <button id="helpBtn" class="btn-action btn-menu" title="Show Shortcuts (H)">❓</button>
+            <!-- Right: Stats Button -->
+            <div class="control-buttons">
+                <button class="medieval-btn medieval-btn-stone game-btn" id="statsBtn">
+                    <span class="game-btn-icon">
+                        <img src="assets/ui/sword.png" alt="Stats" style="width: 20px; height: 20px;">
+                    </span>
+                    <span>STATS</span>
+                </button>
             </div>
         </footer>
-
-        <!-- Squad Management Panel (Collapsible) -->
-        <div class="squad-panel" id="squadPanel">
-            <button class="panel-toggle" id="squadToggle">Squad Manager</button>
-            <div class="panel-content">
-                <div class="panel-section">
-                    <h3>⚔️ Deployed Knights (<span id="deployedCount">0</span>)</h3>
-                    <div id="deployedKnights" class="knight-roster">
-                        <p class="placeholder-text">No knights deployed</p>
-                    </div>
-                </div>
-                
-                <div class="panel-section">
-                    <h3>🏰 All Knights (<span id="totalKnightsCount">0</span>)</h3>
-                    <div id="allKnightsRoster" class="knight-roster scrollable-roster">
-                        <p class="placeholder-text">Loading knights...</p>
-                    </div>
-                </div>
-                
-                <div class="panel-section">
-                    <h3>😴 Resting Knights</h3>
-                    <div id="restingKnights" class="knight-roster">
-                        <p class="placeholder-text">No knights resting</p>
-                    </div>
-                </div>
-                
-                <div class="panel-section">
-                    <h3>📊 Squad Stats</h3>
-                    <div id="squadStats" class="squad-stats">
-                        <p>Total Power: <strong id="totalPower">0</strong></p>
-                        <p>Avg Speed: <strong id="avgSpeed">0</strong></p>
-                        <p>Total Stamina: <strong id="totalStamina">0</strong></p>
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
 
-    <!-- Dungeon Completion Modal -->
+    <!-- DUNGEON COMPLETION MODAL -->
     <div id="completionModal" class="modal hidden">
         <div class="modal-content">
-            <h2>🎉 Dungeon Cleared!</h2>
-            <div class="completion-stats">
+            <h2 style="margin-bottom: 20px;">Dungeon Cleared!</h2>
+            <div class="completion-stats" style="margin-bottom: 30px;">
                 <p><strong>Dungeon:</strong> <span id="completedDungeon">-</span></p>
-                <p><strong>Gold Earned:</strong> <span id="completionGold">0</span> 💰</p>
-                <p><strong>Time:</strong> <span id="completionTime">0:00</span> ⏱️</p>
+                <p><strong>Gold Earned:</strong> <span id="completionGold">0</span> DNG</p>
+                <p><strong>Time:</strong> <span id="completionTime">0:00</span></p>
             </div>
-            <div class="modal-actions">
-                <button class="btn-primary" id="nextDungeonBtn">🗺️ Next Dungeon</button>
-                <button class="btn-secondary" id="replayDungeonBtn">🔄 Replay This Dungeon</button>
-                <button class="btn-secondary" id="restHeroesBtn">🍺 Rest All Heroes</button>
+            <div class="modal-actions" style="display: flex; gap: 12px; justify-content: center;">
+                <button class="rewards-btn claim-btn" id="nextDungeonBtn" style="min-width: 180px;">
+                    Next Dungeon
+                </button>
+                <button class="rewards-btn history-btn" id="replayDungeonBtn" style="min-width: 180px;">
+                    Replay Dungeon
+                </button>
             </div>
         </div>
     </div>
 
-    <!-- Keyboard Shortcuts Overlay -->
-    <div id="shortcutsOverlay" class="shortcuts-overlay hidden">
-        <h3>⌨️ Keyboard Shortcuts</h3>
-        <div class="shortcut-list">
-            <div class="shortcut-key">Space</div>
-            <div class="shortcut-desc">Deploy Knights</div>
-            
-            <div class="shortcut-key">Esc</div>
-            <div class="shortcut-desc">Recall Knights</div>
-            
-            <div class="shortcut-key">S</div>
-            <div class="shortcut-desc">Toggle Sound Effects</div>
-            
-            <div class="shortcut-key">M</div>
-            <div class="shortcut-desc">Toggle Music</div>
-            
-            <div class="shortcut-key">H</div>
-            <div class="shortcut-desc">Show/Hide This Menu</div>
-            
-            <div class="shortcut-key">Q</div>
-            <div class="shortcut-desc">Toggle Squad Panel</div>
+    <!-- KEYBOARD SHORTCUTS OVERLAY -->
+    <div id="shortcutsOverlay" class="modal hidden">
+        <div class="modal-content">
+            <h2 style="margin-bottom: 20px;">Keyboard Shortcuts</h2>
+            <div style="text-align: left; margin-bottom: 30px;">
+                <p><strong>Space</strong> - Deploy Knights</p>
+                <p><strong>Esc</strong> - Recall Knights</p>
+                <p><strong>H</strong> - Show/Hide Shortcuts</p>
+            </div>
+            <button class="rewards-btn claim-btn" id="shortcutsClose">Close</button>
         </div>
-        <button class="btn-secondary shortcuts-close" id="shortcutsClose">Close</button>
     </div>
-
-    <!-- Tooltip -->
-    <div id="tooltip" class="tooltip hidden"></div>
 
     <!-- Scripts -->
-    <script src="audio.js"></script>
-    <script src="characters.js"></script>
-    <script src="dungeon.js"></script>
-    <script src="pathfinding.js"></script>
-    <script src="combat.js"></script>
-    <script src="ui.js"></script>
-    <script src="game.js"></script>
+    <!-- Shared Wallet System -->
+    <script src="ethers-5.7.2.umd.min.js"></script>
+    <script src="config.js?v=1789100900"></script>
+    <script src="contract-addresses.js?v=3"></script>
+    <script src="wallet.js?v=1789100900"></script>
+    <script src="shared-header.js?v=1789100900"></script>
+    
+    <!-- Transaction Modal -->
+    <script src="transaction-modal.js?v=2"></script>
+    
+    <!-- Leaderboard -->
+    <script src="leaderboard.js?v=2"></script>
+    
+    <!-- Dungeon Session System -->
+    <script src="dungeon-session.js?v=3"></script>
+    <script src="reward-claim-ui.js?v=2"></script>
+    
+    <!-- Game Scripts -->
+    <script src="maps/map-grids.js"></script>
+    <script src="audio.js?v=1789100900"></script>
+    <script src="characters.js?v=1789100900"></script>
+    <script src="dungeon.js?v=1789100900"></script>
+    <script src="pathfinding.js?v=1789100900"></script>
+    <script src="combat.js?v=1789100900"></script>
+    <script src="ui.js?v=1789100900"></script>
+    <script src="medieval-effects.js"></script>
+    <script src="game.js?v=1789100900"></script>
 </body>
 </html>

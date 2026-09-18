@@ -177,14 +177,35 @@ class LootNode {
 
 class Dungeon {
     constructor(type = 'crypts') {
+        this.type = type; // Store the dungeon type ('mines', 'magma', 'void', 'temple', 'crypts')
         this.config = DUNGEONS[type];
-        this.gridWidth = 26; // Larger 26x26 grid for better visibility
-        this.gridHeight = 26;
+        this.gridWidth = 36; // 36 columns (70px tiles)
+        this.gridHeight = 20; // 20 rows (70px tiles) = 720 total tiles
         this.lootNodes = [];
         this.spawnPoints = [];
         this.decorations = [];
-        this.grid = this.generateGrid();
-        this.generateDecorations();
+
+        // Use fixed collision grid from map-grids.js when available
+        const painted = (typeof MAP_GRIDS !== 'undefined') ? MAP_GRIDS[type] : null;
+        if (painted) {
+            this.grid = painted.map(r => [...r]); // deep copy
+            this.usePainted = true;
+        } else {
+            this.grid = this.generateGrid();
+            this.usePainted = false;
+        }
+
+        // Ensure spawn corner is always walkable
+        for (let y = 1; y < 5; y++) {
+            for (let x = 1; x < 5; x++) {
+                if (this.grid[y]) this.grid[y][x] = 0;
+                this.spawnPoints.push({ x, y });
+            }
+        }
+
+        if (!this.usePainted) {
+            this.generateDecorations();
+        }
         this.generateLootNodes();
     }
 
@@ -249,83 +270,87 @@ class Dungeon {
     }
 
     generateDecorations() {
-        // For Bomberman-style maps, decorations are sparse
-        // Only add decorations on type 2 (permanent obstacles) and some floor tiles
+        // NEW: Spawn 15-20 random obstacle decorations (purely visual, walkable)
+        const obstacleCount = 15 + Math.floor(Math.random() * 6); // 15-20 obstacles
         
-        for (let y = 0; y < this.gridHeight; y++) {
-            for (let x = 0; x < this.gridWidth; x++) {
-                const tileType = this.grid[y][x];
-                
-                // Add decoration on permanent obstacles (type 2)
-                if (tileType === 2 && Math.random() < 0.8) {
-                    this.addObstacleDecoration(x, y);
-                }
-                
-                // Sparse floor decorations
-                if (tileType === 0 && Math.random() < 0.05) {
-                    this.addFloorDecoration(x, y, this.config.name);
-                }
+        for (let i = 0; i < obstacleCount; i++) {
+            // Find random walkable floor tile
+            let x, y, attempts = 0;
+            do {
+                x = 1 + Math.floor(Math.random() * (this.gridWidth - 2));
+                y = 1 + Math.floor(Math.random() * (this.gridHeight - 2));
+                attempts++;
+            } while (this.grid[y][x] !== 0 && attempts < 50); // Only place on walkable floor (type 0)
+            
+            if (attempts < 50) {
+                this.addObstacleDecoration(x, y);
             }
         }
+        
+        console.log(`🎨 Generated ${obstacleCount} obstacle decorations`);
     }
 
     addObstacleDecoration(x, y) {
-        // These will render as the permanent obstacles
+        // NEW: Use actual obstacle images from assets folders
         const dungeonType = this.config.name;
-        let spriteX, spriteY, spriteW, spriteH, spriteSheet;
+        let imagePath;
         
         if (dungeonType.includes('Crypts')) {
-            spriteSheet = 'crypts';
-            // Use various skull/bone piles
-            const options = [
-                { sx: 50, sy: 80, sw: 80, sh: 80 },
-                { sx: 200, sy: 80, sw: 80, sh: 80 },
-                { sx: 750, sy: 80, sw: 80, sh: 80 }
-            ];
-            const choice = options[Math.floor(Math.random() * options.length)];
-            spriteX = choice.sx;
-            spriteY = choice.sy;
-            spriteW = choice.sw;
-            spriteH = choice.sh;
+            // Crypts decorations (will add later if you provide images)
+            imagePath = null; // Skip for now
         } else if (dungeonType.includes('Mines')) {
-            spriteSheet = 'mines';
-            // Use rocks and crystal clusters
+            // Goblin Mines obstacles
             const options = [
-                { sx: 50, sy: 900, sw: 100, sh: 60 },
-                { sx: 300, sy: 900, sw: 80, sh: 60 },
-                { sx: 50, sy: 600, sw: 100, sh: 80 }
+                'Emerald_stone_corner_decoration_ΓÇª_2K_20260911012857-autocrop-hair.png',
+                'Glowing_green_emerald_crystal_2K_20260911012918-autocrop-hair.png',
+                'Pixel_art_corner_decoration_2K_20260911012922-autocrop-hair.png',
+                'Pixel_art_green_emerald_decoration_2K_20260911012902-autocrop-hair.png',
+                'Pixel_iron_pickaxe_icon_2K_20260911012928-autocrop-hair.png'
             ];
-            const choice = options[Math.floor(Math.random() * options.length)];
-            spriteX = choice.sx;
-            spriteY = choice.sy;
-            spriteW = choice.sw;
-            spriteH = choice.sh;
+            imagePath = `assets/mines/${options[Math.floor(Math.random() * options.length)]}`;
         } else if (dungeonType.includes('Temple')) {
-            spriteSheet = 'temple';
-            // Use bushes and grass
+            // Overgrown Temple obstacles
             const options = [
-                { sx: 750, sy: 200, sw: 100, sh: 100 },
-                { sx: 750, sy: 350, sw: 100, sh: 100 }
+                'Corner_decoration_asset_pixel_art_2K_20260911013023-autocrop-hair.png',
+                'Jungle_leaf_pixel_art_icon_2K_20260911013100-autocrop-hair.png',
+                'Temple_corner_decoration_pixel_art_2K_20260911013107-autocrop-hair.png',
+                'Treasure_chest_pixel_art_2K_20260911013116-autocrop-hair.png'
             ];
-            const choice = options[Math.floor(Math.random() * options.length)];
-            spriteX = choice.sx;
-            spriteY = choice.sy;
-            spriteW = choice.sw;
-            spriteH = choice.sh;
+            imagePath = `assets/temple/${options[Math.floor(Math.random() * options.length)]}`;
+        } else if (dungeonType.includes('Magma')) {
+            // Magma Chamber obstacles
+            const options = [
+                'Basalt_rock_with_lava_channels_2K_20260911013002-autocrop-hair.png',
+                'Bottom-right_lava_rock_decoration_2K_20260911012949-autocrop-hair.png',
+                'Flame_lava_drop_pixel_art_2K_20260911013053-autocrop-hair.png',
+                'Lava_rock_corner_decoration_pixel_2K_20260911012945-autocrop-hair.png',
+                'Magma_chamber_bottom-left_cornerΓÇª_2K_20260911012932-autocrop-hair.png',
+                'Magma_chamber_flame_pixel_art_2K_20260911012959-autocrop-hair.png',
+                'Pixel_art_treasure_chest_2K_20260911012935-autocrop-hair.png'
+            ];
+            imagePath = `assets/magma/${options[Math.floor(Math.random() * options.length)]}`;
+        } else if (dungeonType.includes('Void')) {
+            // Void Rift obstacles
+            const options = [
+                'Header_icon_pixel_art_void_2K_20260911013016-autocrop-hair.png',
+                'Obsidian_shards_floating_decoration_2K_20260911013038-autocrop-hair.png',
+                'Obsidian_shards_floating_pixel_art_2K_20260911013034-autocrop-hair.png',
+                'Pixel_art_obsidian_shards_decoraΓÇª_2K_20260911013042-autocrop-hair.png',
+                'Purple_void_energy_orb_icon_2K_20260911013020-autocrop-hair.png',
+                'Treasure_chest_pixel_art_2K_20260911013025-autocrop-hair.png'
+            ];
+            imagePath = `assets/void/${options[Math.floor(Math.random() * options.length)]}`;
         } else {
-            spriteSheet = dungeonType.includes('Magma') ? 'magma' : 'void';
-            spriteX = 50;
-            spriteY = 50;
-            spriteW = 80;
-            spriteH = 80;
+            imagePath = null;
         }
         
-        this.decorations.push({ 
-            x, y, 
-            spriteSheet, 
-            spriteX, spriteY, spriteW, spriteH,
-            layer: 'obstacle'
-        });
+        if (imagePath) {
+            this.decorations.push({ 
+                x, y, 
+                imagePath,
+                layer: 'obstacle'
+            });
+        }
     }
 
     addFloorDecoration(x, y, dungeonType) {
@@ -478,8 +503,8 @@ class Dungeon {
             
             // Find valid walkable position with guaranteed path
             do {
-                x = 5 + Math.floor(Math.random() * (this.gridWidth - 10));
-                y = 5 + Math.floor(Math.random() * (this.gridHeight - 10));
+                x = 1 + Math.floor(Math.random() * (this.gridWidth - 2));
+                y = 1 + Math.floor(Math.random() * (this.gridHeight - 2));
                 attempts++;
                 
                 // Must be walkable and not occupied
@@ -572,19 +597,19 @@ class DungeonRenderer {
         this.ctx = canvas.getContext('2d');
         this.dungeon = dungeon;
         
-        // Calculate fixed zoom to fit entire map
+        // Calculate zoom to FILL entire canvas (no padding)
         const mapWidth = dungeon.gridWidth * dungeon.config.tileSize;
         const mapHeight = dungeon.gridHeight * dungeon.config.tileSize;
         
-        // Fit map to canvas with padding
-        const zoomX = (canvas.width * 0.95) / mapWidth;
-        const zoomY = (canvas.height * 0.95) / mapHeight;
-        this.zoom = Math.min(zoomX, zoomY);
+        // Fill canvas completely - no empty space
+        const zoomX = canvas.width / mapWidth;
+        const zoomY = canvas.height / mapHeight;
+        this.zoom = Math.min(zoomX, zoomY); // Use smallest to ensure it fits
         
-        // Center map on canvas
-        this.offsetX = (canvas.width - (mapWidth * this.zoom)) / 2;
-        this.offsetY = (canvas.height - (mapHeight * this.zoom)) / 2;
-        
+        // No offset - map starts at 0,0 and fills canvas
+        this.offsetX = 0;
+        this.offsetY = 0;
+
         // Load decoration sprite sheets
         this.decorationSprites = {};
         this.loadDecorationSprites();
@@ -613,6 +638,28 @@ class DungeonRenderer {
             };
             img.src = path;
             this.decorationSprites[key] = img;
+        });
+        
+        // Load floor tile images for each theme
+        this.floorTiles = {};
+        const floorTileMap = {
+            'mines': 'assets/mines/floor-tile.png',
+            'magma': 'assets/magma/floor-tile.png',
+            'void': 'assets/void/floor-tile.png',
+            'temple': 'assets/temple/floor-tile.png',
+            'crypts': 'assets/crypts/floor-tile.png'
+        };
+        
+        Object.entries(floorTileMap).forEach(([key, path]) => {
+            const img = new Image();
+            img.onload = () => {
+                console.log(`✅ Loaded ${key} floor tile`);
+            };
+            img.onerror = () => {
+                console.warn(`⚠️ Failed to load ${key} floor tile: ${path}`);
+            };
+            img.src = path;
+            this.floorTiles[key] = img;
         });
         
         // Load individual monster images
@@ -685,19 +732,22 @@ class DungeonRenderer {
         const ctx = this.ctx;
         const dungeon = this.dungeon;
         const tileSize = dungeon.config.tileSize * this.zoom;
-        
-        // Clear canvas with DARK background matching reference
-        ctx.fillStyle = dungeon.config.theme.shadowColor;
-        ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-        // Render entire grid
+        // Clear canvas (transparent — video background shows through)
+        ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+        // Render grid overlay tiles
         for (let y = 0; y < dungeon.gridHeight; y++) {
             for (let x = 0; x < dungeon.gridWidth; x++) {
+                const cell = dungeon.grid[y][x];
+                // When using painted maps, skip floor — video shows through
+                if (dungeon.usePainted && cell === 0) continue;
+
                 const screenPos = dungeon.gridToScreen(x, y);
                 const screenX = screenPos.x * this.zoom + this.offsetX;
                 const screenY = screenPos.y * this.zoom + this.offsetY;
-                
-                this.renderTile(screenX, screenY, dungeon.grid[y][x], x, y, tileSize);
+
+                this.renderTile(screenX, screenY, cell, x, y, tileSize);
             }
         }
 
@@ -758,8 +808,8 @@ class DungeonRenderer {
         // Render atmospheric text overlays
         this.renderAtmosphericText();
 
-        // Render decorative border frame
-        this.renderBorderFrame();
+        // Render decorative border frame (DISABLED - using CSS borders instead)
+        // this.renderBorderFrame();
 
         // Render minimap
         this.renderMinimap();
@@ -791,89 +841,20 @@ class DungeonRenderer {
         const theme = this.dungeon.config.theme;
         
         if (type === 1) {
-            // Border walls - very dark with subtle texture
-            ctx.fillStyle = theme.shadowColor;
-            ctx.fillRect(x, y, tileSize, tileSize);
-            
-            // Add dark texture
-            ctx.fillStyle = theme.wall;
-            ctx.globalAlpha = 0.5;
-            ctx.fillRect(x + 1, y + 1, tileSize - 2, tileSize - 2);
-            ctx.globalAlpha = 1.0;
+            // Border walls - INVISIBLE (video background only)
+            // No walls rendered
             
         } else if (type === 2) {
-            // Permanent obstacles - 3D stone pillars like in reference
-            // Dark base
-            ctx.fillStyle = theme.shadowColor;
-            ctx.fillRect(x, y, tileSize, tileSize);
-            
-            // Pillar body with gradient for 3D effect
-            const pillarGradient = ctx.createLinearGradient(x, y, x + tileSize, y + tileSize);
-            pillarGradient.addColorStop(0, theme.pillarTop);
-            pillarGradient.addColorStop(0.5, theme.pillar);
-            pillarGradient.addColorStop(1, theme.wall);
-            ctx.fillStyle = pillarGradient;
-            ctx.fillRect(x + tileSize * 0.1, y + tileSize * 0.1, tileSize * 0.8, tileSize * 0.8);
-            
-            // Top highlight
-            ctx.fillStyle = theme.pillarTop;
-            ctx.fillRect(x + tileSize * 0.1, y + tileSize * 0.1, tileSize * 0.8, tileSize * 0.15);
-            
-            // Side shadow for depth
-            ctx.fillStyle = theme.shadowColor;
-            ctx.globalAlpha = 0.4;
-            ctx.fillRect(x + tileSize * 0.7, y + tileSize * 0.25, tileSize * 0.2, tileSize * 0.65);
-            ctx.fillRect(x + tileSize * 0.25, y + tileSize * 0.7, tileSize * 0.65, tileSize * 0.2);
-            ctx.globalAlpha = 1.0;
+            // Permanent obstacles - INVISIBLE (video background only)
+            // No obstacles rendered
             
         } else if (type === 3) {
-            // Breakable obstacles - wooden chests/crates
-            // Shadow
-            ctx.fillStyle = theme.shadowColor;
-            ctx.fillRect(x, y, tileSize, tileSize);
-            
-            // Crate body
-            ctx.fillStyle = '#8B4513';
-            ctx.fillRect(x + tileSize * 0.15, y + tileSize * 0.15, tileSize * 0.7, tileSize * 0.7);
-            
-            // Wood planks effect
-            ctx.strokeStyle = '#654321';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(x + tileSize * 0.15, y + tileSize * 0.4);
-            ctx.lineTo(x + tileSize * 0.85, y + tileSize * 0.4);
-            ctx.moveTo(x + tileSize * 0.15, y + tileSize * 0.6);
-            ctx.lineTo(x + tileSize * 0.85, y + tileSize * 0.6);
-            ctx.stroke();
-            
-            // Highlight
-            ctx.fillStyle = '#A0522D';
-            ctx.globalAlpha = 0.3;
-            ctx.fillRect(x + tileSize * 0.15, y + tileSize * 0.15, tileSize * 0.7, tileSize * 0.2);
-            ctx.globalAlpha = 1.0;
+            // Breakable obstacles - INVISIBLE (video background only)
+            // No breakable obstacles rendered
             
         } else {
-            // Floor tiles - dark with subtle checkered pattern
-            const isAltTile = (gridX + gridY) % 2 === 0;
-            ctx.fillStyle = isAltTile ? theme.floor : theme.floorAlt;
-            ctx.fillRect(x, y, tileSize, tileSize);
-            
-            // Add subtle grid lines
-            ctx.strokeStyle = theme.shadowColor;
-            ctx.globalAlpha = 0.2;
-            ctx.lineWidth = 1;
-            ctx.strokeRect(x, y, tileSize, tileSize);
-            ctx.globalAlpha = 1.0;
-            
-            // Random dark spots for texture
-            if (Math.random() < 0.05) {
-                ctx.fillStyle = theme.shadowColor;
-                ctx.globalAlpha = 0.3;
-                ctx.beginPath();
-                ctx.arc(x + Math.random() * tileSize, y + Math.random() * tileSize, tileSize * 0.1, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.globalAlpha = 1.0;
-            }
+            // Floor tiles - COMPLETELY INVISIBLE (0% opacity, video only)
+            // No floor tiles rendered - video background shows through completely
         }
     }
 
@@ -882,20 +863,39 @@ class DungeonRenderer {
         const centerX = x + tileSize / 2;
         const centerY = y + tileSize / 2;
         
-        // Get the sprite sheet for this decoration
+        // NEW: Handle image-based decorations
+        if (dec.imagePath) {
+            // Load image if not already loaded
+            if (!this.obstacleImages) {
+                this.obstacleImages = {};
+            }
+            
+            if (!this.obstacleImages[dec.imagePath]) {
+                this.obstacleImages[dec.imagePath] = new Image();
+                this.obstacleImages[dec.imagePath].src = dec.imagePath;
+            }
+            
+            const img = this.obstacleImages[dec.imagePath];
+            
+            if (img.complete && img.naturalWidth > 0) {
+                ctx.save();
+                // Draw the obstacle image filling the tile
+                ctx.drawImage(img, x, y, tileSize, tileSize);
+                ctx.restore();
+            }
+            return;
+        }
+        
+        // OLD: Handle sprite sheet-based decorations (legacy)
         const spriteSheet = this.decorationSprites[dec.spriteSheet];
         
-        // If sprite is loaded, use it; otherwise draw a fallback
         if (spriteSheet && spriteSheet.complete && spriteSheet.naturalWidth > 0) {
             ctx.save();
-            
-            // Draw the sprite FILLING the entire tile
             ctx.drawImage(
                 spriteSheet,
                 dec.spriteX, dec.spriteY, dec.spriteW, dec.spriteH,
-                x, y, tileSize, tileSize  // Fill entire tile
+                x, y, tileSize, tileSize
             );
-            
             ctx.restore();
         } else {
             // Fallback - draw visible colored shapes
