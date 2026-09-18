@@ -3,234 +3,180 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dungeon Knights - Adventure</title>
-    <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="themed-styles-centered.css?v=1789100900">
+    <title>Dungeon Knights — Adventure</title>
+    <link rel="stylesheet" href="theme.css">
+    <link rel="stylesheet" href="layout.css">
     <link rel="stylesheet" href="shared-wallet.css">
     <link rel="stylesheet" href="transaction-modal.css">
     <link rel="stylesheet" href="leaderboard.css">
-    <link rel="stylesheet" href="medieval-theme.css">
-    <link rel="stylesheet" href="medieval-components.css">
-    <link rel="stylesheet" href="medieval-game.css">
-    <link rel="stylesheet" href="medieval-effects.css">
 </head>
 <body data-dungeon-theme="crypts">
-    <div class="game-container">
-        <!-- CASTLE HEADER -->
-        <header class="castle-header game-header">
-            <button class="medieval-btn medieval-btn-stone" onclick="window.location.href='menu.html'" style="padding: 10px 20px; font-size: 14px; display: flex; align-items: center; gap: 8px;">
-                <img src="assets/ui/sword.png" alt="Sword" style="width: 20px; height: 20px; filter: brightness(1.2);">
-                Select Knights
+<div class="page">
+
+    <!-- ============ HEADER ============ -->
+    <header class="header">
+        <div class="header-brand">
+            <a href="menu.html" class="btn btn-ghost btn-sm" style="gap:6px">
+                <img src="assets/ui/sword.png" class="btn-icon-img" alt="">
+                <span>Knights</span>
+            </a>
+        </div>
+        <div class="header-title">DUNGEON KNIGHTS</div>
+        <div class="header-actions">
+            <div class="wallet-pill" id="walletWidgetGame">
+                <span id="headerDngBalance">0 DNG</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- ============ MAIN ============ -->
+    <div class="game-main">
+
+        <!-- LEFT PANEL: Active Squad -->
+        <aside class="side-panel">
+            <div class="side-panel-header">
+                <img src="assets/ui/sword.png" class="panel-header-icon" alt="">
+                Active Squad
+            </div>
+            <div class="side-panel-body">
+                <div class="knight-card" id="squadList">
+                    <!-- JS-populated -->
+                </div>
+            </div>
+        </aside>
+
+        <!-- CENTER: Canvas + Video -->
+        <div class="canvas-area">
+            <video id="dungeonBackground" autoplay loop muted playsinline class="dungeon-video-bg">
+                <source src="maps/map/animated/crypts-map-animated.mp4" type="video/mp4">
+            </video>
+            <canvas id="gameCanvas" width="1140" height="600"></canvas>
+        </div>
+
+        <!-- RIGHT PANEL: Info -->
+        <aside class="side-panel right">
+            <!-- Wallet / Stats -->
+            <div class="side-panel-header">
+                <img src="assets/ui/shield.png" class="panel-header-icon" alt="">
+                Status
+            </div>
+            <div class="side-panel-body">
+                <div class="stat-row">
+                    <span class="stat-label">Wallet</span>
+                    <span class="stat-value stat-value-gold" id="ownerMark">0 DNG</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Total Claimed</span>
+                    <span class="stat-value" id="resourceAmount">0</span>
+                </div>
+            </div>
+
+            <!-- Chest Display -->
+            <div class="chest-display">
+                <img id="chestImage" class="chest-display-img" src="assets/crypts/chest.png" alt="Chest">
+            </div>
+
+            <!-- Rewards -->
+            <div class="side-panel-header" style="border-top:1px solid var(--border-base)">
+                <img src="assets/ui/right tick.png" class="panel-header-icon" alt="">
+                Unclaimed
+            </div>
+            <div class="side-panel-body rewards-block">
+                <div class="rewards-total" id="rewardsTotal">0.00 DNG</div>
+                <div class="rewards-meta" id="rewardsCompletions">Completions: 0</div>
+                <div style="display:flex;flex-direction:column;gap:8px;margin-top:12px">
+                    <button class="btn btn-primary btn-md w-full" id="claimAllBtn">
+                        <img src="assets/ui/right tick.png" class="btn-icon-img" alt=""> Claim All
+                    </button>
+                    <button class="btn btn-secondary btn-md w-full" id="viewHistoryBtn">History</button>
+                    <button class="btn btn-secondary btn-md w-full" id="leaderboardBtn">Leaderboard</button>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- ============ BOTTOM BAR ============ -->
+    <footer class="control-bar">
+        <div class="control-group">
+            <button class="btn btn-primary btn-md" id="deployBtn">
+                <img src="assets/ui/sword.png" class="btn-icon-img" alt=""> Deploy
             </button>
-            <div class="castle-logo header-title">
-                <div class="header-title-icon">
-                    <img src="assets/ui/castle.png" alt="Castle" style="width: 32px; height: 32px;">
-                </div>
-                <div class="header-title-text">DUNGEON KNIGHTS</div>
-            </div>
-            <div class="treasure-pouch" id="walletWidgetGame">
-                <span class="treasure-amount" id="headerDngBalance">0 DNG</span>
-            </div>
-        </header>
+            <button class="btn btn-danger btn-md" id="recallBtn">
+                <img src="assets/ui/exit cross.png" class="btn-icon-img" alt=""> Recall
+            </button>
+            <button class="btn btn-secondary btn-md" id="menuBtn">
+                <img src="assets/ui/castle.png" class="btn-icon-img" alt=""> Menu
+            </button>
+        </div>
 
-        <!-- MAIN GAME AREA WITH DECORATIVE BORDERS -->
-        <main class="game-main">
-            <!-- LEFT PANEL: ACTIVE SQUAD -->
-            <aside class="squad-panel parchment-bg">
-                <div class="panel-header medieval-subtitle">
-                    <span class="panel-icon">
-                        <img src="assets/ui/sword.png" alt="Sword" style="width: 24px; height: 24px;">
-                    </span>
-                    <span id="squadPanelTitle">Active Squad</span>
-                </div>
-                <div class="squad-list" id="squadList">
-                    <!-- Dynamically populated knight cards -->
-                </div>
-            </aside>
+        <div class="control-stats">
+            <div class="control-stat">DNG/min: <strong id="dngRate">0</strong></div>
+            <div class="control-stat">Active: <strong id="activeKnights">0/15</strong></div>
+            <div class="control-stat">Loot: <strong id="activeLoot">0</strong></div>
+            <div class="control-stat">Est. Time: <strong id="estimatedTime">--</strong></div>
+        </div>
 
-            <!-- CENTER: GAME CANVAS WITH FRAME -->
-            <div class="canvas-wrapper">
-                <!-- VIDEO BACKGROUND -->
-                <video id="dungeonBackground" autoplay loop muted playsinline class="dungeon-video-bg">
-                    <source src="maps/map/animated/crypts-map-animated.mp4" type="video/mp4">
-                </video>
+        <div class="control-group">
+            <button class="btn btn-secondary btn-md" id="statsBtn">
+                <img src="assets/ui/sword.png" class="btn-icon-img" alt=""> Stats
+            </button>
+        </div>
+    </footer>
 
-                <!-- GAME CANVAS (Center) -->
-                <canvas id="gameCanvas" width="1140" height="600"></canvas>
-
-                <!-- ATMOSPHERIC TEXT OVERLAY -->
-                <div class="atmosphere-text" id="atmosphereText">DARK DEPTHS...</div>
-            </div>
-
-            <!-- RIGHT PANEL: INFO DISPLAY -->
-            <aside class="info-panel parchment-bg">
-                <!-- WALLET BALANCE -->
-                <section class="info-section">
-                    <div class="rune-stone">
-                        <div class="rune-label" id="ownerMarkTitle">Wallet Balance</div>
-                        <div class="rune-value" id="ownerMark">0 DNG</div>
-                    </div>
-                </section>
-
-                <!-- TOTAL CLAIMED -->
-                <section class="info-section">
-                    <div class="rune-stone">
-                        <div class="rune-label" id="resourcePoolTitle">Total Claimed</div>
-                        <div class="rune-value" id="resourceAmount">0 DNG</div>
-                    </div>
-                </section>
-
-                <!-- CHEST DISPLAY -->
-                <section class="chest-display">
-                    <div class="chest-image torch-glow" id="chestImage"></div>
-                </section>
-
-                <!-- UNCLAIMED REWARDS -->
-                <section class="info-section">
-                    <div class="rewards-panel scroll-card">
-                        <div class="scroll-title medieval-subtitle">Unclaimed Rewards</div>
-                        <div class="rewards-total" id="rewardsTotal">0.00 DNG</div>
-                        <div class="rewards-meta">
-                            <span id="rewardsCompletions">Completions: 0</span>
-                        </div>
-                        <button class="medieval-btn" id="claimAllBtn" style="width: 100%; margin: 8px 0; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                            <img src="assets/ui/right tick.png" alt="Claim" style="width: 16px; height: 16px;">
-                            Claim All
-                        </button>
-                        <button class="medieval-btn medieval-btn-stone" id="viewHistoryBtn" style="width: 100%; margin: 8px 0;">
-                            History
-                        </button>
-                        <button class="medieval-btn medieval-btn-stone" id="leaderboardBtn" style="width: 100%; margin: 8px 0;">
-                            Leaderboard
-                        </button>
-                    </div>
-                </section>
-            </aside>
-
-            <!-- PARCHMENT NOTIFICATION -->
-            <div class="parchment-note scroll-card" id="parchmentNote">
-                <div class="parchment-title medieval-subtitle">Welcome Adventurer!</div>
-                <div class="parchment-text medieval-body">Press 'H' for shortcuts</div>
-                <div class="parchment-text medieval-body">Deploy knights to begin!</div>
-            </div>
-        </main>
-
-        <!-- BOTTOM CONTROL BAR -->
-        <footer class="control-bar stone-bg">
-            <!-- Left: Action Buttons -->
-            <div class="control-buttons">
-                <button class="medieval-btn medieval-btn-gold game-btn" id="deployBtn">
-                    <span class="game-btn-icon">
-                        <img src="assets/ui/sword.png" alt="Deploy" style="width: 20px; height: 20px;">
-                    </span>
-                    <span>DEPLOY</span>
-                </button>
-                <button class="medieval-btn medieval-btn-red game-btn" id="recallBtn">
-                    <span class="game-btn-icon">
-                        <img src="assets/ui/exit cross.png" alt="Recall" style="width: 20px; height: 20px;">
-                    </span>
-                    <span>RECALL</span>
-                </button>
-                <button class="medieval-btn medieval-btn-stone game-btn" id="menuBtn">
-                    <span class="game-btn-icon">
-                        <img src="assets/ui/castle.png" alt="Menu" style="width: 20px; height: 20px;">
-                    </span>
-                    <span>MENU</span>
-                </button>
-            </div>
-
-            <!-- Center: Status Display -->
-            <div class="status-display">
-                <div class="status-item">
-                    <span class="medieval-body">DNG/min: </span>
-                    <strong id="dngRate" class="stat-highlight">0</strong>
-                </div>
-                <div class="status-item">
-                    <span class="medieval-body">Active: </span>
-                    <strong id="activeKnights" class="stat-highlight">0/15</strong>
-                </div>
-                <div class="status-item">
-                    <span class="medieval-body">Loot: </span>
-                    <strong id="activeLoot" class="stat-highlight">0</strong>
-                </div>
-                <div class="status-item">
-                    <span class="medieval-body">Est. Time: </span>
-                    <strong id="estimatedTime" class="stat-highlight">--</strong>
-                </div>
-            </div>
-
-            <!-- Right: Stats Button -->
-            <div class="control-buttons">
-                <button class="medieval-btn medieval-btn-stone game-btn" id="statsBtn">
-                    <span class="game-btn-icon">
-                        <img src="assets/ui/sword.png" alt="Stats" style="width: 20px; height: 20px;">
-                    </span>
-                    <span>STATS</span>
-                </button>
-            </div>
-        </footer>
+    <!-- Toast notification -->
+    <div class="toast" id="parchmentNote">
+        <div class="toast-title">Welcome Adventurer</div>
+        <div class="toast-body">Press 'H' for shortcuts<br>Deploy knights to begin!</div>
     </div>
+</div>
 
-    <!-- DUNGEON COMPLETION MODAL -->
-    <div id="completionModal" class="modal hidden">
-        <div class="modal-content">
-            <h2 style="margin-bottom: 20px;">Dungeon Cleared!</h2>
-            <div class="completion-stats" style="margin-bottom: 30px;">
-                <p><strong>Dungeon:</strong> <span id="completedDungeon">-</span></p>
-                <p><strong>Gold Earned:</strong> <span id="completionGold">0</span> DNG</p>
-                <p><strong>Time:</strong> <span id="completionTime">0:00</span></p>
-            </div>
-            <div class="modal-actions" style="display: flex; gap: 12px; justify-content: center;">
-                <button class="rewards-btn claim-btn" id="nextDungeonBtn" style="min-width: 180px;">
-                    Next Dungeon
-                </button>
-                <button class="rewards-btn history-btn" id="replayDungeonBtn" style="min-width: 180px;">
-                    Replay Dungeon
-                </button>
-            </div>
+<!-- ============ MODALS ============ -->
+<div id="completionModal" class="modal-backdrop hidden">
+    <div class="modal">
+        <div class="modal-title">Dungeon Cleared</div>
+        <div class="modal-stats">
+            <p><strong>Dungeon</strong> <span id="completedDungeon">-</span></p>
+            <p><strong>Gold Earned</strong> <span id="completionGold">0</span> DNG</p>
+            <p><strong>Time</strong> <span id="completionTime">0:00</span></p>
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-primary btn-md" id="nextDungeonBtn" style="flex:1">Next Dungeon</button>
+            <button class="btn btn-secondary btn-md" id="replayDungeonBtn" style="flex:1">Replay</button>
         </div>
     </div>
+</div>
 
-    <!-- KEYBOARD SHORTCUTS OVERLAY -->
-    <div id="shortcutsOverlay" class="modal hidden">
-        <div class="modal-content">
-            <h2 style="margin-bottom: 20px;">Keyboard Shortcuts</h2>
-            <div style="text-align: left; margin-bottom: 30px;">
-                <p><strong>Space</strong> - Deploy Knights</p>
-                <p><strong>Esc</strong> - Recall Knights</p>
-                <p><strong>H</strong> - Show/Hide Shortcuts</p>
-            </div>
-            <button class="rewards-btn claim-btn" id="shortcutsClose">Close</button>
+<div id="shortcutsOverlay" class="modal-backdrop hidden">
+    <div class="modal">
+        <div class="modal-title">Shortcuts</div>
+        <div style="margin-bottom:24px;color:var(--text-secondary);font-size:14px;line-height:2">
+            <p><strong style="color:var(--text-primary);width:80px;display:inline-block">Space</strong> Deploy Knights</p>
+            <p><strong style="color:var(--text-primary);width:80px;display:inline-block">Esc</strong> Recall Knights</p>
+            <p><strong style="color:var(--text-primary);width:80px;display:inline-block">H</strong> Toggle Help</p>
         </div>
+        <button class="btn btn-secondary btn-md w-full" id="shortcutsClose">Close</button>
     </div>
+</div>
 
-    <!-- Scripts -->
-    <!-- Shared Wallet System -->
-    <script src="ethers-5.7.2.umd.min.js"></script>
-    <script src="config.js?v=1789100900"></script>
-    <script src="contract-addresses.js?v=3"></script>
-    <script src="wallet.js?v=1789100900"></script>
-    <script src="shared-header.js?v=1789100900"></script>
+<!-- ============ SCRIPTS ============ -->
+<script src="ethers-5.7.2.umd.min.js"></script>
+<script src="config.js?v=1789100900"></script>
+<script src="contract-addresses.js?v=3"></script>
+<script src="wallet.js?v=1789100900"></script>
+<script src="shared-header.js?v=1789100900"></script>
+<script src="transaction-modal.js?v=2"></script>
+<script src="leaderboard.js?v=2"></script>
+<script src="dungeon-session.js?v=3"></script>
+<script src="reward-claim-ui.js?v=2"></script>
 
-    <!-- Transaction Modal -->
-    <script src="transaction-modal.js?v=2"></script>
-
-    <!-- Leaderboard -->
-    <script src="leaderboard.js?v=2"></script>
-
-    <!-- Dungeon Session System -->
-    <script src="dungeon-session.js?v=3"></script>
-    <script src="reward-claim-ui.js?v=2"></script>
-
-    <!-- Game Scripts -->
-    <script src="maps/map-grids.js"></script>
-    <script src="audio.js?v=1789100900"></script>
-    <script src="characters.js?v=1789100900"></script>
-    <script src="dungeon.js?v=1789100900"></script>
-    <script src="pathfinding.js?v=1789100900"></script>
-    <script src="combat.js?v=1789100900"></script>
-    <script src="ui.js?v=1789100900"></script>
-    <script src="medieval-effects.js"></script>
-    <script src="game.js?v=1789100900"></script>
+<script src="maps/map-grids.js"></script>
+<script src="audio.js?v=1789100900"></script>
+<script src="characters.js?v=1789100900"></script>
+<script src="dungeon.js?v=1789100900"></script>
+<script src="pathfinding.js?v=1789100900"></script>
+<script src="combat.js?v=1789100900"></script>
+<script src="ui.js?v=1789100900"></script>
+<script src="medieval-effects.js"></script>
+<script src="game.js?v=1789100900"></script>
 </body>
 </html>

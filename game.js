@@ -80,6 +80,9 @@ class Game {
         // Initialize with selected/random dungeon
         this.createDungeon(this.selectedDungeon);
         
+        // Initialize video background
+        this.initVideoBackground();
+        
         // Track dungeon start time
         this.dungeonStartTime = null;
         
@@ -113,7 +116,23 @@ class Game {
         this.knightAI = new KnightAI(this.pathfinding);
         this.combat = new CombatSystem(this.dungeon, this.knightManager);
         this.selectedDungeon = type;
-        
+
+        // Switch video background
+        if (this.switchDungeonVideo) this.switchDungeonVideo(type);
+
+        // Switch chest image in the right panel
+        const chestImg = document.getElementById('chestImage');
+        if (chestImg) {
+            const chestMap = {
+                crypts: 'assets/crypts/chest.png',
+                mines: 'assets/mines/chest.png',
+                temple: 'assets/temple/chest.png',
+                magma: 'assets/magma/chest.png',
+                void: 'assets/void/chest.png'
+            };
+            chestImg.src = chestMap[type] || chestMap.crypts;
+        }
+
         console.log(`🗺️ Created ${this.dungeon.config.name} dungeon`);
     }
 
@@ -582,6 +601,56 @@ class Game {
             dungeonName: this.dungeon ? this.dungeon.config.name : 'Unknown',
             activeLootNodes: activeLoot
         };
+    }
+    
+    // Video Background System
+    initVideoBackground() {
+        this.videoElement = document.getElementById('dungeonBackground');
+        if (!this.videoElement) {
+            console.warn('⚠️ Video background element not found');
+            return;
+        }
+        
+        // Load initial dungeon video
+        this.switchDungeonVideo(this.selectedDungeon);
+        console.log('🎬 Video background initialized');
+    }
+    
+    switchDungeonVideo(dungeonType) {
+        if (!this.videoElement) return;
+        
+        const videoMap = {
+            'crypts': 'maps/map/animated/crypts-map-animated.mp4',
+            'mines': 'maps/map/animated/mines-map-animated.mp4',
+            'temple': 'maps/map/animated/temple-map-animated.mp4',
+            'magma': 'maps/map/animated/magma-map-animated.mp4',
+            'void': 'maps/map/animated/void-map-animated.mp4'
+        };
+        
+        const videoPath = videoMap[dungeonType];
+        if (!videoPath) {
+            console.warn(`⚠️ No video found for dungeon: ${dungeonType}`);
+            return;
+        }
+        
+        // Update video source
+        const source = this.videoElement.querySelector('source');
+        if (source) {
+            source.src = videoPath;
+        } else {
+            const newSource = document.createElement('source');
+            newSource.src = videoPath;
+            newSource.type = 'video/mp4';
+            this.videoElement.appendChild(newSource);
+        }
+        
+        // Reload and play
+        this.videoElement.load();
+        this.videoElement.play().catch(err => {
+            console.warn('Video autoplay failed (browser policy):', err);
+        });
+        
+        console.log(`🎬 Switched to ${dungeonType} video: ${videoPath}`);
     }
 }
 
