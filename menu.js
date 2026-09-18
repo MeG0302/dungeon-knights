@@ -455,7 +455,7 @@ class MenuSystem {
             card.innerHTML = `
                 <div class="knight-avatar rarity-${knight.rarity.tier}" style="border-color: ${knight.rarity.color}; ${hasNoRuns ? 'opacity: 0.6;' : ''}">
                     ${imgHtml}
-                    ${hasNoRuns ? '<div style="position: absolute; bottom: -5px; right: -5px; background: #1f2937; border-radius: 50%; padding: 2px 6px; font-size: 16px;">😴</div>' : ''}
+                    ${hasNoRuns ? '<div style="position:absolute;bottom:4px;right:4px;background:#1f2937;border-radius:50%;padding:2px;font-size:14px;">😴</div>' : ''}
                 </div>
                 <div class="knight-info">
                     <div class="knight-name">Knight #${knight.id}</div>
