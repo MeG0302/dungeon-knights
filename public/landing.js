@@ -40,6 +40,7 @@ class LandingPage {
         this.enterDungeonBtn = document.getElementById('enterDungeonBtn');
         this.summonKnightBtn = document.getElementById('summonKnightBtn');
         this.marketplaceBtn = document.getElementById('marketplaceBtn');
+        this.pointsBtn = document.getElementById('pointsBtn');
         this.leaderboardBtn = document.getElementById('leaderboardLandingBtn');
         
         // Stats elements
