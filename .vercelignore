@@ -10,13 +10,18 @@ private-key.txt
 *.pem
 
 # Local-only state: the file-driver point store and Freebuff scratch/logs.
-.data/
-.freebuff/
+/.data/
+/.freebuff/
 
 # Source art and build tooling are not part of the deployed site — everything the
 # browser fetches lives under public/ (e.g. public/assets/points/, public/sprites/).
-art/
-arya/
-points/
-tools/
-docs/
+#
+# Every pattern below is ANCHORED with a leading slash on purpose. An unanchored
+# `points/` also matches `app/points/`, `app/api/points/` and `public/assets/points/`,
+# which silently stripped the whole Points Program out of a deployment: the route 404'd
+# and the vault had no art, while the build itself succeeded and looked fine.
+/art/
+/arya/
+/points/
+/tools/
+/docs/
