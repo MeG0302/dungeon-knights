@@ -553,6 +553,74 @@ body {
 .loading-transition.hidden { display: none; }
 
 /* ==========================================================
+   MAP LOADING GATE
+   The map's own loading screen: it covers the game from the first paint (so the
+   chosen dungeon never appears as the markup's placeholder map) and it is taken
+   down by public/loading-gate.js once the dungeon's art has arrived. Arya stands
+   on it at z-index 2200, so the gate itself sits just underneath her.
+   ========================================================== */
+#mapLoadingGate {
+  position: fixed; inset: 0; z-index: 1900;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 18px;
+  background:
+    radial-gradient(ellipse at 50% 42%, rgba(212, 168, 67, 0.07) 0%, rgba(0, 0, 0, 0) 62%),
+    var(--bg-dark, #0d0b09);
+  transition: opacity 500ms ease-out;
+  /* Room for her: she rises through the lower middle of the screen. */
+  padding-bottom: 26vh;
+  text-align: center;
+}
+
+#mapLoadingGate.is-open { opacity: 0; pointer-events: none; }
+
+.map-gate-title {
+  font-family: var(--font-display, 'Cinzel', serif);
+  font-size: clamp(18px, 2.4vw, 26px);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--accent-gold, #d4a843);
+  text-shadow: 0 0 24px rgba(212, 168, 67, 0.25);
+}
+
+.map-gate-sub {
+  font-family: var(--font-heading, 'Cinzel', serif);
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-muted, #8a8177);
+}
+
+.map-gate-track {
+  width: min(320px, 62vw);
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+}
+
+.map-gate-bar {
+  height: 100%;
+  width: 3%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #7a5c2e 0%, var(--accent-gold, #d4a843) 100%);
+  transition: width 260ms ease-out;
+}
+
+.map-gate-label {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: var(--text-secondary, #cfc7bb);
+}
+
+.map-gate-count {
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: var(--text-muted, #8a8177);
+}
+
+/* ==========================================================
    ANIMATIONS
    ========================================================== */
 /* ==========================================================
