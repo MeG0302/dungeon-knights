@@ -1,0 +1,22 @@
+# Never upload local secrets or machine state to a deployment.
+# (.env.local holds a deployer private key and the local VERCEL_OIDC_TOKEN; a Next.js
+# build on Vercel would otherwise read it and could shadow the dashboard's own vars.)
+.env
+.env.local
+.env.production
+.env*.local
+private-key.txt
+*.key
+*.pem
+
+# Local-only state: the file-driver point store and Freebuff scratch/logs.
+.data/
+.freebuff/
+
+# Source art and build tooling are not part of the deployed site — everything the
+# browser fetches lives under public/ (e.g. public/assets/points/, public/sprites/).
+art/
+arya/
+points/
+tools/
+docs/
