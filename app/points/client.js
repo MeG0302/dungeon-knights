@@ -93,7 +93,7 @@ export default function PointsPage() {
     };
 
     if (inDungeon) {
-        return <PointsDungeon onExit={handleDungeonComplete} />;
+        return <PointsDungeon onExit={handleDungeonComplete} onShare={handleShareX} />;
     }
 
     return (

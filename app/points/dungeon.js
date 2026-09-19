@@ -9,8 +9,9 @@ const LEVELS = [
 ];
 
 const KNIGHT_COLORS = ['#4d9fff', '#ff6b6b', '#4dff4d', '#ffdd4d', '#dd4dff'];
+const kColors = KNIGHT_COLORS;
 
-export default function PointsDungeon({ onExit }) {
+export default function PointsDungeon({ onExit, onShare }) {
     const canvasRef = useRef(null);
     const animRef = useRef(null);
     const [level, setLevel] = useState(0);
@@ -202,6 +203,7 @@ export default function PointsDungeon({ onExit }) {
     function handleShareX() {
         const text = encodeURIComponent(`I just conquered the Points Vault and earned 900 PTS in Dungeon Knights!`);
         window.open(`https://twitter.com/intent/tweet?text=${text}`, '_blank');
+        if (onShare) onShare();
         setShared(true);
     }
 
