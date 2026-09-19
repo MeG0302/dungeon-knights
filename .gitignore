@@ -52,6 +52,7 @@ out/
 .freebuff/*.log
 .freebuff/*.log.err
 .freebuff/*.pid
+.freebuff/*.env
 .freebuff/project-id
 
 # Temporary files

@@ -406,18 +406,35 @@ six concurrent re-clears of the same floor -> credited 100, 100, 100, 100, 0, 10
 ```
 
 Redis does this with `SET … NX EX` (atomic across instances); the file and memory drivers use an
-in-process set, which is correct because they are single-process by definition — two `next dev`
-servers on one machine would still race, and that is a development-only shape. **The guard is
-only truly cross-instance once KV exists**; without it, each serverless instance still has its own
-set, so the double-pay window narrows to a single instance rather than closing.
+in-process set, which is only enough inside one process. **The guard is therefore only
+cross-instance once KV exists** — and production does not have KV yet, which was measured on the
+live deployment rather than assumed. Twelve simultaneous clears of today's first floor on one
+wallet, signed in as a throwaway wallet through the real challenge/signature flow:
+
+```
+said-credited: 12 of 12, final balance: 100
+```
+
+Every instance kept its own ledger and paid the floor, and the balance still *looked* right only
+because each of them wrote `0 + 100` over its own copy. The visible symptom before that is
+milder and easier to attribute: two requests read different balances, and the leaderboard
+reshuffles between reloads.
 
 The floor's record is written **before** it is paid. A failure in between credits nothing (logged
 loudly with the address, day and amount) — a missed payment can be replayed by hand, a double
 payment cannot be taken back.
 
 ```bash
-node tools/check-points-guard.js http://localhost:3000   # 9 checks, 8-way concurrency
+node tools/check-points-guard.js http://localhost:3000   # 9 checks, 8-way concurrency, one process
+node tools/check-kv-store.js                             # 6 checks, two processes, no account needed
 ```
+
+`check-kv-store.js` is how the guard gets proven *before* KV exists: it runs the real
+`clearLevel` in two child processes against one shared store — a fake that speaks the Upstash REST
+dialect, with `SET NX` atomic — so the redis path is exercised for real. With a shared store, two
+processes × 8 overlapping clears produce **exactly one** payout and both read back the same
+balance; without one, they each pay the same floor. It is also the regression test for the
+multi-instance bug, since nothing else in the repo can produce two "instances" at once.
 
 ### `.vercelignore` — anchor every root-only path
 
