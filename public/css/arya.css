@@ -15,7 +15,11 @@
      underneath her (see avoidDialog in arya.js). */
   transform: translateX(calc(-50% + var(--arya-shift, 0px)));
   transition: transform 320ms ease-out;
-  z-index: 1200;              /* above the game HUD and above modal backdrops (1000) */
+  /* Above the game HUD, above modal backdrops (1000), and above the quest board's
+     "Entering X…" transition (2000) — that overlay is opaque and used to bury her
+     completely during the one moment she has something worth saying. Below her the
+     map's own gate (1900) so she can stand on the loading screen. */
+  z-index: 2200;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -176,11 +180,118 @@
   justify-content: center;
 }
 
+/* ------------------------------------------------------ tour (walkthrough) */
+/* While she is explaining, the bubble is no longer a dismissable popup: the
+   controls are, and a click on her line must not close the step being read. */
+.arya-bubble.is-touring {
+  cursor: default;
+  max-width: var(--arya-bubble-max, min(430px, 82vw));
+}
+
+.arya-tour {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid rgba(122, 92, 46, 0.45);
+}
+
+.arya-tour[hidden] { display: none; }
+
+.arya-tour-dots {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+}
+
+.arya-tour-dots span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(212, 168, 67, 0.28);
+  transition: background 160ms linear, transform 160ms linear;
+}
+
+.arya-tour-dots span.is-done { background: rgba(212, 168, 67, 0.6); }
+.arya-tour-dots span.is-on {
+  background: var(--accent-gold, #d4a843);
+  transform: scale(1.5);
+}
+
+.arya-tour-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.arya-tour-btn {
+  pointer-events: auto;
+  font-family: var(--font-heading, 'Cinzel', serif);
+  font-size: 10px;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+  padding: 5px 11px;
+  border-radius: 4px;
+  border: 1px solid var(--border-bronze, #7a5c2e);
+  background: linear-gradient(180deg, #2b2419 0%, #1b1712 100%);
+  color: var(--text-secondary, #cfc7bb);
+  cursor: pointer;
+  transition: color 120ms linear, border-color 120ms linear, filter 120ms linear;
+}
+
+.arya-tour-btn:hover:not(:disabled) {
+  color: var(--accent-gold, #e8c56b);
+  border-color: var(--accent-gold, #d4a843);
+}
+
+.arya-tour-btn:disabled { opacity: 0.4; cursor: default; }
+
+.arya-tour-btn.is-primary {
+  background: linear-gradient(180deg, #d4a843 0%, #a8792a 100%);
+  border-color: #e8c56b;
+  color: #1a1409;
+  font-weight: 700;
+}
+
+.arya-tour-btn.is-primary:hover { color: #100c06; filter: brightness(1.06); }
+
+.arya-tour-btn.is-ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-muted, #8a8177);
+}
+
+.arya-tour-btn.is-ghost:hover {
+  color: var(--text-secondary, #cfc7bb);
+  border-color: transparent;
+}
+
+/* The spotlight: one fixed box carrying an enormous spread shadow, so everything
+   except the element she is describing is dimmed. pointer-events:none keeps the
+   page underneath completely usable while she talks. */
+#arya-spot {
+  position: fixed;
+  z-index: 1150;              /* above the page, below Arya herself (1200) */
+  pointer-events: none;
+  border-radius: 10px;
+  border: 1px solid rgba(232, 197, 107, 0.85);
+  box-shadow:
+    0 0 0 9999px rgba(6, 4, 2, 0.62),
+    0 0 22px rgba(232, 197, 107, 0.35),
+    inset 0 0 22px rgba(232, 197, 107, 0.1);
+  transition: top 180ms ease-out, left 180ms ease-out, width 180ms ease-out, height 180ms ease-out;
+}
+
+#arya-spot[hidden] { display: none; }
+
 /* ------------------------------------------------------------------ mobile */
 @media (max-width: 760px) {
   .arya-figure { height: clamp(130px, 24vh, 200px); }
   .arya-bubble { max-width: 82vw; padding: 10px 12px; }
   .arya-message { font-size: 12px; }
+  .arya-tour-btn { padding: 5px 9px; font-size: 9px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -188,4 +299,5 @@
   .arya-pop.is-in { transform: none; }
   .arya-pop.is-out { transform: none; }
   .arya-figure { animation: none; }
+  #arya-spot { transition: none; }
 }

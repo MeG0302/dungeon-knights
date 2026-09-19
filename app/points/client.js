@@ -16,6 +16,84 @@ import PointsDungeon from './dungeon';
 const ASSETS = '/assets/points/';
 const BOARD_LIMIT = 25;
 
+// Arya's walkthrough of this page. It is remembered under this key, so it runs the
+// first time a visitor arrives and then never again — the "Ask Arya" button in the
+// footer replays it for anyone who wants the tour a second time.
+const TOUR_ID = 'points-v1';
+
+/**
+ * The steps she reads out. Every line is a function so that the wallet and vault steps
+ * describe the page as it is *right now* (connected, already cleared today) instead of
+ * however it looked when the walkthrough was built.
+ */
+function pointsTourSteps(live) {
+    const now = () => live() || {};
+    return [
+        {
+            kind: 'think',
+            mood: 'First time here',
+            text: 'A new face at the gate. I am Arya, and this is the Points Vault — seven steps from me and the whole page will make sense. Hit <strong>Next</strong> when you are ready, <strong>Skip</strong> if you would rather work it out yourself.',
+        },
+        {
+            // The wallet step is the one that genuinely differs per visitor, so it also
+            // picks its own expression: alarmed with no wallet at all, thoughtful while
+            // waiting to be signed, sworn-in once it is bound.
+            kind: () => {
+                const v = now();
+                if (v.connected) return 'ready';
+                return v.walletReady ? 'think' : 'alarm';
+            },
+            mood: 'The wallet',
+            target: '[data-arya="wallet"]',
+            text: () => {
+                const v = now();
+                if (v.connected) {
+                    return `That is you: <strong>${shortAddress(v.address)}</strong>${v.rank ? `, rank <strong>#${v.rank}</strong> of ${(v.players || 0).toLocaleString()} players` : ''}. Every point you earn is tied to this wallet rather than to this browser, so it follows you anywhere you sign in.`;
+                }
+                if (!v.walletReady) {
+                    return 'But there is no wallet in this browser, so the vault stays shut. Install MetaMask (or any Web3 wallet), reload, and the gate opens for you.';
+                }
+                return 'One signature binds this wallet to the vault. It is free, it costs no gas, and it is the only thing I will ever ask you to sign — after that your points follow the wallet.';
+            },
+        },
+        {
+            kind: 'brace',
+            mood: 'Three floors',
+            target: '[data-arya="vault"]',
+            text: () => (now().entryComplete
+                ? 'You have already cleared today&rsquo;s run, so this button sleeps until tomorrow. The whole thing pays again on a fresh day, so come back to it.'
+                : `Three floors — ${VAULT_LEVELS.map((l) => l.name).join(', ')} — paying <strong>${VAULT_LEVELS.map((l) => l.points).join(', then ')}</strong>. Five epic knights ride with you, a run takes about twenty seconds, and the monsters do hit back. One entry a day.`),
+        },
+        {
+            kind: 'ready',
+            mood: 'Double it',
+            target: '[data-arya="share"]',
+            text: () => (now().shared
+                ? 'Today&rsquo;s share is already claimed — your entry was paid out at double. It resets with the vault tomorrow.'
+                : `Clear all three floors and this unlocks. Post the run on X and the whole entry doubles: <strong>${VAULT_ENTRY_TOTAL} becomes ${VAULT_ENTRY_TOTAL * 2} PTS</strong>. Once a day, same as the vault.`),
+        },
+        {
+            kind: 'think',
+            mood: 'Raise your banner',
+            target: '[data-arya="refer"]',
+            text: 'Copy this link and whoever joins through it earns you <strong>15%</strong> of everything they make, plus <strong>5%</strong> of what their own recruits make. Paid the moment they earn it — there is nothing to claim.',
+        },
+        {
+            kind: 'brace',
+            mood: 'The standings',
+            target: '[data-arya="board"]',
+            text: () => (now().connected
+                ? 'And here it is all counted: every wallet on the program, ranked by points. Your row is the one tagged <strong>you</strong>, so you never have to hunt for it. The second tab lists who you brought in and what each of them has paid you.'
+                : 'And here it is all counted: every wallet on the program, ranked by points. Connect yours and your row appears in it, tagged <strong>you</strong>. The second tab lists who you brought in.'),
+        },
+        {
+            kind: 'clear',
+            mood: 'That is everything',
+            text: 'So: connect, clear three floors, double it on X, and bring friends. The gate is yours — go and earn.',
+        },
+    ];
+}
+
 export default function PointsPage() {
     // boot → anon (no session) → ready (signed in). `error` is only used when the page
     // itself cannot work, never for a rejected signature the player can retry.
@@ -36,11 +114,15 @@ export default function PointsPage() {
     // render) so the server and the first client paint also agree.
     const [walletReady, setWalletReady] = useState(false);
     const noticeTimer = useRef(null);
+    // What Arya's walkthrough reads while it talks. A ref and not the state itself,
+    // because her steps are written the moment they show, not when the tour is built.
+    const liveRef = useRef({});
 
     const points = state?.points ?? 0;
     const cleared = state?.clearedToday ?? [];
     const connected = phase === 'ready';
     const entryComplete = !!state?.entryComplete;
+    const live = () => liveRef.current;
 
     const flash = useCallback((message) => {
         setNotice(message);
@@ -125,6 +207,49 @@ export default function PointsPage() {
         };
     }, []);
 
+    // Arya's live view of the page, refreshed on every render, so the lines she reads
+    // describe what the visitor is actually looking at.
+    useEffect(() => {
+        liveRef.current = {
+            phase,
+            connected,
+            walletReady,
+            address: state?.address || address,
+            points,
+            entryComplete,
+            shared: !!state?.sharedToday,
+            rank: state?.rank || 0,
+            players: state?.players || 0,
+        };
+    });
+
+    // She walks a first-time visitor through the page exactly once. `/arya.js` arrives
+    // afterInteractive, so this waits for her instead of assuming she is already there —
+    // and gives up quietly if she never turns up, because the page works without her.
+    useEffect(() => {
+        if (phase === 'boot' || inDungeon) return;
+        let tries = 0;
+        const timer = setInterval(() => {
+            tries += 1;
+            const arya = window.Arya;
+            if (arya) {
+                clearInterval(timer);
+                if (!arya.hasSeenTour(TOUR_ID) && !arya.isTouring()) {
+                    arya.tour(TOUR_ID, { steps: pointsTourSteps(live) });
+                }
+            } else if (tries > 40) {
+                clearInterval(timer);
+            }
+        }, 250);
+        return () => clearInterval(timer);
+    }, [phase, inDungeon]);
+
+    /** The footer's "Ask Arya" — the walkthrough again, on request. */
+    const handleGuide = () => {
+        if (!window.Arya) return;
+        window.Arya.tour(TOUR_ID, { steps: pointsTourSteps(live), force: true });
+    };
+
     // The wallet can be switched from the extension while this page is open.
     useEffect(() => onAccountsChanged((next) => {
         if (!next) {
@@ -156,17 +281,21 @@ export default function PointsPage() {
             loadBoard();
             if (!started.state.referrer) await attachPendingRef();
             if (window.Arya) {
-                window.Arya.say('enter', {
+                window.Arya.say('ready', {
                     message: started.state.points > 0
-                        ? `Welcome back, champion. <strong>${started.state.points.toLocaleString()} PTS</strong> to your name.`
+                        ? `Welcome back, champion. <strong>${started.state.points.toLocaleString()} PTS</strong> to your name${started.state.rank ? `, rank <strong>#${started.state.rank}</strong>` : ''}.`
                         : 'Your wallet is bound to the vault. Clear three floors and the points are yours.',
                 });
             }
             flash('Signed in — points now count on the shared leaderboard.');
         } catch (e) {
             // A rejected signature is not an error state, it is a decision.
-            if (e?.code === 4001 || /rejected/i.test(e?.message || '')) flash('Signature declined — connect again when ready.');
-            else setError(e.message || 'Could not connect the wallet.');
+            if (e?.code === 4001 || /rejected/i.test(e?.message || '')) {
+                flash('Signature declined — connect again when ready.');
+                if (window.Arya) {
+                    window.Arya.say('alarm', { message: 'Signature declined — nothing was signed and nothing was lost. Ask me again whenever you are ready.' });
+                }
+            } else setError(e.message || 'Could not connect the wallet.');
         } finally {
             setBusy(null);
         }
@@ -182,6 +311,9 @@ export default function PointsPage() {
 
     const handleEnterDungeon = () => {
         if (!connected || entryComplete) return;
+        // The vault covers the page, so her walkthrough and its spotlight must not still
+        // be standing when it mounts.
+        if (window.Arya) window.Arya.endTour();
         setInDungeon(true);
     };
 
@@ -288,8 +420,8 @@ export default function PointsPage() {
             <link rel="stylesheet" href="/theme.css" />
             <link rel="stylesheet" href="/css/points.css?v=5" />
             <link rel="stylesheet" href="/css/wallet-widget.css" />
-            <link rel="stylesheet" href="/css/arya.css?v=1" />
-            <Script src="/arya.js?v=1" strategy="afterInteractive" />
+            <link rel="stylesheet" href="/css/arya.css?v=3" />
+            <Script src="/arya.js?v=3" strategy="afterInteractive" />
         </>
     );
 
@@ -373,7 +505,7 @@ export default function PointsPage() {
                             )}
 
                             {/* Wallet — everything below earns into this */}
-                            <div className={`wallet-card ${connected ? 'is-connected' : ''}`}>
+                            <div className={`wallet-card ${connected ? 'is-connected' : ''}`} data-arya="wallet">
                                 {phase === 'boot' ? (
                                     <div className="wallet-card-line">Checking your wallet…</div>
                                 ) : connected ? (
@@ -411,6 +543,7 @@ export default function PointsPage() {
                                 className="btn btn-primary btn-md w-full"
                                 onClick={handleEnterDungeon}
                                 disabled={!connected || entryComplete}
+                                data-arya="vault"
                                 style={{ justifyContent: 'flex-start', gap: 10 }}
                             >
                                 <img src="assets/ui/sword.png" className="btn-icon-img" alt="" />
@@ -455,6 +588,7 @@ export default function PointsPage() {
                                 className={`btn ${state?.sharedToday ? 'btn-primary' : 'btn-secondary'} btn-sm w-full`}
                                 onClick={handleShareX}
                                 disabled={!connected || !entryComplete || !!state?.sharedToday}
+                                data-arya="share"
                                 title={!connected ? 'Connect a wallet first' : 'Clear all three floors first'}
                             >
                                 {state?.sharedToday ? 'Shared Today (x2)' : 'Share on X'}
@@ -470,7 +604,7 @@ export default function PointsPage() {
                             <p className="panel-hint">
                                 15% of what your referrals earn, 5% of what theirs do — paid the moment they do.
                             </p>
-                            <div className="referral-row">
+                            <div className="referral-row" data-arya="refer">
                                 {/* An input, not a <code>: the full link has to be selectable
                                     by hand when the clipboard API is unavailable. */}
                                 <input
@@ -512,7 +646,7 @@ export default function PointsPage() {
                     </aside>
 
                     {/* RIGHT: Leaderboard / Referrals */}
-                    <main className="side-panel" style={{ flex: 1, borderRight: 'none' }}>
+                    <main className="side-panel" data-arya="board" style={{ flex: 1, borderRight: 'none' }}>
                         <div className="side-panel-header" style={{ justifyContent: 'space-between' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <img src={`${ASSETS}Golden_trophy_pixel_art_icon_2K_20260919011419-autocrop-hair.png`} alt="" className="panel-header-icon points-icon" width={20} height={20} />
@@ -641,6 +775,16 @@ export default function PointsPage() {
                     <span style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: 0.5 }}>
                         Earn points by completing vault runs, sharing on X, and referring friends
                     </span>
+                    {/* The walkthrough only auto-runs for a newcomer — this is how it is
+                        asked for a second time. */}
+                    <button
+                        className="btn btn-ghost btn-sm arya-guide-btn"
+                        onClick={handleGuide}
+                        title="Arya will walk you through the vault"
+                    >
+                        <span className="arya-guide-mark" aria-hidden="true">?</span>
+                        Ask Arya
+                    </button>
                 </footer>
 
                 {overlays}

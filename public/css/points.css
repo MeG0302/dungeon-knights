@@ -23,9 +23,41 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    gap: 14px;
     background: var(--bg-dark);
     border-top: 1px solid var(--border-base);
     flex-shrink: 0;
+}
+
+/* The way back into Arya's walkthrough once it has been seen (see TOUR_ID in client.js). */
+.arya-guide-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    border-color: transparent;
+    padding: 3px 10px;
+}
+
+.arya-guide-btn:hover {
+    color: var(--accent-gold);
+    border-color: var(--border-bronze);
+}
+
+.arya-guide-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    border: 1px solid currentColor;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
 }
 
 /* Section headings inside the left panel (vault progress, share, referrals) */

@@ -7,11 +7,27 @@
        window.Arya.say('clear', { dungeon: 'Forgotten Crypts' });   // after clearing a dungeon
        window.Arya.say('enter', { dungeon: 'Void Rift' });          // a map was accepted
        window.Arya.say('mint',  { count: 3 });                      // knights summoned
-       window.Arya.say('return');                                   // back on the Knights tab
+              window.Arya.say('return');                                   // back on the Knights tab
+       window.Arya.say('hold');                                     // a map is still loading
 
    Each kind picks its own portrait from /assets/arya/. She always rises from the
    lower middle, says her line in a speech bubble, and leaves on her own — she never
    pauses the game and never swallows a click (only the bubble is interactive).
+
+   She also walks a newcomer through a page when asked. The caller supplies the steps
+   (it is the only part that knows its own DOM), she drives the rest:
+
+       window.Arya.tour('points', {
+           steps: [
+               { kind: 'think', mood: 'Welcome', text: 'First time? Let me explain.' },
+               { kind: 'brace', text: 'Three floors.', target: '[data-arya="vault"]' },
+           ],
+       });
+
+   while (window.Arya.hasSeenTour('points') === false). A step leaves its bubble up
+   (no timer), dims the page around the element its `target` selector points at, and
+   offers Back / Next / Skip. Finishing or skipping is remembered in localStorage, so
+   a walkthrough meant for newcomers runs once; `force: true` replays it on demand.
    ========================================================================== */
 
 (function () {
@@ -55,6 +71,39 @@
             mood: 'Come back soon',
             text: () => 'Back to the hall so soon? Your knights will keep the fire burning till the next run.',
         },
+        // The second batch of expressions. `ready` and `alarm` are the two halves of
+        // the wallet moment, `brace` is the fight being described, `think` narrates.
+        ready: {
+            file: 'arya-ready.png',
+            mood: 'Sworn in',
+            sound: 'deploy',
+            text: (v) => `Your wallet is bound to the vault${v.rank ? ` — rank <strong>#${v.rank}</strong>` : ''}. What you earn here is yours, not this browser's.`,
+        },
+        alarm: {
+            file: 'arya-alarm.png',
+            mood: 'Hold on',
+            text: () => 'There is no wallet in this browser, so the vault stays shut. Install MetaMask (or any Web3 wallet), reload, and I will bind it to your name.',
+        },
+        brace: {
+            file: 'arya-brace.png',
+            mood: 'Steel yourself',
+            text: (v) => (v.dungeon
+                ? `<strong>${v.dungeon}</strong> does not fight fair — and neither should you.`
+                : 'They do not fight fair in there — and neither should you.'),
+        },
+        think: {
+            file: 'arya-think.png',
+            mood: 'Asking',
+            text: () => 'Ask away — the rules are mine to explain.',
+        },
+        // The map gate's line (public/loading-gate.js). The alarmed pose is the right
+        // one for it — hands up, "wait a moment" — and she is held until the dungeon's
+        // art has arrived, so this one has no timer of its own.
+        hold: {
+            file: 'arya-alarm.png',
+            mood: 'Hold on',
+            text: () => 'Hold on, champion — the map is still coming through the gate. The monsters are waking and your knights are taking their places.',
+        },
     };
 
     let root = null;
@@ -63,17 +112,30 @@
     let moodEl = null;
     let messageEl = null;
     let bubble = null;
+    let tourBar = null;
+    let tourDots = null;
+    let spot = null;
+    let spotTarget = null;
+    let spotEl = null;
     let hideTimer = null;
     let lastKind = null;
     let lastAt = 0;
     let visible = false;
 
+    // The walkthrough, if one is running. `say()` is ignored while it is (a page event
+    // must not stomp the step being read, and a connect during the tour is exactly that
+    // kind of event), and her bubble stops auto-hiding until it ends.
+    let tour = null;
+
     // The portraits are 1.0–1.4 MB PNGs each, so they are fetched once and then kept by
     // the browser cache. Prefetching all four would put ~4.8 MB on every page load, so a
     // page warms only the line it is most likely to need; the rest arrive on first use.
     const PAGE_DEFAULT = {
-        '/game': 'clear',      // the completion modal is the next thing that happens here
-        '/points': 'clear',    // the vault's last floor
+        // The map gate speaks first here ("hold on"), then the completion modal — both
+        // are certain enough to be worth warming, and two portraits is still less than
+        // half of what prefetching all of them used to cost.
+        '/game': ['hold', 'clear'],
+        '/points': 'clear',    // the vault's last floor (or the newcomer's walkthrough)
         '/menu': 'return',     // greeted on arrival from a run
         '/mint': 'mint',       // summoned knights
         '/dungeons': 'enter',  // a map is about to be accepted
@@ -81,13 +143,19 @@
 
     const prefetched = {};
 
-    function prefetchFor(kind) {
-        const key = SAYINGS[kind] ? kind : PAGE_DEFAULT[location.pathname] || 'clear';
-        const file = SAYINGS[key].file;
-        if (prefetched[file]) return;
+    function warm(kind) {
+        const saying = SAYINGS[kind];
+        if (!saying || prefetched[saying.file]) return;
         const img = new Image();
-        img.src = ASSETS + file;
-        prefetched[file] = img;
+        img.src = ASSETS + saying.file;
+        prefetched[saying.file] = img;
+    }
+
+    function prefetchFor(kind) {
+        if (SAYINGS[kind]) { warm(kind); return; }
+        const fallback = PAGE_DEFAULT[location.pathname] || 'clear';
+        if (Array.isArray(fallback)) fallback.forEach(warm);
+        else warm(fallback);
     }
 
     // Pages declare the stylesheet themselves; this is the safety net for a page that
@@ -95,7 +163,7 @@
     function ensureStyles() {
         // Versioned like every other hand-written stylesheet in this project, so a CSS
         // edit is not swallowed by the browser cache. Bump on change.
-        const href = '/css/arya.css?v=1';
+        const href = '/css/arya.css?v=3';
         if (document.querySelector(`link[href^="/css/arya.css"]`)) return;
         const link = document.createElement('link');
         link.rel = 'stylesheet';
@@ -128,9 +196,27 @@
         bubble.innerHTML =
             '<button class="arya-close" type="button" aria-label="Dismiss">&#10005;</button>' +
             '<div class="arya-name"><span class="arya-dot"></span> Arya &middot; Gate Keeper<span class="arya-mood"></span></div>' +
-            '<div class="arya-message"></div>';
+            '<div class="arya-message"></div>' +
+            '<div class="arya-tour" hidden>' +
+            '<div class="arya-tour-dots" aria-hidden="true"></div>' +
+            '<div class="arya-tour-actions">' +
+            '<button class="arya-tour-btn" type="button" data-act="back">Back</button>' +
+            '<button class="arya-tour-btn is-primary" type="button" data-act="next">Next</button>' +
+            '<button class="arya-tour-btn is-ghost" type="button" data-act="skip">Skip</button>' +
+            '</div>' +
+            '</div>';
         moodEl = bubble.querySelector('.arya-mood');
         messageEl = bubble.querySelector('.arya-message');
+        tourBar = bubble.querySelector('.arya-tour');
+        tourDots = bubble.querySelector('.arya-tour-dots');
+        // Her own click-to-dismiss must not swallow a step button, and the controls are
+        // their own little toolbar inside the bubble.
+        tourBar.addEventListener('click', (e) => {
+            const btn = e.target.closest('button[data-act]');
+            if (!btn) return;
+            e.stopPropagation();
+            advance(btn.dataset.act);
+        });
 
         const stage = document.createElement('div');
         stage.className = 'arya-stage';
@@ -147,9 +233,15 @@
         root.appendChild(pop);
         document.body.appendChild(root);
 
-        bubble.addEventListener('click', () => hide());
+        // During a walkthrough a stray click on her bubble must not dismiss the step
+        // being read — the Skip button is the way out (and Escape still works).
+        bubble.addEventListener('click', () => {
+            if (!tour) hide();
+        });
         window.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && visible) hide();
+            if (e.key !== 'Escape' || !visible) return;
+            if (tour) endTour();
+            else hide();
         });
     }
 
@@ -209,6 +301,8 @@
     }
 
     function hide() {
+        // Leaving the page mid-walkthrough counts as having seen it.
+        if (tour) stopTour(true);
         if (!root || !visible) return;
         visible = false;
         clearTimeout(hideTimer);
@@ -226,6 +320,10 @@
      */
     function say(kind, opts) {
         try {
+            // A walkthrough owns the bubble while it is running. A page event landing in
+            // the middle of a step (connecting a wallet fires one) would otherwise wipe
+            // the line the player is still reading.
+            if (tour) return null;
             return sayNow(kind, opts);
         } catch (err) {
             // She is decoration. A bug in here must never take down the page that
@@ -291,6 +389,237 @@
         return true;
     }
 
+    // ------------------------------------------------------------- walkthrough
+    // A walkthrough is a list of steps the calling page hands in — it is the only part
+    // that knows its own DOM. Each step names a selector; she dims everything else,
+    // points at it, and offers Back / Next / Skip. Finishing or skipping is remembered
+    // in localStorage, so a walkthrough meant for newcomers only ever runs for them.
+
+    function tourKey(id) {
+        return `dk_arya_tour_${id}`;
+    }
+
+    function hasSeenTour(id) {
+        try { return localStorage.getItem(tourKey(id)) === '1'; } catch { return false; }
+    }
+
+    function markTourSeen(id) {
+        try { localStorage.setItem(tourKey(id), '1'); } catch { /* private mode */ }
+    }
+
+    function forgetTour(id) {
+        try { localStorage.removeItem(tourKey(id)); } catch { /* private mode */ }
+    }
+
+    function ensureSpot() {
+        if (spot) return;
+        spot = document.createElement('div');
+        spot.id = 'arya-spot';
+        spot.hidden = true;
+        document.body.appendChild(spot);
+        // Whatever she is pointing at can scroll away underneath her (a panel has its
+        // own scrollbar, so this listens in the capture phase), so the hole follows it.
+        window.addEventListener('scroll', () => placeSpot(), true);
+        window.addEventListener('resize', () => {
+            placeSpot();
+            if (tour) seatForStep(spotEl);
+        });
+    }
+
+    // She stands at the bottom of the middle of the screen, which is exactly where a
+    // page's lower controls live — on the Points page her bubble covers the share and
+    // referral rows she is talking about. When she would end up on top of the thing she
+    // is pointing at, she steps to the other side instead.
+    function seatForStep(el) {
+        if (!bubble || !root) return;
+        const vw = window.innerWidth;
+        const centre = () => vw / 2 - bubble.offsetWidth / 2 - 6;
+        if (!el) {
+            root.style.setProperty('--arya-shift', '0px');
+            return;
+        }
+        // Measure from a centred bubble, or a step after a step would be judged from
+        // wherever the last one pushed her.
+        root.style.setProperty('--arya-shift', '0px');
+        const b = bubble.getBoundingClientRect();       // read forces the reflow
+        const r = el.getBoundingClientRect();
+        const crosses = Math.min(b.right, r.right) - Math.max(b.left, r.left) > 0
+            && Math.min(b.bottom, r.bottom) - Math.max(b.top, r.top) > 0;
+        const limit = Math.max(0, centre());
+        const sameSide = r.left + r.width / 2 < vw / 2;
+        const shift = crosses ? (sameSide ? limit : -limit) : 0;
+        root.style.setProperty('--arya-shift', `${Math.round(shift)}px`);
+    }
+
+    function placeSpot() {
+        if (!spot) return;
+        if (!spotTarget) { spot.hidden = true; return; }
+        const el = document.querySelector(spotTarget);
+        if (!el) { spot.hidden = true; return; }
+        const r = el.getBoundingClientRect();
+        if (r.width < 8 || r.height < 8) { spot.hidden = true; return; }
+        const pad = 6;
+        spot.hidden = false;
+        spot.style.top = `${Math.round(r.top - pad)}px`;
+        spot.style.left = `${Math.round(r.left - pad)}px`;
+        spot.style.width = `${Math.round(r.width + pad * 2)}px`;
+        spot.style.height = `${Math.round(r.height + pad * 2)}px`;
+    }
+
+    function setSpot(target) {
+        ensureSpot();
+        spotTarget = target || null;
+        spotEl = null;
+        if (spotTarget) {
+            const el = document.querySelector(spotTarget);
+            // `nearest`, so a target that is already on screen does not yank the page.
+            if (el && el.scrollIntoView) {
+                spotEl = el;
+                el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+            }
+        }
+        // After the reflow the scroll above can cause, and un-hid (see showStep), so both
+        // the hole and the step aside are measured from real layout.
+        requestAnimationFrame(() => {
+            placeSpot();
+            if (tour) seatForStep(spotEl);
+        });
+    }
+
+    function stepAt(i) {
+        return (tour && tour.steps[i]) || null;
+    }
+
+    function paintDots() {
+        if (!tourDots || !tour) return;
+        if (tourDots.childElementCount !== tour.steps.length) {
+            tourDots.innerHTML = '';
+            for (let i = 0; i < tour.steps.length; i += 1) tourDots.appendChild(document.createElement('span'));
+        }
+        Array.prototype.forEach.call(tourDots.children, (dot, i) => {
+            dot.className = i === tour.index ? 'is-on' : (i < tour.index ? 'is-done' : '');
+        });
+    }
+
+    // A step may pick its expression at the moment it shows (the wallet step is alarmed
+    // with no wallet, sworn-in with one), so `kind` is allowed to be a function.
+    function stepKind(step) {
+        let raw = step.kind;
+        try {
+            if (typeof raw === 'function') raw = raw(step.vars || {});
+        } catch { raw = null; }
+        return SAYINGS[raw] ? raw : 'think';
+    }
+
+    function stepText(step, saying) {
+        const raw = step.text !== undefined ? step.text : saying.text;
+        try {
+            return typeof raw === 'function' ? raw(step.vars || {}) : raw;
+        } catch { return ''; }
+    }
+
+    function showStep() {
+        const step = stepAt(tour.index);
+        if (!step) return;
+        const kind = stepKind(step);
+        const saying = SAYINGS[kind];
+        prefetchFor(kind);
+
+        figure.src = ASSETS + saying.file;
+        moodEl.textContent = step.mood || saying.mood || '';
+        messageEl.innerHTML = stepText(step, saying);
+        bubble.classList.add('is-touring');
+        tourBar.hidden = false;
+        paintDots();
+
+        const next = tourBar.querySelector('button[data-act="next"]');
+        if (next) next.textContent = tour.index >= tour.steps.length - 1 ? 'Got it' : 'Next';
+        const back = tourBar.querySelector('button[data-act="back"]');
+        if (back) back.disabled = tour.index === 0;
+
+        // Same order as sayNow: un-hide before measuring, so her step aside is computed
+        // from real layout instead of a zero-width hidden subtree.
+        const wasHidden = root.hidden;
+        root.hidden = false;
+        if (wasHidden) root.classList.add('is-instant');
+        avoidDialog();
+        if (wasHidden) requestAnimationFrame(() => root.classList.remove('is-instant'));
+        pop.classList.remove('is-out');
+
+        if (!visible) {
+            visible = true;
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    if (visible) pop.classList.add('is-in');
+                });
+            });
+        }
+
+        // No timer while she is explaining — a step stays until the player moves on.
+        clearTimeout(hideTimer);
+        hideTimer = null;
+        setSpot(step.target);
+
+        // Warm the next portrait after this one has painted, so no step arrives blank,
+        // but never make this step wait on a 1.3 MB decode.
+        const ahead = stepAt(tour.index + 1);
+        if (ahead) setTimeout(() => prefetchFor(stepKind(ahead)), 80);
+    }
+
+    function stopTour(seen) {
+        if (!tour) return false;
+        const id = tour.id;
+        tour = null;
+        if (seen !== false) markTourSeen(id);
+        if (tourBar) tourBar.hidden = true;
+        if (bubble) bubble.classList.remove('is-touring');
+        setSpot(null);
+        return true;
+    }
+
+    /** Move on, back, or give up. */
+    function advance(act) {
+        if (!tour) return;
+        if (act === 'skip') { endTour('skip'); return; }
+        if (act === 'back') {
+            tour.index = Math.max(0, tour.index - 1);
+            showStep();
+            return;
+        }
+        if (tour.index >= tour.steps.length - 1) { endTour('done'); return; }
+        tour.index += 1;
+        showStep();
+    }
+
+    /** She lingers a beat after the last step, then leaves on her usual timer. */
+    function endTour(reason) {
+        if (!stopTour(true)) return null;
+        clearTimeout(hideTimer);
+        hideTimer = setTimeout(hide, 5000);
+        return reason || 'done';
+    }
+
+    /**
+     * Walk the page through a list of steps.
+     * @param {string} id   the walkthrough's name, and the key it is remembered under
+     * @param {{steps: Array<{kind?: string, text?: string|Function, mood?: string,
+     *          target?: string, vars?: object}>, force?: boolean}} [opts]
+     * @returns {boolean} whether she started
+     */
+    function startTour(id, opts) {
+        const options = opts || {};
+        const steps = (Array.isArray(options.steps) ? options.steps : []).filter(Boolean);
+        if (!steps.length) return false;
+        if (!options.force && hasSeenTour(id)) return false;
+        // A second walkthrough cannot overlap the first.
+        if (tour) stopTour(true);
+
+        build();
+        tour = { id, steps, index: 0 };
+        showStep();
+        return true;
+    }
+
     // ---------------------------------------------------------------- flags
     // Small session helpers, used by the "left the game for the Knights tab" flow.
     function setFlag(name) {
@@ -309,6 +638,11 @@
     window.Arya = {
         say,
         hide,
+        tour: startTour,
+        endTour,
+        hasSeenTour,
+        forgetTour,
+        isTouring: () => !!tour,
         setFlag,
         takeFlag,
         isVisible: () => visible,
