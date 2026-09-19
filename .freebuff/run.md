@@ -12,15 +12,41 @@ A fresh checkout needs these local-only pieces before it will run:
 - **Dependencies** — npm project (`package-lock.json` present): `npm ci` (or `npm install`).
   `node_modules/` is already present in this checkout.
 
-Nothing else is required to boot. Note that the game engine scripts are served **verbatim** from
-disk, not bundled:
+Nothing else is required to boot. The engine scripts are served **verbatim** from `public/` — the
+browser fetches `/dungeon.js?v=…` straight off disk, not from a bundle:
 
-- Root `dungeon.js`, `game.js`, `combat.js`, `characters.js`, … are the **source of truth** you edit.
-- `public/` holds the copies the browser actually fetches (`/dungeon.js?v=…`).
-- After editing a root engine file, sync it into `public/`:
-  `cp dungeon.js game.js combat.js characters.js pathfinding.js dungeon-select.js dungeon-session.js public/`
-  `public/dungeon.js` must be **byte-identical** to the root file — confirm with
-  `diff dungeon.js public/dungeon.js` (empty output).
+- **`public/` is the source of truth.** Edit `public/dungeon.js`, never a copy at the root: those
+  copies were deleted ("One source of truth" below), and `tools/check-copies.js` fails if one
+  comes back.
+- **Bump the `?v=`** in `lib/static-pages.js` when you change a served script, or a returning player
+  keeps the old copy. Versions also live in one `next/script` tag in `app/points/client.js`.
+- `next.config.js` 308-redirects the old root `*.html` names (`/menu.html`, `/index.html`, …) to the
+  real routes, so those files are unreachable by design.
+
+### Switches that still need a human
+
+Four things are built and verified but **off**, each waiting only on a value. Nothing else is
+blocked; every one of them is a redeploy away, and no code change is needed.
+
+| what | what is missing | where the steps are |
+|---|---|---|
+| Points Program persistence | `KV_REST_API_URL` + `KV_REST_API_TOKEN` (Upstash/Vercel KV) | *The Points Program is server-backed* |
+| Mobile wallets | `PRIVY_APP_ID` (+ `PRIVY_CLIENT_ID`), and the chain enabled for the app | *Wallets: injected first…* |
+| Server-signed payouts (V4) | the contract deployed in Remix, then `GAME_CONTRACT_V4` + `GAME_SIGNER_PRIVATE_KEY` | *Server-signed runs (Game V4)*, `docs/DEPLOY-GAME-V4.md` |
+| Phone gas | players fund their own embedded wallet | *Wallets: injected first…* |
+
+Until the first two are set, the deployment is honest about it: the Points page shows its amber
+"not persistent" banner, and the wallet facade stays dormant.
+
+Confirm a served file on the live domain is the one you edited — hashes, not eyeballing:
+
+```bash
+node --input-type=module -e "import {createHash} from 'crypto'; import {readFileSync} from 'fs';\
+for (const f of ['dungeon.js','wallet.js','leaderboard.js']) {\
+  const local = readFileSync('public/'+f);\
+  const remote = Buffer.from(await (await fetch('https://dungeon-knights.vercel.app/'+f)).arrayBuffer());\
+  console.log(f, createHash('sha256').update(local).digest('hex') === createHash('sha256').update(remote).digest('hex') ? 'identical' : 'DIFFERENT'); }"
+```
 
 ### Arya, the dungeon gate keeper
 
