@@ -311,6 +311,55 @@ chain, so the real ownership, timing and forgery paths are exercised without a w
 - **Two `next dev` servers in one project share `.next`** and clobber each other's route cache:
   one starts 404-ing routes that worked a minute earlier. Run them one at a time.
 
+### Wallets: injected first, embedded when configured
+
+Every page reaches the chain through `window.ethereum`, which is fine on a desktop with an
+extension and impossible on a phone, where no wallet injects anything into the page.
+`public/wallet-source.js` is the single place that decides where that provider comes from, and
+installs one when the browser has none of its own. It is loaded on all six pages, immediately
+before `wallet.js`, and by the Points route itself (it is a React route, not a legacy page, so it
+appends the script tag in `app/points/client.js`).
+
+Resolution order: **injected** (an extension always wins — no round trip, no modal, and it is
+never overwritten while it is there) → **embedded, restored silently** (a returning phone session
+is signed back in on load with no UI) → **embedded, on demand** (the provider exists from the
+start with no account, exactly like a locked extension; the first `eth_requestAccounts` runs an
+email-code sign-in) → **nothing**, at which point `unavailableMessage()` says what to do.
+
+**Dormant by default, and that is the whole point.** `/api/wallet/config` reads
+`PRIVY_APP_ID`; with it unset the route answers `embedded: null`, and the facade then loads no
+third-party script, mounts no iframe, and never touches `window.ethereum`. Verified live with the
+App ID unset: `window.DKWallet` present, `window.ethereum` still `undefined`, no modal, no iframe,
+and `walletManager.connect()` still shows the desktop message and opens the MetaMask download page
+— unchanged behaviour on every page.
+
+```bash
+node tools/check-wallet-source.js    # 41 checks: dormant, injected-wins, restore, sign-in, cancel,
+                                    # chain mismatch, sign-out — against a fake SDK and stub DOM
+```
+
+To switch it on, set these on the Vercel project and redeploy (no code change):
+
+| variable | why |
+|---|---|
+| `PRIVY_APP_ID` | Turns the embedded path on. Public by design — it identifies the app to Privy's hosted UI, not a credential. |
+| `PRIVY_CLIENT_ID` | Optional, from the dashboard under Settings → Clients. |
+| `PRIVY_SDK_URL` | Optional. Defaults to `https://esm.sh/@privy-io/js-sdk-core`; **pin an exact version once tested**, or self-host the bundle and point this at it. |
+
+**What has not been proven, and cannot be until an App ID exists:** the facade is built to
+Privy's documented core-SDK API (`initialize`, `user.get`, `embeddedWallet.getURL /
+onMessage / create / getEthereumProvider`, `auth.email.sendCode / loginWithCode`, `auth.logout`)
+and driven end to end against a fake of it, but the real handshake has never run. Two things will
+need checking first:
+
+- **The embedded wallet has to be on Robinhood Chain Testnet (46630 / `0xb626`).** Our chain is an
+  app choice, not a wallet one, so the facade asks the wallet what chain it is on and **warns with
+the exact decimal id** when they disagree rather than letting the first transaction fail
+  anonymously (`capabilities().chainMismatch` carries the same value). Enable the network for the
+  app in the Privy dashboard.
+- **It needs gas** — an embedded wallet is the player's own, non-custodial wallet, and it starts
+  empty. Fund it from a faucet before minting or claiming.
+
 ## 2. Run the server
 
 - Script: `npm run dev` (`next dev`).

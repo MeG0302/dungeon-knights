@@ -431,6 +431,11 @@ export default function PointsPage() {
             <link rel="stylesheet" href="/css/wallet-widget.css" />
             <link rel="stylesheet" href="/css/arya.css?v=3" />
             <Script src="/arya.js?v=3" strategy="afterInteractive" />
+            {/* The one page that is a React route rather than a legacy page, so it has to
+                pull the wallet source in itself. It is what makes `window.ethereum`
+                exist on a phone, where nothing injects one — and what drops it in the
+                moment the rest of the game already has. */}
+            <Script src="/wallet-source.js?v=1" strategy="afterInteractive" />
         </>
     );
 

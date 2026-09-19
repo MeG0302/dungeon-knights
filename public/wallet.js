@@ -1,4 +1,9 @@
 // Wallet Manager with Direct Web3 Integration
+//
+// Where the provider comes from is not decided here — `public/wallet-source.js` (loaded
+// before this file) settles that: an injected extension when there is one, an embedded
+// wallet when the server is configured for it, and nothing at all otherwise. Everything
+// below still speaks plain EIP-1193, so the same code serves both.
 console.log('🔧 Loading wallet.js...');
 
 class WalletManager {
@@ -6,6 +11,9 @@ class WalletManager {
     this.provider = null;
     this.userAddress = null;
     this.isConnected = false;
+    // 'injected' or 'embedded' — read by the UI when it needs to say which wallet is in
+    // use (an embedded one has to be funded before it can pay gas).
+    this.walletKind = null;
     
     // Contract addresses
     this.nftContractAddress = '0x06c7D4b0C35858c78c3B213fbf50fB4A25f20512';
@@ -21,23 +29,22 @@ class WalletManager {
   // Initialize wallet manager
   async init() {
     console.log('🔌 Initializing wallet...');
-    
-    // Wait a bit for MetaMask to inject if needed
-    let retries = 0;
-    while (typeof window.ethereum === 'undefined' && retries < 10) {
-      console.log('⏳ Waiting for Web3 provider...', retries);
-      await new Promise(resolve => setTimeout(resolve, 100));
-      retries++;
-    }
-    
-    // Check if MetaMask or other wallet is available
-    if (typeof window.ethereum === 'undefined') {
-      console.warn('⚠️ No Web3 wallet detected after waiting');
+
+    // The source waits briefly for a late-injecting extension, then falls back to a
+    // silently restored embedded session (no UI — a returning player is just signed in).
+    const source = window.DKWallet;
+    const provider = source
+      ? await source.provider({ waitMs: 1000 })
+      : (typeof window.ethereum !== 'undefined' ? window.ethereum : null);
+
+    if (!provider) {
+      console.warn('⚠️ No Web3 wallet available');
       return false;
     }
-    
-    this.provider = window.ethereum;
-    console.log('✅ Web3 provider found');
+
+    this.provider = provider;
+    this.walletKind = (source && source.kind && source.kind()) || 'injected';
+    console.log('✅ Web3 provider found', this.walletKind === 'embedded' ? '(embedded wallet)' : '');
     
     // Check if already connected (from localStorage)
     const wasConnected = localStorage.getItem('walletConnected') === 'true';
@@ -92,15 +99,34 @@ class WalletManager {
   // Connect wallet
   async connect() {
     console.log('🔌 Connecting wallet...');
-    
+
     if (!this.provider) {
-      // Check if ethereum is available but not yet set
-      if (typeof window.ethereum !== 'undefined') {
+      const source = window.DKWallet;
+      if (source) {
+        // Asks the source for a provider, which is where an embedded wallet's email
+        // sign-in happens. Returns null when this browser has no wallet to offer.
+        try {
+          this.provider = await source.connect();
+          this.walletKind = source.kind ? source.kind() : null;
+        } catch (error) {
+          console.error('❌ Wallet sign-in failed:', error);
+          alert(error.message || 'Wallet sign-in failed. Please try again.');
+          return false;
+        }
+      } else if (typeof window.ethereum !== 'undefined') {
         console.log('Found ethereum, setting provider...');
         this.provider = window.ethereum;
-      } else {
-        alert('Please install MetaMask or another Web3 wallet!');
-        window.open('https://metamask.io/download/', '_blank');
+        this.walletKind = 'injected';
+      }
+
+      if (!this.provider) {
+        // Honest about the device, and still useful on a desktop: the download link stays
+        // for someone who can install an extension, and is not offered to a phone that
+        // cannot.
+        const mobile = source && source.isMobile && source.isMobile();
+        alert((source && source.unavailableMessage && source.unavailableMessage())
+          || 'Please install MetaMask or another Web3 wallet!');
+        if (!mobile) window.open('https://metamask.io/download/', '_blank');
         return false;
       }
     }
@@ -203,6 +229,12 @@ class WalletManager {
   
   // Disconnect wallet
   async disconnect() {
+    // An embedded wallet is a real session on Privy's side: clearing localStorage alone
+    // would sign the player back in on the next page load.
+    if (this.walletKind === 'embedded' && window.DKWallet && window.DKWallet.disconnect) {
+      await window.DKWallet.disconnect();
+    }
+    this.walletKind = null;
     this.onDisconnect();
   }
   
