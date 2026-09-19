@@ -1,5 +1,10 @@
 # 🔗 Dungeon Knights Web3 Integration Guide
 
+> **Superseded — kept for history.** `public/js/web3/*` (including `web3-integration.js` and the
+> RainbowKit wiring) was never loaded by any page and has been deleted. Pages use
+> `public/wallet-source.js` for their provider now; see `.freebuff/run.md` → "Wallets: injected
+> first, embedded when configured".
+
 ## ✅ Deployment Status
 
 ### Game Frontend

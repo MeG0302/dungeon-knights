@@ -360,6 +360,36 @@ the exact decimal id** when they disagree rather than letting the first transact
 - **It needs gas** — an embedded wallet is the player's own, non-custodial wallet, and it starts
   empty. Fund it from a faucet before minting or claiming.
 
+### One source of truth (and the cache-bust rule)
+
+The repository used to carry a second copy of the whole client at its root — `dungeon.js`,
+`menu.js`, `leaderboard.js`, `wallet.js` and 17 more — while the browser fetched `public/<same
+name>`. Only `public/` is served: `/wallet.js` and `/dungeon.js` return 200 from there, and the
+root `*.html` pages that used the root copies are not served at all (`next.config.js` 308-redirects
+`/menu.html`, `/index.html` and friends to the real routes). So the root copies were dead weight
+that had drifted — 81 lines in `dungeon.js`, 688 in `leaderboard.js` — and one of them cost real
+time: `dungeon.js` was loaded with a `?v=` that had never been bumped, so a fix would never have
+reached a returning player however many times it was deployed.
+
+**They are deleted, along with the abandoned wallet integrations** (`public/js/web3/*`,
+`privy-integration.js`, `privy-config.js`, `rainbowkit-integration.js`, `dungeon-session-OLD.js`,
+`_vidprobe.html`) — none of them was loaded by any page or imported by anything. The one-shot
+contract scripts at the root (`check-*.js`, `deploy-*.js`, `fund-*.js`) are **not** duplicates and
+were left alone; they are the user's manual tools.
+
+Two rules follow, and `tools/check-copies.js` enforces the first pair:
+
+```bash
+node tools/check-copies.js   # fails on a root duplicate, or a script loaded from a path that does not exist
+```
+
+- **Never keep a same-named copy of a served file at the root.** Edit `public/`. The check fails
+  the moment a duplicate reappears, which is how it would otherwise come back.
+- **Bump `?v=` whenever you edit a served script.** The versions live in `lib/static-pages.js` (and
+  one `next/script` tag in `app/points/client.js`). Loading a file with no version at all is the
+  same hazard in slow motion; the check lists the ones that currently do, so the next person to
+  edit one knows to add a version rather than assume the browser will notice.
+
 ## 2. Run the server
 
 - Script: `npm run dev` (`next dev`).

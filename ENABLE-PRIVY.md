@@ -1,7 +1,13 @@
 # 🔐 Enable Privy Multi-Wallet Support
 
+> **Superseded — kept for history.** The code this describes was never loaded by any page and has
+> been deleted. Wallets now go through `public/wallet-source.js` and
+> `app/api/wallet/config/route.js`: an injected extension first, an embedded (Privy) wallet when
+> `PRIVY_APP_ID` is set on the server. See `.freebuff/run.md` → "Wallets: injected first, embedded
+> when configured" for the steps that actually switch it on.
+
 ## Current Status
-- ✅ Privy integrated (supports 150+ wallets)
+- ✅ Embedded wallet wiring shipped, dormant until `PRIVY_APP_ID` exists (see the note above)
 - ⏳ Waiting for your Privy App ID
 - 🔒 Currently using MetaMask only
 

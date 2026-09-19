@@ -1,5 +1,12 @@
 # 🔐 Privy Integration Setup
 
+> **Superseded — kept for history.** The integration described below (`privy-integration.js`,
+> `privy-config.js`, `public/js/web3/*`) was never loaded by any page and has been deleted.
+> Wallets now go through `public/wallet-source.js` and `app/api/wallet/config/route.js`:
+> an injected extension first, an embedded (Privy) wallet when `PRIVY_APP_ID` is set on the
+> server. See `.freebuff/run.md` → "Wallets: injected first, embedded when configured" for the
+> steps that actually switch it on.
+
 ## What is Privy?
 Privy allows users to connect with:
 - 🦊 MetaMask
