@@ -374,10 +374,50 @@ That is why the page reports the driver and shows an amber banner when `persiste
 Provisioning a store needs the account owner: `vercel integration add` requires an interactive
 terminal and a human accepting marketplace terms.
 
-**Decision taken in this thread (user, explicit): production stays on the in-memory store for
-now.** Do not provision KV, and do not add a fail-closed guard, without asking again. The amber
-banner is the intended signal, and a single player clicking through the vault is sequential
-traffic — which is why their own run will usually look correct while a crowd would not.
+**Decision, updated in this thread: provision KV.** The earlier choice was to stay on the
+in-memory store; the user has since asked for a shared one, so the code is ready and waiting on
+two env vars. Nothing else has to change — the driver is already picked by environment.
+
+**Click-through (needs the account owner; `vercel integration add` is interactive and requires a
+human to accept marketplace terms, so it cannot be scripted):**
+
+1. Vercel → project → **Storage** → **Create Database** → **Upstash for Redis** → free tier.
+2. Connect it to this project, **Production and Preview**. Vercel writes `KV_REST_API_URL` and
+   `KV_REST_API_TOKEN` into the project automatically (an Upstash-direct pair,
+   `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`, is picked up too).
+3. **Redeploy** — env changes do not apply to an existing deployment.
+4. Confirm it took: `curl -s https://dungeon-knights.vercel.app/api/points/me` will still 401, so
+   check the page instead — the amber "points are not persistent" banner disappears on its own,
+   because it is driven by the store's own report:
+
+   ```bash
+   curl -s https://dungeon-knights.vercel.app/api/points/leaderboard | head -c 200
+   # after a real sign-in, GET /api/points/me reports storage.driver = "redis", persistent = true
+   ```
+
+### The once-a-day guard (`claimGuard`)
+
+The floors and the share bonus are each claimed atomically before anything is paid. Without it,
+`getWallet` + `updateWallet` are two steps and two overlapping requests both pass the "not cleared
+yet" check:
+
+```
+six concurrent re-clears of the same floor -> credited 100, 100, 100, 100, 0, 100, 0
+```
+
+Redis does this with `SET … NX EX` (atomic across instances); the file and memory drivers use an
+in-process set, which is correct because they are single-process by definition — two `next dev`
+servers on one machine would still race, and that is a development-only shape. **The guard is
+only truly cross-instance once KV exists**; without it, each serverless instance still has its own
+set, so the double-pay window narrows to a single instance rather than closing.
+
+The floor's record is written **before** it is paid. A failure in between credits nothing (logged
+loudly with the address, day and amount) — a missed payment can be replayed by hand, a double
+payment cannot be taken back.
+
+```bash
+node tools/check-points-guard.js http://localhost:3000   # 9 checks, 8-way concurrency
+```
 
 ### `.vercelignore` — anchor every root-only path
 
