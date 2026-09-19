@@ -27,7 +27,10 @@
    while (window.Arya.hasSeenTour('points') === false). A step leaves its bubble up
    (no timer), dims the page around the element its `target` selector points at, and
    offers Back / Next / Skip. Finishing or skipping is remembered in localStorage, so
-   a walkthrough meant for newcomers runs once; `force: true` replays it on demand.
+   a walkthrough meant for newcomers runs once — `force: true` is the opt-out, and it
+   covers both cases at once: the Points page passes it so every visit gets the tour
+   (Skip is one click for anyone who knows the page), and its "Ask Arya" button passes
+   it to replay the tour mid-visit. Pass both and she is one Skip away, every time.
    ========================================================================== */
 
 (function () {

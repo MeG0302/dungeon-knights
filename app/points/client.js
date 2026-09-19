@@ -16,9 +16,9 @@ import PointsDungeon from './dungeon';
 const ASSETS = '/assets/points/';
 const BOARD_LIMIT = 25;
 
-// Arya's walkthrough of this page. It is remembered under this key, so it runs the
-// first time a visitor arrives and then never again — the "Ask Arya" button in the
-// footer replays it for anyone who wants the tour a second time.
+// Arya's walkthrough of this page. It runs on every visit — a newcomer learns the page,
+// a regular can press Skip in one click — so this key is only an identity, not a
+// once-ever latch. The footer's "Ask Arya" replays it mid-visit without a reload.
 const TOUR_ID = 'points-v1';
 
 /**
@@ -31,8 +31,10 @@ function pointsTourSteps(live) {
     return [
         {
             kind: 'think',
-            mood: 'First time here',
-            text: 'A new face at the gate. I am Arya, and this is the Points Vault — seven steps from me and the whole page will make sense. Hit <strong>Next</strong> when you are ready, <strong>Skip</strong> if you would rather work it out yourself.',
+            // She greets every visit, not only the first, so this welcome has to read
+            // correctly to someone who has completed the vault ten times.
+            mood: 'Welcome',
+            text: 'I am Arya, keeper of the gate. Seven steps and this page will make sense — <strong>Next</strong> to follow me, <strong>Skip</strong> if you would rather work it out yourself.',
         },
         {
             // The wallet step is the one that genuinely differs per visitor, so it also
@@ -117,6 +119,9 @@ export default function PointsPage() {
     // What Arya's walkthrough reads while it talks. A ref and not the state itself,
     // because her steps are written the moment they show, not when the tour is built.
     const liveRef = useRef({});
+    // Her walkthrough opens once per visit. It runs on every arrival, but connecting a
+    // wallet or leaving the vault re-runs this effect and must not drag her back out.
+    const tourOpened = useRef(false);
 
     const points = state?.points ?? 0;
     const cleared = state?.clearedToday ?? [];
@@ -223,19 +228,23 @@ export default function PointsPage() {
         };
     });
 
-    // She walks a first-time visitor through the page exactly once. `/arya.js` arrives
-    // afterInteractive, so this waits for her instead of assuming she is already there —
-    // and gives up quietly if she never turns up, because the page works without her.
+    // She walks every visitor through the page — once per visit, not once per browser,
+    // since a returning player is one Skip away from the page they already know.
+    // `/arya.js` arrives afterInteractive, so this waits for her instead of assuming she
+    // is already there, and gives up quietly if she never turns up, because the page
+    // works without her. `force` is what makes it run again despite the "seen" flag.
     useEffect(() => {
-        if (phase === 'boot' || inDungeon) return;
+        if (phase === 'boot' || inDungeon || tourOpened.current) return;
         let tries = 0;
         const timer = setInterval(() => {
             tries += 1;
             const arya = window.Arya;
             if (arya) {
                 clearInterval(timer);
-                if (!arya.hasSeenTour(TOUR_ID) && !arya.isTouring()) {
-                    arya.tour(TOUR_ID, { steps: pointsTourSteps(live) });
+                if (tourOpened.current || arya.isTouring()) return;
+                tourOpened.current = true;
+                if (!arya.tour(TOUR_ID, { steps: pointsTourSteps(live), force: true })) {
+                    tourOpened.current = false;
                 }
             } else if (tries > 40) {
                 clearInterval(timer);
