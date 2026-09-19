@@ -122,10 +122,11 @@ class UI {
             });
         }
         
-        // Stats button
+        // Stats button — the player's own on-chain record. It used to log "feature coming
+        // soon", which was the one thing the button could not do.
         if (this.statsBtn) {
             this.statsBtn.addEventListener('click', () => {
-                console.log('Stats button clicked - feature coming soon!');
+                if (window.rewardClaimUI) window.rewardClaimUI.showHistory();
             });
         }
         
@@ -157,13 +158,9 @@ class UI {
             });
         }
         
-        // View History button
-        if (this.viewHistoryBtn) {
-            this.viewHistoryBtn.addEventListener('click', () => {
-                console.log('📜 Opening Claim History page...');
-                window.location.href = 'claim-history.html';
-            });
-        }
+        // The History button is owned by `reward-claim-ui.js`, which shows the wallet's claims
+        // from the chain's events. This used to navigate to `claim-history.html` — a file
+        // outside `public/`, so the site never served it and the button landed on a 404.
         
         // Completion modal buttons
         const nextDungeonBtn = document.getElementById('nextDungeonBtn');

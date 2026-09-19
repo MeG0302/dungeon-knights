@@ -69,10 +69,9 @@ class LeaderboardManager {
             this.currentUserAddress = window.walletManager.userAddress.toLowerCase();
         }
         
-        // Load data if not already loaded
-        if (this.leaderboardData.length === 0) {
-            this.loadLeaderboard();
-        }
+        // Always ask on open. The route caches the chain sweep for half a minute, so a
+        // player can press Refresh as often as they like without the RPC seeing it.
+        this.loadLeaderboard();
     }
 
     hide() {
@@ -147,92 +146,25 @@ class LeaderboardManager {
     }
 
     async fetchLeaderboardData() {
-        // Fetch DungeonCompleted events from the blockchain and aggregate by player
-        console.log('📊 Fetching leaderboard data from blockchain...');
-        
-        try {
-            // Get provider and contract
-            const provider = new ethers.providers.JsonRpcProvider(
-                window.DUNGEON_CONFIG.getNetworkConfig().rpc
-            );
-            
-            const gameContractAddress = window.DUNGEON_CONFIG.getGameContract();
-            const gameContractABI = [
-                'event DungeonCompleted(address indexed player, uint256 indexed knightId, uint256 dungeonId, uint256 timeSpent, uint256 reward, uint256 timestamp)'
-            ];
-            
-            const gameContract = new ethers.Contract(
-                gameContractAddress,
-                gameContractABI,
-                provider
-            );
-            
-            // Get current block
-            const currentBlock = await provider.getBlockNumber();
-            console.log(`Current block: ${currentBlock}`);
-            
-            // Fetch events from the last 100,000 blocks with paging
-            const fromBlock = Math.max(0, currentBlock - 100000);
-            const BLOCK_RANGE = 10000; // Process 10k blocks at a time to avoid RPC limits
-            
-            console.log(`Fetching DungeonCompleted events from block ${fromBlock} to ${currentBlock}...`);
-            
-            // Query all DungeonCompleted events with pagination
-            const filter = gameContract.filters.DungeonCompleted();
-            let allEvents = [];
-            
-            for (let start = fromBlock; start <= currentBlock; start += BLOCK_RANGE) {
-                const end = Math.min(start + BLOCK_RANGE - 1, currentBlock);
-                console.log(`  Querying blocks ${start} to ${end}...`);
-                
-                try {
-                    const events = await gameContract.queryFilter(filter, start, end);
-                    allEvents = allEvents.concat(events);
-                    console.log(`  Found ${events.length} events in this range`);
-                } catch (err) {
-                    console.warn(`  Failed to query blocks ${start}-${end}:`, err.message);
-                    // Continue with next range even if one fails
-                }
-            }
-            
-            console.log(`Found ${allEvents.length} DungeonCompleted events total`);
-            
-            if (allEvents.length === 0) {
-                return [];
-            }
-            
-            // Aggregate rewards by player address
-            const playerData = {};
-            
-            allEvents.forEach(event => {
-                const player = event.args.player.toLowerCase();
-                const reward = parseFloat(ethers.utils.formatEther(event.args.reward));
-                
-                if (!playerData[player]) {
-                    playerData[player] = {
-                        address: player,
-                        totalRewards: 0,
-                        claimCount: 0
-                    };
-                }
-                
-                playerData[player].totalRewards += reward;
-                playerData[player].claimCount += 1;
-            });
-            
-            // Convert to array
-            const leaderboardArray = Object.values(playerData);
-            
-            console.log(`📊 Leaderboard: ${leaderboardArray.length} unique players`);
-            
-            return leaderboardArray;
-            
-        } catch (error) {
-            console.error('❌ Failed to fetch leaderboard data:', error);
-            
-            // Return empty array on error
-            return [];
+        // The sweep lives on the server (`/api/game/leaderboard`): the chain is 121 million
+        // blocks tall, which is not something to run in a player's browser, and it needs the
+        // contract's exact event signature. This used to run here against
+        // `DungeonCompleted(address,uint256,uint256,uint256,uint256,uint256)` — the contract
+        // emits `(…,uint256,uint8,uint256,uint256)`, a different topic hash — so it matched
+        // nothing and the board read "no claims yet" no matter what had been claimed.
+        const res = await fetch('/api/game/leaderboard?limit=25', { cache: 'no-store' });
+        const payload = await res.json().catch(() => null);
+        if (!res.ok) {
+            throw new Error(payload?.error || `Leaderboard unavailable (${res.status})`);
         }
+        // Server-side totals, so the footer can say "all time" without needing every row.
+        this.totals = {
+            players: payload.players || 0,
+            claims: payload.claims || 0,
+            totalClaimed: payload.totalClaimed || 0,
+        };
+        console.log(`📊 Leaderboard: ${this.totals.players} players, ${this.totals.totalClaimed.toFixed(2)} DNG claimed`);
+        return payload.rows || [];
     }
 
     renderLeaderboard(data) {
@@ -297,12 +229,13 @@ class LeaderboardManager {
         
         this.body.innerHTML = tableHTML;
         
-        // Update stats
-        const totalClaimed = sorted.reduce((sum, e) => sum + e.totalRewards, 0);
-        const totalPlayers = sorted.length;
+        // Update stats. The server's totals cover every player, not just the rows shown.
+        const totalClaimed = this.totals ? this.totals.totalClaimed : sorted.reduce((sum, e) => sum + e.totalRewards, 0);
+        const totalPlayers = this.totals ? this.totals.players : sorted.length;
+        const allTime = this.totals ? ' all time' : '';
         this.stats.innerHTML = `
             <strong>${totalPlayers}</strong> players • 
-            <strong>${totalClaimed.toFixed(2)}</strong> DNG claimed total
+            <strong>${totalClaimed.toFixed(2)}</strong> DNG claimed${allTime}
         `;
         
         this.refreshBtn.disabled = false;

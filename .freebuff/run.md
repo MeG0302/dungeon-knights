@@ -532,6 +532,38 @@ for p in / /points /menu /mint /dungeons /game \
 done
 ```
 
+### The Hall of Fame and a player's record (on-chain events)
+
+Both read the game contract's own logs, server-side, with no indexer and nothing to keep in
+sync:
+
+```bash
+curl -s 'http://localhost:3000/api/game/leaderboard?limit=5' | head -c 300
+curl -s 'http://localhost:3000/api/game/history?address=0x038d…' | head -c 300
+node tools/check-logs.js      # 28 checks: signatures, decoding, sweeping, then the live chain
+```
+
+Three things worth knowing, each of which was a real defect before this existed:
+
+- **The event signature is the whole query.** `public/leaderboard.js` used to query
+  `DungeonCompleted(address,uint256,uint256,uint256,uint256,uint256)` from the browser while the
+  contract emits `(address,uint256,uint256,uint8,uint256,uint256)` — a different topic hash, so it
+  matched nothing and the board said "no claims yet" forever, which looks exactly like a quiet
+  game. `tools/check-logs.js` pins both hashes and re-encodes logs through the same interface, so
+  the round trip is proven rather than assumed.
+- **The sweep starts at the contract's deployment block**, found by an `eth_getCode` binary search
+  (~27 calls) and cached, not at block 0 — the chain is 121 million blocks tall, and walking it in
+  20,000-block windows is over 6,000 RPC calls. A node that refuses a wide `eth_getLogs` outright
+  still gets swept in windows, which is why both paths exist. Set `GAME_FROM_BLOCK` to skip even
+  the search.
+- **The ranking is money that actually moved**: `RewardsClaimed` (emitted after the transfer),
+  not `DungeonCompleted`. 900 DNG of runs nobody claimed is not an achievement yet. A player's
+  own record lists both, so the page can show a run they have not claimed.
+
+The game's **History** button opens that record (it used to navigate to `claim-history.html`, a
+file outside `public/` that the site never served — a 404), and **Stats**, which logged *"feature
+coming soon"*, now opens the same panel.
+
 ### Watching the game
 
 `/game` redirects to `/menu` unless a squad is selected (`localStorage.selectedKnights`). To drive
