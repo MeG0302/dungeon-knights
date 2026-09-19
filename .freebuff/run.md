@@ -72,9 +72,9 @@ the gutter so that dialog stays clickable. She is seated above a page's own bott
 
 #### The walkthrough (`window.Arya.tour`)
 
-Newcomers get a guided tour of the Points Program on their first visit, and never again on
-that browser. `app/points/client.js` supplies the steps (it is the only part that knows its
-own DOM) and the module drives the rest:
+The Points Program gets a guided tour **on every visit**, not only a newcomer's first one —
+Skip is one click, so a returning player pays nothing for it. `app/points/client.js` supplies
+the steps (it is the only part that knows its own DOM) and the module drives the rest:
 
 ```js
 window.Arya.tour('points-v1', { steps: [{ kind, text, mood, target }], force });
@@ -85,7 +85,12 @@ window.Arya.forgetTour('points-v1');    // replay for the next visitor
 - A step's `kind` may be a **function**, and its `text` a string or a function — the wallet
   step reads both live, so it is alarmed with no wallet, thoughtful while unsigned, sworn-in
   once bound, and its line names the address and rank.
-- Each visit: the version that shipped this is `points-v1`; bump it to show the tour again.
+- **The module still defaults to once-ever** (`hasSeenTour`); the Points page opts out by
+  passing `force: true`, which is the same flag that makes a replay mid-visit work. So the
+  `dk_arya_tour_points-v1` flag is an identity, not a latch — nothing depends on it there.
+- It opens **once per visit**, guarded by the `tourOpened` ref: connecting a wallet or
+  returning from the vault re-runs the effect that starts it, and must not drag her back.
+  Navigating away and back is a fresh mount, so she greets you again.
 - A step's `target` is a CSS selector. The module dims the whole page with a single fixed
   box carrying a 9999px spread shadow (`#arya-spot`, z-index 1150, below her 1200) and rings
   the target — and **steps her aside** when her bubble would sit on top of it
@@ -97,9 +102,12 @@ window.Arya.forgetTour('points-v1');    // replay for the next visitor
   finishing all mark it seen; **entering the vault ends it** (`endTour()` in
   `handleEnterDungeon`), because the vault covers the page.
 - The footer's **Ask Arya** chip replays it on demand (`force: true`).
-- Verify from a console: `window.Arya.forgetTour('points-v1')`, reload, and the tour starts
-  ~1 s after the page settles. `tools/check-all.js`'s battery also covers her plain popups
-  (29 checks) — run it with the tour stopped, since it drives `say()` directly.
+- Since it greets repeat visitors, the opening step's copy must read correctly to someone who
+  has cleared the vault ten times — it is "Welcome", not "First time here".
+- Verify from a console: skip or finish the tour, reload, and it starts again (~1 s after the
+  page settles) with `dk_arya_tour_points-v1` already `"1"`. `tools/check-all.js`'s battery
+  also covers her plain popups (29 checks) — run it with the tour stopped, since it drives
+  `say()` directly.
 
 ### The map loading gate (`public/loading-gate.js`)
 
@@ -238,6 +246,70 @@ The browser asks; it never decides.
   being composited** (backgrounded, occluded, or a preview surface with no visible client).
   That is intentional — no dungeon time is lost — but it means a headless soak only progresses
   while the page is actually being rendered.
+
+### Server-signed runs (Game V4)
+
+The claim path used to trust the browser completely. `batchClaimRewards` on the deployed V3
+checks ownership, rarity and the daily cap — **and nothing else**. There is no time check at
+all: the `max(30, 300/√knights)` minimum in `KNIGHT-SCALING.md` lives only in the client, so a
+script that never opens the game can claim 15 knights × 5 runs = **75 payouts in one
+transaction**.
+
+V4 (`contracts/DungeonKnightsGameV4.sol`) closes it. Every run must carry a signature from the
+backend, over that exact run, bound to the chain id and the contract address:
+
+```
+startDungeon  → POST /api/game/start     server-stamped run token (HMAC over address + squad
+                                         + *its own* start time, so the browser cannot backdate)
+completeDungeon → POST /api/game/complete  validates, then prices the run from on-chain rarity
+                                         and signs a receipt (single-use nonce, short expiry)
+Claim All     → V4.claimSignedRuns(...)  verifies the signature, burns the nonce, recomputes
+                                         the reward from on-chain rarity, pays the difference
+```
+
+Nothing needs a database: the single-use nonce is enforced on chain (`usedNonce`), and both the
+run token and the receipt are stateless MACs. `GAME_CONTRACT_V4` is served to the browser by
+`GET /api/game/config`, so the address lives in exactly one place — the server's env.
+
+**Honest limit.** This stops a script from paying itself without playing, and from claiming
+faster than the minimum time. It cannot prove a human watched the knights: a bot that starts and
+finishes runs on schedule still earns, though it must wait as long as an honest player and the
+on-chain daily caps bound it either way.
+
+**Transition order matters.** V3 must stay unpaused until the new client is live, so runs already
+sitting in a player's `localStorage` can still be paid. `flushLegacyRuns()` does that
+automatically — once per browser session, only when a wallet is already connected — and it is why
+the client classifies runs as `signed` (has a receipt), `legacy` (has neither receipt nor token)
+or retryable (has a token, receipt failed on a hiccup; valid for hours).
+
+| variable | why |
+|---|---|
+| `GAME_CONTRACT_V4` | **Unset today** — the app records runs exactly as before and claims on V3. Setting it is what switches the site over, not the deploy. |
+| `GAME_SIGNER_PRIVATE_KEY` | The backend run signer. `node tools/gen-signer.js` prints a fresh pair; the private key goes here, the address into the V4 constructor. |
+| `GAME_RUN_SECRET` | Keys the run tokens. Falls back to `POINTS_SESSION_SECRET`, then to a dev constant. |
+| `GAME_RPC_URL`, `GAME_CHAIN_ID`, `GAME_MIN_BASE_SECONDS`, `GAME_MIN_FLOOR_SECONDS`, `GAME_RECEIPT_TTL_SECONDS` | Overrides; defaults are the testnet RPC, 46630, 300, 30 and 900. |
+
+Deploying: **`docs/DEPLOY-GAME-V4.md`** (Remix, step by step, including pausing V3 and sweeping
+its treasury), then `node tools/check-v4.js 0x…` to confirm the wiring read-only.
+
+```bash
+node tools/check-runs.js                                    # 16 unit checks
+node tools/check-runs.js http://localhost:3000 http://localhost:3001   # + live API checks
+node tools/check-session.js                                 # 34 client checks (sandbox)
+```
+
+The live phase needs a server started with GAME_CONTRACT_V4 + GAME_SIGNER_PRIVATE_KEY and the
+same `POINTS_SESSION_SECRET` the harness uses; it mints a session for a knight owner it finds on
+chain, so the real ownership, timing and forgery paths are exercised without a wallet.
+
+**Two gotchas this cost time on:**
+
+- **Ethers' provider cannot do network I/O inside a Next server route.** `new JsonRpcProvider()`
+  bundles into the route and fails with `could not detect network (noNetwork)`, while the same
+  call works in a plain Node script. `lib/game-runs.js` therefore does its chain reads over plain
+  `fetch` with `utils.Interface` for the ABI encoding — pure JS, no bundling surprises.
+- **Two `next dev` servers in one project share `.next`** and clobber each other's route cache:
+  one starts 404-ing routes that worked a minute earlier. Run them one at a time.
 
 ## 2. Run the server
 

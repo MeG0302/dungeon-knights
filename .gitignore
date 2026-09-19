@@ -51,6 +51,7 @@ out/
 # maintain it respects ignore rules, so ignoring the whole directory made it uneditable.
 .freebuff/*.log
 .freebuff/*.log.err
+.freebuff/*.pid
 .freebuff/project-id
 
 # Temporary files

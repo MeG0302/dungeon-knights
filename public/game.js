@@ -312,8 +312,18 @@ class Game {
             if (deployedKnights.length > 0) {
                 // Check if contract is deployed
                 console.log('✅ Game contract deployed and ready!');
-                // Pass full knight objects (with tokenId and rarity)
-                window.dungeonSession.completeDungeon(deployedKnights)
+                // What this run actually did, so the backend can sanity-check the report
+                // before it signs a receipt for it. Readable from the loot nodes rather
+                // than tracked separately, so it cannot drift from the map.
+                const nodes = (this.dungeon && this.dungeon.lootNodes) || [];
+                const destroyed = nodes.filter(node => node.isDestroyed);
+                const runMetrics = {
+                    kills: destroyed.filter(node => node.type !== 'chest').length,
+                    chests: destroyed.filter(node => node.type === 'chest').length,
+                    totalNodes: nodes.length
+                };
+                // Pass full knight objects (with tokenId and rarity) plus the metrics
+                window.dungeonSession.completeDungeon(deployedKnights, runMetrics)
                     .then(completion => {
                         if (completion) {
                             console.log(`💰 Earned ${completion.reward} $DNG (unclaimed)`);
