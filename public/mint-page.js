@@ -125,7 +125,13 @@ class MintPage {
       // Hide portal
       if (portal) portal.classList.add('hidden');
 
-      alert(`Successfully summoned ${this.mintQuantity} knight(s)!`);
+      // Arya, the gate keeper, welcomes the new recruits — a popup in her own voice
+      // instead of a browser alert.
+      if (window.Arya) {
+        window.Arya.say('mint', { count: this.mintQuantity });
+      } else {
+        alert(`Successfully summoned ${this.mintQuantity} knight(s)!`);
+      }
 
       await this.loadKnights();
       await this.updateBalance();

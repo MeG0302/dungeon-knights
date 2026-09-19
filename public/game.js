@@ -160,8 +160,13 @@ class Game {
         // Update knight AI
         const deployedKnights = this.knightManager.getDeployedKnights();
         deployedKnights.forEach(knight => {
-            this.knightAI.updateKnight(knight, this.dungeon, deltaTime);
+            // Pass the whole squad: knights may never share a tile, so each one has to
+            // know where the others are standing before it takes a step.
+            this.knightAI.updateKnight(knight, this.dungeon, deltaTime, deployedKnights);
         });
+
+        // Idle monsters stroll around their spawn tile (and return to it)
+        this.dungeon.updateLootNodes(deltaTime, deployedKnights);
 
         // Update combat
         this.combat.update(deltaTime);
@@ -230,9 +235,12 @@ class Game {
 
         // Deploy up to 15 knights
         const deployCount = Math.min(availableKnights.length, 15);
+        const takenSpawns = [];
         for (let i = 0; i < deployCount; i++) {
             const knight = availableKnights[i];
-            const spawnPoint = this.dungeon.getRandomSpawnPoint();
+            // Each knight gets its own tile — units never share one
+            const spawnPoint = this.dungeon.getFreeSpawnPoint(takenSpawns);
+            takenSpawns.push(spawnPoint);
             knight.deploy(spawnPoint.x, spawnPoint.y);
         }
 
@@ -331,6 +339,10 @@ class Game {
         
         // Show completion modal
         this.showCompletionModal(this.dungeon.config.name, goldEarned.toFixed(2), timeString);
+
+        // Arya, the gate keeper, rises from the lower middle with the news. She is a
+        // spectator only: nothing here waits on her.
+        if (window.Arya) window.Arya.say('clear', { dungeon: this.dungeon.config.name });
     }
     
     showCompletionModal(dungeonName, goldEarned, timeString) {
@@ -348,7 +360,10 @@ class Game {
         countdownDisplay.style.cssText = 'color: #a8a29e; font-style: italic; margin-top: 1rem;';
         countdownDisplay.textContent = `⏰ Auto-progressing to next dungeon in ${secondsLeft}s...`;
         
-        const modalContent = modal.querySelector('.modal-content');
+        // The completion modal has no .modal-content wrapper (just .modal), so fall
+        // back to it. This used to throw here on every clear, which silently skipped
+        // the countdown AND the auto-progress timer set up below.
+        const modalContent = modal.querySelector('.modal-content') || modal;
         const existingCountdown = document.getElementById('autoProgressCountdown');
         if (existingCountdown) {
             existingCountdown.remove();
@@ -418,8 +433,10 @@ class Game {
         
         // Re-deploy the same knights at spawn points
         if (deployedKnights.length > 0) {
+            const nextSpawns = [];
             deployedKnights.forEach(knight => {
-                const spawnPoint = this.dungeon.getRandomSpawnPoint();
+                const spawnPoint = this.dungeon.getFreeSpawnPoint(nextSpawns);
+                nextSpawns.push(spawnPoint);
                 knight.position = { x: spawnPoint.x, y: spawnPoint.y };
                 knight.gridPosition = { x: spawnPoint.x, y: spawnPoint.y };
                 knight.state = 'idle';
@@ -449,8 +466,10 @@ class Game {
         
         // Re-deploy the same knights at spawn points
         if (deployedKnights.length > 0) {
+            const replaySpawns = [];
             deployedKnights.forEach(knight => {
-                const spawnPoint = this.dungeon.getRandomSpawnPoint();
+                const spawnPoint = this.dungeon.getFreeSpawnPoint(replaySpawns);
+                replaySpawns.push(spawnPoint);
                 knight.position = { x: spawnPoint.x, y: spawnPoint.y };
                 knight.gridPosition = { x: spawnPoint.x, y: spawnPoint.y };
                 knight.state = 'idle';
@@ -675,4 +694,12 @@ window.addEventListener('DOMContentLoaded', () => {
     } catch (error) {
         console.error('❌ Failed to initialize game:', error);
     }
+
+    // Leaving the game for the Knights tab — either the header's Knights link or the
+    // Menu button. The trip is remembered rather than announced here, because a popup
+    // fired on the click would be destroyed by the navigation a moment later.
+    document.addEventListener('click', (e) => {
+        const el = e.target && e.target.closest ? e.target.closest('a[href="menu.html"], #menuBtn') : null;
+        if (el && window.Arya) window.Arya.setFlag('fromGame');
+    }, true);
 });

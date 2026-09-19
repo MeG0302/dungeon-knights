@@ -43,6 +43,12 @@ build/
 out/
 .next/
 
+# Local point store (file driver for the Points Program)
+.data/
+
+# Freebuff agent scratch: local run doc and dev-server logs
+.freebuff/
+
 # Temporary files
 *.tmp
 *.temp

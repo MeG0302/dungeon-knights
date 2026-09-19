@@ -20,6 +20,13 @@ class CombatSystem {
 
         // Update visual effects
         this.activeEffects = this.activeEffects.filter(effect => {
+            // Effects can be scheduled a beat ahead — a monster answers a knight's
+            // swing only after that swing has played out — so sit on the delay
+            // first and let the animation clock start once it expires.
+            if (effect.delay > 0) {
+                effect.delay -= deltaTime;
+                return true;
+            }
             effect.life -= deltaTime;
             return effect.life > 0;
         });
@@ -29,6 +36,19 @@ class CombatSystem {
         if (!knight.canAttack()) return;
 
         const damage = knight.attack(target);
+
+        // Let the target react to the swing BEFORE the blow is applied, so even the
+        // hit that finishes a monster still provokes its fight-back spit. Purely
+        // cosmetic: onHit applies no damage of any kind.
+        if (typeof target.onHit === 'function') {
+            const countering = target.onHit(knight);
+            if (countering) {
+                // Same wind-up the monster itself is holding: the counter lands after
+                // the knight's swing instead of on the exact frame of the hit.
+                this.addMonsterAttackEffect(target, knight, target.counterDelay);
+            }
+        }
+
         const destroyed = target.takeDamage(damage);
 
         // Play sword hit sound
@@ -55,8 +75,14 @@ class CombatSystem {
             knight.state = 'idle';
             knight.path = [];
             
-            // Add destruction effect
-            this.addDestructionEffect(target.gridX, target.gridY, target.type);
+            // Add destruction effect, carrying the monster art so its corpse
+            // can fade out instead of blinking away
+            this.addDestructionEffect(target.gridX, target.gridY, target.type, target.monsterImage);
+
+            // Chests play a lid-opening animation with a gold burst
+            if (target.type === 'chest') {
+                this.addChestOpenEffect(target);
+            }
         }
     }
 
@@ -72,14 +98,45 @@ class CombatSystem {
         });
     }
 
-    addDestructionEffect(gridX, gridY, type) {
+    addDestructionEffect(gridX, gridY, type, monsterImage = null) {
         this.activeEffects.push({
             type: 'destroy',
             gridX,
             gridY,
             targetType: type,
+            monsterImage,
             life: 1.0,
             startLife: 1.0
+        });
+    }
+
+    // Themed monster fight-back: the dungeon type decides what it lashes out with
+    // (flames, black beam, cosmic beam, vine whip, vomit). Visual only — the
+    // knight takes no damage from it.
+    addMonsterAttackEffect(source, target, delay = 0) {
+        this.activeEffects.push({
+            type: 'monsterAttack',
+            theme: this.dungeon.type,
+            gridX: source.gridX,
+            gridY: source.gridY,
+            source,
+            target,
+            // Seconds to hold before the spit starts flying (0 = fire immediately)
+            delay: Math.max(0, delay || 0),
+            life: 0.85,
+            startLife: 0.85
+        });
+    }
+
+    // Chest victory animation: hinge-styled lid opening with a coin fountain
+    addChestOpenEffect(target) {
+        this.activeEffects.push({
+            type: 'chestOpen',
+            gridX: target.gridX,
+            gridY: target.gridY,
+            dungeonType: this.dungeon.type,
+            life: 1.4,
+            startLife: 1.4
         });
     }
 

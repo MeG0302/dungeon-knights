@@ -1,5 +1,434 @@
 /* Points Page — uses theme.css for base styles */
 
+/* The page shell: a fixed-height column, so the leaderboard scrolls inside the
+   right panel instead of pushing the footer off screen.
+
+   Both rules below are `min-height: 0` on purpose. A flex child defaults to
+   `min-height: auto`, which means it refuses to shrink below its content — with a
+   thirty-row leaderboard that stretched the row past the viewport, pushed the footer
+   out of view, and left the panel with no scrollbar because it was already as tall as
+   its content. */
+.points-page .points-main-row,
+.points-page .side-panel-body {
+    min-height: 0;
+}
+
+/* Both panels scroll on their own; the page itself never does. */
+.points-page .side-panel-body {
+    overflow-y: auto;
+}
+
+.points-footer {
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-dark);
+    border-top: 1px solid var(--border-base);
+    flex-shrink: 0;
+}
+
+/* Section headings inside the left panel (vault progress, share, referrals) */
+.panel-section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 4px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--accent-gold);
+}
+
+.panel-hint {
+    padding: 0 4px;
+    margin-bottom: 8px;
+    font-size: 10px;
+    line-height: 1.5;
+    color: var(--text-muted);
+}
+
+/* A locked button still has to be readable — "Vault Cleared Today" is information,
+   not just a dead end. */
+.points-left-panel .btn:disabled {
+    opacity: 0.72;
+    cursor: not-allowed;
+}
+
+.points-left-panel .btn:disabled .btn-icon-img {
+    filter: grayscale(0.6);
+}
+
+/* A cleared floor reads as done, and stays legible while it does. */
+.stat-row.is-done .stat-label {
+    opacity: 0.65;
+}
+
+/* ---------------------------------------------------------------------------
+   Wallet card
+   The page needs a wallet before it can pay anything, so this states clearly
+   which wallet is earning and how to start earning.
+   --------------------------------------------------------------------------- */
+.wallet-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid var(--border-base);
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.28);
+}
+
+.wallet-card.is-connected {
+    border-color: var(--border-accent, var(--accent-gold));
+    background: rgba(212, 168, 67, 0.06);
+}
+
+.wallet-card-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    letter-spacing: 0.5px;
+    color: var(--text-primary);
+}
+
+.wallet-card-meta {
+    font-size: 10.5px;
+    line-height: 1.5;
+    color: var(--text-muted);
+}
+
+/* The little "live" dot next to the address, in the card and in the header. */
+.wallet-chip-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #5fbf6a;
+    box-shadow: 0 0 6px rgba(95, 191, 106, 0.8);
+    flex-shrink: 0;
+}
+
+.wallet-chip {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.5px;
+}
+
+/* Transient feedback: "+100 PTS banked", "Signed in…" */
+.points-notice {
+    position: fixed;
+    left: 50%;
+    bottom: 56px;
+    transform: translateX(-50%);
+    z-index: 950;
+    padding: 10px 18px;
+    border: 1px solid var(--border-accent, var(--accent-gold));
+    border-radius: 4px;
+    background: rgba(10, 10, 14, 0.94);
+    color: var(--accent-gold);
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    pointer-events: none;
+    animation: points-notice-in 0.18s ease-out;
+}
+
+@keyframes points-notice-in {
+    from { opacity: 0; transform: translate(-50%, 8px); }
+    to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* Failures that need saying out loud (a 500 from the API, a rejected floor) */
+.points-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 4px;
+    font-size: 11.5px;
+    line-height: 1.5;
+}
+
+.points-banner-error {
+    border: 1px solid rgba(200, 70, 60, 0.5);
+    background: rgba(200, 70, 60, 0.12);
+    color: #e8a49b;
+}
+
+/* A real warning: the page works, but the deployment is not storing points anywhere
+   durable. Amber, not red — it is a setup task, not a fault. */
+.points-banner-warn {
+    border: 1px solid rgba(212, 168, 67, 0.5);
+    background: rgba(212, 168, 67, 0.1);
+    color: #e0c882;
+}
+
+.points-banner code {
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 10.5px;
+    color: var(--accent-gold);
+}
+
+/* Failures have to stay visible while the vault covers the page (overlay z-index 900). */
+.points-banner-float {
+    position: fixed;
+    left: 50%;
+    top: 18px;
+    transform: translateX(-50%);
+    z-index: 960;
+    max-width: 620px;
+    background: rgba(22, 10, 10, 0.96);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55);
+}
+
+.points-banner-x {
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+    padding: 2px;
+}
+
+/* ---------------------------------------------------------------------------
+   Ranking table and referral ledger
+   These rows had no styles anywhere, so the table used to render as colliding
+   run-together text. One grid definition drives the header and every row.
+   --------------------------------------------------------------------------- */
+.leaderboard-table,
+.referrals-list {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border-base);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.lb-header,
+.lb-row {
+    display: grid;
+    grid-template-columns: 52px 1fr 110px 64px;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 14px;
+}
+
+.lb-header {
+    background: rgba(0, 0, 0, 0.4);
+    border-bottom: 1px solid var(--border-base);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.lb-row {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.lb-row:last-child {
+    border-bottom: none;
+}
+
+.lb-row:nth-child(even) {
+    background: rgba(255, 255, 255, 0.015);
+}
+
+.lb-rank {
+    font-family: var(--font-heading, inherit);
+    font-weight: 700;
+    color: var(--text-muted);
+}
+
+.lb-row.top-1 .lb-rank { color: #f0d478; }
+.lb-row.top-2 .lb-rank { color: #cfd3d8; }
+.lb-row.top-3 .lb-rank { color: #cf9a5a; }
+
+.lb-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.lb-points {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: var(--accent-gold);
+}
+
+.lb-refs {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted);
+}
+
+/* Your own row stays findable at a glance, wherever it lands. */
+.lb-row.is-you {
+    background: rgba(212, 168, 67, 0.12);
+    border-left: 3px solid var(--accent-gold);
+    padding-left: 11px;
+    color: var(--text-primary);
+}
+
+.lb-you-tag {
+    padding: 1px 6px;
+    border: 1px solid var(--accent-gold);
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--accent-gold);
+}
+
+/* Empty, loading and error states share one look. */
+.lb-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 52px 24px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.lb-state-small {
+    padding: 16px;
+    font-size: 11px;
+}
+
+/* Referral ledger: who you invited, what they have, what you were paid. */
+.ref-header,
+.ref-row {
+    display: grid;
+    grid-template-columns: 1fr 110px 110px;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 14px;
+}
+
+.ref-header {
+    background: rgba(0, 0, 0, 0.4);
+    border-bottom: 1px solid var(--border-base);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.ref-row {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.ref-row:last-child {
+    border-bottom: none;
+}
+
+.ref-row.ref-total {
+    background: rgba(212, 168, 67, 0.08);
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.ref-addr {
+    font-variant-numeric: tabular-nums;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ref-their {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted);
+}
+
+.ref-earned {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: var(--accent-gold);
+}
+
+/* Invite link row in the left panel */
+.referral-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+/* The invite link field. It is a real <input> so the link can still be selected and
+   copied by hand when the Clipboard API is unavailable. */
+.referral-code {
+    flex: 1;
+    min-width: 0;
+    padding: 6px 10px;
+    border: 1px solid var(--border-base);
+    border-radius: 4px;
+    background: var(--bg-dark);
+    color: var(--accent-gold);
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    text-overflow: ellipsis;
+    outline: none;
+    cursor: text;
+}
+
+.referral-code:focus {
+    border-color: var(--border-accent, var(--accent-gold));
+    box-shadow: 0 0 0 2px rgba(212, 168, 67, 0.18);
+}
+
+.referral-code::selection {
+    background: rgba(212, 168, 67, 0.35);
+}
+
+.referral-meta {
+    padding: 0 4px;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.ref-earnings {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 1px solid var(--border-accent, var(--accent-gold));
+    border-radius: 4px;
+    background: rgba(212, 168, 67, 0.07);
+    font-size: 11px;
+}
+
+.ref-earnings-label {
+    color: var(--text-secondary);
+    letter-spacing: 0.5px;
+}
+
+.ref-earnings-value {
+    font-weight: 700;
+    color: var(--accent-gold);
+}
+
 /* All icons on points page */
 .points-icon {
     image-rendering: pixelated;
@@ -19,4 +448,235 @@
     height: 40px;
     opacity: 0.35;
     margin-bottom: 12px;
+}
+
+/* ---------------------------------------------------------------------------
+   Points Vault mini-game
+   The map is a looping video, the fight is drawn on a transparent canvas above
+   it, and the HUD stays in HTML so its text is never scaled by the canvas.
+   --------------------------------------------------------------------------- */
+.dungeon-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 900;
+    background: #06060a;
+    overflow: hidden;
+    font-family: var(--font-body, Inter, sans-serif);
+}
+
+.dungeon-map {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    image-rendering: pixelated;
+}
+
+/* Darken the map's edges so the sprites and HUD stay readable on top of it */
+.dungeon-vignette {
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 45%, rgba(0, 0, 0, 0.72) 100%),
+        linear-gradient(to bottom, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0) 22%, rgba(0, 0, 0, 0) 62%, rgba(0, 0, 0, 0.8) 100%);
+    pointer-events: none;
+}
+
+.dungeon-container {
+    position: relative;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.dungeon-top-bar {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 14px 22px;
+    background: linear-gradient(to bottom, rgba(4, 4, 8, 0.92), rgba(4, 4, 8, 0.35));
+    border-bottom: 1px solid var(--border-base, rgba(212, 168, 67, 0.25));
+}
+
+.dungeon-level-info {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    min-width: 260px;
+}
+
+.dungeon-level-name {
+    font-family: var(--font-display, Cinzel, serif);
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+
+.dungeon-level-num {
+    font-size: 12px;
+    color: var(--text-secondary, #b8b2a6);
+    letter-spacing: 1px;
+}
+
+.dungeon-timer {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.dungeon-timer-text {
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    color: var(--accent-gold, #d4a843);
+    min-width: 54px;
+}
+
+.dungeon-timer-bar {
+    flex: 1;
+    height: 8px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.09);
+    border: 1px solid rgba(212, 168, 67, 0.25);
+    overflow: hidden;
+}
+
+.dungeon-timer-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.12s linear;
+}
+
+.dungeon-points-so-far {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--accent-gold, #d4a843);
+    border: 1px solid rgba(212, 168, 67, 0.4);
+    border-radius: 4px;
+    padding: 4px 10px;
+    background: rgba(212, 168, 67, 0.08);
+}
+
+.dungeon-stage {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+}
+
+.dungeon-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.dungeon-loading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-display, Cinzel, serif);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent-gold, #d4a843);
+    opacity: 0.8;
+}
+
+.dungeon-bottom {
+    min-height: 108px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 16px 22px 22px;
+    background: linear-gradient(to top, rgba(4, 4, 8, 0.95), rgba(4, 4, 8, 0.2));
+    border-top: 1px solid var(--border-base, rgba(212, 168, 67, 0.25));
+}
+
+/* Deploy / Recall / Exit — the same controls, and the same order, as the
+   main dungeon game's control bar. */
+.dungeon-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.dungeon-controls .dungeon-btn {
+    min-width: 150px;
+}
+
+.dungeon-controls .dungeon-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.dungeon-fighting {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
+.dungeon-dummy-label {
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-muted, #8b857a);
+}
+
+.dungeon-status-text {
+    font-family: var(--font-display, Cinzel, serif);
+    font-size: 15px;
+    letter-spacing: 2px;
+    color: var(--accent-gold, #d4a843);
+}
+
+.dungeon-complete {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    text-align: center;
+}
+
+.dungeon-reward-announce {
+    font-family: var(--font-display, Cinzel, serif);
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent-gold, #d4a843);
+    text-shadow: 0 0 24px rgba(212, 168, 67, 0.45);
+}
+
+.dungeon-final-note {
+    font-size: 12px;
+    color: var(--text-secondary, #b8b2a6);
+    max-width: 520px;
+    line-height: 1.5;
+}
+
+.dungeon-final-btns {
+    display: flex;
+    gap: 12px;
+}
+
+.dungeon-btn {
+    min-width: 200px;
+    justify-content: center;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    font-size: 12px;
+}
+
+.dungeon-btn.is-shared {
+    opacity: 1;
+    border-color: var(--accent-gold, #d4a843);
 }

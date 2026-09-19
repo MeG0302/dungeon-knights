@@ -547,4 +547,10 @@ class MenuSystem {
 // Initialize menu system when page loads
 window.addEventListener('DOMContentLoaded', () => {
     window.menuSystem = new MenuSystem();
+
+    // Arriving here from a dungeon run: Arya greets the player at the gate. The flag
+    // is set by the game when the Knights link or Menu button is clicked.
+    if (window.Arya && window.Arya.takeFlag('fromGame')) {
+        setTimeout(() => window.Arya.say('return'), 450);
+    }
 });

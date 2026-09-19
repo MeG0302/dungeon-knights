@@ -5,8 +5,12 @@ class PathfindingAI {
         this.dungeon = dungeon;
     }
 
-    // A* pathfinding algorithm
-    findPath(startX, startY, endX, endY) {
+    // A* pathfinding algorithm.
+    // `blocked` marks tiles a knight may walk AROUND but should not stroll over —
+    // tiles held by another knight, a monster or a chest. They are given a heavy
+    // step cost rather than being impassable, so a monster standing in a doorway
+    // can never make a target unreachable.
+    findPath(startX, startY, endX, endY, blocked) {
         const openSet = [];
         const closedSet = new Set();
         const startNode = { x: startX, y: startY, g: 0, h: 0, f: 0, parent: null };
@@ -32,7 +36,8 @@ class PathfindingAI {
                 
                 if (closedSet.has(key)) continue;
 
-                const g = current.g + 1;
+                const occupied = blocked && blocked(neighbor.x, neighbor.y);
+                const g = current.g + (occupied ? 8 : 1);
                 const h = this.heuristic(neighbor.x, neighbor.y, endX, endY);
                 const f = g + h;
 
@@ -98,22 +103,25 @@ class PathfindingAI {
         return path;
     }
 
-    // Find nearest loot node that has at least one adjacent walkable tile
-    findNearestLoot(knightX, knightY, lootNodes) {
+    // Find nearest loot node this knight can actually get to and strike.
+    // Monsters are only reachable from their LEFT or RIGHT tile, so a monster
+    // walled in above and below is not a target a knight can ever attack.
+    findNearestLoot(knightX, knightY, lootNodes, knights, self) {
         let nearest = null;
         let shortestDistance = Infinity;
 
         for (const node of lootNodes) {
             if (node.isDestroyed) continue;
-            
-            // Check if node has at least one adjacent walkable tile
-            const hasAccess = this.hasAdjacentWalkableTile(node.gridX, node.gridY);
-            if (!hasAccess) {
-                console.log(`⚠️ Skipping unreachable loot at (${node.gridX}, ${node.gridY})`);
-                continue;
-            }
-            
-            const distance = this.heuristic(knightX, knightY, node.gridX, node.gridY);
+
+            const hasAccess = node.type === 'monster'
+                ? this.hasLateralApproach(node.gridX, node.gridY)
+                : this.hasAdjacentWalkableTile(node.gridX, node.gridY);
+            if (!hasAccess) continue;
+
+            // Prefer a monster nobody is already standing beside, so knights spread
+            // out instead of piling onto the same two tiles.
+            const crowd = this.approachCrowding(node.gridX, node.gridY, node, knights, self, node.type === 'monster');
+            const distance = this.heuristic(knightX, knightY, node.gridX, node.gridY) + crowd * 4;
             if (distance < shortestDistance) {
                 shortestDistance = distance;
                 nearest = node;
@@ -121,6 +129,38 @@ class PathfindingAI {
         }
 
         return nearest;
+    }
+
+    // Can a knight strike this monster from the side? Its left or right tile has to
+    // exist and be free of other loot.
+    hasLateralApproach(x, y) {
+        return [-1, 1].some(dx =>
+            this.dungeon.isWalkable(x + dx, y) && !this.dungeon.hasLootNodeAt(x + dx, y));
+    }
+
+    // How contested this target already is: knights standing on its strike tiles, plus
+    // the ones merely walking there. Counting the walkers is what stops a whole squad
+    // from picking the same monster, which otherwise leaves them jostling for the two
+    // tiles it can be hit from.
+    approachCrowding(x, y, node, knights, self, lateralOnly) {
+        if (!knights || !knights.length) return 0;
+        const tiles = lateralOnly
+            ? [{ x: x - 1, y }, { x: x + 1, y }]
+            : [{ x: x - 1, y }, { x: x + 1, y }, { x, y: y - 1 }, { x, y: y + 1 }];
+        let crowd = 0;
+        for (const k of knights) {
+            if (!k || k === self) continue;
+            if (node && k.target === node) { crowd += 1.5; continue; }
+            if (k.gridPosition && tiles.some(t => k.gridPosition.x === t.x && k.gridPosition.y === t.y)) crowd += 1;
+        }
+        return crowd;
+    }
+
+    // A tile no unit may stand on: another knight, or a monster/chest
+    isOccupied(x, y, knights, self) {
+        if (this.dungeon.hasLootNodeAt(x, y)) return true;
+        return (knights || []).some(k => k && k !== self && k.gridPosition &&
+            k.gridPosition.x === x && k.gridPosition.y === y);
     }
     
     // Check if a position has at least one adjacent walkable tile
@@ -145,11 +185,16 @@ class PathfindingAI {
     }
 
     // Check if knight is adjacent to target (for melee attacking)
-    isAdjacent(x1, y1, x2, y2, range = 1) {
-        // For melee (range = 1), must be directly adjacent (not diagonal)
+    // `lateralOnly` is used for monsters: a knight fights what stands directly to
+    // its left or right and never reaches up or down. Chests keep the 4-way rule,
+    // so a chest tucked into a corner can still be opened and a run can still end.
+    isAdjacent(x1, y1, x2, y2, range = 1, lateralOnly = false) {
         const dx = Math.abs(x1 - x2);
         const dy = Math.abs(y1 - y2);
-        
+        const reach = Math.max(1, range || 1);
+
+        if (lateralOnly) return dy === 0 && dx >= 1 && dx <= reach;
+
         // Must be exactly 1 tile away in one direction, 0 in the other (no diagonal)
         return (dx === 1 && dy === 0) || (dx === 0 && dy === 1);
     }
@@ -161,10 +206,14 @@ class KnightAI {
         this.pathfinding = pathfinding;
     }
 
-    updateKnight(knight, dungeon, deltaTime) {
+    updateKnight(knight, dungeon, deltaTime, deployedKnights = []) {
         if (!knight.isDeployed || knight.state === 'exhausted' || knight.state === 'resting') {
             return;
         }
+
+        // Everyone else on the board — knights share no tile with anyone.
+        const others = (deployedKnights || []).filter(k => k !== knight);
+        const occupied = (x, y) => this.pathfinding.isOccupied(x, y, others, knight);
 
         // Always check for new target if current is destroyed or doesn't exist
         if (!knight.target || knight.target.isDestroyed) {
@@ -181,7 +230,9 @@ class KnightAI {
             knight.target = this.pathfinding.findNearestLoot(
                 knight.gridPosition.x,
                 knight.gridPosition.y,
-                lootNodes
+                lootNodes,
+                others,
+                knight
             );
             
             if (!knight.target) {
@@ -191,15 +242,23 @@ class KnightAI {
             
             console.log(`🎯 Knight #${knight.id} found new target at (${knight.target.gridX}, ${knight.target.gridY})`);
 
-            // Find path to an adjacent tile (not ON the target)
-            const adjacentTile = this.findAdjacentWalkableTile(knight.target.gridX, knight.target.gridY, dungeon);
-            
+            // Find the tile to strike from (not ON the target)
+            const adjacentTile = this.findAdjacentTile(
+                knight.target.gridX,
+                knight.target.gridY,
+                dungeon,
+                others,
+                knight,
+                knight.target.type === 'monster'
+            );
+
             if (adjacentTile) {
                 knight.path = this.pathfinding.findPath(
                     knight.gridPosition.x,
                     knight.gridPosition.y,
                     adjacentTile.x,
-                    adjacentTile.y
+                    adjacentTile.y,
+                    occupied
                 );
                 
                 if (knight.path.length === 0) {
@@ -207,42 +266,58 @@ class KnightAI {
                     knight.target = null; // Try different target next frame
                 }
             } else {
-                // No adjacent tile available, pick different target
+                // No strike tile available, pick different target
                 console.log(`❌ Knight #${knight.id} no adjacent tile for target`);
                 knight.target = null;
                 return;
             }
         }
 
-        // Check if in melee attack range (directly adjacent)
+        // Monsters are struck from the side only; chests can be opened from any side
+        const lateral = knight.target && knight.target.type === 'monster';
+
+        // Check if in melee attack range
         if (knight.target && this.pathfinding.isAdjacent(
             knight.gridPosition.x,
             knight.gridPosition.y,
             knight.target.gridX,
             knight.target.gridY,
-            knight.stats.range
+            knight.stats.range,
+            lateral
         )) {
             knight.state = 'attacking';
             knight.path = []; // Clear path when attacking
+            knight.blockedFor = 0;
             return;
         }
 
         // Move along path
         if (knight.path.length > 1) {
             knight.state = 'moving';
-            this.moveKnight(knight, deltaTime);
+            this.moveKnight(knight, deltaTime, occupied);
         } else if (knight.path.length === 1) {
-            // Reached destination, should be adjacent to target now
+            // Reached destination but not in striking range (something moved in, or
+            // the monster strolled) — re-plan rather than stand about
             knight.state = 'idle';
+            knight.target = null;
+            knight.path = [];
         } else if (knight.target && !knight.target.isDestroyed) {
             // No path but have target - recalculate
-            const adjacentTile = this.findAdjacentWalkableTile(knight.target.gridX, knight.target.gridY, dungeon);
+            const adjacentTile = this.findAdjacentTile(
+                knight.target.gridX,
+                knight.target.gridY,
+                dungeon,
+                others,
+                knight,
+                knight.target.type === 'monster'
+            );
             if (adjacentTile) {
                 knight.path = this.pathfinding.findPath(
                     knight.gridPosition.x,
                     knight.gridPosition.y,
                     adjacentTile.x,
-                    adjacentTile.y
+                    adjacentTile.y,
+                    occupied
                 );
             } else {
                 // Can't reach target, get new one
@@ -251,31 +326,29 @@ class KnightAI {
         }
     }
     
-    // Find an adjacent walkable tile to the target
-    findAdjacentWalkableTile(targetX, targetY, dungeon) {
-        const directions = [
-            { x: 0, y: -1 }, // North
-            { x: 1, y: 0 },  // East
-            { x: 0, y: 1 },  // South
-            { x: -1, y: 0 }  // West
-        ];
-        
-        // Shuffle to get random adjacent tile
-        const shuffled = directions.sort(() => Math.random() - 0.5);
-        
-        for (const dir of shuffled) {
-            const adjX = targetX + dir.x;
-            const adjY = targetY + dir.y;
-            
-            if (dungeon.isWalkable(adjX, adjY)) {
-                return { x: adjX, y: adjY };
-            }
-        }
-        
-        return null; // No walkable adjacent tile
+    // Find the tile a knight strikes a target from. Monsters only expose their
+    // left/right tiles; chests keep all four sides so a corner chest still opens.
+    // A tile already held by another knight is ranked last, so knights spread out.
+    findAdjacentTile(targetX, targetY, dungeon, knights, self, lateralOnly) {
+        const directions = lateralOnly
+            ? [{ x: -1, y: 0 }, { x: 1, y: 0 }]
+            : [{ x: 0, y: -1 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 0 }];
+
+        const candidates = directions
+            .map(dir => ({ x: targetX + dir.x, y: targetY + dir.y }))
+            .filter(t => dungeon.isWalkable(t.x, t.y) && !dungeon.hasLootNodeAt(t.x, t.y));
+
+        if (!candidates.length) return null; // no strike tile at all
+
+        // Prefer a free tile; fall back to a taken one so target selection never
+        // starves (the knight that gets there second waits its turn instead).
+        const free = candidates.filter(t => !(knights || []).some(k => k && k !== self &&
+            k.gridPosition && k.gridPosition.x === t.x && k.gridPosition.y === t.y));
+        const pool = free.length ? free : candidates;
+        return pool[Math.floor(Math.random() * pool.length)];
     }
 
-    moveKnight(knight, deltaTime) {
+    moveKnight(knight, deltaTime, occupied) {
         if (knight.path.length < 2) return;
 
         const nextNode = knight.path[1]; // [0] is current position
@@ -300,12 +373,28 @@ class KnightAI {
         // Move when timer exceeds interval
         if (knight.moveTimer >= moveInterval) {
             knight.moveTimer = 0;
-            
+
             const dx = Math.sign(nextNode.x - knight.gridPosition.x);
             const dy = Math.sign(nextNode.y - knight.gridPosition.y);
-            
-            knight.gridPosition.x += dx;
-            knight.gridPosition.y += dy;
+            const stepX = knight.gridPosition.x + dx;
+            const stepY = knight.gridPosition.y + dy;
+
+            // Units never share a tile: if a knight or a monster is standing there,
+            // hold the step. Waiting too long means the tile is genuinely taken, so
+            // drop the plan and pick a different target rather than deadlock.
+            if (occupied && occupied(stepX, stepY)) {
+                knight.blockedFor = (knight.blockedFor || 0) + moveInterval;
+                if (knight.blockedFor >= 1.2) {
+                    knight.blockedFor = 0;
+                    knight.path = [];
+                    knight.target = null;
+                }
+                return;
+            }
+
+            knight.blockedFor = 0;
+            knight.gridPosition.x = stepX;
+            knight.gridPosition.y = stepY;
         }
     }
 }

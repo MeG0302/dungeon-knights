@@ -1,0 +1,191 @@
+/* ==========================================================================
+   Arya — the dungeon gate keeper.
+   She rises from the lower middle of whatever page calls window.Arya.say().
+   The wrapper ignores pointer events so she never blocks the game underneath;
+   only her speech bubble is interactive.
+   ========================================================================== */
+
+#arya-root {
+  position: fixed;
+  left: 50%;
+  /* --arya-bottom is set to sit her on top of a page's own bottom bar, so a
+     control bar is never buried under her waist. */
+  bottom: var(--arya-bottom, 0px);
+  /* --arya-shift slides the whole unit aside when a dialog's buttons would end up
+     underneath her (see avoidDialog in arya.js). */
+  transform: translateX(calc(-50% + var(--arya-shift, 0px)));
+  transition: transform 320ms ease-out;
+  z-index: 1200;              /* above the game HUD and above modal backdrops (1000) */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  pointer-events: none;
+  user-select: none;
+}
+
+#arya-root[hidden] { display: none; }
+
+/* Applied for the one frame in which she is positioned, so the step aside never
+   animates across the screen as she rises. */
+#arya-root.is-instant { transition: none; }
+
+/* The whole figure + bubble is one unit that slides up from below the fold. */
+.arya-pop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform: translateY(112%);
+  opacity: 0;
+  transition: transform 520ms cubic-bezier(0.18, 0.9, 0.24, 1.02), opacity 320ms ease-out;
+  will-change: transform, opacity;
+}
+
+.arya-pop.is-in {
+  transform: translateY(8%);
+  opacity: 1;
+}
+
+.arya-pop.is-out {
+  transform: translateY(112%);
+  opacity: 0;
+  transition: transform 380ms cubic-bezier(0.5, 0, 0.75, 0.2), opacity 300ms ease-in;
+}
+
+/* ------------------------------------------------------------------ bubble */
+.arya-bubble {
+  position: relative;
+  pointer-events: auto;
+  cursor: pointer;
+  /* --arya-bubble-max is set by avoidDialog when she has to slot into the gutter
+     beside an open dialog, so her line never buries that dialog's buttons. */
+  max-width: var(--arya-bubble-max, min(360px, 78vw));
+  margin-bottom: 6px;
+  padding: 12px 16px 13px;
+  background: linear-gradient(180deg, #262019 0%, #171310 100%);
+  border: 1px solid var(--border-bronze, #7a5c2e);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(212, 168, 67, 0.18);
+  cursor: pointer;
+}
+
+/* little tail pointing down at her */
+.arya-bubble::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -9px;
+  width: 14px;
+  height: 14px;
+  transform: translateX(-50%) rotate(45deg);
+  background: #171310;
+  border-right: 1px solid var(--border-bronze, #7a5c2e);
+  border-bottom: 1px solid var(--border-bronze, #7a5c2e);
+}
+
+.arya-name {
+  font-family: var(--font-heading, 'Cinzel', serif);
+  font-size: 10px;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  color: var(--accent-gold, #d4a843);
+  margin-bottom: 4px;
+  padding-right: 16px;   /* clears the dismiss button */
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.arya-name .arya-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent-gold, #d4a843);
+  box-shadow: 0 0 8px rgba(212, 168, 67, 0.9);
+  flex-shrink: 0;
+}
+
+.arya-mood {
+  margin-left: auto;
+  font-size: 9px;
+  letter-spacing: 1.2px;
+  color: var(--text-muted, #8a8177);
+}
+
+.arya-message {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-primary, #ece7df);
+  text-wrap: pretty;
+}
+
+.arya-message strong { color: var(--accent-gold, #e8c56b); }
+
+.arya-close {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  width: 20px;
+  height: 20px;
+  line-height: 18px;
+  text-align: center;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted, #8a8177);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.arya-close:hover {
+  color: var(--accent-gold, #d4a843);
+  background: rgba(212, 168, 67, 0.12);
+}
+
+/* ------------------------------------------------------------------ figure */
+.arya-figure {
+  display: block;
+  height: clamp(180px, 31vh, 300px);
+  width: auto;
+  /* She is drawn with the pale glow of the art itself; the shadow just seats her. */
+  filter: drop-shadow(0 14px 26px rgba(0, 0, 0, 0.6));
+  animation: arya-breathe 4.5s ease-in-out infinite;
+}
+
+@keyframes arya-breathe {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-4px) scale(1.006); }
+}
+
+/* A soft gold vignette behind her so she never looks pasted onto a bright map. */
+.arya-halo {
+  position: absolute;
+  bottom: -10%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 130%;
+  height: 70%;
+  background: radial-gradient(ellipse at 50% 90%, rgba(212, 168, 67, 0.18) 0%, rgba(0, 0, 0, 0) 70%);
+  pointer-events: none;
+}
+
+.arya-stage {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+/* ------------------------------------------------------------------ mobile */
+@media (max-width: 760px) {
+  .arya-figure { height: clamp(130px, 24vh, 200px); }
+  .arya-bubble { max-width: 82vw; padding: 10px 12px; }
+  .arya-message { font-size: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arya-pop { transition: opacity 200ms linear; transform: none; }
+  .arya-pop.is-in { transform: none; }
+  .arya-pop.is-out { transform: none; }
+  .arya-figure { animation: none; }
+}

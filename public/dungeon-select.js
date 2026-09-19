@@ -32,9 +32,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (window.audioManager) window.audioManager.play('button_click');
 
+            // Arya, the gate keeper, sees the squad off as the map opens. The extra beat
+            // on the transition is her screen time — at the old 1.5s she was still rising
+            // when the page navigated away.
+            if (window.Arya) window.Arya.say('enter', { dungeon: dungeonName, duration: 2600 });
+
             setTimeout(() => {
                 window.location.href = 'index.html';
-            }, 1500);
+            }, 2200);
         });
 
         card.addEventListener('mouseenter', () => {

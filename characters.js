@@ -59,6 +59,12 @@ class Knight {
         this.attackCooldown = 0;
         this.isDeployed = false;
         this.totalEarned = 0;
+
+        // Animation state (drives the procedural animation in dungeon.js)
+        this.walkPhase = Math.random() * Math.PI * 2; // per-knight gait offset
+        this.animPhase = Math.random() * Math.PI * 2; // idle breathing offset
+        this.facing = 1;     // 1 = facing right, -1 = facing left
+        this.hitFlash = 0;   // seconds of hit-flash overlay remaining
         
         // Animation properties
         this.attackAnimation = {
@@ -157,6 +163,18 @@ class Knight {
                 this.attackAnimation.progress = 0;
             }
         }
+
+        // Advance the walk cycle — faster knights take quicker strides
+        if (this.state === 'moving') {
+            this.walkPhase += deltaTime * (7 + this.stats.speed * 1.5);
+        } else {
+            this.walkPhase += deltaTime * 2;
+        }
+
+        // Decay the hit flash
+        if (this.hitFlash > 0) {
+            this.hitFlash = Math.max(0, this.hitFlash - deltaTime);
+        }
         
         // Update trail
         this.trailUpdateCooldown -= deltaTime;
@@ -253,6 +271,33 @@ class Knight {
         return (this.stamina / this.stats.maxStamina) * 100;
     }
 
+    /**
+     * How far this knight is between its current tile and the next (0..1).
+     * moveKnight() accumulates moveTimer and snaps one tile when it reaches
+     * 1 / speed, so the same ratio is the smooth render offset between tiles.
+     */
+    getMoveProgress() {
+        if (this.state !== 'moving' || !this.path || this.path.length < 2) return 0;
+        const interval = 1 / Math.max(0.0001, this.stats.speed);
+        return Math.max(0, Math.min(1, (this.moveTimer || 0) / interval));
+    }
+
+    /**
+     * Direction the knight is heading: +1 right, -1 left. Falls back to the
+     * last facing so an idle knight does not snap back to a default pose.
+     */
+    getFacingDirection() {
+        if (this.state === 'moving' && this.path && this.path.length > 1) {
+            const dx = this.path[1].x - this.gridPosition.x;
+            if (dx !== 0) return dx > 0 ? 1 : -1;
+        }
+        if (this.target && !this.target.isDestroyed) {
+            const dx = this.target.gridX - this.gridPosition.x;
+            if (dx !== 0) return dx > 0 ? 1 : -1;
+        }
+        return this.facing === -1 ? -1 : 1;
+    }
+
     canAttack() {
         return this.attackCooldown <= 0 && this.stamina > 0 && this.state !== 'exhausted';
     }
@@ -266,7 +311,13 @@ class Knight {
         // Start attack animation
         this.attackAnimation.active = true;
         this.attackAnimation.progress = 0;
-        
+
+        // Turn to face whatever is being struck
+        if (target && typeof target.gridX === 'number') {
+            const dx = target.gridX - this.gridPosition.x;
+            if (dx !== 0) this.facing = dx > 0 ? 1 : -1;
+        }
+
         return this.stats.power;
     }
 

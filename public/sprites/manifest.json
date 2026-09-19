@@ -1,0 +1,4 @@
+{
+  "_comment": "Register sprite sheets here as {\"id\":\"<entity>:<action>\",\"src\":\"<path>\",\"frames\":N,\"fps\":N,\"loop\":bool}. An empty list means every entity falls back to the built-in procedural animation. See README.md.",
+  "sheets": []
+}
