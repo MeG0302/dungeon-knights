@@ -46,8 +46,12 @@ out/
 # Local point store (file driver for the Points Program)
 .data/
 
-# Freebuff agent scratch: local run doc and dev-server logs
-.freebuff/
+# Freebuff agent scratch: only the dev-server logs are ignored here.
+# The run doc (/.freebuff/run.md) is deliberately NOT ignored — the file tooling used to
+# maintain it respects ignore rules, so ignoring the whole directory made it uneditable.
+.freebuff/*.log
+.freebuff/*.log.err
+.freebuff/project-id
 
 # Temporary files
 *.tmp
