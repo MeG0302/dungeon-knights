@@ -944,6 +944,33 @@ class SpriteSheet {
     }
 }
 
+// The rarity tiers this run can actually field, for scoping the knight sprite preload.
+// The roster saves the whole rarity object, so the tier lives inside it.
+function squadKnightTiers() {
+    try {
+        const raw = JSON.parse(localStorage.getItem('selectedKnights') || '[]');
+        const tiers = [];
+        raw.forEach((k) => {
+            const tier = k && k.rarity && (k.rarity.tier || k.rarity);
+            if (tier && tiers.indexOf(tier) === -1) tiers.push(tier);
+        });
+        return tiers;
+    } catch { return []; }
+}
+
+// Art is fetched per need. The renderer used to pull every dungeon's chest (~13 MB of
+// PNG at ~2.6 MB each) and all six knight tiers (~9 MB) on every load, which is
+// bandwidth the map the player is actually waiting for has to share — public/loading-gate.js
+// waits on the chosen dungeon's chest and the tiers in this squad, and nothing else can
+// ever be drawn in a run.
+const CHEST_ART = {
+    crypts: 'assets/crypts/chest.png',
+    mines: 'assets/mines/chest.png',
+    temple: 'assets/temple/chest.png',
+    magma: 'assets/magma/chest.png',
+    void: 'assets/void/chest.png'
+};
+
 class DungeonRenderer {
     constructor(canvas, dungeon) {
         this.canvas = canvas;
@@ -969,28 +996,16 @@ class DungeonRenderer {
         
         // Load knight images
         this.knightImages = {};
-        this.loadKnightImages();
+        this.loadKnightImages(squadKnightTiers());
 
         // Optional sprite sheets (procedural animation is the fallback)
         this.spriteSheets = {};
         this.loadSpriteSheets();
 
-        // Load chest images for each dungeon type
+        // This dungeon's chest only — the other four are created on demand, see
+        // chestImageFor().
         this.chestImages = {};
-        const chestMap = {
-            'crypts': 'assets/crypts/chest.png',
-            'mines': 'assets/mines/chest.png',
-            'temple': 'assets/temple/chest.png',
-            'magma': 'assets/magma/chest.png',
-            'void': 'assets/void/chest.png'
-        };
-        Object.entries(chestMap).forEach(([key, path]) => {
-            const img = new Image();
-            img.onload = () => console.log(`✅ Loaded ${key} chest`);
-            img.onerror = () => console.warn(`⚠️ Failed to load ${key} chest: ${path}`);
-            img.src = path;
-            this.chestImages[key] = img;
-        });
+        this.chestImageFor(dungeon.type);
     }
 
     loadDecorationSprites() {
@@ -1078,7 +1093,8 @@ class DungeonRenderer {
         }, 2000);
     }
 
-    loadKnightImages() {
+    // Loads the tiers it is given (all of them when given nothing), and never twice.
+    loadKnightImages(tiers) {
         // Map rarity tiers to actual image files (correct filenames with .png)
         const imageMap = {
             'LEGENDARY': 'characters/Knight_in_golden_armor_stands_2K_202609041404_jpeg_2K_202609041417.png',
@@ -1089,7 +1105,10 @@ class DungeonRenderer {
             'COMMON': 'characters/Pixelated_knight_standing_on_tile_2K_202609041402_jpeg_2K_202609041417.png'
         };
 
-        Object.entries(imageMap).forEach(([rarity, path]) => {
+        const wanted = (tiers && tiers.length) ? tiers : Object.keys(imageMap);
+        wanted.forEach((rarity) => {
+            const path = imageMap[rarity];
+            if (!path || this.knightImages[rarity]) return;
             const img = new Image();
             img.onload = () => {
                 console.log(`✅ Loaded ${rarity} knight sprite`);
@@ -1100,6 +1119,26 @@ class DungeonRenderer {
             img.src = path;
             this.knightImages[rarity] = img;
         });
+    }
+
+    // A knight drawn from a tier this run never preloaded (a squad that changed in
+    // another tab, say) still gets its art — it just arrives a beat later.
+    knightImageFor(tier) {
+        if (!this.knightImages[tier]) this.loadKnightImages([tier]);
+        return this.knightImages[tier];
+    }
+
+    // Same deal for the four chests this dungeon is not using.
+    chestImageFor(type) {
+        const path = CHEST_ART[type];
+        if (!path) return null;
+        if (!this.chestImages[type]) {
+            const img = new Image();
+            img.onerror = () => console.warn(`⚠️ Failed to load ${type} chest: ${path}`);
+            img.src = path;
+            this.chestImages[type] = img;
+        }
+        return this.chestImages[type];
     }
 
     // Sprite sheets are optional: public/sprites/manifest.json lists whatever
@@ -1359,7 +1398,7 @@ class DungeonRenderer {
         
         if (node.type === 'chest') {
             // Draw chest using actual image if loaded
-            const chestImg = this.chestImages[this.dungeon.type];
+            const chestImg = this.chestImageFor(this.dungeon.type);
             const chestSize = tileSize * 1.75; // 2.5x scale
 
             // Floating animation
@@ -1631,7 +1670,7 @@ class DungeonRenderer {
             }
         }
 
-        const img = this.knightImages[knight.rarity.tier];
+        const img = this.knightImageFor(knight.rarity.tier);
         if (!drawn && img && img.complete && img.naturalWidth > 0) {
             drawn = true;
             ctx.save();
@@ -1967,7 +2006,7 @@ class DungeonRenderer {
             } else if (effect.type === 'chestOpen') {
                 // Chest victory: the lid swings on its hinge, a shaft of gold
                 // light bursts up and coins fountain out of the cavity.
-                const chestImg = this.chestImages[effect.dungeonType];
+                const chestImg = this.chestImageFor(effect.dungeonType);
                 const size = tileSize * 1.75;
                 const open = Math.min(1, progress * 1.6);
                 const cx = screenX;
