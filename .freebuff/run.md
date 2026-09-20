@@ -34,6 +34,8 @@ blocked; every one of them is a redeploy away, and no code change is needed.
 | Mobile wallets | `PRIVY_APP_ID` (+ `PRIVY_CLIENT_ID`), and the chain enabled for the app | *Wallets: injected first…* |
 | Server-signed payouts (V4) | the contract deployed in Remix, then `GAME_CONTRACT_V4` + `GAME_SIGNER_PRIVATE_KEY` | *Server-signed runs (Game V4)*, `docs/DEPLOY-GAME-V4.md` |
 | Phone gas | players fund their own embedded wallet | *Wallets: injected first…* |
+| The Staking Vault's DNG pool | `WEEKLY_POOL_DNG` (a number), once the tokenomics are out | *The Staking Vault* |
+| Real Genesis holdings | the four Phase 2 contracts deployed, then `GENESIS_NFT`, `STAKING_CONTRACT`, `RAFFLE_CONTRACT`, `CAPSULE_NFT` | *The Staking Vault* |
 
 Until the first two are set, the deployment is honest about it: the Points page shows its amber
 "not persistent" banner, and the wallet facade stays dormant.
@@ -170,6 +172,48 @@ dungeon's chest and the squad's tiers (`squadKnightTiers()`), with `chestImageFo
 `knightImageFor()` fetching anything else lazily, so a missing entry can never draw blank.
 Measured on a Void Rift load: **1 chest fetched instead of 5, 3 knight sprites instead of 6,
 and only the void map video.**
+
+### The Staking Vault (`/staking`)
+
+Phase 2's page, built UI-first: it runs on a labelled preview until the four contracts exist, and
+switches to real holdings on its own when they do.
+
+- **Page** — `app/staking/client.js` (React, like `/points`) with its rules in
+  `lib/staking-config.js` and its data in `lib/staking-source.js`. Styles are scoped under
+  `.staking-page` in `public/css/staking.css`, so `theme.css` and `layout.css` are untouched.
+- **One place for every number** — `lib/staking-config.js`. Tickets are
+  `floor(min(stakedHours, 168) × hashPower)`; the weekly pool is `WEEKLY_POOL_DNG` and is
+  deliberately `null` until the tokenomics land, which is why the page reads `TBD`.
+- **The pool is set by env, not by code.** `WEEKLY_POOL_DNG=15000` in the deployment turns every
+  `TBD` into real DNG — the tile, the per-knight accrual and the claim button — with no rebuild.
+- **Preview vs chain** — `/api/staking/config` reports `chain: false` while any of the four
+  addresses is missing, and the left panel wears a **Preview data** badge. Holdings are seeded
+  deterministically from the wallet, so the same address always sees the same knights.
+- **The live figure is the accrual line** under the summary (`Accruing now · …`). While the pool is
+  `TBD` it counts the share of the pool, printed to five decimals because a week of
+  seconds is a small number and two decimals would sit still for half a minute.
+- **Actions are pure functions** in `lib/staking-source.js` (`applyAction`), so every path — stake,
+  unstake, claim, enter, withdraw, open a capsule — is proven without a wallet.
+
+Verify it:
+
+```bash
+node tools/check-staking.js        # 109 checks: week clock, tickets, capsule odds, actions
+```
+
+In the browser, on `/staking`, after copying the battery into `public/`:
+
+```js
+window.__check.reset(); await window.__check.staking(); window.__check.report();
+```
+
+46 checks — tab ARIA wiring, arrow keys and the URL, the tick actually moving, staking and
+unstaking a knight, the claim refusing with a reason while the pool is `TBD`, and no horizontal
+overflow. The battery puts back any knight it stakes.
+
+**Known and deliberate**, so it is not mistaken for a bug: with 200 capsules a week and few
+knights staked, one entry can expect most of a draw. That is the formula working; the raffle tab
+states the expected share rather than hiding it.
 
 ### The Points Vault is not an engine dungeon
 

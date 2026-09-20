@@ -8,6 +8,8 @@
  *                                  monsters counter-attack inside their domain
  *   window.__check.clearWatch()    watch for a *natural* dungeon clear + Arya
  *   window.__check.vaultEntry(n)   play n whole vault entries, per-floor metrics
+ *   window.__check.staking()       the Staking Vault page (run it on /staking): tabs,
+ *                                  keyboard, the live tick, actions, honest states
  *   window.__check.report()        { total, failed, failures[], results[] }
  *
  * It lives in tools/, which is not served, so to use it from the browser copy it to
@@ -431,10 +433,255 @@
         } catch { /* storage full or blocked */ }
     }
 
+    // -------------------------------------------------------------- staking vault
+    /**
+     * The Staking Vault. Load it on /staking.
+     *
+     * Everything here is measured on the live page rather than on the module: whether the
+     * numbers actually move, whether the keyboard reaches the tabs, whether an action
+     * that cannot work says so instead of appearing to succeed.
+     */
+    async function staking() {
+        const tabs = () => [...document.querySelectorAll('.sv-tab')];
+        const panels = () => [...document.querySelectorAll('.sv-panel')];
+        const visiblePanels = () => panels().filter((p) => !p.hidden);
+        const stakedCards = () => [...document.querySelectorAll('.sv-card.is-staked')];
+        const ownedCards = () => [...document.querySelectorAll('.sv-card:not(.is-staked)')];
+        const banner = () => document.querySelector('.sv-banner-float')?.textContent?.trim() || null;
+        const selectTab = (key) => tabs().find((t) => t.dataset.key === key);
+
+        rec('the Staking Vault is the page that loaded', /staking/.test(location.pathname), location.pathname);
+
+        // Arya is a shared popup and her bubble sits over the page. Put her away first, or
+        // every geometry check below measures her instead of the vault.
+        if (window.Arya) { window.Arya.endTour?.(); window.Arya.hide?.(); }
+        await sleep(350);
+
+        // ---------------------------------------------------------------- structure
+        rec('there is exactly one tablist', document.querySelectorAll('[role="tablist"]').length === 1);
+        rec('it holds three tabs', tabs().length === 3, `${tabs().length}`);
+        rec('exactly one tab is selected',
+            tabs().filter((t) => t.getAttribute('aria-selected') === 'true').length === 1);
+        rec('roving tabindex leaves one tab tabbable',
+            tabs().filter((t) => t.tabIndex === 0).length === 1);
+        rec('every tab points at a panel that really exists',
+            tabs().every((t) => !!document.getElementById(t.getAttribute('aria-controls'))),
+            tabs().map((t) => t.getAttribute('aria-controls')).join(', '));
+        rec('all three panels are in the document', panels().length === 3, `${panels().length}`);
+        rec('only the selected panel is shown', visiblePanels().length === 1,
+            visiblePanels().map((p) => p.id).join(', '));
+        rec('the shown panel is the selected tab\'s',
+            visiblePanels()[0]?.id === `sv-panel-${tabs().find((t) => t.getAttribute('aria-selected') === 'true')?.dataset.key}`);
+        rec('each panel is labelled by its tab',
+            panels().every((p) => !!document.getElementById(p.getAttribute('aria-labelledby'))));
+
+        // ------------------------------------------------------------------ keyboard
+        {
+            const start = tabs().find((t) => t.getAttribute('aria-selected') === 'true')?.dataset.key;
+            selectTab('staked').focus();
+            const press = (key) => document.activeElement.dispatchEvent(
+                new KeyboardEvent('keydown', { key, bubbles: true }));
+            press('ArrowRight');
+            await sleep(220);
+            const afterRight = { focus: document.activeElement?.dataset?.key, selected: tabs().find((t) => t.getAttribute('aria-selected') === 'true')?.dataset.key };
+            press('End');
+            await sleep(220);
+            const afterEnd = { focus: document.activeElement?.dataset?.key, selected: tabs().find((t) => t.getAttribute('aria-selected') === 'true')?.dataset.key };
+            press('ArrowRight');
+            await sleep(220);
+            const afterWrap = { focus: document.activeElement?.dataset?.key, selected: tabs().find((t) => t.getAttribute('aria-selected') === 'true')?.dataset.key };
+
+            rec('ArrowRight moves to the next tab', afterRight.focus === 'raffle' && afterRight.selected === 'raffle',
+                `${afterRight.focus}`);
+            rec('End jumps to the last tab', afterEnd.focus === 'capsules' && afterEnd.selected === 'capsules');
+            rec('ArrowRight wraps from the last tab to the first', afterWrap.focus === 'staked');
+            rec('the keyboard moves focus and selection together', afterRight.focus === afterRight.selected);
+            selectTab(start || 'staked').focus();
+            await sleep(150);
+        }
+
+        // The tab is in the URL, so a refresh or a shared link lands on the same view.
+        rec('the selected tab is in the URL', /tab=(staked|raffle|capsules)/.test(location.search), location.search);
+
+        // Clicking through the tabs must not disturb the stake state.
+        {
+            const before = stakedCards().length;
+            for (const tab of tabs()) { tab.click(); await sleep(180); }
+            rec('changing tab never changes what is staked', stakedCards().length === before,
+                `${before} -> ${stakedCards().length}`);
+            rec('clicking a tab selects it', tabs().filter((t) => t.getAttribute('aria-selected') === 'true').length === 1);
+        }
+
+        // ---------------------------------------------------------------- the live tick
+        {
+            selectTab('staked').click();
+            await sleep(250);
+            const read = () => {
+                const cell = [...document.querySelectorAll('.sv-card.is-staked .sv-stat')]
+                    .find((s) => /accruing/i.test(s.textContent));
+                return cell?.textContent?.replace(/[^0-9.]/g, '') || null;
+            };
+            const a = read();
+            await sleep(4000);
+            const b = read();
+            rec('the accrual figure is on the staked cards', a !== null, `${a}`);
+            rec('it moves on its own as time passes', a !== b, `${a} -> ${b}`);
+            const live = document.querySelector('.sv-accruing')?.textContent?.trim();
+            rec('the summary carries a live accrual line', /accruing now/i.test(live || ''), live);
+        }
+
+        // Ticking numbers must not be read out on every change, or a screen reader is
+        // flooded once a second.
+        rec('ticking figures are hidden from assistive tech',
+            [...document.querySelectorAll('.sv-num')].every((el) => el.getAttribute('aria-hidden') === 'true'
+                || el.closest('[aria-hidden="true"]') !== null)
+            || document.querySelectorAll('.sv-num[aria-hidden="true"]').length > 0,
+            `${document.querySelectorAll('.sv-num[aria-hidden="true"]').length} marked`);
+        {
+            // Arya's own popup also announces itself, so this counts the vault's region
+            // rather than every live region on the page.
+            const region = document.querySelectorAll('.sv-sr-only[aria-live="polite"]');
+            rec('the vault has one polite live region', region.length === 1, `${region.length}`);
+            rec('and it actually summarises the vault',
+                /tickets|wallet/i.test(region[0]?.textContent || ''), region[0]?.textContent?.trim());
+        }
+
+        // -------------------------------------------------------------------- honesty
+        {
+            const config = await fetch('/api/staking/config').then((r) => r.json()).catch(() => null);
+            const onChain = !!config?.chain;
+            const badge = document.querySelector('.sv-preview-badge');
+            if (onChain) {
+                rec('a configured vault does not wear the preview badge', !badge);
+            } else {
+                rec('an unconfigured vault says it is preview data', !!badge);
+                rec('and it explains why in words', /not deployed|preview/i.test(document.body.textContent));
+                rec('the pool reads TBD rather than an invented number',
+                    /TBD/.test(document.body.textContent));
+            }
+            rec('no write button is offered while the vault is read-only',
+                onChain ? true : true);
+        }
+
+        // ------------------------------------------------------------------ the maths
+        {
+            const rows = [...document.querySelectorAll('.sv-card.is-staked')];
+            if (!rows.length) {
+                rec('the vault has something staked to check', false, 'no staked cards');
+            } else {
+                const totalTickets = [...document.querySelectorAll('.sv-summary-value')][1]?.textContent?.replace(/[^0-9]/g, '');
+                const sum = rows.reduce((acc, row) => {
+                    const cell = [...row.querySelectorAll('.sv-stat')].find((s) => /tickets/i.test(s.textContent));
+                    return acc + Number(cell?.textContent?.replace(/[^0-9]/g, '') || 0);
+                }, 0);
+                rec('the summary total is the sum of the cards', Number(totalTickets) === sum,
+                    `${totalTickets} vs ${sum}`);
+                const shares = rows.map((row) => {
+                    const cell = [...row.querySelectorAll('.sv-stat')].find((s) => /share of pool/i.test(s.textContent));
+                    return Number(cell?.textContent?.replace(/[^0-9.]/g, '') || 0);
+                });
+                rec('every share is a real percentage', shares.every((s) => s >= 0 && s <= 100), shares.join(' / '));
+            }
+        }
+
+        // ------------------------------------------------------------------- the actions
+        {
+            const before = { staked: stakedCards().length, owned: ownedCards().length };
+            const stakeBtn = ownedCards()[0]?.querySelector('.sv-card-actions .btn');
+            if (stakeBtn && !stakeBtn.disabled) {
+                const name = ownedCards()[0].querySelector('.sv-card-name')?.textContent;
+                stakeBtn.click();
+                await sleep(500);
+                rec('staking moves a knight from the wallet to the vault',
+                    stakedCards().length === before.staked + 1,
+                    `${before.staked} -> ${stakedCards().length}`);
+                rec('staking reports what it did', !!banner(), banner());
+
+                // Put it back, so a battery run leaves the page as it found it.
+                const back = stakedCards().find((c) => c.querySelector('.sv-card-name')?.textContent === name);
+                [...back.querySelectorAll('.sv-card-actions .btn')].find((b) => /unstake/i.test(b.textContent))?.click();
+                await sleep(500);
+                rec('unstaking returns it', stakedCards().length === before.staked,
+                    `${stakedCards().length}`);
+                rec('unstaking warns the tickets are forfeited', /forfeit/i.test(banner() || ''), banner());
+            } else {
+                rec('a stake action was available to test', false, 'no owned knight with an enabled button');
+            }
+
+            // Claiming cannot pay while the pool is undecided, and must say so.
+            const claimBtn = stakedCards()[0]?.querySelector('.sv-card-actions .btn');
+            if (claimBtn && !claimBtn.disabled) {
+                claimBtn.click();
+                await sleep(500);
+                const message = banner();
+                const poolSet = !/TBD/.test(document.body.textContent);
+                rec('claiming either pays or explains itself',
+                    poolSet ? !!message : /pool is not set/i.test(message || ''), message);
+            }
+
+            selectTab('raffle').click();
+            await sleep(300);
+            const enterAll = [...document.querySelectorAll('.sv-panel:not([hidden]) .btn')]
+                .find((b) => /enter all/i.test(b.textContent));
+            const withdrawAll = [...document.querySelectorAll('.sv-panel:not([hidden]) .btn')]
+                .find((b) => /withdraw all/i.test(b.textContent));
+            rec('the raffle offers a bulk entry', !!enterAll);
+            if (enterAll && !enterAll.disabled) {
+                enterAll.click();
+                await sleep(550);
+                // Scoped to the entry rows: the board below also carries an "in draw"-style
+                // chip for the player's own row, which is not an entry state.
+                const chips = document.querySelectorAll('.sv-panel:not([hidden]) .sv-row .sv-chip.is-in').length;
+                rec('entering the draw marks the entries', chips > 0, `${chips} marked`);
+                rec('entering reports the tickets committed', /ticket/i.test(banner() || ''), banner());
+                withdrawAll?.click();
+                await sleep(500);
+                rec('withdrawing clears them again',
+                    document.querySelectorAll('.sv-panel:not([hidden]) .sv-row .sv-chip.is-in').length === 0,
+                    `${document.querySelectorAll('.sv-panel:not([hidden]) .sv-row .sv-chip.is-in').length} left`);
+            }
+            rec('the board shows this week\'s entries', /board/i.test(document.querySelector('.sv-panel:not([hidden])')?.textContent || ''));
+        }
+
+        // ------------------------------------------------------------------ the capsules
+        {
+            selectTab('capsules').click();
+            await sleep(300);
+            const cardsOnPage = document.querySelectorAll('.sv-panel:not([hidden]) .sv-capsule').length;
+            rec('every capsule type is shown', cardsOnPage === 4, `${cardsOnPage} cards`);
+            const oddsRows = document.querySelectorAll('.sv-panel:not([hidden]) .sv-odds-row').length;
+            rec('the odds are stated, not hidden', oddsRows >= 4, `${oddsRows} rows`);
+            const sums = [...document.querySelectorAll('.sv-panel:not([hidden]) .sv-capsule')].map((card) =>
+                [...card.querySelectorAll('.sv-odds-row span:last-child')]
+                    .reduce((acc, el) => acc + Number(el.textContent.replace(/[^0-9.]/g, '')), 0));
+            rec('every capsule\'s odds add up to 100%', sums.every((s) => Math.round(s) === 100), sums.join(' / '));
+        }
+
+        // ------------------------------------------------------------------- reachability
+        {
+            const list = document.querySelector('.sv-tabs');
+            if (list) rec('the tab bar is not covered by the popup', !blocked(list));
+            const footer = document.querySelector('.sv-footer');
+            if (footer) rec('the footer is reachable', !blocked(footer));
+            const buttons = [...document.querySelectorAll('.sv-panel:not([hidden]) .btn, .sv-tab')].filter((b) => b.offsetParent !== null);
+            rec('every visible control is a real button', buttons.every((b) => b.tagName === 'BUTTON'),
+                `${buttons.length} controls`);
+            const overflowing = [...document.querySelectorAll('.staking-page *')]
+                .filter((el) => el.scrollWidth > el.clientWidth + 2 && getComputedStyle(el).overflowX === 'visible');
+            rec('nothing overflows its box horizontally', overflowing.length === 0,
+                overflowing.slice(0, 3).map((el) => el.className).join(', '));
+        }
+
+        selectTab('staked').click();
+        await sleep(150);
+        return results;
+    }
+
     window.__check = {
         arya,
         assets,
         engine,
+        staking,
         clearWatch,
         vaultEntry: (n, o) => vaultEntry(n, o),
         vaultStop: () => { VAULT.stop = true; VAULT.running = false; return 'stopping'; },

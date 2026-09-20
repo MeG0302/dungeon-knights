@@ -1,0 +1,737 @@
+/* ==========================================================
+   STAKING VAULT
+   Built entirely on theme.css tokens. Everything is scoped
+   under .staking-page so this file cannot reach the other
+   pages — the Phase 2 brief puts theme.css and layout.css
+   off limits, so the segmented tab control lives here too.
+   ========================================================== */
+
+/* The page shell. `min-height: 0` on the flex children is what keeps a long staked
+   list scrolling inside its panel instead of stretching the row and pushing the
+   footer off screen (the same trap the Points page documents). */
+.staking-page .sv-main-row,
+.staking-page .side-panel-body {
+    min-height: 0;
+}
+
+.staking-page .side-panel-body {
+    overflow-y: auto;
+}
+
+/* Ticking counters must not shove their neighbours around as the digits change
+   width, so every live figure is tabular. */
+.sv-num {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+}
+
+/* ---------------------------------------------------------------- the preview badge
+   Shown whenever the vault is not reading real contracts. It is deliberately
+   impossible to mistake for decoration. */
+.sv-preview-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    border: 1px solid var(--border-gold);
+    border-radius: var(--radius-sm);
+    background: rgba(212, 175, 55, 0.08);
+    color: var(--accent-gold);
+    font-family: var(--font-heading);
+    font-size: 9px;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.sv-preview-note {
+    font-size: 11px;
+    line-height: 1.55;
+    color: var(--text-muted);
+    border-left: 2px solid var(--border-bronze);
+    padding-left: 9px;
+}
+
+/* ------------------------------------------------------------------- summary card */
+.sv-summary {
+    border: 1px solid var(--border-base);
+    border-radius: var(--radius-md);
+    background: var(--bg-raised);
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.sv-summary-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.sv-summary-wallet {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.sv-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px 12px;
+}
+
+.sv-summary-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.sv-summary-label {
+    font-family: var(--font-heading);
+    font-size: 9px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.sv-summary-value {
+    font-family: var(--font-display);
+    font-size: 16px;
+    color: var(--text-primary);
+    line-height: 1.2;
+}
+
+.sv-summary-value.is-gold { color: var(--accent-gold); }
+.sv-summary-value.is-small { font-family: var(--font-body); font-size: 12px; font-weight: 600; }
+
+/* The one figure that visibly moves every second. */
+.sv-accruing {
+    font-size: 10.5px;
+    color: var(--text-secondary);
+    border-top: 1px solid var(--border-dim);
+    padding-top: 7px;
+}
+
+/* --------------------------------------------------------------- three stat tiles */
+.sv-tiles {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.sv-tile {
+    border: 1px solid var(--border-base);
+    border-radius: var(--radius-md);
+    background: linear-gradient(180deg, var(--bg-raised), var(--bg-panel));
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.sv-tile-label {
+    font-family: var(--font-heading);
+    font-size: 9px;
+    letter-spacing: 1.1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.sv-tile-value {
+    font-family: var(--font-display);
+    font-size: 19px;
+    color: var(--accent-gold);
+    line-height: 1.15;
+}
+
+.sv-tile-value.is-plain { color: var(--text-primary); }
+
+.sv-tile-sub {
+    font-size: 10.5px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+/* A phase that is decided by the clock, not by the player. */
+.sv-tile.is-drawing { border-color: var(--border-gold); }
+.sv-tile.is-drawing .sv-tile-value { color: var(--accent-gold-light); }
+
+/* Tab panels.
+
+   All three live in the DOM and the inactive two are hidden, rather than only the
+   active one being rendered. That is what lets every tab's `aria-controls` point at a
+   real element — a reference to something that does not exist is worse for a screen
+   reader than no reference at all.
+
+   The `[hidden]` rule has to be written out: the browser's own `[hidden] { display: none }`
+   is a user-agent rule, so the class below would otherwise win and show all three at
+   once. */
+.sv-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.sv-panel[hidden] {
+    display: none;
+}
+
+/* ------------------------------------------------------------ segmented tab control */
+.sv-tabs {
+    display: flex;
+    align-items: stretch;
+    gap: 2px;
+    border: 1px solid var(--border-base);
+    border-radius: var(--radius-md);
+    background: var(--bg-dark);
+    padding: 3px;
+}
+
+.sv-tab {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 8px 10px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: var(--font-heading);
+    font-size: 11px;
+    letter-spacing: 1.1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.sv-tab:hover {
+    color: var(--text-primary);
+    border-color: var(--border-bronze);
+}
+
+.sv-tab[aria-selected='true'] {
+    color: var(--accent-gold);
+    background: var(--bg-raised);
+    border-color: var(--border-bronze);
+}
+
+/* A count badge, so a tab can report without being opened. */
+.sv-tab-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 17px;
+    height: 16px;
+    padding: 0 5px;
+    border-radius: 8px;
+    border: 1px solid var(--border-base);
+    background: var(--bg-panel);
+    color: var(--text-secondary);
+    font-family: var(--font-body);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0;
+}
+
+.sv-tab[aria-selected='true'] .sv-tab-count {
+    border-color: var(--border-bronze);
+    color: var(--accent-gold);
+}
+
+/* ------------------------------------------------------------------ genesis cards */
+.sv-card-list {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+}
+
+.sv-card {
+    border: 1px solid var(--border-base);
+    border-left: 2px solid var(--border-bronze);
+    border-radius: var(--radius-md);
+    background: var(--bg-panel);
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.sv-card:hover {
+    border-color: var(--border-bronze);
+    background: var(--bg-raised);
+}
+
+.sv-card.is-staked { border-left-color: var(--accent-gold); }
+
+.sv-card-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.sv-card-name {
+    font-family: var(--font-heading);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: 0.4px;
+}
+
+.sv-card-meta {
+    font-size: 10.5px;
+    color: var(--text-muted);
+    margin-top: 2px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+/* The art slot. A real image drops straight in; until then the frame renders a drawn
+   silhouette, so the layout never depends on art that does not exist yet. */
+.sv-art {
+    width: 46px;
+    height: 46px;
+    flex-shrink: 0;
+    border: 1px solid var(--border-base);
+    border-radius: var(--radius-sm);
+    background:
+        radial-gradient(circle at 50% 34%, rgba(212, 175, 55, 0.14), transparent 62%),
+        var(--bg-dark);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+}
+
+.sv-art img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    image-rendering: pixelated;
+}
+
+.sv-art-glyph {
+    font-family: var(--font-display);
+    font-size: 20px;
+    color: var(--accent-gold-dim);
+    line-height: 1;
+}
+
+.sv-art[data-rarity='rare'] .sv-art-glyph { color: #7EB8DA; }
+.sv-art[data-rarity='legendary'] .sv-art-glyph { color: #D4AF37; }
+.sv-art[data-rarity='mythic'] .sv-art-glyph { color: #B07CD8; }
+
+/* Staked cards get a slow pulse instead of a spinner: it reads as "working", and it
+   stops entirely for anyone who has asked for less motion. */
+.sv-card.is-staked .sv-art::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    box-shadow: inset 0 0 10px rgba(212, 175, 55, 0.25);
+    animation: sv-breathe 3.6s ease-in-out infinite;
+}
+
+@keyframes sv-breathe {
+    0%, 100% { opacity: 0.25; }
+    50% { opacity: 0.75; }
+}
+
+.sv-card-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(74px, 1fr));
+    gap: 8px;
+    border-top: 1px solid var(--border-dim);
+    padding-top: 9px;
+}
+
+.sv-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.sv-stat-label {
+    font-family: var(--font-heading);
+    font-size: 8.5px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.sv-stat-value {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.sv-stat-value.is-gold { color: var(--accent-gold); }
+.sv-stat-value.is-tbd { color: var(--text-muted); font-weight: 500; }
+
+/* hashPower, 1–100, as a bar so the trait is legible at a glance */
+.sv-power {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sv-power-track {
+    flex: 1;
+    height: 4px;
+    min-width: 34px;
+    border-radius: 2px;
+    background: var(--bg-dark);
+    border: 1px solid var(--border-dim);
+    overflow: hidden;
+}
+
+.sv-power-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-gold-dim), var(--accent-gold));
+}
+
+.sv-card-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+/* Actions sit together on the right rather than stretching across the card — a lone
+   Stake button that fills the width reads as the card's whole purpose, which it is not. */
+.sv-card-actions {
+    justify-content: flex-end;
+}
+
+.sv-card-actions .btn {
+    flex: 0 1 auto;
+    min-width: 96px;
+    justify-content: center;
+}
+
+/* ------------------------------------------------------------------------ badges */
+.sv-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    border: 1px solid var(--border-base);
+    background: var(--bg-dark);
+    color: var(--text-secondary);
+    font-size: 9.5px;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+}
+
+.sv-chip.is-in { border-color: var(--border-bronze); color: var(--accent-gold); }
+.sv-chip.is-capped { border-color: var(--border-bronze); color: var(--text-gold); }
+
+/* ---------------------------------------------------------------------- roll list */
+.sv-rows {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border-base);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.sv-row {
+    display: grid;
+    grid-template-columns: 1.5fr 0.8fr 0.8fr 0.9fr auto;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--border-dim);
+    background: var(--bg-panel);
+    font-size: 12px;
+}
+
+.sv-row:last-child { border-bottom: none; }
+.sv-row:nth-child(even) { background: var(--bg-raised); }
+
+.sv-row-head {
+    background: var(--bg-dark);
+    color: var(--text-muted);
+    font-family: var(--font-heading);
+    font-size: 9px;
+    letter-spacing: 1.1px;
+    text-transform: uppercase;
+    padding-top: 7px;
+    padding-bottom: 7px;
+}
+
+.sv-row-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.sv-row-num {
+    font-variant-numeric: tabular-nums;
+    color: var(--text-secondary);
+}
+
+.sv-row-num.is-gold { color: var(--accent-gold); }
+.sv-row-num.is-tbd { color: var(--text-muted); }
+
+.sv-row-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+}
+
+/* The board narrows to two columns on small panels. */
+.sv-board-row {
+    display: grid;
+    grid-template-columns: 32px 1.4fr 1fr 0.7fr;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 12px;
+    border-bottom: 1px solid var(--border-dim);
+    font-size: 12px;
+}
+
+.sv-board-row:last-child { border-bottom: none; }
+.sv-board-row:nth-child(even) { background: var(--bg-raised); }
+
+.sv-board-rank {
+    font-family: var(--font-display);
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.sv-board-row.is-me { background: rgba(212, 175, 55, 0.07); }
+.sv-board-row.is-me .sv-board-rank { color: var(--accent-gold); }
+
+/* ------------------------------------------------------------------- capsule grid */
+.sv-capsule-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 10px;
+}
+
+.sv-capsule {
+    border: 1px solid var(--border-base);
+    border-radius: var(--radius-md);
+    background: var(--bg-panel);
+    padding: 11px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sv-capsule.is-empty { opacity: 0.5; }
+
+.sv-capsule-head {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+
+.sv-capsule-count {
+    font-family: var(--font-display);
+    font-size: 17px;
+    color: var(--accent-gold);
+    margin-left: auto;
+}
+
+.sv-odds {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    border-top: 1px solid var(--border-dim);
+    padding-top: 8px;
+}
+
+.sv-odds-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 10.5px;
+    color: var(--text-secondary);
+}
+
+.sv-odds-row span:last-child {
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+/* --------------------------------------------------------------- empty and states */
+.sv-empty {
+    border: 1px dashed var(--border-bronze);
+    border-radius: var(--radius-md);
+    background: rgba(26, 23, 20, 0.65);
+    padding: 26px 20px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 9px;
+}
+
+.sv-empty-title {
+    font-family: var(--font-heading);
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-primary);
+}
+
+.sv-empty-text {
+    font-size: 11.5px;
+    line-height: 1.6;
+    color: var(--text-muted);
+    max-width: 420px;
+}
+
+/* A sticky bar for bulk actions, so "stake all" is reachable without scrolling. */
+.sv-bulk {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    border: 1px solid var(--border-base);
+    border-radius: var(--radius-md);
+    background: var(--bg-raised);
+    padding: 9px 11px;
+}
+
+.sv-bulk-note {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-right: auto;
+}
+
+/* ------------------------------------------------------------------------ messages */
+.sv-banner {
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-bronze);
+    background: var(--bg-raised);
+    padding: 9px 12px;
+    font-size: 11.5px;
+    line-height: 1.55;
+    color: var(--text-secondary);
+    display: flex;
+    gap: 9px;
+    align-items: flex-start;
+}
+
+.sv-banner.is-error { border-color: var(--danger); color: #e8b3ad; }
+.sv-banner.is-good { border-color: var(--success); color: var(--text-primary); }
+
+.sv-banner-x {
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+    padding: 2px 4px;
+    opacity: 0.7;
+}
+
+.sv-banner-x:hover { opacity: 1; }
+
+/* Floats over whatever is on screen, including a busy tab. */
+.sv-banner-float {
+    position: fixed;
+    right: 18px;
+    bottom: 52px;
+    max-width: 380px;
+    z-index: 60;
+    box-shadow: var(--shadow-lg);
+    background: var(--bg-raised);
+}
+
+.sv-footer {
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    background: var(--bg-dark);
+    border-top: 1px solid var(--border-base);
+    flex-shrink: 0;
+}
+
+.sv-footer-note {
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+}
+
+/* The way back into Arya's walkthrough, matching the Points page. */
+.sv-arya-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    border-color: transparent;
+    padding: 3px 10px;
+}
+
+.sv-arya-btn:hover {
+    color: var(--accent-gold);
+    border-color: var(--border-bronze);
+}
+
+/* Screen-reader-only live summary: the ticking numbers themselves are decorative to a
+   reader, so they are hidden and this speaks once per change instead. */
+.sv-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ------------------------------------------------------------------------ motion */
+@media (prefers-reduced-motion: reduce) {
+    .sv-card.is-staked .sv-art::after { animation: none; opacity: 0.4; }
+    .sv-tab { transition: none; }
+}
+
+/* --------------------------------------------------------------------- narrow view */
+/* Three tiles hold their row down to 720px — they only need to stack below that, where
+   each would be narrower than its own contents. */
+@media (max-width: 900px) {
+    .sv-tile-value { font-size: 17px; }
+}
+
+@media (max-width: 720px) {
+    .sv-tiles { grid-template-columns: 1fr; }
+    .sv-summary-grid { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 760px) {
+    .staking-page .sv-main-row { flex-direction: column; overflow-y: auto; }
+    .staking-page .sv-main-row > .side-panel { width: 100% !important; }
+    .sv-row { grid-template-columns: 1.4fr 1fr auto; row-gap: 6px; }
+    .sv-row > .sv-col-hide-narrow { display: none; }
+    .sv-row-head > .sv-col-hide-narrow { display: none; }
+}

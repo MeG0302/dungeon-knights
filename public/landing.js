@@ -30,6 +30,7 @@ class LandingPage {
         this.summonKnightBtn.addEventListener('mouseenter', startMusic, { once: true });
         this.marketplaceBtn.addEventListener('mouseenter', startMusic, { once: true });
         this.pointsBtn.addEventListener('mouseenter', startMusic, { once: true });
+        this.stakingBtn.addEventListener('mouseenter', startMusic, { once: true });
         this.leaderboardBtn.addEventListener('mouseenter', startMusic, { once: true });
         
         // Also try on any click
@@ -41,6 +42,7 @@ class LandingPage {
         this.summonKnightBtn = document.getElementById('summonKnightBtn');
         this.marketplaceBtn = document.getElementById('marketplaceBtn');
         this.pointsBtn = document.getElementById('pointsBtn');
+        this.stakingBtn = document.getElementById('stakingBtn');
         this.leaderboardBtn = document.getElementById('leaderboardLandingBtn');
         
         // Stats elements
@@ -180,6 +182,14 @@ class LandingPage {
             alert('🏪 Marketplace coming soon!');
         });
         
+        // Staking Vault - Stake Genesis Knights, earn from the weekly pool
+        this.stakingBtn.addEventListener('click', () => {
+            if (window.audioManager) {
+                window.audioManager.play('button_click');
+            }
+            window.location.href = '/staking';
+        });
+
         // Points Program
         this.pointsBtn.addEventListener('click', () => {
             if (window.audioManager) {
