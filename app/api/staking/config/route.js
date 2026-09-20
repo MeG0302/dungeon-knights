@@ -85,7 +85,12 @@ export async function GET() {
     return NextResponse.json({
         chain: missing.length === 0,
         reason: missing.length
-            ? `The staking contracts are not deployed on this network yet (missing ${missing.join(', ')}), so this vault is showing preview data.`
+            // Deliberately no verdict about what the page is showing. This sentence is used in two
+            // different states — a labelled preview when no collection exists, and a simulation
+            // over **real** knights when one does — so claiming "preview data" here was wrong in
+            // the second case, and the page repeated it verbatim to a player looking at their own
+            // knights. The route states the fact; the snapshot and the page say what it means.
+            ? `The staking contracts are not deployed on this network yet (missing ${missing.join(', ')}).`
             : null,
         addresses: ADDRESSES,
         vaultLive: Boolean(ADDRESSES.vault),

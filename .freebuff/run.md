@@ -303,14 +303,38 @@ The vault shows the knights a wallet **actually owns**, read from the deployed c
   the list is short and how many the contract reports. That is the case the whole interface exists
   for — an unenumerable contract can produce a partial answer, and the only bad outcome is a
   partial answer that looks finished.
-- **Ownership is read live even while staking is not.** `staked` is always empty and that is not a
-  placeholder: nothing can be staked until the staking contract exists.
+- **A real knight can still be staked, and that is a simulation.** `chainSnapshot` used to answer
+  `canWrite: false` for the whole vault the moment staking was undeployed, which turned 45 real
+  knights into a page with **every control dead** — indistinguishable from a broken page, and it
+  hid the mechanics the vault exists to show. A side with a real collection is now `canWrite: true`
+  with `simulated: true`, and says what it is in three places: the badge (*"● Real knights ·
+  simulated staking"*), an amber banner in the panel, and a **Simulated** chip on anything the
+  player has staked. A side with **no** collection is still genuinely inert (`canWrite: false`,
+  `simulated: false`) because there is nothing to act on.
+- **Two different claims must never share one sentence.** "The knights are invented" (the preview
+  badge) and "the knights are real, the stake is not" (the simulation badge) are separate claims,
+  and a player acting on one must not be reading the other. The route's `reason` string used to end
+  *"…so this vault is showing preview data"* and the simulation banner repeated it verbatim to a
+  player looking at their own 45 knights. **The route now states the fact and carries no verdict**
+  about what the page is showing; the snapshot and the page say what it means. Pinned by
+  `check-staking`.
+- **The node throttles, so a page load must not depend on one clean read.** A read is three calls
+  (logs, `balanceOf`, the ownership batch) and one load can ask twice, and **HTTP 429** then
+  produced *"the chain could not be read just now"* over a wallet's real knights. Two fixes:
+  `rpcBatch` retries four times with exponential backoff **plus jitter** (a fixed pause
+  synchronised across concurrent readers is the worst thing to send at a throttling node), and
+  `/api/staking/holdings` holds a wallet's answer for **30 seconds** — 2.48s → 0.007s on a repeat
+  request. It is a cache, not a store: failures are never remembered, so a throttle is followed by
+  a real retry.
+- **Ownership is read live even while staking is not.** `staked` starts empty because nothing has
+  been staked yet, not as a placeholder.
 
 Verify it:
 
 ```bash
-node tools/check-staking.js        # 143 checks: week clock, tickets, capsule odds, actions,
-                                   #   and the real-holdings wiring (fetch stubbed, no network)
+node tools/check-staking.js        # 150 checks: week clock, tickets, capsule odds, actions,
+                                   #   the real-holdings wiring and the simulated-stake state
+                                   #   (fetch stubbed, no network)
 node tools/check-staking-chain.js  # 19 checks: the collection's shape and a live wallet read
 node tools/check-rarity.js         # 44 checks: the economy, incl. capsule outcomes
 node tools/check-identifiers.js    # 4 checks: every name a bundled module uses is defined
@@ -332,7 +356,7 @@ In the browser, on `/staking`, after copying the battery into `public/`:
 window.__check.reset(); await window.__check.staking(); window.__check.report();
 ```
 
-**77 checks on the current deployment** (86 when nothing is live, because the preview-only
+**87 checks on the current deployment** (more when nothing is live, because the preview-only
 branches have more to assert) — tab ARIA wiring, arrow keys and the URL, no horizontal overflow,
 and every capsule offering only a payable tier (checked against the tier list the server returns,
 not against the page). It also covers the interactive layer: the ladder draws six bars whose

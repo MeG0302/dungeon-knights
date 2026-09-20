@@ -16,6 +16,13 @@ import {
     applyAction, knightsYieldAtCap, loadVault, refresh, SOURCE_PREVIEW,
 } from '../../lib/staking-source';
 
+// The tier ladder's own range, for the same reason the Genesis side has one: a bar drawn against
+// the wrong range is not a rough picture of the value, it is a bar that is always empty. Knights
+// run 15–100 hash power where Genesis runs 300–1000, so a Knight measured on Genesis's scale
+// pegged at zero — and did, until this was split.
+const KNIGHTS_HP_MIN = Math.min(...KNIGHTS_HASH_POWER.map((tier) => tier.hashPower));
+const KNIGHTS_HP_MAX = Math.max(...KNIGHTS_HASH_POWER.map((tier) => tier.hashPower));
+
 const TABS = [
     { key: 'staked', label: 'Staked' },
     { key: 'raffle', label: 'Raffle' },
@@ -516,7 +523,7 @@ export default function StakingClient() {
     const pageStyles = (
         <>
             <link rel="stylesheet" href="/theme.css" />
-            <link rel="stylesheet" href="/css/staking.css?v=4" />
+            <link rel="stylesheet" href="/css/staking.css?v=5" />
             <link rel="stylesheet" href="/css/wallet-widget.css" />
             <link rel="stylesheet" href="/css/arya.css?v=3" />
             <Script src="/arya.js?v=3" strategy="afterInteractive" />
@@ -555,6 +562,10 @@ export default function StakingClient() {
     // took the whole page down. Every write control now reads this flag instead.
     const canWrite = !!live?.canWrite;
     const isPreview = live?.source === SOURCE_PREVIEW;
+    // Real holdings, no staking contract: the controls work, and every one of them is a
+    // simulation. Read from the snapshot rather than derived here, because the page must not
+    // decide for itself whether it can write.
+    const simulated = !!live?.simulated;
     const isKnights = collection === 'knights';
     // What the chain read actually managed, when one was attempted. Kept whole rather than
     // reduced to a count, because the honest part is not how many knights came back — it is
@@ -614,6 +625,18 @@ export default function StakingClient() {
         </span>
     );
 
+    // Real knights, simulated staking. The badge is separate from the preview one on purpose:
+    // "the knights are invented" and "the knights are real but the stake is not" are different
+    // claims, and a player deciding whether to act needs to know which one they are looking at.
+    const simulationBadge = simulated && (
+        <span
+            className="sv-preview-badge is-sim"
+            title="Your knights are real, read from the collection. The staking contract is not deployed, so staking here is a simulation and sends no transaction."
+        >
+            ● Real knights · simulated staking
+        </span>
+    );
+
     return (
         <>
             {pageStyles}
@@ -647,6 +670,7 @@ export default function StakingClient() {
                             <img src="assets/ui/shield.png" className="panel-header-icon" alt="" />
                             My {collectionLabel}
                             {previewBadge}
+                            {simulationBadge}
                         </div>
                         <div className="side-panel-body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
 
@@ -1002,6 +1026,7 @@ export default function StakingClient() {
                                                     key={knight.tokenId}
                                                     knight={knight}
                                                     collection={collection}
+                                                    simulated={simulated}
                                                     busy={busy}
                                                     canWrite={canWrite}
                                                     onStake={() => run('stake', { tokenId: knight.tokenId })}
@@ -1018,6 +1043,7 @@ export default function StakingClient() {
                                                     knight={knight}
                                                     staked
                                                     collection={collection}
+                                                    simulated={simulated}
                                                     busy={busy}
                                                     canWrite={canWrite}
                                                     nowMs={nowMs}
@@ -1496,8 +1522,12 @@ export default function StakingClient() {
                                 )}
                             </section>
 
-                            {!canWrite && connected && (
-                                <div className="sv-banner">
+                            {/* The reason a control might not do what it looks like it does. It
+                                fires for two different situations and they must not read the same:
+                                a simulated stake (the button works, nothing reaches the chain) and
+                                an inert side (the button is disabled). */}
+                            {(simulated || (!canWrite && connected)) && live.writeBlockedReason && (
+                                <div className={`sv-banner${simulated ? ' is-sim' : ''}`}>
                                     <span>{live.writeBlockedReason}</span>
                                 </div>
                             )}
@@ -1535,20 +1565,28 @@ export default function StakingClient() {
  * earn, and the staked face is the one with live numbers on it.
  */
 function GenesisCard({
-    knight, staked = false, busy, canWrite, nowMs, onStake, onClaim, onUnstake, collection = 'genesis',
+    knight, staked = false, busy, canWrite, simulated = false, nowMs,
+    onStake, onClaim, onUnstake, collection = 'genesis',
 }) {
     // The card is the same card on both sides — a stake is a stake — but what the hours
     // *bank* is not: Genesis banks tickets into the weekly draw, Knights bank weight into
     // the yield split. Naming it correctly is the difference between a number and a promise.
     const unit = collection === 'knights' ? 'weight' : 'tickets';
+    const isKnightsCard = collection === 'knights';
     const hours = staked ? (nowMs - knight.stakedAt) / 3_600_000 : 0;
-    // The bar measures position inside the collection's published range, not the raw
-    // number: at 300–1000 a raw value would peg the bar full for every knight.
+    // The bar measures position inside the **collection's own** published range, not the raw
+    // number. Both halves matter: a raw value pegs the bar full for every Genesis knight, and
+    // the other collection's range pegs it empty for every Knight.
+    const powerMin = isKnightsCard ? KNIGHTS_HP_MIN : HASH_POWER_MIN;
+    const powerMax = isKnightsCard ? KNIGHTS_HP_MAX : HASH_POWER_MAX;
     const powerPct = Math.min(100, Math.max(0,
-        (((knight.hashPower || 0) - HASH_POWER_MIN) / (HASH_POWER_MAX - HASH_POWER_MIN)) * 100));
-    // The band is the honest label for a knight: it comes from the published table, so a
-    // player can check it, unlike a per-token rarity this collection does not publish.
-    const band = bandFor(knight.hashPower);
+        (((knight.hashPower || 0) - powerMin) / (powerMax - powerMin)) * 100));
+    // The label is the honest one for the collection. Genesis publishes *bands* — checkable, and
+    // the thing its staking is priced on — while a Knight is labelled by the **tier** it was
+    // minted at, which is what its hash power comes from. `bandFor` returns nothing for 15–100,
+    // so using it on both sides left every real Knight wearing no label at all.
+    const band = isKnightsCard ? null : bandFor(knight.hashPower);
+    const tierLabel = isKnightsCard ? (knight.tierName || null) : null;
     const rate = ticketsPerHour(knight.hashPower);
     const capped = hours >= TICKET_CAP_HOURS;
     const capPct = Math.min(100, (hours / TICKET_CAP_HOURS) * 100);
@@ -1569,7 +1607,13 @@ function GenesisCard({
                             <span className="sv-num">{knight.hashPower} HP</span>
                         </span>
                         {band && <span className="sv-chip" data-band={band.key}>{band.name}</span>}
+                        {tierLabel && <span className="sv-chip is-tier" data-tier={knight.rarity}>{tierLabel}</span>}
                         {staked && knight.entered && <span className="sv-chip is-in">In draw</span>}
+                        {staked && simulated && (
+                            <span className="sv-chip is-sim" title="No staking contract is deployed — this stake is a simulation and nothing was sent to the chain.">
+                                Simulated
+                            </span>
+                        )}
                     </span>
                 </span>
             </div>

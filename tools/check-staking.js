@@ -56,6 +56,7 @@ import {
     weekInfo,
 } from '../lib/staking-source.js';
 import { STAKING_SHARE_OF_DUNGEON, lineBudgets, weeklyBudgetDng } from '../lib/reward-config.js';
+import { readFileSync } from 'fs';
 
 const results = [];
 function rec(label, pass, detail) {
@@ -505,8 +506,34 @@ section('Loading the vault');
         real.holdings?.enumerable === false);
     rec('nothing is reported as staked, because no staking contract exists',
         real.staked.length === 0);
-    rec('and the reason staking is refused is carried, not invented on the page',
-        /not deployed/i.test(real.writeBlockedReason || ''), real.writeBlockedReason);
+    // A real collection with no staking contract: the controls must WORK, and the page must say
+    // what they are. Both halves are asserted because either alone is a lie — a dead page hides
+    // the mechanics, and a live page with no label lets a player believe their NFT is staked.
+    rec('a real collection with no staking contract stays playable', real.canWrite === true);
+    rec('and is reported as a simulation', real.simulated === true);
+    rec('the reason names the simulation, not a read-only page',
+        /simulation|not really staked/i.test(real.writeBlockedReason || ''), real.writeBlockedReason);
+    rec('and it says nothing is sent to the chain',
+        /nothing .*chain|no transaction/i.test(real.writeBlockedReason || ''));
+
+    // The route's reason sentence is reused in two different states — a labelled preview when no
+    // collection exists, and a simulation over REAL knights when one does — so it must not carry a
+    // verdict about what the page is showing. It used to end "...so this vault is showing preview
+    // data", which the simulation banner then repeated verbatim to a player looking at their own
+    // knights. The route states the fact; the snapshot says what it means.
+    const routeSource = readFileSync(new URL('../app/api/staking/config/route.js', import.meta.url), 'utf8');
+    rec('the route\u2019s reason carries no verdict about what the page is showing',
+        !/showing preview data/i.test(routeSource));
+
+    // Once staking is deployed the same side must stop claiming to be a simulation.
+    const deployed = await loadVault(WALLET, {
+        config: { ...CONFIG, chain: true, reason: null }, nowMs: T0, collection: 'knights',
+        fetchJson: route({ ok: true, knights: KNIGHTS, balance: 2, candidates: 2, complete: true }),
+    });
+    rec('a deployed staking contract is not reported as a simulation',
+        deployed.simulated === false && deployed.canWrite === true);
+    rec('and it carries no blocked reason at all', deployed.writeBlockedReason === null,
+        deployed.writeBlockedReason);
 
     // The Genesis side: its collection does not exist, so it must NOT be filled with preview
     // knights while the Knights side shows real ones. Two sources of truth on one page is worse
@@ -520,6 +547,9 @@ section('Loading the vault');
     rec('and that side explains itself with the collection\u2019s own reason',
         /minted yet/i.test(realGenesis.writeBlockedReason || ''), realGenesis.writeBlockedReason);
     rec('the empty side is still not writable', realGenesis.canWrite === false);
+    rec('and an inert side is not reported as a simulation either',
+        realGenesis.simulated === false,
+        `simulated=${realGenesis.simulated}, canWrite=${realGenesis.canWrite}`);
 
     // A short read must travel as short. This is the whole point of the holdings block.
     const partial = await loadVault(WALLET, {

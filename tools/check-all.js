@@ -472,7 +472,11 @@
         const HOLDINGS_LIVE = !!deployment?.holdingsLive;
         const STAKING_LIVE = !!deployment?.chain;
         const KNIGHTS_LIVE = !!deployment?.collections?.knights?.live;
-        console.log(`        [deployment] holdingsLive=${HOLDINGS_LIVE} stakingLive=${STAKING_LIVE} knightsLive=${KNIGHTS_LIVE}`);
+        // Real knights, no staking contract: the vault stays **playable** and every control in it
+        // is a simulation. That state is the one a player is most likely to misread, so it is
+        // worth naming here rather than inferring at each assertion.
+        const SIMULATED = HOLDINGS_LIVE && !STAKING_LIVE;
+        console.log(`        [deployment] holdingsLive=${HOLDINGS_LIVE} stakingLive=${STAKING_LIVE} knightsLive=${KNIGHTS_LIVE} simulated=${SIMULATED}`);
         rec('the deployment published what it can read', !!deployment,
             deployment ? 'config served' : 'config unreachable');
 
@@ -632,6 +636,16 @@
                 rec('the note describes which of those actually happened',
                     /minted yet|read .*knight|holds no |could not be read/i.test(note),
                     note.replace(/\s+/g, ' ').slice(0, 70));
+
+                // A **side** without a collection is inert, and `simulated` is per side while this
+                // flag is per deployment — so on the Genesis side the simulation is genuinely
+                // absent and the assertions for it live in the Knights block, where real knights
+                // are. Asserting them here would be asserting them against the wrong panel.
+                if (SIMULATED && !document.querySelector('.sv-card')) {
+                    rec('an inert side offers no simulation badge at all',
+                        !document.querySelector('.sv-preview-badge'),
+                        'no collection on this side');
+                }
             } else if (onChain) {
                 rec('a configured vault does not wear the preview badge', !badge);
             } else {
@@ -695,6 +709,8 @@
                     `${before.staked} -> ${stakedCards().length}`);
                 rec('staking reports what it did', !!banner(), banner());
 
+
+
                 // Put it back, so a battery run leaves the page as it found it.
                 const back = stakedCards().find((c) => c.querySelector('.sv-card-name')?.textContent === name);
                 [...back.querySelectorAll('.sv-card-actions .btn')].find((b) => /unstake/i.test(b.textContent))?.click();
@@ -702,6 +718,7 @@
                 rec('unstaking returns it', stakedCards().length === before.staked,
                     `${stakedCards().length}`);
                 rec('unstaking warns the tickets are forfeited', /forfeit/i.test(banner() || ''), banner());
+
             } else {
                 // Either there is no knight to stake, or the button is disabled because the vault
                 // is read-only. Both are correct, and both must be explained rather than silently
@@ -988,6 +1005,51 @@
                     /uncapped|less each one earns/i.test(ladderCaption), ladderCaption.trim().slice(0, 70));
                 rec('and it names the cap it falls to',
                     /cap/i.test(ladderCaption));
+
+                // ------------------------------------------------- the simulated stake
+                //
+                // This side has real knights and no staking contract, so its controls must work
+                // and must say what they are. Both halves are asserted: a dead page hides the
+                // mechanics, and a live page with no label lets a player believe their NFT is
+                // staked. This is the state a player is most likely to misread.
+                if (SIMULATED) {
+                    const badgeText = document.querySelector('.sv-preview-badge')?.textContent || '';
+                    rec('a simulated side says so on its badge',
+                        /simulated/i.test(badgeText) && /real/i.test(badgeText), badgeText.trim());
+                    const simBanner = document.querySelector('.sv-banner.is-sim')?.textContent || '';
+                    rec('and explains the simulation in the panel',
+                        /not really staked|simulation/i.test(simBanner));
+                    rec('the simulation note never claims the holdings are preview data',
+                        !/preview data/i.test(simBanner), simBanner.replace(/\s+/g, ' ').slice(0, 60));
+
+                    const stakeBtn = document.querySelector('.sv-card:not(.is-staked) .sv-card-actions .btn');
+                    rec('the stake control is actually clickable', !!stakeBtn && !stakeBtn.disabled,
+                        stakeBtn ? `"${stakeBtn.textContent.trim()}", disabled=${stakeBtn.disabled}` : 'no button');
+
+                    if (stakeBtn && !stakeBtn.disabled) {
+                        const stakedBefore = stakedCards().length;
+                        stakeBtn.click();
+                        await sleep(600);
+                        rec('clicking stake really stakes it',
+                            stakedCards().length === stakedBefore + 1,
+                            `${stakedBefore} -> ${stakedCards().length}`);
+                        const marked = stakedCards()[0]?.querySelector('.sv-chip.is-sim');
+                        rec('and the new stake is marked as a simulation', !!marked,
+                            marked?.textContent?.trim() || 'no marker');
+                        rec('the marker only ever sits on a staked card',
+                            document.querySelectorAll('.sv-card:not(.is-staked) .sv-chip.is-sim').length === 0);
+                        rec('and that knight wears its tier, not a band',
+                            !!stakedCards()[0]?.querySelector('.sv-chip.is-tier'),
+                            stakedCards()[0]?.querySelector('.sv-chip.is-tier')?.textContent?.trim());
+
+                        // Put it back, so a battery run leaves the page as it found it.
+                        [...stakedCards()[0].querySelectorAll('.sv-card-actions .btn')]
+                            .find((b) => /unstake/i.test(b.textContent))?.click();
+                        await sleep(600);
+                        rec('unstaking returns it', stakedCards().length === stakedBefore,
+                            `${stakedCards().length}`);
+                    }
+                }
 
                 const beforeBack = sideFingerprint();
                 genesisBtn.click();

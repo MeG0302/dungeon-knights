@@ -683,6 +683,24 @@
 .sv-banner.is-error { border-color: var(--danger); color: #e8b3ad; }
 .sv-banner.is-good { border-color: var(--success); color: var(--text-primary); }
 
+/* A simulated stake. Deliberately the amber of the partial-read note rather than the gold of a
+   normal panel: it is not an error, and it is not ordinary either — the stake really does bank
+   hours and accrue, and none of it reaches the chain. */
+.sv-banner.is-sim {
+    border-color: #d99a2b;
+    background: rgba(217, 154, 43, 0.09);
+    color: #f0d9a8;
+}
+
+.sv-preview-badge.is-sim {
+    border-color: #d99a2b;
+    background: rgba(217, 154, 43, 0.12);
+    color: #f0c674;
+}
+
+.sv-chip.is-sim { border-color: #d99a2b; color: #f0c674; }
+.sv-chip.is-tier { border-color: var(--border-dim); color: var(--text-secondary); }
+
 .sv-banner-x {
     margin-left: auto;
     background: none;
