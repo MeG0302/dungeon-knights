@@ -1,0 +1,237 @@
+/* ==========================================================
+   Summoning Chamber (mint) — mobile / iPhone + Android
+   Loaded only on the mint route, after the legacy theme so
+   these rules win at equal specificity. Inline legacy widths
+   are overridden with !important.
+   ========================================================== */
+
+/* Portal / summoning overlay is missing from theme.css — define it
+   here so it works on every viewport, not just mobile. */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.85);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+.modal-overlay.hidden {
+  display: none;
+}
+
+.modal-overlay .modal {
+  min-width: 0;
+  max-width: 360px;
+  width: 100%;
+  margin: 0;
+}
+
+@media (max-width: 860px) {
+  html,
+  body {
+    height: auto;
+    min-height: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* The bone cursor is pointless on touch devices. */
+  html,
+  body,
+  button,
+  a,
+  .card,
+  .knight-card {
+    cursor: auto;
+  }
+
+  .page {
+    width: 100%;
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
+  /* ---------- Header ---------- */
+  .header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    flex-wrap: wrap;
+    row-gap: 8px;
+    padding: calc(8px + env(safe-area-inset-top, 0px)) 12px 8px;
+    gap: 8px;
+    justify-content: flex-start;
+  }
+
+  /* The title is redundant with the panel headers on phones. */
+  .header-title {
+    display: none;
+  }
+
+  .header .btn-ghost {
+    order: 1;
+    margin-right: auto;
+    padding: 5px 9px;
+    font-size: 9.5px;
+    gap: 5px;
+    flex-shrink: 0;
+    min-height: 0;
+  }
+
+  .header .btn-icon-img {
+    width: 14px;
+    height: 14px;
+  }
+
+  .header-actions {
+    order: 2;
+    flex: 0 1 auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .wallet-pill {
+    padding: 5px 10px;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+  }
+
+  /* The shared connect button is injected by shared-header.js. */
+  .shared-wallet-header {
+    order: 3;
+    margin-left: auto;
+    padding: 0;
+    gap: 0;
+    flex-shrink: 0;
+  }
+
+  .shared-wallet-btn {
+    padding: 7px 11px;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    box-shadow: none;
+  }
+
+  /* ---------- Stack the two panels ---------- */
+  .page > div {
+    flex-direction: column;
+    overflow: visible !important;
+    flex: 1 1 auto;
+  }
+
+  .page > div > aside.side-panel {
+    width: 100% !important;
+    flex-shrink: 0;
+    overflow: visible;
+    border-right: none;
+    border-bottom: 1px solid var(--border-base);
+  }
+
+  .page > div > main.side-panel {
+    width: 100%;
+    flex: 1 1 auto;
+    overflow: visible;
+    border-right: none;
+  }
+
+  .side-panel-header {
+    padding: 10px 14px;
+    font-size: 11px;
+    letter-spacing: 1.5px;
+  }
+
+  .side-panel-body {
+    overflow: visible !important;
+    padding: 16px 14px calc(20px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Tighter vertical rhythm in the forge panel. */
+  .page > div > aside.side-panel .side-panel-body {
+    gap: 18px !important;
+  }
+
+  /* Shrink the summoning portal. */
+  .side-panel-body > div[style*="width:160px"] {
+    width: 132px !important;
+    height: 132px !important;
+  }
+
+  #capsuleImg {
+    width: 64px !important;
+    height: 64px !important;
+  }
+
+  .control-panel {
+    padding: 14px;
+  }
+
+  #quantity-display {
+    width: 64px;
+  }
+
+  /* Comfortable touch targets. */
+  .btn {
+    min-height: 44px;
+  }
+
+  /* ---------- Knight gallery ---------- */
+  #knights-container {
+    grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)) !important;
+    gap: 10px !important;
+  }
+
+  #knights-container .knight-card {
+    width: 100%;
+    overflow: hidden;
+  }
+
+  /* Stack title above rarity so long badges can't spill out of the card. */
+  #knights-container .knight-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 8px 10px;
+  }
+
+  #knights-container .knight-header h3 {
+    max-width: 100%;
+    font-size: 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  #knights-container .rarity-badge {
+    font-size: 8px;
+    padding: 2px 6px;
+    letter-spacing: 0.5px;
+  }
+}
+
+/* Small phones (< 390px) */
+@media (max-width: 389px) {
+  .side-panel-body > div[style*="width:160px"] {
+    width: 112px !important;
+    height: 112px !important;
+  }
+
+  #capsuleImg {
+    width: 56px !important;
+    height: 56px !important;
+  }
+
+  #knights-container {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}

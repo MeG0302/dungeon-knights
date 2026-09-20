@@ -69,8 +69,16 @@ export default function LegacyPage({ pageKey }) {
       {page.inlineStyles.map((css, i) => (
         <style key={`inline-${i}`} dangerouslySetInnerHTML={{ __html: css }} />
       ))}
+      {/* Phones get their own sheet per route. It is loaded after the legacy theme so its
+          rules win at equal specificity, and it is inert until its media query matches. */}
       {pageKey === 'landing' && (
         <link rel="stylesheet" href="/landing-mobile.css" />
+      )}
+      {pageKey === 'menu' && (
+        <link rel="stylesheet" href="/menu-mobile.css" />
+      )}
+      {pageKey === 'mint' && (
+        <link rel="stylesheet" href="/mint-mobile.css" />
       )}
       <div dangerouslySetInnerHTML={{ __html: page.body }} />
     </>
