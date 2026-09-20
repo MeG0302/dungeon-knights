@@ -18,6 +18,29 @@
     overflow-y: auto;
 }
 
+/* The row and its two columns are laid out here rather than in the component: an inline
+   `style` outranks every media query below, and that is exactly how the phone layout
+   used to lose the vault — the row could not be told to scroll, so the knight column
+   above it filled the row and the `flex: 1` vault column shrank to a single pixel. */
+.staking-page .sv-main-row {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+}
+
+/* The boot state sits in the same row, centred, until the vault is read. */
+.staking-page .sv-main-row.is-centered {
+    align-items: center;
+    justify-content: center;
+}
+
+.staking-page .sv-aside { width: 400px; }
+
+.staking-page .sv-vault {
+    flex: 1;
+    min-width: 0;
+}
+
 /* Ticking counters must not shove their neighbours around as the digits change
    width, so every live figure is tabular. */
 .sv-num {
@@ -724,15 +747,154 @@
     .sv-tile-value { font-size: 17px; }
 }
 
+/* --------------------------------------------------------------------- phones
+   Same shape as menu-mobile.css and mint-mobile.css. theme.css pins html/body to
+   `height: 100%; overflow: hidden` and `.page` to a fixed `100vh`, which on a phone
+   means the document cannot scroll and 100vh is taller than what the browser actually
+   shows. Both are undone here, so the vault becomes one scrolling document and the
+   panels stack instead of competing for a single fixed-height row. */
+@media (max-width: 760px) {
+    html,
+    body {
+        height: auto;
+        min-height: 100%;
+        overflow-x: hidden;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .staking-page {
+        width: 100%;
+        height: auto;
+        min-height: 100dvh;
+        overflow: visible;
+    }
+
+    /* The header used to be 494px of content in a 390px viewport, so the wallet chip
+       and the pool pill were clipped off the edge. It wraps now, and sticks, because
+       on a phone the page underneath it is long. */
+    .staking-page .header {
+        position: sticky;
+        top: 0;
+        flex-wrap: wrap;
+        row-gap: 6px;
+        padding: calc(8px + env(safe-area-inset-top, 0px)) 12px 8px;
+    }
+
+    /* Redundant on a phone: the vault panel is headed "Staking Vault" a scroll below. */
+    .staking-page .header-title { display: none; }
+
+    .staking-page .header > .btn-ghost {
+        padding: 6px 10px;
+        font-size: 10px;
+        gap: 6px;
+    }
+
+    .staking-page .header-actions {
+        margin-left: auto;
+        row-gap: 6px;
+        flex-wrap: wrap;
+    }
+
+    /* Stack the two panels and let the document scroll. `flex: none` matters: a flex
+       item in a column container is sized from its content, and a long knight list
+       would otherwise starve the panel after it. */
+    .staking-page .sv-main-row {
+        flex-direction: column;
+        flex: none;
+        overflow: visible;
+    }
+
+    .staking-page .sv-aside {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid var(--border-base);
+    }
+
+    .staking-page .sv-vault {
+        width: 100%;
+        flex: none;
+    }
+
+    /* Nothing is clipped to a fixed box any more, so nothing scrolls inside one. */
+    .staking-page .side-panel,
+    .staking-page .side-panel-body {
+        overflow: visible;
+    }
+
+    .staking-page .side-panel-body {
+        padding: 14px 14px calc(16px + env(safe-area-inset-bottom, 0px));
+    }
+
+    /* Comfortable touch targets, as on the Hall. */
+    .staking-page .btn { min-height: 44px; }
+
+    /* One capsule per row: at two columns the card was 158px, which left the name 59px
+       — narrower than the word "Legendary" — and squeezed the odds table beside it. */
+    .sv-capsule-grid { grid-template-columns: minmax(0, 1fr); }
+
+    /* The floating error/notice banner is right-anchored with a 380px cap, which is
+       wider than the phone it is anchored inside. */
+    .sv-banner-float {
+        left: 12px;
+        right: 12px;
+        max-width: none;
+        bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .sv-footer {
+        height: auto;
+        flex-wrap: wrap;
+        row-gap: 6px;
+        padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+    }
+
+    /* A phone row is two lines — who the knight is and what it earned, then the actions
+       beneath. In one line the Claim/Unstake pair claimed 167px of a 340px row, leaving
+       the knight's name 83px, which clipped it (and 66px at 360). */
+    .sv-row {
+        grid-template-columns: minmax(0, 1fr) auto;
+        row-gap: 8px;
+    }
+
+    .sv-row > .sv-col-hide-narrow { display: none; }
+    .sv-row-head > .sv-col-hide-narrow { display: none; }
+
+    .sv-row > .sv-row-actions {
+        grid-column: 1 / -1;
+        justify-content: flex-end;
+    }
+
+    /* The head's trailing cell only exists to hold the actions' column open above; once
+       the actions wrap there is nothing left for it to align. */
+    .sv-row-head > span:last-child { display: none; }
+
+    /* The board is four fixed columns on a desktop panel and four cramped ones on a
+       phone: "W144" was clipping to "W14…" in the 32px rank column. */
+    .sv-board-row {
+        grid-template-columns: 38px minmax(0, 1fr) minmax(0, 0.95fr) minmax(0, 0.95fr);
+        font-size: 11px;
+    }
+
+    /* A long address on the raffle board must ellipsise rather than push the tickets
+       and share columns off the panel. */
+    .sv-board-row > span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /* The trailing cell of a past draw reads "6,110 tickets"; wrapping it is better than
+       ellipsising it to "4,120 t…". */
+    .sv-board-row > span:last-child { white-space: normal; }
+
+    /* The player's own row carries a "You" chip beside the address, which does not fit
+       on one line at this width — wrap it rather than ellipsise the chip away. */
+    .sv-board-row > span:nth-child(2) { white-space: normal; }
+}
+
 @media (max-width: 720px) {
     .sv-tiles { grid-template-columns: 1fr; }
     .sv-summary-grid { grid-template-columns: 1fr 1fr; }
-}
-
-@media (max-width: 760px) {
-    .staking-page .sv-main-row { flex-direction: column; overflow-y: auto; }
-    .staking-page .sv-main-row > .side-panel { width: 100% !important; }
-    .sv-row { grid-template-columns: 1.4fr 1fr auto; row-gap: 6px; }
-    .sv-row > .sv-col-hide-narrow { display: none; }
-    .sv-row-head > .sv-col-hide-narrow { display: none; }
 }

@@ -194,6 +194,17 @@ switches to real holdings on its own when they do.
   seconds is a small number and two decimals would sit still for half a minute.
 - **Actions are pure functions** in `lib/staking-source.js` (`applyAction`), so every path — stake,
   unstake, claim, enter, withdraw, open a capsule — is proven without a wallet.
+- **Phones get their own block in the same sheet** — `@media (max-width: 760px)` at the foot of
+  `public/css/staking.css`, shaped like `menu-mobile.css` and `mint-mobile.css`: `html, body` come
+  off `height: 100%; overflow: hidden` and `.page` off its fixed `100vh`, so the route scrolls as
+  one document. `/staking` was the page this hurt most, because the row carried `overflow: hidden`
+  and the vault column `flex: 1` as **inline styles**, and an inline style outranks every media
+  query. The row could never be told to scroll, so the knight column filled all 735px of it and the
+  vault column measured **1px** — the tiles, the tabs and the capsules were not on the phone at
+  all. That layout now lives in the stylesheet (`.sv-main-row`, `.sv-aside`, `.sv-vault`); **do not
+  move it back into the component**, and edit it here to change it. Measure it by loading the route
+  in a width-set `<iframe>` — media queries resolve against the frame's viewport, which is the only
+  way to see phone rules without a phone.
 - **Capsules may only promise tiers the contracts pay.** The spec's fourth capsule was the
   *Mythic* capsule, handing out a tier with no on-chain reward slot 2–30% of the time — a card
   that would revert on every claim. It is the **Prime Capsule** now, named for the top

@@ -351,7 +351,7 @@ export default function StakingClient() {
     const pageStyles = (
         <>
             <link rel="stylesheet" href="/theme.css" />
-            <link rel="stylesheet" href="/css/staking.css?v=1" />
+            <link rel="stylesheet" href="/css/staking.css?v=2" />
             <link rel="stylesheet" href="/css/wallet-widget.css" />
             <link rel="stylesheet" href="/css/arya.css?v=3" />
             <Script src="/arya.js?v=3" strategy="afterInteractive" />
@@ -371,7 +371,7 @@ export default function StakingClient() {
                         <div className="header-title">STAKING VAULT</div>
                         <div className="header-actions" />
                     </header>
-                    <div className="sv-main-row" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div className="sv-main-row is-centered">
                         <div className="sv-empty">
                             <div className="sv-empty-title">Opening the vault</div>
                             <div className="sv-empty-text">Reading your Genesis Knights{phase === 'boot' ? '' : ' and this week&rsquo;s draw'}…</div>
@@ -437,10 +437,10 @@ export default function StakingClient() {
                     </div>
                 </header>
 
-                <div className="sv-main-row" style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+                <div className="sv-main-row">
 
                     {/* LEFT — the player's Genesis Knights */}
-                    <aside className="side-panel" style={{ width: 400 }} data-arya="genesis">
+                    <aside className="side-panel sv-aside" data-arya="genesis">
                         <div className="side-panel-header">
                             <img src="assets/ui/shield.png" className="panel-header-icon" alt="" />
                             My Genesis
@@ -590,7 +590,7 @@ export default function StakingClient() {
                     </aside>
 
                     {/* RIGHT — the numbers and the draw */}
-                    <main className="side-panel" style={{ flex: 1, borderRight: 'none' }}>
+                    <main className="side-panel sv-vault">
                         <div className="side-panel-header">
                             <img src="assets/ui/castle.png" className="panel-header-icon" alt="" />
                             Staking Vault
