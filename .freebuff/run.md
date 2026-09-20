@@ -540,9 +540,15 @@ The project deploys with the **CLI**, not a git integration: `vercel ls` shows d
 authored by `meglast320-1694`, and a `git push` does not trigger a build. From this worktree:
 
 ```bash
-vercel --prod --yes
-vercel alias set <the-new-deployment-url> dungeon-knights.vercel.app
+vercel --prod --yes --scope meglast320-1694
+vercel alias set <the-new-deployment-url> dungeon-knights.vercel.app --scope meglast320-1694
 ```
+
+**Pass `--scope` explicitly.** Without it the CLI reads `.vercel/project.json`'s `orgId`
+(`team_PBaj3VVHW4j3Jp0BpN2vczV8`) and the deploy dies with a bare `Error: Not authorized`,
+even though `vercel whoami` succeeds and `vercel project ls` lists the project — reads resolve
+the scope fine, only the write is refused, so the error points at the wrong place. Naming the
+scope makes the same command succeed (`✓ Ready in 41s`).
 
 **The second command is not optional.** `--prod` publishes to and aliases
 dungeon-knights-meglast320-1694.vercel.app, and leaves the project's custom domain
