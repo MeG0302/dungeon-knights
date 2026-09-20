@@ -117,10 +117,6 @@ function fmtCountdown(ms, phase) {
     return `${mins}m ${secs}s`;
 }
 
-function fmtPct(fraction, digits = 2) {
-    return `${(100 * (fraction || 0)).toFixed(digits)}%`;
-}
-
 /** Pool share reads as a fraction of a percent for a while, so it needs its own scale. */
 function fmtShare(fraction) {
     const pct = 100 * (fraction || 0);
@@ -155,7 +151,6 @@ export default function StakingClient() {
     const [busy, setBusy] = useState(null);
     const [error, setError] = useState(null);
     const [notice, setNotice] = useState(null);
-    const [approved, setApproved] = useState(() => new Set());
     const [since, setSince] = useState(null);
     const [dismissedSince, setDismissedSince] = useState(false);
 
@@ -349,7 +344,6 @@ export default function StakingClient() {
         forgetWallet();
         setAddress(null);
         setVault(null);
-        setApproved(new Set());
         if (window.Arya?.hide) window.Arya.hide();
     };
 
