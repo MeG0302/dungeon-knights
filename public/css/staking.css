@@ -735,9 +735,398 @@
 }
 
 /* ------------------------------------------------------------------------ motion */
+/* ==========================================================
+   THE POWER LADDER
+   The published distribution, drawn. Six bars whose heights compare against the largest
+   band, so the shape says what the table means: 200 / 210 / 210 / 200 / 140 / 64 — the top
+   is thin. Each band is a button; selecting one filters the two knight lists below.
+   ========================================================== */
+
+/* One colour per band, a ramp from the dim bottom of the range to the violet top.
+   Everything band-coloured reads `--band-colour`, so the palette lives in one place. */
+.staking-page [data-band='spark'] { --band-colour: #9AA3B2; }
+.staking-page [data-band='ember'] { --band-colour: #D08A4A; }
+.staking-page [data-band='forge'] { --band-colour: #DFA83F; }
+.staking-page [data-band='radiant'] { --band-colour: #EFC95E; }
+.staking-page [data-band='ascendant'] { --band-colour: #F5DE96; }
+.staking-page [data-band='prime'] { --band-colour: #B07CD8; }
+
+.sv-ladder {
+    border: 1px solid var(--border-base);
+    border-radius: var(--radius-md);
+    background: linear-gradient(180deg, var(--bg-raised), var(--bg-panel));
+    padding: 10px 11px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sv-ladder-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.sv-ladder-title {
+    font-family: var(--font-heading);
+    font-size: 9.5px;
+    letter-spacing: 1.4px;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.sv-ladder-rule {
+    font-size: 9px;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.sv-ladder-bars {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 4px;
+}
+
+.sv-band {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 0;
+    min-width: 0;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.sv-band:hover,
+.sv-band.is-active {
+    border-color: var(--border-bronze);
+    background: rgba(212, 175, 55, 0.07);
+}
+
+.sv-band:focus-visible {
+    outline: 2px solid var(--accent-gold);
+    outline-offset: 1px;
+}
+
+.sv-band-count {
+    font-size: 9px;
+    color: var(--text-muted);
+}
+
+/* The track is a fixed height and the fill is a percentage of it. The player's own
+   knights sit at its base — one knight is a fraction of a percent of a 200-knight band,
+   so that segment has a floor. Invisible gold would be worse than a generous one. */
+.sv-band-bar {
+    position: relative;
+    width: 100%;
+    height: 46px;
+    display: flex;
+    align-items: flex-end;
+    border: 1px solid var(--border-dim);
+    border-radius: 2px;
+    background: rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+}
+
+.sv-band-fill {
+    width: 100%;
+    background: var(--band-colour, var(--border-bronze));
+    opacity: 0.75;
+    transition: height 0.3s ease;
+}
+
+.sv-band:hover .sv-band-fill { opacity: 1; }
+
+.sv-band-mine {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(180deg, var(--accent-gold-light), var(--accent-gold));
+    box-shadow: 0 0 6px rgba(212, 175, 55, 0.5);
+}
+
+.sv-band.has-mine .sv-band-name { color: var(--accent-gold); }
+
+.sv-band-name {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-heading);
+    font-size: 7.5px;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.sv-ladder-caption {
+    font-size: 10px;
+    line-height: 1.45;
+    color: var(--text-secondary);
+    border-top: 1px solid var(--border-dim);
+    padding-top: 7px;
+    min-height: 30px;
+}
+
+.sv-ladder-caption strong { color: var(--accent-gold); font-weight: 700; }
+
+/* ---------------------------------------------------------------- list controls */
+.sv-controls {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex-wrap: wrap;
+}
+
+.sv-controls-label {
+    font-family: var(--font-heading);
+    font-size: 9px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.sv-seg {
+    display: flex;
+    gap: 2px;
+    padding: 2px;
+    border: 1px solid var(--border-base);
+    border-radius: var(--radius-sm);
+    background: var(--bg-dark);
+}
+
+.sv-seg-btn {
+    padding: 4px 10px;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: var(--font-heading);
+    font-size: 9.5px;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.sv-seg-btn:hover { color: var(--text-primary); }
+
+.sv-seg-btn[aria-pressed='true'] {
+    color: var(--accent-gold);
+    background: var(--bg-raised);
+    border-color: var(--border-bronze);
+}
+
+.sv-chip.is-filter {
+    border-color: var(--border-bronze);
+    background: var(--bg-dark);
+    color: var(--accent-gold);
+    cursor: pointer;
+}
+
+.sv-chip.is-filter:hover { border-color: var(--border-gold); }
+
+.sv-chip[data-band] {
+    border-color: var(--band-colour, var(--border-base));
+    color: var(--band-colour, var(--text-secondary));
+}
+
+.sv-art[data-band] .sv-art-glyph { color: var(--band-colour, var(--accent-gold-dim)); }
+
+/* ------------------------------------------------------------ draw countdown ring */
+.sv-tile-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+/* The week as a ring: the fill runs from the last draw to the next, so the countdown has
+   a shape as well as a number. */
+.sv-ring { width: 34px; height: 34px; flex-shrink: 0; }
+
+.sv-ring-track {
+    fill: none;
+    stroke: var(--bg-dark);
+    stroke-width: 4;
+}
+
+.sv-ring-fill {
+    fill: none;
+    stroke: var(--accent-gold);
+    stroke-width: 4;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.9s linear;
+}
+
+.sv-tile.is-final .sv-ring-fill {
+    stroke: var(--accent-gold-light);
+    filter: drop-shadow(0 0 4px rgba(212, 175, 55, 0.6));
+}
+
+/* ------------------------------------------------------------- the pool projector
+   The one unknown on the page, made draggable. Every line says what it is, because a
+   number a player can move is a number a player can mistake for a promise. */
+.sv-project {
+    border: 1px solid var(--border-bronze);
+    border-radius: var(--radius-md);
+    background: linear-gradient(180deg, rgba(212, 175, 55, 0.05), transparent 60%), var(--bg-raised);
+    padding: 10px 12px 11px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.sv-project-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.sv-project-title {
+    font-family: var(--font-heading);
+    font-size: 9.5px;
+    letter-spacing: 1.3px;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.sv-project-value {
+    font-family: var(--font-display);
+    font-size: 17px;
+    color: var(--accent-gold);
+    line-height: 1.1;
+}
+
+.sv-project-unit {
+    font-family: var(--font-heading);
+    font-size: 9px;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+}
+
+/* A range input has to be built from scratch to fit the vault — an un-restyled native
+   control is the one piece of chrome that would give the page away. */
+.sv-range {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 24px;
+    margin: 0;
+    background: transparent;
+    cursor: pointer;
+}
+
+.sv-range::-webkit-slider-runnable-track {
+    height: 4px;
+    border: 1px solid var(--border-dim);
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--border-bronze), var(--accent-gold-dim));
+}
+
+.sv-range::-moz-range-track {
+    height: 4px;
+    border: 1px solid var(--border-dim);
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--border-bronze), var(--accent-gold-dim));
+}
+
+.sv-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    margin-top: -7px;
+    border: 1px solid var(--border-gold);
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, var(--accent-gold-light), var(--accent-gold-dim));
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+}
+
+.sv-range::-moz-range-thumb {
+    width: 15px;
+    height: 15px;
+    border: 1px solid var(--border-gold);
+    border-radius: 50%;
+    background: var(--accent-gold);
+}
+
+.sv-range:focus-visible {
+    outline: 2px solid var(--accent-gold);
+    outline-offset: 3px;
+}
+
+.sv-project-ticks {
+    display: flex;
+    justify-content: space-between;
+    font-size: 8.5px;
+    color: var(--text-muted);
+}
+
+.sv-project-out {
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+}
+
+.sv-project-out strong { color: var(--text-primary); }
+.sv-project-out strong.is-gold { color: var(--accent-gold); }
+
+.sv-project-arrow { color: var(--border-bronze); }
+
+.sv-project-fine {
+    font-size: 9.5px;
+    line-height: 1.45;
+    color: var(--text-muted);
+    border-top: 1px solid var(--border-dim);
+    padding-top: 6px;
+}
+
+/* --------------------------------------------------------------------- ticket cap */
+.sv-cap {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.sv-cap-track {
+    height: 3px;
+    border: 1px solid var(--border-dim);
+    border-radius: 2px;
+    background: var(--bg-dark);
+    overflow: hidden;
+}
+
+.sv-cap-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-gold-dim), var(--accent-gold));
+    transition: width 0.9s linear;
+}
+
+.sv-cap-fill.is-capped { background: var(--border-bronze); }
+
+.sv-cap-note {
+    font-size: 9px;
+    color: var(--text-muted);
+}
+
+/* --------------------------------------------------------------------- motion */
 @media (prefers-reduced-motion: reduce) {
     .sv-card.is-staked .sv-art::after { animation: none; opacity: 0.4; }
     .sv-tab { transition: none; }
+    .sv-band-fill,
+    .sv-cap-fill,
+    .sv-ring-fill { transition: none; }
+    .sv-tile.is-final .sv-ring-fill { filter: none; }
 }
 
 /* --------------------------------------------------------------------- narrow view */
@@ -832,6 +1221,20 @@
     /* One capsule per row: at two columns the card was 158px, which left the name 59px
        — narrower than the word "Legendary" — and squeezed the odds table beside it. */
     .sv-capsule-grid { grid-template-columns: minmax(0, 1fr); }
+
+    /* The ladder fits six bands at 390px, but they are ~55px each: shorter bars, smaller
+       labels, and a full-width caption to carry the detail the labels cannot. */
+    .sv-ladder-bars { gap: 3px; }
+    .sv-band { min-height: 44px; }
+    .sv-band-bar { height: 38px; }
+    .sv-band-name { font-size: 6.5px; }
+    .sv-ladder-caption { min-height: 42px; }
+
+    /* Touch-sized controls for the sort segment and the pool slider. */
+    .sv-seg-btn { padding: 7px 12px; }
+    .sv-range { height: 34px; }
+    .sv-range::-webkit-slider-thumb { width: 22px; height: 22px; margin-top: -10px; }
+    .sv-range::-moz-range-thumb { width: 21px; height: 21px; }
 
     /* The floating error/notice banner is right-anchored with a 380px cap, which is
        wider than the phone it is anchored inside. */

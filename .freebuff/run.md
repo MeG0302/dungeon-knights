@@ -194,6 +194,25 @@ switches to real holdings on its own when they do.
   seconds is a small number and two decimals would sit still for half a minute.
 - **Actions are pure functions** in `lib/staking-source.js` (`applyAction`), so every path — stake,
   unstake, claim, enter, withdraw, open a capsule — is proven without a wallet.
+- **The interactive layer**, and the rules that keep it honest:
+  - **Power ladder** (top of *My Genesis*) — one bar per band of `HASH_POWER_BANDS`, heights
+    against the largest band (200/210/210/200/140/64, so the thin top is the first thing you
+    see), the wallet's own knights marked at each bar's base, and the band's name in gold when
+    it holds one. Selecting a band filters both knight lists; the filter chip next to *Sort*
+    clears it. The counts are the published table's, never recomputed here.
+  - **Knight labels are bands, not rarities.** `bandFor(hashPower)` supplies the chip and the
+    art colour, because the band is a *checkable* label — this collection publishes no
+    per-token rarity, and the old hard-coded `data-rarity="legendary"` was decoration that
+    claimed something untrue.
+  - **Pool projector** — a range input that exists **only while `poolDng` is null**, and whose
+    every line says it is a projection. This is the invariant to protect: rendering it once the
+    pool is real would turn a what-if into something a player reads as a quote. The battery
+    asserts it appears exactly while the pool is undecided.
+  - **Draw ring** — the week drawn as a ring, filled from the last draw to the next
+    (`strokeDashoffset = C × (1 - weekProgress)`), gold-pulsed in the final hour.
+  - **Ticket cap** — a staked card draws its progress toward the 168-hour cap and says how many
+    hours of tickets are left, with its hourly rate beside it, because the cap is the one
+    deadline a staker has to plan around.
 - **Phones get their own block in the same sheet** — `@media (max-width: 760px)` at the foot of
   `public/css/staking.css`, shaped like `menu-mobile.css` and `mint-mobile.css`: `html, body` come
   off `height: 100%; overflow: hidden` and `.page` off its fixed `100vh`, so the route scrolls as
@@ -228,10 +247,17 @@ In the browser, on `/staking`, after copying the battery into `public/`:
 window.__check.reset(); await window.__check.staking(); window.__check.report();
 ```
 
-48 checks — tab ARIA wiring, arrow keys and the URL, the tick actually moving, staking and
+62 checks — tab ARIA wiring, arrow keys and the URL, the tick actually moving, staking and
 unstaking a knight, the claim refusing with a reason while the pool is `TBD`, no horizontal
 overflow, and every capsule offering only a payable tier (checked against the tier list the
-server returns, not against the page). The battery puts back any knight it stakes.
+server returns, not against the page). It also covers the interactive layer: the ladder draws
+six bars whose counts sum to 1,024 and marks the bands the wallet holds, a selected band really
+filters the lists and the chip really clears them, the ring's offset stays inside its
+circumference, every knight wears a *published* band, and the projector appears exactly while
+the pool is undecided, moves when dragged and says it is not a promise. The battery puts back
+any knight it stakes. I checked these are not vacuous the same way as the rarity guards: with
+`has-mine` dropped, the bar height pinned to 50% and the filter chip removed, five named checks
+fail and the rest still pass.
 
 **Known and deliberate**, so it is not mistaken for a bug: with 200 capsules a week and few
 knights staked, one entry can expect most of a draw. That is the formula working; the raffle tab

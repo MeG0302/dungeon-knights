@@ -7,7 +7,10 @@ import Script from 'next/script';
 import {
     connectWallet, forgetWallet, hasInjectedWallet, onAccountsChanged, savedAddress, shortAddress,
 } from '../../lib/points-client';
-import { CAPSULES_PER_WEEK, HASH_POWER_MAX, HASH_POWER_MIN } from '../../lib/staking-config';
+import {
+    CAPSULES_PER_WEEK, GENESIS_SUPPLY, HASH_POWER_BANDS, HASH_POWER_MAX, HASH_POWER_MIN,
+    TICKET_CAP_HOURS, WEEK_MS, bandFor, ticketsPerHour, weekEnd,
+} from '../../lib/staking-config';
 import { applyAction, loadVault, refresh, SOURCE_PREVIEW } from '../../lib/staking-source';
 
 const TABS = [
@@ -22,6 +25,38 @@ const TOUR_ID = 'staking-v1';
 
 const TICK_MS = 1000;
 const SEEN_KEY = 'dk_staking_seen';
+
+// The tallest band sets the scale for the ladder, so the bars compare against the
+// collection rather than against each other.
+const LADDER_TOP = Math.max(...HASH_POWER_BANDS.map((band) => band.count));
+
+/**
+ * Sort orders for the two knight lists. Power is the default because it is the number a
+ * staker actually compares — it *is* the hourly ticket rate.
+ *
+ * `tickets` on an unstaked knight is zero rather than unknown, so a list sorted by
+ * tickets reads as staked-first, which is the useful order for that question.
+ */
+const SORTS = [
+    { key: 'power', label: 'Power' },
+    { key: 'tickets', label: 'Tickets' },
+    { key: 'name', label: 'Name' },
+];
+
+// The pool projector. Its range is deliberately wide and round: the point is to show how
+// the share maths behaves, not to propose a number the treasury has not agreed to.
+const GUESS_POOL = { min: 5000, max: 100000, step: 5000, start: 15000 };
+
+// The draw ring's circumference, so the fill is `C × (1 - weekProgress)`.
+const RING_C = 2 * Math.PI * 19;
+
+function sortKnights(list, sort) {
+    const copy = [...list];
+    if (sort === 'tickets') copy.sort((a, b) => (b.tickets || 0) - (a.tickets || 0) || b.hashPower - a.hashPower);
+    else if (sort === 'name') copy.sort((a, b) => a.tokenId - b.tokenId);
+    else copy.sort((a, b) => b.hashPower - a.hashPower || a.tokenId - b.tokenId);
+    return copy;
+}
 
 // ---------------------------------------------------------------- the walkthrough
 /**
@@ -153,6 +188,12 @@ export default function StakingClient() {
     const [notice, setNotice] = useState(null);
     const [since, setSince] = useState(null);
     const [dismissedSince, setDismissedSince] = useState(false);
+    // The three controls a player drives rather than reads: how the list is ordered, which
+    // band of the ladder is selected, and what-if the weekly pool were a different size.
+    const [sort, setSort] = useState('power');
+    const [bandFilter, setBandFilter] = useState(null);
+    const [hoverBand, setHoverBand] = useState(null);
+    const [guessPool, setGuessPool] = useState(GUESS_POOL.start);
 
     const tourOpened = useRef(false);
     const tabRefs = useRef({});
@@ -351,7 +392,7 @@ export default function StakingClient() {
     const pageStyles = (
         <>
             <link rel="stylesheet" href="/theme.css" />
-            <link rel="stylesheet" href="/css/staking.css?v=2" />
+            <link rel="stylesheet" href="/css/staking.css?v=3" />
             <link rel="stylesheet" href="/css/wallet-widget.css" />
             <link rel="stylesheet" href="/css/arya.css?v=3" />
             <Script src="/arya.js?v=3" strategy="afterInteractive" />
@@ -390,6 +431,21 @@ export default function StakingClient() {
     const pool = live?.pool || {};
     const week = live?.week || {};
     const poolDng = live?.pool?.dng ?? null;
+
+    // The ladder counts every knight the wallet holds — staked or not — because it is a
+    // picture of what this wallet owns, not of what it is currently earning with.
+    const mine = [...staked, ...owned];
+    const bandMatches = (knight) => !bandFilter || bandFor(knight.hashPower)?.key === bandFilter;
+    const shownStaked = sortKnights(staked, sort).filter(bandMatches);
+    const shownOwned = sortKnights(owned, sort).filter(bandMatches);
+    const filterBand = bandFilter ? HASH_POWER_BANDS.find((band) => band.key === bandFilter) : null;
+
+    // Tickets bank at exactly the hash power, so the staked total *is* the hourly rate.
+    const hourlyTickets = totals.hashPower || 0;
+
+    // The week ring: how much of the week between the last draw and the next has run.
+    const weekOpenAt = weekEnd(nowMs) - WEEK_MS;
+    const weekProgress = Math.min(1, Math.max(0, (nowMs - weekOpenAt) / WEEK_MS));
 
     const countdownMs = (week.drawAt || 0) - nowMs;
     const myAccruedShare = staked.reduce((sum, knight) => sum + (knight.accruedShare || 0), 0);
@@ -455,6 +511,72 @@ export default function StakingClient() {
                                     interaction are real, the holdings are not.
                                 </p>
                             )}
+
+                            {/* The published distribution, drawn. The band counts *are* the promise
+                                the collection is sold on, so the ladder is a picture of the
+                                contract rather than decoration — and it doubles as the filter
+                                for the lists below, which is what makes it worth a tap. */}
+                            <div className="sv-ladder" data-arya="ladder">
+                                <div className="sv-ladder-head">
+                                    <span className="sv-ladder-title">Power ladder</span>
+                                    <span className="sv-ladder-rule sv-num">1 HP = 1 ticket / hour</span>
+                                </div>
+                                <div
+                                    className="sv-ladder-bars"
+                                    role="group"
+                                    aria-label={`Hash power bands across the ${fmtInt(GENESIS_SUPPLY)} Genesis Knights. Selecting one filters your own knights.`}
+                                >
+                                    {HASH_POWER_BANDS.map((band) => {
+                                        const here = mine.filter((k) => bandFor(k.hashPower)?.key === band.key).length;
+                                        const active = bandFilter === band.key;
+                                        return (
+                                            <button
+                                                key={band.key}
+                                                type="button"
+                                                className={`sv-band${active ? ' is-active' : ''}${here ? ' has-mine' : ''}`}
+                                                data-band={band.key}
+                                                aria-pressed={active}
+                                                aria-label={`${band.name}: ${band.lo} to ${band.hi} hash power, ${band.count} of the ${fmtInt(GENESIS_SUPPLY)} knights, earning ${band.lo} to ${band.hi} tickets an hour`}
+                                                onMouseEnter={() => setHoverBand(band)}
+                                                onMouseLeave={() => setHoverBand(null)}
+                                                onFocus={() => setHoverBand(band)}
+                                                onBlur={() => setHoverBand(null)}
+                                                onClick={() => setBandFilter(active ? null : band.key)}
+                                            >
+                                                <span className="sv-band-count sv-num" aria-hidden="true">{band.count}</span>
+                                                <span className="sv-band-bar" aria-hidden="true">
+                                                    <span
+                                                        className="sv-band-fill"
+                                                        style={{ height: `${Math.round((band.count / LADDER_TOP) * 100)}%` }}
+                                                    />
+                                                    {here > 0 && (
+                                                        <span
+                                                            className="sv-band-mine"
+                                                            style={{ height: `${Math.max(10, Math.round((here / band.count) * 100))}%` }}
+                                                        />
+                                                    )}
+                                                </span>
+                                                <span className="sv-band-name" aria-hidden="true">{band.name.replace('Genesis ', '')}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                <p className="sv-ladder-caption">
+                                    {hoverBand ? (
+                                        <>
+                                            <strong>{hoverBand.name}</strong> · {hoverBand.lo}-{hoverBand.hi} HP ·{' '}
+                                            {hoverBand.count} knights · {hoverBand.lo}-{hoverBand.hi} tickets/hour
+                                            {mine.some((k) => bandFor(k.hashPower)?.key === hoverBand.key) && (
+                                                <> · <strong>{mine.filter((k) => bandFor(k.hashPower)?.key === hoverBand.key).length} of yours</strong></>
+                                            )}
+                                        </>
+                                    ) : filterBand ? (
+                                        <>Showing only <strong>{filterBand.name}</strong> below. Select it again to clear.</>
+                                    ) : (
+                                        <>Select a band to filter your knights. The bars are how many of the {fmtInt(GENESIS_SUPPLY)} sit in each.</>
+                                    )}
+                                </p>
+                            </div>
 
                             {!connected ? (
                                 <div className="sv-empty">
@@ -524,10 +646,42 @@ export default function StakingClient() {
                                             {poolDng === null
                                                 ? <>Accruing now · {fmtSharePrecise(myAccruedShare)} of the pool</>
                                                 : <>Accruing now · {fmtDng(claimable)}</>}
+                                            {hourlyTickets > 0 && <> · {fmtInt(hourlyTickets)} tickets/hour</>}
                                         </p>
                                     </div>
 
                                     <p className="sv-sr-only" aria-live="polite">{liveSummary}</p>
+
+                                    {/* Ordering for the two lists. It only earns its space once
+                                        there is more than one knight to order. */}
+                                    {mine.length > 1 && (
+                                        <div className="sv-controls">
+                                            <span className="sv-controls-label">Sort</span>
+                                            <div className="sv-seg" role="group" aria-label="Sort your Genesis Knights">
+                                                {SORTS.map((entry) => (
+                                                    <button
+                                                        key={entry.key}
+                                                        type="button"
+                                                        className="sv-seg-btn"
+                                                        aria-pressed={sort === entry.key}
+                                                        onClick={() => setSort(entry.key)}
+                                                    >
+                                                        {entry.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            {filterBand && (
+                                                <button
+                                                    type="button"
+                                                    className="sv-chip is-filter"
+                                                    onClick={() => setBandFilter(null)}
+                                                    title={`Show every band again`}
+                                                >
+                                                    {filterBand.name} ✕
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
 
                                     {/* Unstaked first: the action a player most often wants is the
                                         one that is not possible from a list of staked knights. */}
@@ -554,9 +708,19 @@ export default function StakingClient() {
                                         </div>
                                     )}
 
-                                    {!!owned.length && (
+                                    {!!filterBand && !shownStaked.length && !shownOwned.length && (
+                                        <div className="sv-empty">
+                                            <div className="sv-empty-title">No {filterBand.name} knights</div>
+                                            <div className="sv-empty-text">
+                                                None of your knights sit in the {filterBand.lo}–{filterBand.hi} HP band.
+                                                Your {mine.length} knight{mine.length === 1 ? '' : 's'} are in other bands.
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {!!shownOwned.length && (
                                         <div className="sv-card-list">
-                                            {owned.map((knight) => (
+                                            {shownOwned.map((knight) => (
                                                 <GenesisCard
                                                     key={knight.tokenId}
                                                     knight={knight}
@@ -568,9 +732,9 @@ export default function StakingClient() {
                                         </div>
                                     )}
 
-                                    {!!staked.length && (
+                                    {!!shownStaked.length && (
                                         <div className="sv-card-list">
-                                            {staked.map((knight) => (
+                                            {shownStaked.map((knight) => (
                                                 <GenesisCard
                                                     key={knight.tokenId}
                                                     knight={knight}
@@ -618,10 +782,27 @@ export default function StakingClient() {
                                         Your share of the draw: {fmtShare(totals.myShare)} → {fmtInt(totals.expectedCapsules)} expected
                                     </span>
                                 </div>
-                                <div className={`sv-tile ${week.phase === 'pending' ? 'is-drawing' : ''}`}>
+                                <div className={`sv-tile ${week.phase === 'pending' ? 'is-drawing' : ''} ${week.phase === 'final' ? 'is-final' : ''}`}>
                                     <span className="sv-tile-label">Next draw</span>
-                                    <span className="sv-tile-value sv-num" aria-hidden="true">
-                                        {fmtCountdown(countdownMs, week.phase)}
+                                    <span className="sv-tile-row">
+                                        {/* The week, drawn: the ring fills from the last draw to
+                                            the next one, so the countdown has a shape as well as
+                                            a number. */}
+                                        <svg className="sv-ring" viewBox="0 0 44 44" aria-hidden="true">
+                                            <circle className="sv-ring-track" cx="22" cy="22" r="19" />
+                                            <circle
+                                                className="sv-ring-fill"
+                                                cx="22"
+                                                cy="22"
+                                                r="19"
+                                                transform="rotate(-90 22 22)"
+                                                strokeDasharray={RING_C}
+                                                strokeDashoffset={RING_C * (1 - weekProgress)}
+                                            />
+                                        </svg>
+                                        <span className="sv-tile-value sv-num" aria-hidden="true">
+                                            {fmtCountdown(countdownMs, week.phase)}
+                                        </span>
                                     </span>
                                     <span className="sv-tile-sub">
                                         {week.phase === 'pending'
@@ -630,6 +811,45 @@ export default function StakingClient() {
                                     </span>
                                 </div>
                             </div>
+
+                            {/* The pool is the one unknown on this page, so it is the one thing a
+                                player can drag. Every figure is their own share recomputed live,
+                                and it says what it is: a projection, not a quote. */}
+                            {poolDng === null && (
+                                <div className="sv-project" data-arya="project">
+                                    <div className="sv-project-head">
+                                        <span className="sv-project-title">If the weekly pool were</span>
+                                        <span className="sv-project-value sv-num" aria-hidden="true">
+                                            {fmtInt(guessPool)} <span className="sv-project-unit">DNG</span>
+                                        </span>
+                                    </div>
+                                    <input
+                                        className="sv-range"
+                                        type="range"
+                                        min={GUESS_POOL.min}
+                                        max={GUESS_POOL.max}
+                                        step={GUESS_POOL.step}
+                                        value={guessPool}
+                                        onChange={(event) => setGuessPool(Number(event.target.value))}
+                                        aria-label="Imagine a different weekly pool, in DNG"
+                                        aria-valuetext={`${fmtInt(guessPool)} DNG a week`}
+                                    />
+                                    <div className="sv-project-ticks" aria-hidden="true">
+                                        {[GUESS_POOL.min, (GUESS_POOL.min + GUESS_POOL.max) / 2, GUESS_POOL.max].map((tick) => (
+                                            <span key={tick} className="sv-num">{(tick / 1000)}k</span>
+                                        ))}
+                                    </div>
+                                    <p className="sv-project-out">
+                                        Your <strong className="sv-num">{fmtShare(totals.myShare)}</strong> share{` `}
+                                        <span className="sv-project-arrow" aria-hidden="true">→</span>{` `}
+                                        <strong className="sv-num is-gold">{fmtDng(guessPool * (totals.myShare || 0))}</strong> a week
+                                    </p>
+                                    <p className="sv-project-fine">
+                                        A projection you are dragging, not a promise. The treasury sets this
+                                        number; until it does, every other figure reads TBD.
+                                    </p>
+                                </div>
+                            )}
 
                             <div className="sv-tabs" role="tablist" aria-label="Staking views" data-arya="tabs" onKeyDown={onTabKeyDown}>
                                 {TABS.map((entry) => {
@@ -930,11 +1150,17 @@ function GenesisCard({ knight, staked = false, busy, canWrite, nowMs, onStake, o
     // number: at 300–1000 a raw value would peg the bar full for every knight.
     const powerPct = Math.min(100, Math.max(0,
         (((knight.hashPower || 0) - HASH_POWER_MIN) / (HASH_POWER_MAX - HASH_POWER_MIN)) * 100));
+    // The band is the honest label for a knight: it comes from the published table, so a
+    // player can check it, unlike a per-token rarity this collection does not publish.
+    const band = bandFor(knight.hashPower);
+    const rate = ticketsPerHour(knight.hashPower);
+    const capped = hours >= TICKET_CAP_HOURS;
+    const capPct = Math.min(100, (hours / TICKET_CAP_HOURS) * 100);
 
     return (
-        <div className={`sv-card ${staked ? 'is-staked' : ''}`}>
+        <div className={`sv-card ${staked ? 'is-staked' : ''}`} data-band={band?.key}>
             <div className="sv-card-head">
-                <span className="sv-art" data-rarity="legendary" aria-hidden="true">
+                <span className="sv-art" data-band={band?.key} aria-hidden="true">
                     <span className="sv-art-glyph">✦</span>
                 </span>
                 <span style={{ flex: 1, minWidth: 0 }}>
@@ -946,6 +1172,7 @@ function GenesisCard({ knight, staked = false, busy, canWrite, nowMs, onStake, o
                             </span>
                             <span className="sv-num">{knight.hashPower} HP</span>
                         </span>
+                        {band && <span className="sv-chip" data-band={band.key}>{band.name}</span>}
                         {staked && knight.entered && <span className="sv-chip is-in">In draw</span>}
                     </span>
                 </span>
@@ -968,6 +1195,21 @@ function GenesisCard({ knight, staked = false, busy, canWrite, nowMs, onStake, o
                                 ? fmtSharePrecise(knight.accruedShare)
                                 : fmtDng(knight.accruedDng)}
                         </span>
+                    </span>
+                </div>
+            )}
+
+            {/* Tickets are time, and the cap is the one deadline a staker has to plan
+                around — so it is drawn rather than implied. */}
+            {staked && (
+                <div className="sv-cap" title={`A staked knight banks tickets for ${TICKET_CAP_HOURS} hours, then stops until it is restaked`}>
+                    <span className="sv-cap-track" aria-hidden="true">
+                        <span className={`sv-cap-fill${capped ? ' is-capped' : ''}`} style={{ width: `${capPct}%` }} />
+                    </span>
+                    <span className="sv-cap-note sv-num" aria-hidden="true">
+                        {capped
+                            ? `${fmtInt(rate)} tickets/hour · cap reached, no more bank`
+                            : `${fmtInt(rate)} tickets/hour · ${fmtInt(TICKET_CAP_HOURS - hours)}h left`}
                     </span>
                 </div>
             )}

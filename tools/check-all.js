@@ -671,6 +671,94 @@
                 unpayable.length ? `no reward slot for: ${unpayable.join(', ')}` : `${new Set(promised).size} tiers offered`);
         }
 
+        // ----------------------------------------------- the ladder, the ring, the projector
+        //
+        // These are the interactive parts of the page, and the ones most likely to rot
+        // silently: a ladder that stops matching the published bands, a ring that stops
+        // tracking the week, or a what-if projector that appears even once the pool is
+        // real and turns a projection into something a player reads as a quote.
+        {
+            selectTab('staked').click();
+            await sleep(200);
+
+            const cfg = await fetch('/api/staking/config')
+                .then((res) => (res.ok ? res.json() : null)).catch(() => null);
+            const poolSet = cfg?.poolDng !== null && cfg?.poolDng !== undefined;
+            const bandEls = [...document.querySelectorAll('.sv-band')];
+
+            rec('the ladder draws one bar per published band', bandEls.length === 6, `${bandEls.length} bars`);
+            const drawn = bandEls.map((b) => Number(b.querySelector('.sv-band-count')?.textContent || 0));
+            rec('the ladder counts still sum to the collection',
+                drawn.reduce((a, b) => a + b, 0) === 1024, drawn.join(' + '));
+            const held = document.querySelectorAll('.sv-card').length;
+            rec('the ladder marks the bands the user holds knights in',
+                held === 0 || bandEls.some((b) => b.classList.contains('has-mine')),
+                `${bandEls.filter((b) => b.classList.contains('has-mine')).length} of ${bandEls.length} marked`);
+            rec('the tallest band is drawn full height',
+                bandEls.some((b) => b.querySelector('.sv-band-fill')?.style.height === '100%'));
+
+            // Selecting a band has to filter the two lists, and selecting it again has to
+            // put them back — a filter with no way out is a trap.
+            const total = document.querySelectorAll('.sv-card').length;
+            const target = bandEls[2];
+            target?.click();
+            await sleep(300);
+            const filtered = document.querySelectorAll('.sv-card').length;
+            const chip = document.querySelector('.sv-chip.is-filter');
+            rec('selecting a band filters your knights',
+                target?.getAttribute('aria-pressed') === 'true' && filtered <= total, `${total} -> ${filtered}`);
+            rec('and the filter is escapable', !!chip, chip?.textContent?.trim());
+            chip?.click();
+            await sleep(300);
+            rec('clearing it restores every knight',
+                document.querySelectorAll('.sv-card').length === total,
+                `${document.querySelectorAll('.sv-card').length}`);
+
+            // The week ring: a shape for the countdown, filled from the last draw.
+            const ring = document.querySelector('.sv-ring-fill');
+            const dash = Number(ring?.getAttribute('stroke-dasharray') || 0);
+            const offset = Number(ring?.getAttribute('stroke-dashoffset') || 0);
+            rec('the draw ring is drawn in proportion to the week',
+                dash > 100 && offset >= 0 && offset <= dash, `${offset.toFixed(1)} of ${dash.toFixed(1)}`);
+
+            // A staked knight has a deadline, so it is shown one.
+            rec('a staked card shows its ticket cap',
+                document.querySelectorAll('.sv-card.is-staked .sv-cap-note').length > 0);
+
+            // Every knight is labelled with a band that is actually published.
+            const named = [...document.querySelectorAll('.sv-card .sv-chip[data-band]')].map((c) => c.dataset.band);
+            const published = bandEls.map((b) => b.dataset.band);
+            rec('every knight wears a published band',
+                named.length > 0 && named.every((key) => published.includes(key)),
+                [...new Set(named)].join(', '));
+
+            // The pool is the one number nobody has set, so it is the one thing a player
+            // may drag — and it must disappear the moment the real number exists.
+            const range = document.querySelector('.sv-range');
+            rec('the what-if slider appears exactly while the pool is undecided',
+                poolSet ? !range : !!range, poolSet ? 'pool is set' : 'pool is TBD');
+            if (range && !poolSet) {
+                const read = () => document.querySelector('.sv-project-out')?.textContent || '';
+                const before = read();
+                // React tracks the value property, so the native setter has to be used or
+                // the change is swallowed as "no change".
+                const setNative = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+                setNative.call(range, String(Number(range.max)));
+                range.dispatchEvent(new Event('input', { bubbles: true }));
+                await sleep(300);
+                const after = read();
+                rec('dragging it moves the projection', before !== after && /DNG/.test(after));
+                rec('the projection says it is one',
+                    /not a promise/i.test(document.querySelector('.sv-project')?.textContent || ''));
+                setNative.call(range, String(Number(range.min)));
+                range.dispatchEvent(new Event('input', { bubbles: true }));
+                await sleep(200);
+                const lowest = read();
+                rec('a smaller pool projects less DNG',
+                    lowest !== after, `${after.replace(/[^0-9,.]/g, '').slice(0, 12)} -> ${lowest.replace(/[^0-9,.]/g, '').slice(0, 12)}`);
+            }
+        }
+
         // ------------------------------------------------------------------- reachability
         {
             const list = document.querySelector('.sv-tabs');
