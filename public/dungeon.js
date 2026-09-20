@@ -1095,14 +1095,15 @@ class DungeonRenderer {
 
     // Loads the tiers it is given (all of them when given nothing), and never twice.
     loadKnightImages(tiers) {
-        // Map rarity tiers to actual image files (correct filenames with .png)
+        // One knight per tier, mirroring the art in `public/config.js` so the dungeon, the
+        // Hall and the Summoning Chamber never show a different knight for the same tier.
+        // `tools/check-rarity.js` fails if the two tables drift apart.
         const imageMap = {
             'LEGENDARY': 'characters/Knight_in_golden_armor_stands_2K_202609041404_jpeg_2K_202609041417.png',
-            'MYTHIC': 'characters/Pixel_knight_holding_cosmic_shield_2K_202609041402_jpeg_2K_202609041417.png',
-            'EPIC': 'characters/Pixel_knight_holding_wooden_shield_2K_202609041402_jpeg_2K_202609041417.png',
-            'RARE': 'characters/Pixel_knight_standing_on_floor_2K_202609041402_jpeg_2K_202609041417.png',
-            'UNCOMMON': 'characters/Pixelated_knight_standing_on_tile_2K_202609041402_jpeg_2K_202609041417.png',
-            'COMMON': 'characters/Pixelated_knight_standing_on_tile_2K_202609041402_jpeg_2K_202609041417.png'
+            'EPIC': 'characters/Pixel_knight_holding_cosmic_shield_2K_202609041402_jpeg_2K_202609041417.png',
+            'RARE': 'characters/Pixelated_knight_standing_on_tile_2K_202609041402_jpeg_2K_202609041417.png',
+            'UNCOMMON': 'characters/Pixel_knight_standing_on_floor_2K_202609041402_jpeg_2K_202609041417.png',
+            'COMMON': 'characters/Pixel_knight_holding_wooden_shield_2K_202609041402_jpeg_2K_202609041417.png'
         };
 
         const wanted = (tiers && tiers.length) ? tiers : Object.keys(imageMap);

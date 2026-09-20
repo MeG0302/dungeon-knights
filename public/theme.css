@@ -517,7 +517,6 @@ body {
 .dot-rare { background: #3B82F6; }
 .dot-epic { background: #A855F7; }
 .dot-legendary { background: var(--accent-gold); }
-.dot-mythic { background: #B07CD8; }
 
 /* ==========================================================
    QUEST CARDS (dungeon-select grid)

@@ -24,20 +24,17 @@ class MenuSystem {
     }
     
     loadKnightImages() {
-        // Map rarity tiers to actual image files
-        const imageMap = {
-            'LEGENDARY': 'characters/Knight_in_golden_armor_stands_2K_202609041404_jpeg_2K_202609041417.png',
-            'MYTHIC': 'characters/Pixel_knight_holding_cosmic_shield_2K_202609041402_jpeg_2K_202609041417.png',
-            'EPIC': 'characters/Pixel_knight_holding_wooden_shield_2K_202609041402_jpeg_2K_202609041417.png',
-            'RARE': 'characters/Pixel_knight_standing_on_floor_2K_202609041402_jpeg_2K_202609041417.png',
-            'UNCOMMON': 'characters/Pixelated_knight_standing_on_tile_2K_202609041402_jpeg_2K_202609041417.png',
-            'COMMON': 'characters/Pixelated_knight_standing_on_tile_2K_202609041402_jpeg_2K_202609041417.png'
-        };
+        // Knight art comes from the single rarity config (config.js), so adding a tier is
+        // one edit there rather than a second list here that can drift out of step.
+        const tiers = window.RARITY_TIERS || [];
+        const config = window.RARITY_CONFIG || {};
 
-        Object.entries(imageMap).forEach(([rarity, path]) => {
+        tiers.forEach(tier => {
+            const entry = config[tier];
+            if (!entry?.image) return;
             const img = new Image();
-            img.src = path;
-            this.knightImages[rarity] = img;
+            img.src = entry.image;
+            this.knightImages[tier.toUpperCase()] = img;
         });
     }
     
@@ -301,7 +298,7 @@ class MenuSystem {
         knights.sort((a, b) => {
             switch(this.sortBy) {
                 case 'rarity':
-                    const rarityOrder = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY', 'MYTHIC'];
+                    const rarityOrder = (window.RARITY_TIERS || []).map(t => t.toUpperCase());
                     return rarityOrder.indexOf(b.rarity.tier) - rarityOrder.indexOf(a.rarity.tier);
                 case 'power':
                     return b.stats.power - a.stats.power;
@@ -424,7 +421,41 @@ class MenuSystem {
         const knights = this.getFilteredAndSortedKnights();
         
         if (knights.length === 0) {
-            this.knightRoster.innerHTML = '<p class="empty-message">No knights match the current filter. Visit the Summoning Chamber to forge your first knight!</p>';
+            // An empty roster and an over-tight filter are different problems, so they get
+            // different messages and different ways out.
+            const hasAnyKnights = this.knightManager.knights.length > 0;
+
+            this.knightRoster.innerHTML = hasAnyKnights
+                ? `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">🛡️</div>
+                        <div class="empty-state-title">No Knights Match</div>
+                        <p class="empty-state-text">No knights fit the current rarity filter. Try a different one, or clear it to see your full roster.</p>
+                        <button type="button" class="btn btn-secondary btn-md" id="emptyClearFilters">
+                            <img src="assets/ui/exit cross.png" class="btn-icon-img" alt=""> Clear Filters
+                        </button>
+                    </div>
+                `
+                : `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">🛡️</div>
+                        <div class="empty-state-title">No Knights Yet</div>
+                        <p class="empty-state-text">Your roster is empty. Forge your first knight in the Summoning Chamber and begin your conquest.</p>
+                        <a class="btn btn-primary btn-md" href="/mint">
+                            <img src="assets/ui/sword.png" class="btn-icon-img" alt=""> Summon Knights
+                        </a>
+                    </div>
+                `;
+
+            const clearBtn = this.knightRoster.querySelector('#emptyClearFilters');
+            if (clearBtn) {
+                clearBtn.addEventListener('click', () => {
+                    this.filterRarity = 'all';
+                    const rarityFilter = document.getElementById('rarityFilter');
+                    if (rarityFilter) rarityFilter.value = 'all';
+                    this.renderKnightRoster();
+                });
+            }
             return;
         }
         

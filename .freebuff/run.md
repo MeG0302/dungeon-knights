@@ -460,6 +460,45 @@ node tools/check-copies.js   # fails on a root duplicate, or a script loaded fro
   same hazard in slow motion; the check lists the ones that currently do, so the next person to
   edit one knows to add a version rather than assume the browser will notice.
 
+### One rarity economy (`tools/check-rarity.js`)
+
+The rarity table used to be written down in four places — `public/config.js`, the engine's
+`public/characters.js`, the React helpers in `lib/knights.js`, and the constructor of every reward
+contract — and they had drifted. The mint page advertised **six** tiers ending in Mythic at 0.3%,
+while the engine rolled five; because `rollRarity()` accumulates the `dropRate`s and falls through
+to `Common` past the last entry, the sixth tier could not be rolled at all. Players were quoted odds
+the game did not honour.
+
+There are now **five tiers, one per on-chain enum slot** — Common 50%, Uncommon 30%, Rare 15%,
+Epic 4%, Legendary 1%, paying 10/17/30/75/150 $DNG with 5/5/4/3/4 runs a day. `Mythic` is gone from
+the economy, the odds table is drawn from `config.js` rather than hard-coded in the markup, the
+mint price comes from `CONFIG.getMintPrice()` instead of a literal `500`, and the dungeon's
+per-tier art now agrees with the cards.
+
+```bash
+node tools/check-rarity.js   # fails the moment any of the four tables drifts from the others
+```
+
+It loads `config.js` and `characters.js` into a `vm` sandbox with a stub `window`, reads the five
+`.sol` constructors as text, and pins: the same five tier names everywhere, every field equal across
+the three JS tables, odds summing to exactly 1, the contracts' `rarityReward`/`dailyCap` matching
+the tier at the same index, every tier's art resolving on disk, and `lib/static-pages.js` still
+carrying the `#rarityChances` container the odds are drawn into.
+
+### Solidity: Foundry, and what is not installed
+
+`foundry.toml` configures `forge` against `contracts/` with `node_modules` as its lib path, so the
+contracts can be compiled and inspected without Hardhat:
+
+```bash
+npm install            # @openzeppelin/contracts is a devDependency, for the solc imports
+forge build            # requires Foundry; `forge` is NOT installed in this environment
+```
+
+**`forge` is not on PATH here**, so the ported contract changes are reviewed rather than compiled.
+Install Foundry (`foundryup`) before trusting a build result; the sources changed only in ways
+`tools/check-rarity.js` can see, plus signatures no tool in this repo can check.
+
 ## 2. Run the server
 
 - Script: `npm run dev` (`next dev`).
