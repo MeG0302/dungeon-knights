@@ -6,7 +6,13 @@ class WalletManager {
     this.provider = null;
     this.userAddress = null;
     this.isConnected = false;
-    
+    this.walletType = 'metamask';
+
+    // Privy bridge (set by the React <PrivyBridge /> when enabled)
+    this.privy = null;
+    this._privyListener = null;
+    this._initPromise = null;
+
     // Contract addresses
     this.nftContractAddress = '0x06c7D4b0C35858c78c3B213fbf50fB4A25f20512';
     this.tokenContractAddress = '0xA8D54F6FEeAFaf5C2c546D1D1644aE2f46A2d910';
@@ -18,8 +24,148 @@ class WalletManager {
     console.log('✅ WalletManager initialized');
   }
   
-  // Initialize wallet manager
+  // Whether Privy is configured as the wallet method
+  privyEnabled() {
+    return !!(window.DUNGEON_CONFIG && window.DUNGEON_CONFIG.PRIVY && window.DUNGEON_CONFIG.PRIVY.enabled);
+  }
+  
+  // Wait for the React Privy bridge to mount and expose window.privyBridge
+  async waitForPrivyBridge(timeoutMs = 8000) {
+    if (window.privyBridge) return window.privyBridge;
+    
+    return new Promise((resolve) => {
+      const onReady = () => {
+        cleanup();
+        resolve(window.privyBridge || null);
+      };
+      const timer = setTimeout(() => {
+        cleanup();
+        resolve(window.privyBridge || null);
+      }, timeoutMs);
+      const cleanup = () => {
+        clearTimeout(timer);
+        window.removeEventListener('privyBridgeReady', onReady);
+      };
+      window.addEventListener('privyBridgeReady', onReady);
+    });
+  }
+  
+  // Initialize wallet manager (Privy when enabled, then injected wallet fallback)
   async init() {
+    if (this._initPromise) return this._initPromise;
+    this._initPromise = this._init();
+    return this._initPromise;
+  }
+  
+  async _init() {
+    if (this.privyEnabled()) {
+      console.log('🔌 Initializing Privy wallet...');
+      const bridge = await this.waitForPrivyBridge();
+      
+      if (bridge) {
+        this.privy = bridge;
+        this.setupPrivyListeners();
+        
+        if (bridge.isAuthenticated && bridge.isAuthenticated()) {
+          await this.onPrivyAuthenticated();
+        }
+        
+        console.log('✅ Privy wallet manager ready');
+        return true;
+      }
+      
+      console.warn('⚠️ Privy bridge unavailable — falling back to injected wallet');
+    }
+    
+    return this.initInjected();
+  }
+  
+  // Subscribe to auth changes emitted by the Privy bridge
+  setupPrivyListeners() {
+    if (this._privyListener) return;
+    
+    this._privyListener = (event) => {
+      const detail = event.detail || {};
+      if (detail.authenticated) {
+        this.onPrivyAuthenticated(detail.address, detail.walletType);
+      } else {
+        this.onPrivyDisconnected();
+      }
+    };
+    
+    window.addEventListener('privyAuthChanged', this._privyListener);
+  }
+  
+  // Handle a successful Privy authentication
+  async onPrivyAuthenticated(address, walletType) {
+    if (!this.privy) return false;
+    
+    const nextAddress = address || (this.privy.getAddress && this.privy.getAddress()) || null;
+    if (
+      this.isConnected &&
+      this.userAddress &&
+      nextAddress &&
+      this.userAddress.toLowerCase() === nextAddress.toLowerCase()
+    ) {
+      return true;
+    }
+    
+    try {
+      // The provider can be briefly unavailable while an embedded wallet is created
+      let provider = null;
+      for (let attempt = 0; attempt < 20 && !provider; attempt++) {
+        provider = await this.privy.getProvider();
+        if (!provider) await new Promise((r) => setTimeout(r, 150));
+      }
+      
+      this.provider = provider;
+      this.userAddress = nextAddress;
+      
+      if (!this.userAddress && provider) {
+        const accounts = await provider.request({ method: 'eth_accounts' });
+        this.userAddress = accounts && accounts[0];
+      }
+      
+      if (!this.userAddress) return false;
+      
+      this.isConnected = true;
+      this.walletType = walletType || (this.privy.getWalletType && this.privy.getWalletType()) || 'privy';
+      
+      localStorage.setItem('walletConnected', 'true');
+      localStorage.setItem('walletAddress', this.userAddress);
+      localStorage.setItem('walletType', this.walletType);
+      
+      console.log('✅ Privy connected:', this.userAddress);
+      
+      window.dispatchEvent(new CustomEvent('walletConnected', {
+        detail: { address: this.userAddress, provider: this.provider }
+      }));
+      
+      return true;
+    } catch (error) {
+      console.error('❌ Privy auth handling failed:', error);
+      return false;
+    }
+  }
+  
+  // Handle a Privy logout
+  onPrivyDisconnected() {
+    if (!this.isConnected && !this.userAddress) return;
+    
+    console.log('👋 Privy disconnected');
+    this.isConnected = false;
+    this.userAddress = null;
+    this.provider = null;
+    
+    localStorage.removeItem('walletConnected');
+    localStorage.removeItem('walletAddress');
+    localStorage.removeItem('walletType');
+    
+    window.dispatchEvent(new Event('walletDisconnected'));
+  }
+  
+  // Initialize the injected (MetaMask-style) wallet
+  async initInjected() {
     console.log('🔌 Initializing wallet...');
     
     // Wait a bit for MetaMask to inject if needed
@@ -91,6 +237,23 @@ class WalletManager {
   
   // Connect wallet
   async connect() {
+    // Prefer Privy when it is enabled and available
+    if (this.privyEnabled()) {
+      if (!this.privy) {
+        await this.init();
+      }
+      if (this.privy) {
+        console.log('🔌 Opening Privy login...');
+        try {
+          await this.privy.login();
+          return true;
+        } catch (error) {
+          console.error('❌ Privy login failed:', error);
+          return false;
+        }
+      }
+    }
+    
     console.log('🔌 Connecting wallet...');
     
     if (!this.provider) {
@@ -113,10 +276,12 @@ class WalletManager {
       
       this.userAddress = accounts[0];
       this.isConnected = true;
+      this.walletType = 'metamask';
       
       // Save to localStorage
       localStorage.setItem('walletConnected', 'true');
       localStorage.setItem('walletAddress', this.userAddress);
+      localStorage.setItem('walletType', this.walletType);
       
       console.log('✅ Connected:', this.userAddress);
       
@@ -203,6 +368,16 @@ class WalletManager {
   
   // Disconnect wallet
   async disconnect() {
+    if (this.privy) {
+      try {
+        await this.privy.logout();
+      } catch (error) {
+        console.error('❌ Privy logout failed:', error);
+      }
+      this.onPrivyDisconnected();
+      return;
+    }
+    
     this.onDisconnect();
   }
   

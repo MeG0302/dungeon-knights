@@ -1,5 +1,15 @@
+const webpack = require('webpack');
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  webpack: (config) => {
+    // Privy dynamically (and optionally) imports its Farcaster Solana connector.
+    // This app only uses EVM wallets, so skip bundling that optional dependency.
+    config.plugins.push(
+      new webpack.IgnorePlugin({ resourceRegExp: /^@farcaster\/mini-app-solana$/ })
+    );
+    return config;
+  },
   async redirects() {
     return [
       { source: '/landing.html', destination: '/', permanent: true },

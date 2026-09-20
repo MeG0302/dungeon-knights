@@ -7,16 +7,16 @@ const CONFIG = {
   
   // Wallet Connection Method
   WALLET: {
-    method: 'rainbowkit', // Options: 'metamask', 'privy', 'rainbowkit'
+    method: 'privy', // Options: 'metamask', 'privy', 'rainbowkit'
     // RainbowKit: Works immediately, shows all wallets (MetaMask, Coinbase, WalletConnect, etc.)
-    // Privy: Needs App ID, supports email/social login too
+    // Privy: Multi-wallet + email login (requires App ID)
     // MetaMask: Simple, MetaMask only
   },
   
   // Privy Configuration (supports all wallets + email + social)
   PRIVY: {
-    enabled: false, // Set to true after getting App ID from https://dashboard.privy.io/
-    appId: 'YOUR_PRIVY_APP_ID_HERE', // Get from https://dashboard.privy.io/
+    enabled: true,
+    appId: 'cmu9rk7lo034q0cl24jlo2mr7',
   },
   
   // Token Information

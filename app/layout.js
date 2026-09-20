@@ -1,4 +1,6 @@
 import { OG_IMAGE, SITE_DESCRIPTION, SITE_KEYWORDS, SITE_NAME, SITE_URL } from '../lib/site';
+import Providers from './providers';
+import PrivyBridge from './privy-bridge';
 
 export const metadata = {
   metadataBase: new URL(SITE_URL),
@@ -65,7 +67,12 @@ export const viewport = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body style={{ margin: 0 }}>{children}</body>
+      <body style={{ margin: 0 }}>
+        <Providers>
+          <PrivyBridge />
+          {children}
+        </Providers>
+      </body>
     </html>
   );
 }

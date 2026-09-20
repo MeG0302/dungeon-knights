@@ -36,7 +36,18 @@ class SharedHeader {
   createHeader() {
     // Check if custom header already exists
     let existingHeader = document.getElementById('shared-wallet-header');
-    
+
+    // Some pages (e.g. the game) already render and manage their own wallet
+    // UI. Don't inject a second, duplicate copy there.
+    if (
+      !existingHeader &&
+      (document.getElementById('disconnectBtn') ||
+        document.getElementById('walletAddressDisplay'))
+    ) {
+      console.log('ℹ️ Existing wallet UI detected — skipping shared wallet header');
+      return;
+    }
+
     if (!existingHeader) {
       // Create new header element
       const header = document.createElement('div');
@@ -58,15 +69,29 @@ class SharedHeader {
         </button>
       `;
       
-      // Insert at top of body or specified container
+      // Prefer the header's existing right-hand action cluster so the wallet
+      // controls sit with the rest of the header actions instead of wrapping.
       const container = document.querySelector('.mint-header, .game-header, header') || document.body;
-      
-      // If there's already a header, append to it
-      if (container.tagName === 'HEADER' || container.classList.contains('mint-header') || container.classList.contains('game-header')) {
-        const rightSection = container.querySelector('.header-right') || container;
+      const rightSection =
+        container.querySelector && container.querySelector('.header-actions, .header-right');
+
+      if (rightSection) {
         rightSection.appendChild(header);
+      } else if (
+        container.tagName === 'HEADER' ||
+        container.classList.contains('mint-header') ||
+        container.classList.contains('game-header')
+      ) {
+        container.appendChild(header);
       } else {
         container.insertBefore(header, container.firstChild);
+      }
+
+      // The shared header already shows address + balance, so hide the
+      // legacy balance-only pill to avoid a duplicated readout.
+      const legacyPill = (rightSection || container).querySelector('.wallet-pill');
+      if (legacyPill && !legacyPill.querySelector('#disconnectBtn')) {
+        legacyPill.style.display = 'none';
       }
       
       this.headerElement = header;
