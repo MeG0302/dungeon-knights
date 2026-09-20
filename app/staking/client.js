@@ -297,7 +297,7 @@ export default function StakingClient() {
         }
         if (stored?.at && Array.isArray(stored.tickets)) {
             const before = stored.tickets.reduce((sum, entry) => {
-                const now = live.staked.find((k) => k.tokenId === entry.tokenId);
+                const now = (live.staked || []).find((k) => k.tokenId === entry.tokenId);
                 return sum + (now ? now.tickets - entry.tickets : 0);
             }, 0);
             if (before > 0 && Date.now() - stored.at > 3_600_000) {
@@ -396,7 +396,7 @@ export default function StakingClient() {
             <link rel="stylesheet" href="/css/wallet-widget.css" />
             <link rel="stylesheet" href="/css/arya.css?v=3" />
             <Script src="/arya.js?v=3" strategy="afterInteractive" />
-            <Script src="/wallet-source.js?v=1" strategy="afterInteractive" />
+            <Script src="/wallet-source.js?v=2" strategy="afterInteractive" />
         </>
     );
 
@@ -424,6 +424,12 @@ export default function StakingClient() {
     }
 
     const connected = !!live?.connected;
+    // Derived once, on purpose. Some write controls live in panels that are always
+    // rendered — the inactive tabs stay mounted so their `aria-controls` resolve — and
+    // those panels render when `live` is still null, i.e. for every first-time visitor
+    // who has not connected yet. Reading `live.canWrite` there threw during render and
+    // took the whole page down. Every write control now reads this flag instead.
+    const canWrite = !!live?.canWrite;
     const isPreview = live?.source === SOURCE_PREVIEW;
     const staked = live?.staked || [];
     const owned = live?.owned || [];
@@ -692,7 +698,7 @@ export default function StakingClient() {
                                                 : 'Every Genesis Knight is staked'}
                                         </span>
                                         {owned.length > 1 && (
-                                            <button className="btn btn-secondary btn-sm" onClick={() => run('stakeAll')} disabled={!live.canWrite || !!busy}>
+                                            <button className="btn btn-secondary btn-sm" onClick={() => run('stakeAll')} disabled={!canWrite || !!busy}>
                                                 Stake all
                                             </button>
                                         )}
@@ -725,7 +731,7 @@ export default function StakingClient() {
                                                     key={knight.tokenId}
                                                     knight={knight}
                                                     busy={busy}
-                                                    canWrite={live.canWrite}
+                                                    canWrite={canWrite}
                                                     onStake={() => run('stake', { tokenId: knight.tokenId })}
                                                 />
                                             ))}
@@ -740,7 +746,7 @@ export default function StakingClient() {
                                                     knight={knight}
                                                     staked
                                                     busy={busy}
-                                                    canWrite={live.canWrite}
+                                                    canWrite={canWrite}
                                                     nowMs={nowMs}
                                                     onClaim={() => run('claim', { tokenId: knight.tokenId })}
                                                     onUnstake={() => run('unstake', { tokenId: knight.tokenId })}
@@ -801,13 +807,18 @@ export default function StakingClient() {
                                             />
                                         </svg>
                                         <span className="sv-tile-value sv-num" aria-hidden="true">
-                                            {fmtCountdown(countdownMs, week.phase)}
+                                            {/* A countdown needs a draw date, and there is none until a
+                                                wallet loads the week. `0m 0s` would read as "drawing
+                                                now", which is a claim this page cannot make. */}
+                                            {week.drawAt ? fmtCountdown(countdownMs, week.phase) : '—'}
                                         </span>
                                     </span>
                                     <span className="sv-tile-sub">
                                         {week.phase === 'pending'
                                             ? 'This week’s winners are being drawn.'
-                                            : `Week ${week.number} · Monday 00:00 UTC${week.phase === 'final' ? ' · final hour' : ''}`}
+                                            : week.drawAt
+                                                ? `Week ${week.number} · Monday 00:00 UTC${week.phase === 'final' ? ' · final hour' : ''}`
+                                                : 'Connect a wallet to load this week’s draw'}
                                     </span>
                                 </div>
                             </div>
@@ -922,7 +933,7 @@ export default function StakingClient() {
                                                             <button
                                                                 className="btn btn-secondary btn-sm"
                                                                 onClick={() => run('claim', { tokenId: knight.tokenId })}
-                                                                disabled={!live.canWrite || !!busy}
+                                                                disabled={!canWrite || !!busy}
                                                                 title={poolDng === null ? 'The weekly pool is not set yet' : 'Claim accrued DNG'}
                                                             >
                                                                 Claim
@@ -930,7 +941,7 @@ export default function StakingClient() {
                                                             <button
                                                                 className="btn btn-danger btn-sm"
                                                                 onClick={() => run('unstake', { tokenId: knight.tokenId })}
-                                                                disabled={!live.canWrite || !!busy}
+                                                                disabled={!canWrite || !!busy}
                                                                 title="Return the knight to your wallet. Its tickets are forfeited."
                                                             >
                                                                 Unstake
@@ -954,10 +965,10 @@ export default function StakingClient() {
                                                 ? `${live.entries.length} of ${staked.length} knights entered · ${fmtInt(totals.myTickets)} tickets`
                                                 : 'No knights entered in this week’s draw'}
                                         </span>
-                                        <button className="btn btn-primary btn-sm" onClick={() => run('enterAll')} disabled={!live.canWrite || !!busy || !staked.length}>
+                                        <button className="btn btn-primary btn-sm" onClick={() => run('enterAll')} disabled={!canWrite || !!busy || !staked.length}>
                                             Enter all
                                         </button>
-                                        <button className="btn btn-secondary btn-sm" onClick={() => run('withdrawAll')} disabled={!live.canWrite || !!busy || !live?.entries?.length}>
+                                        <button className="btn btn-secondary btn-sm" onClick={() => run('withdrawAll')} disabled={!canWrite || !!busy || !live?.entries?.length}>
                                             Withdraw all
                                         </button>
                                     </div>
@@ -994,11 +1005,11 @@ export default function StakingClient() {
                                                         </span>
                                                         <span className="sv-row-actions">
                                                             {knight.entered ? (
-                                                                <button className="btn btn-secondary btn-sm" onClick={() => run('withdrawRaffle', { tokenId: knight.tokenId })} disabled={!live.canWrite || !!busy}>
+                                                                <button className="btn btn-secondary btn-sm" onClick={() => run('withdrawRaffle', { tokenId: knight.tokenId })} disabled={!canWrite || !!busy}>
                                                                     Withdraw
                                                                 </button>
                                                             ) : (
-                                                                <button className="btn btn-primary btn-sm" onClick={() => run('enterRaffle', { tokenId: knight.tokenId })} disabled={!live.canWrite || !!busy}>
+                                                                <button className="btn btn-primary btn-sm" onClick={() => run('enterRaffle', { tokenId: knight.tokenId })} disabled={!canWrite || !!busy}>
                                                                     Enter
                                                                 </button>
                                                             )}
@@ -1096,7 +1107,7 @@ export default function StakingClient() {
                                                 </div>
                                                 <button
                                                     className="btn btn-primary btn-sm w-full"
-                                                    disabled={!capsule.count || !live.canWrite || !!busy}
+                                                    disabled={!capsule.count || !canWrite || !!busy}
                                                     onClick={() => run('openCapsule', { key: capsule.key })}
                                                 >
                                                     Open capsule
@@ -1106,7 +1117,7 @@ export default function StakingClient() {
                                     </div>
                             </section>
 
-                            {!live?.canWrite && connected && (
+                            {!canWrite && connected && (
                                 <div className="sv-banner">
                                     <span>{live.writeBlockedReason}</span>
                                 </div>

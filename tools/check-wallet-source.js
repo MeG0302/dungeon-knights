@@ -123,7 +123,15 @@ function fakeSdk({ config, user = null }) {
         constructor(options) {
             calls.push(['construct', options]);
             this.options = options;
-            this.user = { get: async () => ({ user }) };
+            // 0.76.x does **not** resolve to `{ user: null }` when storage is empty — it
+            // throws `No tokens found in storage`. `config.sessionThrows` opts into that,
+            // because the real behaviour is what the facade has to survive.
+            this.user = {
+                get: async () => {
+                    if (config.sessionThrows && !user) throw new Error('No tokens found in storage');
+                    return { user };
+                },
+            };
             this.embeddedWallet = {
                 getURL: () => 'https://auth.privy.io/embed/secure-context',
                 onMessage: () => {},
@@ -379,6 +387,39 @@ function load({ userAgent, embedded, injected = null, sdk = null, captureWarning
     const cancelledCaps = await cancelled.window.DKWallet.capabilities();
     rec('cancelling does not connect anyone', cancelledCaps.connected === false, `outcome: ${cancelledOutcome}`);
     rec('cancelling does not remove the wallet', !!cancelled.window.ethereum, 'shim still installed');
+
+    // ------------------------------------------------ a session that cannot be read
+    console.log('');
+    console.log('An empty session in storage — what 0.76.x actually does');
+
+    const sdkEmpty = fakeSdk({ config: { hasSession: false, sessionThrows: true } });
+    const empty = load({ embedded: { appId: 'app-id' }, sdk: sdkEmpty });
+    const emptyProvider = await empty.window.DKWallet.provider({ waitMs: 0 });
+    const emptyCaps = await empty.window.DKWallet.capabilities();
+    rec('an unreadable session does not break the facade', !!empty.window.DKWallet, 'facade is up');
+    rec('it is reported as no account',
+        emptyCaps.connected === false && emptyProvider === null,
+        `connected: ${emptyCaps.connected}, provider: ${emptyProvider}`);
+    rec('and no prompt is shown for it', findByClass(empty.body, 'dkw-backdrop') === null, 'no modal');
+    rec('the wallet is still offered, like a locked extension',
+        !!empty.window.ethereum && empty.window.ethereum.isDKEmbedded === true, 'shim installed');
+
+    // The regression this pins: awaiting `user.get()` directly meant the first click on a
+    // phone threw before the sign-in UI existed, so "Connect Wallet" did nothing at all.
+    // Caught rather than awaited bare: a throw here is the regression, and it must be
+    // reported as one failing check instead of aborting the rest of the run.
+    let emptyThrew = null;
+    const emptyPending = empty.window.DKWallet.connect()
+        .catch((error) => { emptyThrew = error.message || String(error); return null; });
+    await settle();
+    const emptyModal = findByClass(empty.body, 'dkw-backdrop');
+    rec('the first click still reaches the sign-in UI', !!emptyModal,
+        emptyModal ? 'modal shown' : `no modal${emptyThrew ? ` (threw: ${emptyThrew})` : ''}`);
+    const emptyCancel = emptyModal && findByClass(emptyModal, 'dkw-ghost');
+    if (emptyCancel) emptyCancel.onclick();
+    await emptyPending;
+    rec('and dismissing it connects nobody',
+        (await empty.window.DKWallet.capabilities()).connected === false, 'still signed out');
 
     // ----------------------------------------------------------- chain mismatch
     console.log('');

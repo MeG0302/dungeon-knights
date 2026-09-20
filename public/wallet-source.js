@@ -399,6 +399,26 @@
         return state.shim;
     }
 
+    /**
+     * The signed-in user, or null if there is no session.
+     *
+     * `privy.user.get()` is **not** a null-returning getter: with nothing in storage it
+     * throws `No tokens found in storage` rather than resolving to `{ user: null }`. Read
+     * directly, that killed the first click on a phone — the sign-in UI was never reached
+     * because the exception arrived one line earlier, and the whole point of this module
+     * is that first click. So a session that cannot be read is treated as a session that
+     * does not exist; anything a sign-in itself goes wrong with still throws, further in.
+     */
+    async function currentUser(privy) {
+        try {
+            const { user } = await privy.user.get();
+            return user || null;
+        } catch (error) {
+            log('no session to restore:', error.message || error);
+            return null;
+        }
+    }
+
     /** An authenticated session restored with no UI, or null. */
     function restore() {
         if (state.address) return Promise.resolve(state.shim);
@@ -407,7 +427,7 @@
             const shim = await ensureEmbedded();
             if (!shim) return null;
             const privy = await privyFor(state.config);
-            const { user } = await privy.user.get();
+            const user = await currentUser(privy);
             if (!user) return null;
             return attach(privy, user);
         })().catch((error) => {
@@ -425,7 +445,7 @@
         if (!shim) return null;
         try {
             const privy = await privyFor(state.config);
-            let { user } = await privy.user.get();
+            let user = await currentUser(privy);
             if (!user) user = await signInWithEmail(privy);
             if (!user) return null;
             return await attach(privy, user);
@@ -503,7 +523,7 @@
     async function disconnect() {
         if (state.kind !== 'embedded' || !state.privy) return;
         try {
-            const { user } = await state.privy.user.get();
+            const user = await currentUser(state.privy);
             if (user) await state.privy.auth.logout({ userId: user.id });
         } catch (error) {
             warn('sign-out failed:', error.message || error);

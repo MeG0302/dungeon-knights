@@ -324,9 +324,46 @@ The browser asks; it never decides.
   #   window.__check.engine(8)     // main engine: runs, kills, chests static, counters
   #   window.__check.assets()      // which portraits this page actually fetched
   #   window.__check.clearWatch()  // then watch for a real dungeon clear + her line
-  #   window.__check.vaultEntry(1) // play a whole vault entry, per-floor metrics    #   window.__check.report()      // { total, failed, failures[], results[] }
+  #   window.__check.vaultEntry(1) // play a whole vault entry, per-floor metrics
+  #   await window.__check.staking()  // the vault, 62 checks — RUN IT ON /staking
+  #   window.__check.report()      // { total, failed, failures[], results[] }
     rm public/_check.js            # and take it out again
     ```
+
+  **`engine()` needs a squad whose shape the engine accepts**, or it reports checks that look
+  like engine bugs but are the fixture's fault. Store real `Knight` objects, not hand-written
+  stats — `range: 1` is what makes a knight melee, and `rarity` is an object, not a tier name:
+
+  ```js
+  // on /game, where characters.js is loaded
+  const knights = [0, 1, 2, 3, 4].map((i) => {
+      const k = new Knight(i + 1);
+      return { id: k.id, rarity: k.rarity, stats: k.stats, stamina: k.stamina, state: k.state, totalEarned: 0 };
+  });
+  localStorage.setItem('selectedKnights', JSON.stringify(knights));
+  localStorage.setItem('selectedDungeon', 'crypts');   // one of DUNGEONS' keys, not a display name
+  ```
+
+  `selectedDungeon` must be one of `crypts / mines / temple / magma / void`. Any other value
+  crashes the engine at boot (`Dungeon.addObstacleDecoration` reads `this.config.name` while
+  `this.config` is `undefined`) — see the open question at the end of this file.
+
+  **The first-time visitor is a separate entry point, and it is the state the battery used to
+  miss.** `staking()` always ran with a wallet already saved, so the vault was never rendered
+  with **no snapshot at all** — the case that used to throw during render and leave the whole
+  page blank. The state needs a reload, so it is driven in four steps:
+
+  ```js
+  window.__check.prepareFresh();   // stash walletAddress, clear it
+  // reload /staking, then:
+  window.__check.freshState();     // 8 checks on what a brand-new visitor gets
+  window.__check.restoreWallet();  // put the wallet back
+  // reload /staking, then: await window.__check.staking()
+  ```
+
+  Do not try to test this in an `iframe`. A hidden `/staking` starts the embedded-wallet
+  handshake and leaves the renderer too busy to answer anything, and it took the page out for
+  minutes. A reload is cheaper and exact.
 
   `node tools/gate-check.js` is the other half: it is a plain node test (no browser, no
   dependencies) for the map loading gate, and it exits non-zero on failure.
@@ -452,7 +489,7 @@ and `walletManager.connect()` still shows the desktop message and opens the Meta
 — unchanged behaviour on every page.
 
 ```bash
-node tools/check-wallet-source.js    # 41 checks: dormant, injected-wins, restore, sign-in, cancel,
+node tools/check-wallet-source.js    # 47 checks: dormant, injected-wins, restore, sign-in, cancel,
                                     # chain mismatch, sign-out — against a fake SDK and stub DOM
 ```
 
@@ -462,13 +499,35 @@ To switch it on, set these on the Vercel project and redeploy (no code change):
 |---|---|
 | `PRIVY_APP_ID` | Turns the embedded path on. Public by design — it identifies the app to Privy's hosted UI, not a credential. |
 | `PRIVY_CLIENT_ID` | Optional, from the dashboard under Settings → Clients. |
-| `PRIVY_SDK_URL` | Optional. Defaults to `https://esm.sh/@privy-io/js-sdk-core`; **pin an exact version once tested**, or self-host the bundle and point this at it. |
+| `PRIVY_SDK_URL` | Optional. Defaults to the pinned `@privy-io/js-sdk-core@0.76.1` in the route; override only to move the pin or self-host the bundle. |
 
-**What has not been proven, and cannot be until an App ID exists:** the facade is built to
-Privy's documented core-SDK API (`initialize`, `user.get`, `embeddedWallet.getURL /
-onMessage / create / getEthereumProvider`, `auth.email.sendCode / loginWithCode`, `auth.logout`)
-and driven end to end against a fake of it, but the real handshake has never run. Two things will
-need checking first:
+**Switched on in this thread.** The App ID is `cmu9rk7lo034q0cl24jlo2mr7`. It lives in
+`.env.local` locally and in **Vercel production** (added as type `config`, not `secret` — it is
+public by design and the team should be able to read it back):
+
+```bash
+printf '%s' '<app-id>' | vercel env add PRIVY_APP_ID production --type config --scope meglast320-1694
+vercel env rm PRIVY_APP_ID production --yes --scope meglast320-1694   # to replace it
+```
+
+Piping the value is what makes this non-interactive. Two notes: the CLI still prompts for a
+**git branch** when the environment is `preview` (`vercel env add … preview`), so preview is
+**not set** and needs a human on a terminal; and `--type config` matters because the default is
+`secret`, which hides a value nobody needs hidden.
+
+**The real handshake now runs.** Verified against the live SDK, not a fake: the secure-context
+iframe mounts for *this* app id
+(`auth.privy.io/apps/cmu9rk7lo034q0cl24jlo2mr7/embedded-wallets`), and signing in with a
+non-routable `.invalid` address returns **`POST auth.privy.io/api/v1/passwordless/init → 200`**
+and advances to the code step. Nothing real was mailed.
+
+One bug came out of that first real run and is fixed: **`privy.user.get()` throws
+`No tokens found in storage`** when nobody is signed in — it is not a null-returning getter — so
+on 0.76.1 the first *Connect Wallet* on a phone died before any sign-in UI appeared.
+`public/wallet-source.js` now catches that specific case; the fake in `check-wallet-source.js`
+throws the same way so the regression cannot come back (**47/47**, was 41).
+
+Still unproven, and only a human can close these:
 
 - **The embedded wallet has to be on Robinhood Chain Testnet (46630 / `0xb626`).** Our chain is an
   app choice, not a wallet one, so the facade asks the wallet what chain it is on and **warns with
@@ -599,6 +658,7 @@ not the deployment URL.
 
 | variable | why it is required |
 |---|---|
+| `PRIVY_APP_ID` | **Set** (type `config`). Turns the embedded wallet on for the phone flow. Before it was set, production answered `embedded: null` and the whole embedded path stayed dormant. Env changes need a **redeploy** — the route is `force-dynamic`, but the deployment still has to exist. |
 | `POINTS_SESSION_SECRET` | **Set.** Sessions are HMACs. Without it each serverless instance generates its own random secret, so a token minted by one instance is rejected by the next: a player connects, clears a floor, and is randomly logged out. Measured before/after: 1-of-8 authenticated calls succeeded, then 8-of-8 once set. |
 | `KV_REST_API_URL` + `KV_REST_API_TOKEN` (or `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`) | **NOT set — required before the Points Program means anything.** Without it the store falls back to per-instance memory. |
 
@@ -743,3 +803,22 @@ localStorage.setItem('selectedKnights', JSON.stringify(
 Freezing the animation loop for a screenshot breaks the rAF chain — restore it with
 `game.gameLoop = game.constructor.prototype.gameLoop` and re-kick
 `requestAnimationFrame(t => game.gameLoop(t))`, or the game stays frozen forever.
+
+Building the squad with the engine's own class is safer than hand-writing the objects
+(`new Knight(id)` gives `stats.range: 1`, which is what makes it melee, and a `rarity`
+*object* rather than a tier name — a squad missing `range` deploys, reports `attacking`,
+and deals no damage at all, which reads exactly like a broken engine).
+
+**`selectedDungeon` must be one of `crypts / mines / temple / magma / void`** — the keys of
+`DUNGEONS`, not a display name. Any other value, including a stale key left in a browser from
+an earlier map rename, throws at boot and the game never starts:
+
+```
+❌ Failed to initialize game: TypeError: Cannot read properties of undefined (reading 'name')
+    at Dungeon.addObstacleDecoration (dungeon.js:369)   // this.config is undefined
+```
+
+`new Dungeon(type)` sets `this.config = DUNGEONS[type]` and then uses it unguarded. Not fixed
+here — the dungeon keys and the map art are being changed by hand right now, which is exactly
+when a stale `selectedDungeon` reaches a player, and defaulting an unknown key to `crypts` is a
+one-line call someone should make deliberately.

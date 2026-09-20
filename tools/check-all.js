@@ -452,6 +452,16 @@
 
         rec('the Staking Vault is the page that loaded', /staking/.test(location.pathname), location.pathname);
 
+        // Everything below is measured against a loaded vault, so a run with no wallet
+        // stored would report a pile of confusing failures instead of saying what is
+        // wrong. Say it once, plainly. (The no-wallet case has its own entry point:
+        // __check.prepareFresh() → reload → __check.freshState().)
+        if (!localStorage.getItem('walletAddress')) {
+            rec('the battery is running against a loaded vault', false,
+                'no walletAddress in storage — run __check.prepareFresh(), reload, then __check.staking() again');
+            return results;
+        }
+
         // Arya is a shared popup and her bubble sits over the page. Put her away first, or
         // every geometry check below measures her instead of the vault.
         if (window.Arya) { window.Arya.endTour?.(); window.Arya.hide?.(); }
@@ -779,11 +789,85 @@
         return results;
     }
 
+    // ------------------------------------------------------ the first-time visitor
+    //
+    // The state every new player is in, and the one the battery above never reached: it
+    // always ran with a wallet already saved, so the vault was never rendered with no
+    // snapshot at all. It used to throw there — the whole page went blank for anyone who
+    // had not connected before — while every other check still passed.
+    //
+    // It cannot be tested in a frame: a hidden /staking starts the embedded-wallet
+    // handshake, which leaves the renderer too busy to answer. So it is a reload instead.
+    //
+    //   __check.prepareFresh()   stash the saved wallet and clear it
+    //   reload /staking          a genuine first visit
+    //   __check.freshState()     assert what that visitor gets
+    //   __check.restoreWallet()  put the wallet back
+    const FRESH_STASH = 'dk_check_wallet_stash';
+
+    function prepareFresh() {
+        const stash = {
+            address: localStorage.getItem('walletAddress'),
+            connected: localStorage.getItem('walletConnected'),
+        };
+        localStorage.setItem(FRESH_STASH, JSON.stringify(stash));
+        localStorage.removeItem('walletAddress');
+        localStorage.removeItem('walletConnected');
+        return 'wallet stashed — reload /staking, then run __check.freshState()';
+    }
+
+    function restoreWallet() {
+        let stash = null;
+        try { stash = JSON.parse(localStorage.getItem(FRESH_STASH) || 'null'); } catch { /* ignore */ }
+        if (!stash) return 'nothing stashed';
+        if (stash.address !== null) localStorage.setItem('walletAddress', stash.address);
+        if (stash.connected !== null) localStorage.setItem('walletConnected', stash.connected);
+        localStorage.removeItem(FRESH_STASH);
+        return 'wallet restored — reload /staking, then run __check.staking()';
+    }
+
+    /** What a visitor who has never connected gets. Run it on /staking with no wallet. */
+    function freshState() {
+        if (window.Arya) { window.Arya.endTour?.(); window.Arya.hide?.(); }
+        const text = (document.body.innerText || '').replace(/\s+/g, ' ');
+
+        rec('a visitor with no wallet gets a rendered vault, not a blank page',
+            text.length > 400 && /vault is closed/i.test(text),
+            text ? text.slice(0, 48) : '(body empty — the render threw)');
+        rec('the published ladder still renders for them',
+            document.querySelectorAll('.sv-band').length === 6,
+            `${document.querySelectorAll('.sv-band').length} bands`);
+        rec('the inactive tabs render for them too',
+            document.querySelectorAll('[role="tabpanel"]').length === 3,
+            `${document.querySelectorAll('[role="tabpanel"]').length} panels`);
+        // These two are the exact controls that threw: the raffle panel's bulk buttons
+        // are always rendered, and they read the snapshot's write flag while it is null.
+        const raffle = [...document.querySelectorAll('#sv-panel-raffle .sv-bulk .btn')];
+        rec('the always-rendered raffle buttons survived the empty snapshot',
+            raffle.length === 2, `${raffle.length} found`);
+        rec('and they are disabled rather than broken',
+            raffle.every((b) => b.disabled), raffle.map((b) => (b.disabled ? 'off' : 'on')).join(', '));
+        rec('the closed vault shows no missing value',
+            text.length > 0 && !/undefined|NaN/.test(text),
+            (text.match(/[^ ]*undefined[^ ]*/i) || ['none'])[0]);
+        rec('the draw tile makes no claim without a draw date',
+            !/0m 0s/.test(text),
+            (document.querySelector('.sv-tile:last-child .sv-tile-value')?.textContent || '').trim());
+        const connect = [...document.querySelectorAll('button')]
+            .find((b) => /connect wallet|sign in as/i.test(b.textContent));
+        rec('and it invites them to connect', !!connect && !connect.disabled,
+            connect ? (connect.disabled ? 'disabled' : 'enabled') : 'no button');
+        return results;
+    }
+
     window.__check = {
         arya,
         assets,
         engine,
         staking,
+        prepareFresh,
+        freshState,
+        restoreWallet,
         clearWatch,
         vaultEntry: (n, o) => vaultEntry(n, o),
         vaultStop: () => { VAULT.stop = true; VAULT.running = false; return 'stopping'; },
