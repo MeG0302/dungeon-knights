@@ -8,6 +8,12 @@ function absolute(path) {
   return `/${path}`;
 }
 
+const MOBILE_STYLES = {
+  landing: '/landing-mobile.css',
+  mint: '/mint-mobile.css',
+  menu: '/menu-mobile.css',
+};
+
 export default function LegacyPage({ pageKey }) {
   const page = STATIC_PAGES[pageKey];
 
@@ -69,8 +75,8 @@ export default function LegacyPage({ pageKey }) {
       {page.inlineStyles.map((css, i) => (
         <style key={`inline-${i}`} dangerouslySetInnerHTML={{ __html: css }} />
       ))}
-      {pageKey === 'landing' && (
-        <link rel="stylesheet" href="/landing-mobile.css" />
+      {MOBILE_STYLES[pageKey] && (
+        <link rel="stylesheet" href={MOBILE_STYLES[pageKey]} />
       )}
       <div dangerouslySetInnerHTML={{ __html: page.body }} />
     </>

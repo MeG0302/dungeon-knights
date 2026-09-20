@@ -731,26 +731,23 @@ class DungeonRenderer {
     }
 
     loadKnightImages() {
-        // Map rarity tiers to actual image files (correct filenames with .png)
-        const imageMap = {
-            'LEGENDARY': 'characters/Knight_in_golden_armor_stands_2K_202609041404_jpeg_2K_202609041417.png',
-            'MYTHIC': 'characters/Pixel_knight_holding_cosmic_shield_2K_202609041402_jpeg_2K_202609041417.png',
-            'EPIC': 'characters/Pixel_knight_holding_wooden_shield_2K_202609041402_jpeg_2K_202609041417.png',
-            'RARE': 'characters/Pixel_knight_standing_on_floor_2K_202609041402_jpeg_2K_202609041417.png',
-            'UNCOMMON': 'characters/Pixelated_knight_standing_on_tile_2K_202609041402_jpeg_2K_202609041417.png',
-            'COMMON': 'characters/Pixelated_knight_standing_on_tile_2K_202609041402_jpeg_2K_202609041417.png'
-        };
+        // Knight art comes from the single rarity config (config.js)
+        const tiers = window.RARITY_TIERS || [];
+        const config = window.RARITY_CONFIG || {};
 
-        Object.entries(imageMap).forEach(([rarity, path]) => {
+        tiers.forEach(tier => {
+            const entry = config[tier];
+            if (!entry?.image) return;
+            const key = tier.toUpperCase();
             const img = new Image();
             img.onload = () => {
-                console.log(`✅ Loaded ${rarity} knight sprite`);
+                console.log(`✅ Loaded ${key} knight sprite`);
             };
             img.onerror = () => {
-                console.warn(`⚠️ Failed to load ${rarity} knight: ${path}`);
+                console.warn(`⚠️ Failed to load ${key} knight: ${entry.image}`);
             };
-            img.src = path;
-            this.knightImages[rarity] = img;
+            img.src = entry.image;
+            this.knightImages[key] = img;
         });
     }
 

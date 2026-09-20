@@ -121,12 +121,11 @@ class DungeonSessionManager {
      */
     estimateReward(knights) {
         let total = 0;
+        const fallback = window.DUNGEON_CONFIG?.averageDungeonReward?.() ?? 0;
         knights.forEach(knight => {
             const rarity = knight.rarity?.tier || knight.rarity;
-            const rarityData = window.RARITY?.[rarity];
-            if (rarityData) {
-                total += rarityData.dungeonReward;
-            }
+            const rarityData = window.DUNGEON_CONFIG?.getRarity?.(rarity);
+            total += rarityData ? rarityData.dungeonReward : fallback;
         });
         return total;
     }
@@ -159,9 +158,12 @@ class DungeonSessionManager {
     }
     
     async calculateRunReward(knightIds) {
+        // Expected $DNG per run, derived from config (single source of truth)
+        const avgReward = window.DUNGEON_CONFIG?.averageDungeonReward?.() ?? 0;
+
         // If we can't fetch knight data, use fallback estimate
         if (!window.walletManager || !window.walletManager.isConnected) {
-            return knightIds.length * 15; // Fallback: 15 DNG average per knight
+            return knightIds.length * avgReward;
         }
         
         try {
@@ -185,25 +187,25 @@ class DungeonSessionManager {
             
             const knightNFT = new ethers.Contract(knightNFTAddress, knightNFTABI, provider);
             
-            // Rarity rewards from contract (matches V2 contract)
-            const rarityRewards = [10, 17, 30, 75, 150]; // Common, Uncommon, Rare, Epic, Legendary
+            // Rarity rewards from config; index matches on-chain rarity enum (0-4)
+            const rarityRewards = window.DUNGEON_CONFIG?.getRarityRewards?.() || [];
             
             let totalReward = 0;
             
             for (const knightId of knightIds) {
                 try {
                     const [, rarity] = await knightNFT.getKnightInfo(knightId);
-                    totalReward += rarityRewards[rarity];
+                    totalReward += rarityRewards[rarity] ?? avgReward;
                 } catch (error) {
-                    console.warn(`⚠️ Failed to get rarity for knight ${knightId}, using average (15 DNG)`);
-                    totalReward += 15; // Fallback
+                    console.warn(`⚠️ Failed to get rarity for knight ${knightId}, using average (${avgReward} DNG)`);
+                    totalReward += avgReward;
                 }
             }
             
             return totalReward;
         } catch (error) {
             console.warn('⚠️ Failed to fetch knight rarities, using estimate:', error.message);
-            return knightIds.length * 15; // Fallback: 15 DNG average per knight
+            return knightIds.length * avgReward;
         }
     }
 

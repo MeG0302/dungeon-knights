@@ -1,48 +1,31 @@
 // Character System - Stats, Rarity, and Knight Management
-// Rarity system based on CONFIG (Uncommon = 25 dungeon ROI baseline)
+// Rarity/economy values come from the single source of truth in config.js
+// (window.RARITY_CONFIG) so gameplay, mint odds and claim estimates stay aligned.
 
-const RARITY = {
-    COMMON: { 
-        name: 'Common', 
-        multiplier: 1.0, 
-        color: '#9E9E9E', 
-        dropRate: 0.50, // 50%
-        dungeonReward: 10, // 50 dungeons to ROI (10-day @ 5/day)
-        dailyRuns: 5 // 5 runs/day = 50 DNG/day = 10 day ROI
-    },
-    UNCOMMON: { 
-        name: 'Uncommon', 
-        multiplier: 1.7, 
-        color: '#4CAF50', 
-        dropRate: 0.30, // 30%
-        dungeonReward: 17, // Must match contract V2
-        dailyRuns: 5 // 5 runs/day = 85 DNG/day
-    },
-    RARE: { 
-        name: 'Rare', 
-        multiplier: 3.0, 
-        color: '#2196F3', 
-        dropRate: 0.15, // 15%
-        dungeonReward: 30, // ~17 dungeons to ROI
-        dailyRuns: 4 // 4 runs/day = 120 DNG/day = 4.2 day ROI
-    },
-    EPIC: { 
-        name: 'Epic', 
-        multiplier: 7.5, 
-        color: '#9C27B0', 
-        dropRate: 0.04, // 4%
-        dungeonReward: 75, // ~7 dungeons to ROI
-        dailyRuns: 3 // 3 runs/day = 225 DNG/day = 2.2 day ROI
-    },
-    LEGENDARY: { 
-        name: 'Legendary', 
-        multiplier: 15.0, 
-        color: '#FFD700', 
-        dropRate: 0.01, // 1%
-        dungeonReward: 150, // ~3 dungeons to ROI (15x Common)
-        dailyRuns: 4 // 4 runs/day = 600 DNG/day = 0.8 day ROI
+const RARITY = (() => {
+    const tiers = (typeof window !== 'undefined' && window.RARITY_TIERS) || [];
+    const config = (typeof window !== 'undefined' && window.RARITY_CONFIG) || {};
+    const table = {};
+
+    tiers.forEach(tier => {
+        const r = config[tier];
+        if (!r) return;
+        table[tier.toUpperCase()] = {
+            name: r.name,
+            multiplier: r.multiplier,
+            color: r.color,
+            dropRate: r.dropRate,
+            dungeonReward: r.dungeonReward,
+            dailyRuns: r.dailyRuns
+        };
+    });
+
+    if (Object.keys(table).length === 0) {
+        console.error('❌ RARITY_CONFIG not loaded — load config.js before characters.js');
     }
-};
+
+    return table;
+})();
 
 class Knight {
     constructor(id) {

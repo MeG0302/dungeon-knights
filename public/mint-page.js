@@ -17,6 +17,7 @@ class MintPage {
 
     await this.walletManager.init();
 
+    this.renderRarityChances();
     this.setupQuantityControls();
     this.setupMintButton();
     this.setupListeners();
@@ -28,18 +29,44 @@ class MintPage {
     console.log('✅ Mint page ready');
   }
 
+  mintPrice() {
+    return window.DUNGEON_CONFIG?.getMintPrice?.() ?? 500;
+  }
+
+  renderRarityChances() {
+    const container = document.getElementById('rarityChances');
+    if (!container || !window.RARITY_TIERS || !window.RARITY_CONFIG) return;
+
+    container.innerHTML = window.RARITY_TIERS.map(tier => {
+      const r = window.RARITY_CONFIG[tier];
+      return `
+        <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
+          <span style="display:flex;align-items:center;gap:6px"><span class="dot dot-${tier}"></span> ${r.name}</span>
+          <span style="color:var(--text-muted)">${(r.dropRate * 100).toFixed(1)}%</span>
+        </div>
+      `;
+    }).join('');
+
+    const perKnight = document.getElementById('cost-per-knight');
+    if (perKnight) perKnight.textContent = `${this.mintPrice()} DNG`;
+  }
+
+  updateTotalCost() {
+    const costDisplay = document.getElementById('total-cost');
+    if (costDisplay) costDisplay.textContent = `${this.mintQuantity * this.mintPrice()} DNG`;
+  }
+
   setupQuantityControls() {
     const decreaseBtn = document.getElementById('decrease-quantity');
     const increaseBtn = document.getElementById('increase-quantity');
     const quantityDisplay = document.getElementById('quantity-display');
-    const costDisplay = document.getElementById('total-cost');
 
     if (decreaseBtn) {
       decreaseBtn.addEventListener('click', () => {
         if (this.mintQuantity > 1) {
           this.mintQuantity--;
           if (quantityDisplay) quantityDisplay.textContent = this.mintQuantity;
-          if (costDisplay) costDisplay.textContent = this.mintQuantity * 500;
+          this.updateTotalCost();
         }
       });
     }
@@ -49,7 +76,7 @@ class MintPage {
         if (this.mintQuantity < 10) {
           this.mintQuantity++;
           if (quantityDisplay) quantityDisplay.textContent = this.mintQuantity;
-          if (costDisplay) costDisplay.textContent = this.mintQuantity * 500;
+          this.updateTotalCost();
         }
       });
     }
@@ -92,7 +119,7 @@ class MintPage {
       mintBtn.innerHTML = '<img src="assets/ui/sword.png" class="btn-icon-img" alt=""> MINTING...';
     } else {
       mintBtn.disabled = false;
-      const cost = this.mintQuantity * 500;
+      const cost = this.mintQuantity * this.mintPrice();
       mintBtn.innerHTML = `<img src="assets/ui/sword.png" class="btn-icon-img" alt=""> SUMMON ${this.mintQuantity} KNIGHT${this.mintQuantity > 1 ? 'S' : ''} (${cost} DNG)`;
     }
   }
@@ -112,7 +139,7 @@ class MintPage {
       const portal = document.getElementById('portalAnimation');
       if (portal) portal.classList.remove('hidden');
 
-      const cost = this.mintQuantity * 500;
+      const cost = this.mintQuantity * this.mintPrice();
 
       // Approve
       const approved = await this.walletManager.approveDNG(cost);

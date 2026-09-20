@@ -511,7 +511,7 @@ class Game {
         
         // Play recruit sound - rare drop sound for epic+ knights
         if (window.audioManager) {
-            const sound = ['EPIC', 'LEGENDARY', 'MYTHIC'].includes(knight.rarity.tier) ? 
+            const sound = ['EPIC', 'LEGENDARY'].includes(knight.rarity.tier) ? 
                 'rare_drop' : 'recruit';
             window.audioManager.play(sound);
         }

@@ -639,7 +639,6 @@ body {
   justify-content: center;
   flex-wrap: wrap;
 }
-}
 .knight-stat { font-family: var(--font-heading); }
 
 .knight-stamina-display { margin-top: 6px; }
@@ -733,6 +732,57 @@ body {
   text-align: center;
   padding: 40px 20px;
   font-size: 13px;
+}
+
+/* ==========================================================
+   EMPTY STATES (knight roster, galleries)
+   ========================================================== */
+.empty-state {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 6px;
+  padding: 48px 24px;
+  min-height: 240px;
+}
+
+.empty-state-icon {
+  width: 72px;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  line-height: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 35%, rgba(212, 175, 55, 0.16) 0%, rgba(212, 175, 55, 0.02) 70%);
+  border: 1px solid var(--border-bronze);
+  box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  margin-bottom: 12px;
+}
+
+.empty-state-title {
+  font-family: var(--font-heading);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--accent-gold);
+}
+
+.empty-state-text {
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  max-width: 320px;
+  margin-bottom: 8px;
+}
+
+.empty-state .btn {
+  margin-top: 4px;
 }
 
 /* Rarity colors on knight cards */
