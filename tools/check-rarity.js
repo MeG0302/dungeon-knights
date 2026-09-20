@@ -29,6 +29,7 @@ import path from 'path';
 import vm from 'vm';
 import { fileURLToPath } from 'url';
 import { RARITY } from '../lib/knights.js';
+import { CAPSULE_TYPES, HASH_POWER_BANDS } from '../lib/staking-config.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = path.join(ROOT, 'public');
@@ -222,6 +223,53 @@ const mintPrice = page.getMintPrice();
 rec('the mint price comes from the config, not a literal in the controller',
     Number.isFinite(mintPrice) && mintPrice > 0,
     `${mintPrice} DNG on ${page.getCurrentNetwork()}`);
+
+console.log('');
+console.log('The Staking Vault may only hand out tiers the contracts can pay');
+
+// A capsule mints a knight, so its outcomes are bounded by the same five slots. The spec's
+// fourth capsule was named after a Mythic tier that has no reward slot — the one place the
+// phantom tier could have come back.
+const tierIndex = new Map(ON_CHAIN.map((tier, i) => [tier, i]));
+const outcomeIndex = (row) => tierIndex.get(String(row.rarity).toUpperCase());
+
+const unpayable = [];
+for (const capsule of CAPSULE_TYPES) {
+    for (const row of capsule.odds) {
+        if (outcomeIndex(row) === undefined) unpayable.push(`${capsule.name} → ${row.rarity}`);
+    }
+}
+rec('every capsule outcome is a tier the reward contracts pay', unpayable.length === 0,
+    unpayable.length ? `no reward slot for: ${unpayable.join(', ')}` : `${CAPSULE_TYPES.length} capsules, all payable`);
+
+for (const capsule of CAPSULE_TYPES) {
+    const total = capsule.odds.reduce((sum, row) => sum + row.pct, 0);
+    rec(`${capsule.name} odds sum to exactly 100`, total === 100, `${total}%`);
+}
+
+// A rung is only worth more if it raises the floor, so the floors have to climb.
+const floors = CAPSULE_TYPES.map((c) => Math.min(...c.odds.map(outcomeIndex)));
+const floorsClimb = floors.every((floor, i) => i === 0 || floor > floors[i - 1]);
+rec('each rarer capsule raises the floor', floorsClimb,
+    floorsClimb
+        ? CAPSULE_TYPES.map((c, i) => `${c.name.split(' ')[0]}: ${ON_CHAIN[floors[i]]}`).join(' → ')
+        : `floors are ${floors.join(', ')}`);
+
+// `dungeonReward x dailyRuns` is a knight's earning power, so it is what a capsule is worth.
+const yieldOf = (tier) => config[tier].dungeonReward * config[tier].dailyRuns;
+const expected = CAPSULE_TYPES.map((c) =>
+    c.odds.reduce((sum, row) => sum + (yieldOf(String(row.rarity).toLowerCase()) * row.pct) / 100, 0));
+const yieldsClimb = expected.every((value, i) => i === 0 || value > expected[i - 1]);
+rec('each rarer capsule is worth more to a player', yieldsClimb,
+    CAPSULE_TYPES.map((c, i) => `${c.name.split(' ')[0]} ${expected[i].toFixed(1)}`).join(' → ') + ' DNG/day');
+
+// The capsule's own label is a colour key in the UI, so it must name something real.
+const bandKeys = HASH_POWER_BANDS.map((b) => b.key);
+const badLabels = CAPSULE_TYPES
+    .filter((c) => !tierIndex.has(String(c.rarity).toUpperCase()) && !bandKeys.includes(c.rarity))
+    .map((c) => `${c.name}: ${c.rarity}`);
+rec('every capsule label names a tier or a published band', badLabels.length === 0,
+    badLabels.length ? badLabels.join(', ') : CAPSULE_TYPES.map((c) => c.rarity).join(', '));
 
 console.log('');
 const failed = results.filter((r) => !r.pass);

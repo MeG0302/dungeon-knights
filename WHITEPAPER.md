@@ -75,25 +75,36 @@ Seven surfaces, all live on the production domain:
 
 ### 4.1 Knights and rarity
 
-Six rarities, rolled once at summon. Multipliers affect **gameplay stats only** — reward
-amounts are table-fixed per rarity, so a Mythic knight is not paid more per clear than the
-table allows.
+**Five** rarities, one per on-chain enum slot (0–4), rolled once. Multipliers affect
+**gameplay stats only** — reward amounts are table-fixed per rarity, so a Legendary is not
+paid more per clear than the table allows.
 
-| Rarity | Drop rate | Power × | Base speed | Reward / clear | Daily runs | Max DNG / day |
+The odds below are the single published table. It is asserted by `tools/check-rarity.js`
+against the engine, the shared config, the React helpers and each reward contract's
+constructor, so the interface cannot advertise a tier or a number the contracts do not pay:
+
+| Rarity | Roll | Power × | Base speed | Reward / clear | Daily runs | Max DNG / day |
 |---|---|---|---|---|---|---|
-| Common | 65% | 1.0 | 1.0 | 10 | 5 | 50 |
-| Uncommon | 20% | 1.5 | 1.5 | 17 | 5 | 85 |
-| Rare | 10% | 2.2 | 2.14 | 30 | 4 | 120 |
-| Epic | 4.5% | 3.5 | 3.0 | 75 | 3 | 225 |
-| Legendary | 1.2% | 5.0 | 7.5 | 150 | 4 | 600 |
-| Mythic | 0.3% | 8.0 | 15.0 | see §11.1 | — | — |
+| Common | 50% | 1.0 | 1.0 | 10 | 5 | 50 |
+| Uncommon | 30% | 1.7 | 1.7 | 17 | 5 | 85 |
+| Rare | 15% | 3.0 | 3.0 | 30 | 4 | 120 |
+| Epic | 4% | 7.5 | 7.5 | 75 | 3 | 225 |
+| Legendary | 1% | 15.0 | 15.0 | 150 | 4 | 600 |
+
+The rolls sum to exactly 100%, which matters: `rollRarity()` accumulates the percentages and
+falls through to Common for anything past the last entry, so a table that summed to less than
+100 would quietly promote a phantom tier rather than fail. An earlier six-tier table
+advertised a Mythic at 0.3% that could never be rolled at all (§11.1).
 
 Stats: `power = (10 + rand·15) × multiplier × variance(0.8–1.2)`,
 `stamina = (300 + rand·100) × multiplier`. Squad cap **15**. Melee only, 1s attack
 cooldown, monsters 500 HP, loot chests 250 HP.
 
 Observed on testnet across the 78 knights minted so far: 46 Common, 22 Uncommon, 6 Rare,
-1 Epic, 2 Legendary — consistent with the table at a small sample size.
+1 Epic, 2 Legendary. That is the **collection contract's** roll rather than this table — its
+source is not in this repository (§11.13) — and at n=78 the sample is too small to confirm
+or refute either distribution: 59% Common sits between this table's 50% and the previous
+advertised 65%, each about one standard error away.
 
 ### 4.2 The five dungeons
 
@@ -386,7 +397,7 @@ contract risk as real risk, and do not assume the mainnet deployment will look i
 | # | Shipped |
 |---|---|
 | 1 | Canvas engine: pathfinding, melee combat, stamina, five themed dungeons |
-| 2 | Knight NFTs with six-tier rarity roll, summoning chamber, 500 $DNG summons |
+| 2 | Knight NFTs with a five-tier rarity roll, summoning chamber, 500 $DNG summons |
 | 3 | Knight's Hall: roster, sort/filter, squad selection, up to 15 deployed |
 | 4 | Monsters that fight back — themed attacks, 3-tile domains, facing, 2-tile beams, static chests, no double damage |
 | 5 | Live on-chain rewards with daily caps, plus a claim record per wallet |
@@ -423,14 +434,23 @@ timezone disagrees about which week it is. For the minutes after the boundary, b
 draw has run, the interface says *Drawing…* rather than showing an expired countdown.
 
 **Capsules.** Free to open — the prize is the knight, not a second purchase. Odds are shown
-in the interface and each table sums to exactly 100:
+in the interface, every table sums to exactly 100, and **no table offers a tier the reward
+contracts cannot pay**. Each rarer capsule raises the floor rather than only shifting weight:
 
-| Capsule | Common | Uncommon | Rare | Epic | Legendary | Mythic |
+| Capsule | Common | Uncommon | Rare | Epic | Legendary | Expected |
 |---|---|---|---|---|---|---|
-| Common | 60% | 25% | 10% | 4% | 1% | — |
-| Rare | — | 30% | 40% | 20% | 8% | 2% |
-| Legendary | — | — | 20% | 40% | 30% | 10% |
-| Mythic | — | — | — | 30% | 40% | 30% |
+| Common | 60% | 25% | 10% | 4% | 1% | 78.3 DNG/day |
+| Rare | — | 30% | 40% | 20% | 10% | 178.5 |
+| Legendary | — | — | 20% | 40% | 40% | 354.0 |
+| Prime | — | — | — | 30% | 70% | 487.5 |
+
+The fourth capsule was specified as the *Mythic* capsule, handing out a tier with no reward
+slot (see §11.1). It is now the **Prime Capsule** — named for the top hash-power band rather
+than for a knight tier — and it draws only from the top of the real range. *Expected* is
+`dungeonReward × dailyRuns` (a knight's earning power) weighted by the table; the ladder is
+deliberately not steeper, because with five tiers the top rung has nowhere to climb but
+Legendary. **How the 200 weekly capsules are split across these four types is still
+undecided, and it is the number that actually sets this economy.**
 
 **The weekly DNG pool is TBD and the product says so.** No official figure has been
 published, so the interface shows `TBD` where a number would go and continues to show
@@ -451,7 +471,7 @@ the pool is decided, the page becomes real without redesign.
 ## 10. Roadmap
 
 **Phase 1 — core game and live rewards** · *shipped*
-Five dungeons, six-rarity NFTs, on-chain claims with daily caps, points program, Arya,
+Five dungeons, five-rarity NFTs, on-chain claims with daily caps, points program, Arya,
 verification harnesses. (§8)
 
 **Phase 2 — Genesis, staking, raffle** · *in progress*
@@ -475,11 +495,13 @@ timing alone.
 Disclosed because a whitepaper that hides these is worth less than the paper it is printed
 on.
 
-**11.1 — The Mythic reward slot.** The engine can roll six rarities; the deployed reward
-contracts define five reward slots (indices 0–4). A knight that rolled Mythic would fail
-the contract's rarity check on claim. No Mythic has been minted yet, so the bug has never
-fired — and it must be closed before it can. Either the reward arrays extend to six tiers
-or the mint-side roll stops at five.
+**11.1 — The Mythic reward slot.** *(Closed at the source, 20 Sep 2026.)* The engine could
+roll six rarities while the reward contracts define five reward slots (indices 0–4), so a
+knight that rolled Mythic would have failed the contract's rarity check on claim. The
+engine, the shared config, the React helpers and the capsule tables now carry the same five
+tiers, and `tools/check-rarity.js` fails if any of them drifts — including if a capsule ever
+promises a tier with no reward slot. The **deployed** contracts are unchanged, but the trap
+can no longer fire, because nothing can mint the sixth tier.
 
 **11.2 — Conflicting reward tables.** `tokenomics.md` quotes 12 / 20 / 36 / 60 / 100 / 150
 per clear; the **live contract pays 10 / 17 / 30 / 75 / 150**. The contract is the truth
@@ -508,7 +530,9 @@ liquidity exists, no LP is locked, and no vesting contract has been deployed.
 single-run convenience wrapper) calls `this.batchClaimRewards(...)`, which cannot pass its
 own reentrancy guard. It reverts. Only `batchClaimRewards` works. The interface hides this
 by always batching, but the broken selector is still callable and should be removed in the
-next deployment.
+next deployment. *(Source corrected 20 Sep 2026: `claimRewards` is deleted from
+V3-Simple, so no new deployment inherits it. The deployed address still exposes the
+reverting selector.)*
 
 **11.9 — The $DNG token's source is not in this repository.** Its supply, symbol, decimals
 and owner are verifiable on chain; whether a privileged mint function exists is **not**
@@ -524,7 +548,9 @@ before any public testnet push.
 
 **11.11 — Ownership is a single externally-owned wallet, with no two-step transfer.**
 `CONTRACTS.md` already lists `Ownable2Step` as a mainnet prerequisite. Until then, an owner
-key compromise is an immediate, unilateral control of rewards, caps and treasury.
+key compromise is an immediate, unilateral control of rewards, caps and treasury. *(Source
+corrected 20 Sep 2026: every reward contract is now `Ownable2Step`, with immutable token
+references and `SafeERC20`. The deployed V3-Simple still uses single-step `Ownable`.)*
 
 **11.12 — Genesis has no contract, no price, and one unbudgeted promise.** Nothing in §9 is
 on chain: `GenesisNFT.sol` does not exist, the mint price is undecided, and the weekly DNG
@@ -533,6 +559,16 @@ read before mint: the capsule draw pays a knight roughly **0.2 capsules per week
 1,024 are staked, and **free capsule opening mints 10,400 knights a year**, whose expected
 claim capacity is **~299M DNG against a 1M supply**. That faucet is the largest
 unquantified liability in the project.
+
+**11.13 — The collection contract's mint odds are not in this repository.** §4.1's table is
+asserted against the engine, the config, the React helpers and the reward contracts — every
+one of which is in this repository. The **knight NFT itself** is not: `contracts/` holds the
+five reward contracts and nothing else, so the roll that decides a minted knight's rarity
+cannot be read here. That matters because the Summoning Chamber now prints §4.1's numbers as
+*chances*, which asserts they are the contract's odds too. The on-chain sample (78 mints,
+§4.1) is far too small to settle it. **Publishing the collection's source, or reading its
+fixed odds off the bytecode, is required before §4.1 can be called the mint odds rather than
+the engine's roll.**
 
 ---
 

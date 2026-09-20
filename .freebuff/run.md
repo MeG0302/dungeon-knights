@@ -194,11 +194,21 @@ switches to real holdings on its own when they do.
   seconds is a small number and two decimals would sit still for half a minute.
 - **Actions are pure functions** in `lib/staking-source.js` (`applyAction`), so every path — stake,
   unstake, claim, enter, withdraw, open a capsule — is proven without a wallet.
+- **Capsules may only promise tiers the contracts pay.** The spec's fourth capsule was the
+  *Mythic* capsule, handing out a tier with no on-chain reward slot 2–30% of the time — a card
+  that would revert on every claim. It is the **Prime Capsule** now, named for the top
+  hash-power band rather than a knight tier, and its Mythic share moved to Legendary. The
+  ladder raises the floor rung by rung: Common 60/25/10/4/1, Rare 30/40/20/10, Legendary
+  20/40/40, Prime 30/70. `/api/staking/config` serves `knightTiers` (from `lib/knights.js`)
+  so a client can check its odds against the contracts' enum instead of against itself.
+  **Still open:** how the 200 weekly capsules split across the four types is undefined, and it
+  is the number that actually sets the raffle's economy.
 
 Verify it:
 
 ```bash
-node tools/check-staking.js        # 109 checks: week clock, tickets, capsule odds, actions
+node tools/check-staking.js        # 119 checks: week clock, tickets, capsule odds, actions
+node tools/check-rarity.js         # 35 checks: the economy, incl. capsule outcomes
 ```
 
 In the browser, on `/staking`, after copying the battery into `public/`:
@@ -207,9 +217,10 @@ In the browser, on `/staking`, after copying the battery into `public/`:
 window.__check.reset(); await window.__check.staking(); window.__check.report();
 ```
 
-46 checks — tab ARIA wiring, arrow keys and the URL, the tick actually moving, staking and
-unstaking a knight, the claim refusing with a reason while the pool is `TBD`, and no horizontal
-overflow. The battery puts back any knight it stakes.
+48 checks — tab ARIA wiring, arrow keys and the URL, the tick actually moving, staking and
+unstaking a knight, the claim refusing with a reason while the pool is `TBD`, no horizontal
+overflow, and every capsule offering only a payable tier (checked against the tier list the
+server returns, not against the page). The battery puts back any knight it stakes.
 
 **Known and deliberate**, so it is not mistaken for a bug: with 200 capsules a week and few
 knights staked, one entry can expect most of a draw. That is the formula working; the raffle tab

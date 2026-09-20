@@ -7,6 +7,10 @@ import {
     WEEK_EPOCH_UTC,
     WEEK_MS,
 } from '../../../../lib/staking-config.js';
+// The tiers every reward contract can pay. Served alongside the capsule odds because those
+// odds are expressed in these names, and a capsule may not promise one that is missing —
+// the spec's fourth capsule offered a Mythic, which has no on-chain reward slot.
+import { KNIGHT_TIERS } from '../../../../lib/knights.js';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -56,6 +60,7 @@ export async function GET() {
         poolDng: poolFromEnv(),
         capsulesPerWeek: CAPSULES_PER_WEEK,
         capsuleTypes: CAPSULE_TYPES,
+        knightTiers: KNIGHT_TIERS,
         capHours: TICKET_CAP_HOURS,
         week: { epochUtc: WEEK_EPOCH_UTC, lengthMs: WEEK_MS },
     });

@@ -152,7 +152,7 @@ window.RARITY_CONFIG = {
     name: 'Common',
     color: '#9E9E9E',
     multiplier: 1.0,
-    dropRate: 0.50,       // 50% mint odds
+    dropRate: 0.50,       // 50% roll (see WHITEPAPER.md §11.13 before calling this a mint odd)
     dungeonReward: 10,    // $DNG per dungeon clear
     dailyRuns: 5,
     image: 'characters/Pixel_knight_holding_wooden_shield_2K_202609041402_jpeg_2K_202609041417.png'

@@ -10,7 +10,7 @@
  *
  *   - the week really does turn over at Monday 00:00 UTC, in every timezone
  *   - tickets follow the formula in the brief, including the seven-day cap
- *   - the capsule odds add up (the brief's Mythic table did not)
+ *   - the capsule odds add up, and every outcome is a tier the contracts can pay
  *   - an unset weekly pool produces `null` — never an invented number — and a set one
  *     flows all the way to the per-knight figures
  *   - preview holdings are deterministic per wallet, so a page does not reshuffle
@@ -165,7 +165,7 @@ section('Capsules');
     rec('capsule keys are unique', new Set(CAPSULE_TYPES.map((t) => t.key)).size === CAPSULE_TYPES.length);
     rec('no capsule can roll the same rarity twice in one table',
         CAPSULE_TYPES.every((t) => new Set(t.odds.map((o) => o.rarity)).size === t.odds.length));
-    rec('lookup works by key and by id', capsuleType('mythic')?.id === 4 && capsuleType(4)?.key === 'mythic');
+    rec('lookup works by key and by id', capsuleType('prime')?.id === 4 && capsuleType(4)?.key === 'prime');
     rec('an unknown capsule is null, not a crash', capsuleType('nope') === null);
 
     // The brief handed out 200 capsules a week; the number lives in one constant.

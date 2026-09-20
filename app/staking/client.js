@@ -850,7 +850,8 @@ export default function StakingClient() {
                             <section className="sv-panel" id="sv-panel-capsules" role="tabpanel" aria-labelledby="sv-tab-capsules" hidden={tab !== 'capsules'}>
                                     <p className="sv-summary-label">
                                         Capsules are won in the draw and opened in the Summoning Chamber, where the
-                                        knight inside is revealed. The odds below are exactly what the contract rolls.
+                                        knight inside is revealed. These are the published tables: every outcome is a tier
+                                        the reward contracts pay, and each sums to exactly 100.
                                     </p>
                                     <div className="sv-capsule-grid">
                                         {(live?.capsules || []).map((capsule) => (

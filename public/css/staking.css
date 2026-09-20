@@ -331,7 +331,7 @@
 
 .sv-art[data-rarity='rare'] .sv-art-glyph { color: #7EB8DA; }
 .sv-art[data-rarity='legendary'] .sv-art-glyph { color: #D4AF37; }
-.sv-art[data-rarity='mythic'] .sv-art-glyph { color: #B07CD8; }
+.sv-art[data-rarity='prime'] .sv-art-glyph { color: #B07CD8; }
 
 /* Staked cards get a slow pulse instead of a spinner: it reads as "working", and it
    stops entirely for anyone who has asked for less motion. */

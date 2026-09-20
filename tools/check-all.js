@@ -655,6 +655,20 @@
                 [...card.querySelectorAll('.sv-odds-row span:last-child')]
                     .reduce((acc, el) => acc + Number(el.textContent.replace(/[^0-9.]/g, '')), 0));
             rec('every capsule\'s odds add up to 100%', sums.every((s) => Math.round(s) === 100), sums.join(' / '));
+
+            // The vault may only promise tiers the reward contracts can pay. The spec's
+            // fourth capsule handed out a Mythic, which has no on-chain reward slot. The
+            // payable list comes from the server rather than the page, so this compares the
+            // rendered odds against the contracts' enum instead of against the page itself.
+            const capsuleConfig = await fetch('/api/staking/config')
+                .then((res) => (res.ok ? res.json() : null)).catch(() => null);
+            const payable = (capsuleConfig?.knightTiers || []).map((t) => t.toUpperCase());
+            rec('the server publishes the payable tier list', payable.length === 5, payable.join(', '));
+            const promised = [...document.querySelectorAll('.sv-panel:not([hidden]) .sv-odds-row span:first-child')]
+                .map((el) => el.textContent.trim().toUpperCase());
+            const unpayable = [...new Set(promised)].filter((tier) => !payable.includes(tier));
+            rec('no capsule promises a tier the contracts cannot pay', unpayable.length === 0,
+                unpayable.length ? `no reward slot for: ${unpayable.join(', ')}` : `${new Set(promised).size} tiers offered`);
         }
 
         // ------------------------------------------------------------------- reachability
