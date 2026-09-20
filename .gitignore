@@ -66,6 +66,15 @@ cache/
 typechain/
 typechain-types/
 
+# Foundry (the toolchain installs to ~/.foundry; these are local build dirs).
+# `out/` is already ignored above, next to build/ and .next/.
+broadcast/
+.foundry/
+
 # Coverage
 coverage/
 .nyc_output/
+
+# Security reports (local only)
+REPORT.MD
+REPORT.pdf

@@ -3,7 +3,8 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/access/Ownable2Step.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
@@ -17,12 +18,13 @@ interface IKnightNFT {
 /// @title DungeonKnightsGameV3
 /// @notice Batch claiming with backend signature verification for gameplay validation
 /// @dev No transactions needed until claiming - play multiple dungeons, claim once!
-contract DungeonKnightsGameV3 is Ownable, ReentrancyGuard {
+contract DungeonKnightsGameV3 is Ownable2Step, ReentrancyGuard {
     using ECDSA for bytes32;
     using MessageHashUtils for bytes32;
+    using SafeERC20 for IERC20;
 
-    IKnightNFT public knightNFT;
-    IERC20  public dngToken;
+    IKnightNFT public immutable knightNFT;
+    IERC20  public immutable dngToken;
 
     uint8 public constant RARITY_COUNT     = 5;
     uint256 public constant MAX_BATCH      = 50;     // Can claim up to 50 runs at once
@@ -69,6 +71,8 @@ contract DungeonKnightsGameV3 is Ownable, ReentrancyGuard {
     event RarityRewardUpdated(uint8 rarity, uint256 reward);
     event DailyCapUpdated(uint8 rarity, uint8 cap);
     event PausedSet(bool paused);
+    event Funded(address indexed from, uint256 amount);
+    event TokensWithdrawn(address indexed to, uint256 amount);
 
     struct CompletionData {
         uint256[] knightIds;     // Knights that completed this run
@@ -151,14 +155,18 @@ contract DungeonKnightsGameV3 is Ownable, ReentrancyGuard {
                 "Completion too old"
             );
 
-            // Verify backend signature
+            // Verify backend signature.
+            // Bind the receipt to this chain and this exact contract so it cannot be
+            // replayed against another deployment that shares the same trustedSigner.
             bytes32 messageHash = keccak256(abi.encodePacked(
                 msg.sender,
                 completion.knightIds,
                 completion.dungeonId,
                 completion.completedAt,
                 completion.duration,
-                completion.gameDataHash
+                completion.gameDataHash,
+                block.chainid,
+                address(this)
             ));
             
             bytes32 ethSignedHash = messageHash.toEthSignedMessageHash();
@@ -217,7 +225,7 @@ contract DungeonKnightsGameV3 is Ownable, ReentrancyGuard {
             dngToken.balanceOf(address(this)) >= totalReward,
             "Treasury empty"
         );
-        require(dngToken.transfer(msg.sender, totalReward), "Transfer failed");
+        dngToken.safeTransfer(msg.sender, totalReward);
 
         emit RewardsClaimed(msg.sender, totalReward, completions.length, totalKnights);
     }
@@ -261,19 +269,19 @@ contract DungeonKnightsGameV3 is Ownable, ReentrancyGuard {
         emit PausedSet(_paused);
     }
 
-    function fundContract(uint256 amount) external onlyOwner {
-        require(
-            dngToken.transferFrom(msg.sender, address(this), amount), 
-            "Transfer failed"
-        );
+    function fundContract(uint256 amount) external nonReentrant onlyOwner {
+        dngToken.safeTransferFrom(msg.sender, address(this), amount);
+        emit Funded(msg.sender, amount);
     }
 
-    function withdrawTokens(uint256 amount) external onlyOwner {
-        require(dngToken.transfer(msg.sender, amount), "Transfer failed");
+    function withdrawTokens(uint256 amount) external nonReentrant onlyOwner {
+        dngToken.safeTransfer(msg.sender, amount);
+        emit TokensWithdrawn(msg.sender, amount);
     }
 
-    function withdrawAllTokens() external onlyOwner {
+    function withdrawAllTokens() external nonReentrant onlyOwner {
         uint256 balance = dngToken.balanceOf(address(this));
-        require(dngToken.transfer(msg.sender, balance), "Transfer failed");
+        dngToken.safeTransfer(msg.sender, balance);
+        emit TokensWithdrawn(msg.sender, balance);
     }
 }

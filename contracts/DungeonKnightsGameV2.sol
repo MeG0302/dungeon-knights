@@ -3,7 +3,8 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/access/Ownable2Step.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 interface IKnightNFT {
@@ -12,13 +13,20 @@ interface IKnightNFT {
         external view returns (address owner, uint8 rarity, string memory rarityName);
 }
 
-/// @title DungeonKnightsGameV2
+/// @title DungeonKnightsGameV2 (SUPERSEDED)
 /// @notice Rewards are derived on-chain from NFT rarity. Nothing client-supplied is trusted.
 /// @dev Fixes the signature exploit where msg.sender signed their own reward amount.
 ///      Now the contract reads rarity from the NFT and computes reward deterministically.
-contract DungeonKnightsGameV2 is Ownable, ReentrancyGuard {
-    IKnightNFT public knightNFT;
-    IERC20  public dngToken;
+///
+/// @custom:security SUPERSEDED — do not redeploy. `completeDungeons` still pays without
+///         proof a dungeon was played (security report Finding 3); the only controls are
+///         ownership, rarity, a per-knight daily cap and a 30s cooldown. Kept for history;
+///         use DungeonKnightsGameV4.sol for any new deployment.
+contract DungeonKnightsGameV2 is Ownable2Step, ReentrancyGuard {
+    using SafeERC20 for IERC20;
+
+    IKnightNFT public immutable knightNFT;
+    IERC20  public immutable dngToken;
 
     uint8 public constant RARITY_COUNT     = 5;
     uint256 public constant MAX_BATCH      = 15;     // matches the 15-knight squad cap
@@ -54,6 +62,8 @@ contract DungeonKnightsGameV2 is Ownable, ReentrancyGuard {
     event RarityRewardUpdated(uint8 rarity, uint256 reward);
     event DailyCapUpdated(uint8 rarity, uint8 cap);
     event PausedSet(bool paused);
+    event Funded(address indexed from, uint256 amount);
+    event TokensWithdrawn(address indexed to, uint256 amount);
 
     constructor(address _knightNFT, address _dngToken) Ownable(msg.sender) {
         require(_knightNFT != address(0) && _dngToken != address(0), "Zero address");
@@ -143,7 +153,7 @@ contract DungeonKnightsGameV2 is Ownable, ReentrancyGuard {
             dngToken.balanceOf(address(this)) >= totalReward,
             "Treasury empty"
         );
-        require(dngToken.transfer(msg.sender, totalReward), "Transfer failed");
+        dngToken.safeTransfer(msg.sender, totalReward);
 
         emit RewardsClaimed(msg.sender, totalReward, knightIds.length);
     }
@@ -180,11 +190,13 @@ contract DungeonKnightsGameV2 is Ownable, ReentrancyGuard {
         emit PausedSet(_paused);
     }
 
-    function fundContract(uint256 amount) external onlyOwner {
-        require(dngToken.transferFrom(msg.sender, address(this), amount), "Transfer failed");
+    function fundContract(uint256 amount) external nonReentrant onlyOwner {
+        dngToken.safeTransferFrom(msg.sender, address(this), amount);
+        emit Funded(msg.sender, amount);
     }
 
-    function withdrawTokens(uint256 amount) external onlyOwner {
-        require(dngToken.transfer(msg.sender, amount), "Transfer failed");
+    function withdrawTokens(uint256 amount) external nonReentrant onlyOwner {
+        dngToken.safeTransfer(msg.sender, amount);
+        emit TokensWithdrawn(msg.sender, amount);
     }
 }

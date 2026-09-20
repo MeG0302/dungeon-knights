@@ -3,7 +3,8 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/access/Ownable2Step.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 interface IKnightNFT {
@@ -23,9 +24,11 @@ interface IKnightNFT {
 ///         token when the dungeon starts and refuses to sign before the minimum time has
 ///         passed on *its* clock), and it decides the reward — which this contract
 ///         re-derives from on-chain rarity, so a bad signature cannot overpay either.
-contract DungeonKnightsGameV4 is Ownable, ReentrancyGuard {
-    IKnightNFT public knightNFT;
-    IERC20  public dngToken;
+contract DungeonKnightsGameV4 is Ownable2Step, ReentrancyGuard {
+    using SafeERC20 for IERC20;
+
+    IKnightNFT public immutable knightNFT;
+    IERC20  public immutable dngToken;
 
     /// @notice The backend key allowed to authorize runs. Rotatable by the owner.
     address public trustedSigner;
@@ -51,9 +54,11 @@ contract DungeonKnightsGameV4 is Ownable, ReentrancyGuard {
     }
     mapping(uint256 => KnightState) public knightState;
 
-    /// @notice Receipts are single use. The nonce is chosen by the backend, so this is
-    ///         the replay guard and it needs no database behind it.
-    mapping(bytes32 => bool) public usedNonce;
+    /// @notice Receipts are single use, keyed per player so one player's nonces can
+    ///         never collide with or consume another player's valid receipt.
+    /// @dev The nonce is chosen by the backend, so this is the replay guard and it
+    ///      needs no database behind it.
+    mapping(address => mapping(uint256 => bool)) public usedNonce;
 
     bool public paused;
 
@@ -75,6 +80,8 @@ contract DungeonKnightsGameV4 is Ownable, ReentrancyGuard {
     event RarityRewardUpdated(uint8 rarity, uint256 reward);
     event DailyCapUpdated(uint8 rarity, uint8 cap);
     event PausedSet(bool paused);
+    event Funded(address indexed from, uint256 amount);
+    event TokensWithdrawn(address indexed to, uint256 amount);
 
     /// @param knightIds Knights that finished the run.
     /// @param dungeonId  Which dungeon (1=Crypts, 2=Mines, 3=Temple, 4=Magma, 5=Void).
@@ -179,7 +186,7 @@ contract DungeonKnightsGameV4 is Ownable, ReentrancyGuard {
             require(run.dungeonId >= 1 && run.dungeonId <= DUNGEON_COUNT, "Unknown dungeon");
             require(block.timestamp <= run.expiry, "Receipt expired");
             require(run.expiry <= block.timestamp + MAX_RECEIPT_LIFE, "Receipt life too long");
-            require(!usedNonce[bytes32(run.nonce)], "Receipt already used");
+            require(!usedNonce[msg.sender][run.nonce], "Receipt already used");
 
             bytes32 digest = keccak256(abi.encodePacked(
                 "\x19Ethereum Signed Message:\n32",
@@ -190,7 +197,7 @@ contract DungeonKnightsGameV4 is Ownable, ReentrancyGuard {
             // Burn the nonce before any external call, and never reuse it even if the
             // rest of this run turns out to be invalid — a rejected receipt must not be
             // quietly replayable after the state it failed on changes.
-            usedNonce[bytes32(run.nonce)] = true;
+            usedNonce[msg.sender][run.nonce] = true;
 
             uint256 expected = 0;
 
@@ -240,7 +247,7 @@ contract DungeonKnightsGameV4 is Ownable, ReentrancyGuard {
         }
 
         require(dngToken.balanceOf(address(this)) >= totalReward, "Treasury empty");
-        require(dngToken.transfer(msg.sender, totalReward), "Transfer failed");
+        dngToken.safeTransfer(msg.sender, totalReward);
 
         emit RewardsClaimed(msg.sender, totalReward, runs.length, totalKnights);
     }
@@ -309,16 +316,19 @@ contract DungeonKnightsGameV4 is Ownable, ReentrancyGuard {
         emit PausedSet(_paused);
     }
 
-    function fundContract(uint256 amount) external onlyOwner {
-        require(dngToken.transferFrom(msg.sender, address(this), amount), "Transfer failed");
+    function fundContract(uint256 amount) external nonReentrant onlyOwner {
+        dngToken.safeTransferFrom(msg.sender, address(this), amount);
+        emit Funded(msg.sender, amount);
     }
 
-    function withdrawTokens(uint256 amount) external onlyOwner {
-        require(dngToken.transfer(msg.sender, amount), "Transfer failed");
+    function withdrawTokens(uint256 amount) external nonReentrant onlyOwner {
+        dngToken.safeTransfer(msg.sender, amount);
+        emit TokensWithdrawn(msg.sender, amount);
     }
 
-    function withdrawAllTokens() external onlyOwner {
+    function withdrawAllTokens() external nonReentrant onlyOwner {
         uint256 balance = dngToken.balanceOf(address(this));
-        require(dngToken.transfer(msg.sender, balance), "Transfer failed");
+        dngToken.safeTransfer(msg.sender, balance);
+        emit TokensWithdrawn(msg.sender, balance);
     }
 }
