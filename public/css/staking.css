@@ -381,7 +381,8 @@
 .sv-stat-value.is-gold { color: var(--accent-gold); }
 .sv-stat-value.is-tbd { color: var(--text-muted); font-weight: 500; }
 
-/* hashPower, 1–100, as a bar so the trait is legible at a glance */
+/* hashPower, 300–1000, as a bar so the trait is legible at a glance. The fill shows
+   position inside the published range, not the raw value. */
 .sv-power {
     display: flex;
     align-items: center;

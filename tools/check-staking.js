@@ -16,20 +16,29 @@
  *   - preview holdings are deterministic per wallet, so a page does not reshuffle
  *   - every action (stake, claim, enter, open) is refused when it should be, rather than
  *     silently appearing to succeed
+ *   - the published hash-power bands fill the collection exactly and tile 300–1000 — the
+ *     fairness promise made to buyers before mint
  */
 
 import {
     CAPSULES_PER_WEEK,
     CAPSULE_TYPES,
+    GENESIS_SUPPLY,
+    HASH_POWER_BANDS,
+    HASH_POWER_MAX,
+    HASH_POWER_MIN,
     TICKET_CAP_HOURS,
     WEEKLY_POOL_DNG,
     WEEK_MS,
     accruedPoolShare,
+    bandFor,
     capsuleType,
     dngFromPoolShare,
     expectedCapsules,
+    hashPowerPool,
     shareOfPool,
     ticketsFor,
+    ticketsPerHour,
     weekEnd,
     weekNumber,
     weekPhase,
@@ -213,7 +222,40 @@ section('Preview holdings');
     rec('no Genesis Knight is duplicated across owned and staked',
         new Set([...a.owned, ...a.staked].map((k) => k.tokenId)).size === a.owned.length + a.staked.length);
     rec('hash power stays inside the collection\'s range',
-        [...a.owned, ...a.staked].every((k) => k.hashPower >= 1 && k.hashPower <= 100));
+        [...a.owned, ...a.staked].every(
+            (k) => k.hashPower >= HASH_POWER_MIN && k.hashPower <= HASH_POWER_MAX));
+
+    // ------------------------------------------------- the published fairness table
+    // The band counts are a promise made to buyers before mint, so they are asserted
+    // rather than trusted: they must fill the collection exactly, and tile the range with
+    // no gap and no overlap. A later edit that quietly changes either one fails here.
+    rec('the published bands fill the collection exactly',
+        HASH_POWER_BANDS.reduce((sum, band) => sum + band.count, 0) === GENESIS_SUPPLY);
+    rec('the published bands are all whole and positive',
+        HASH_POWER_BANDS.every((band) => Number.isInteger(band.count) && band.count > 0));
+    rec('the published bands tile the range from MIN with no gap and no overlap',
+        HASH_POWER_BANDS.every((band, i) => (
+            i === 0
+                ? band.lo === HASH_POWER_MIN
+                : band.lo === HASH_POWER_BANDS[i - 1].hi + 1
+        )));
+    rec('the published bands end exactly at MAX',
+        HASH_POWER_BANDS[HASH_POWER_BANDS.length - 1].hi === HASH_POWER_MAX);
+    rec('every band is inside the published range',
+        HASH_POWER_BANDS.every((band) => band.lo >= HASH_POWER_MIN && band.hi <= HASH_POWER_MAX));
+    rec('bandFor maps every published band back to itself',
+        HASH_POWER_BANDS.every((band) => bandFor(band.lo)?.key === band.key && bandFor(band.hi)?.key === band.key));
+    rec('bandFor rejects hash power outside the range',
+        bandFor(HASH_POWER_MIN - 1) === null && bandFor(HASH_POWER_MAX + 1) === null);
+    rec('tickets banked per hour are exactly the hash power',
+        [300, 617, 1000].every((hp) => ticketsPerHour(hp) === hp)
+        && ticketsFor({ hashPower: 1000, stakedAt: T0 - HOUR }, T0) === 1000);
+    rec('the pool exposes one count per band',
+        Object.keys(hashPowerPool()).length === HASH_POWER_BANDS.length
+        && Object.values(hashPowerPool()).reduce((s, c) => s + c, 0) === GENESIS_SUPPLY);
+    rec('a top-band knight banks more than a bottom-band one',
+        ticketsFor({ hashPower: 1000, stakedAt: T0 - TICKET_CAP_HOURS * HOUR }, T0)
+        > ticketsFor({ hashPower: 300, stakedAt: T0 - TICKET_CAP_HOURS * HOUR }, T0));
     rec('every knight is named for its token id',
         [...a.owned, ...a.staked].every((k) => k.name === `Genesis #${String(k.tokenId).padStart(3, '0')}`));
 

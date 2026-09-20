@@ -7,7 +7,7 @@ import Script from 'next/script';
 import {
     connectWallet, forgetWallet, hasInjectedWallet, onAccountsChanged, savedAddress, shortAddress,
 } from '../../lib/points-client';
-import { CAPSULES_PER_WEEK } from '../../lib/staking-config';
+import { CAPSULES_PER_WEEK, HASH_POWER_MAX, HASH_POWER_MIN } from '../../lib/staking-config';
 import { applyAction, loadVault, refresh, SOURCE_PREVIEW } from '../../lib/staking-source';
 
 const TABS = [
@@ -58,7 +58,7 @@ function tourSteps(live, actions) {
             target: '[data-arya="genesis"]',
             text: () => {
                 const v = now();
-                return `Every Genesis Knight has a <strong>hash power</strong> between 1 and 100, and it decides how fast it earns. ${v.stakedCount
+                return `Every Genesis Knight has a <strong>hash power</strong> between ${HASH_POWER_MIN.toLocaleString()} and ${HASH_POWER_MAX.toLocaleString()}, and it decides how fast it earns — a knight banks its hash power in tickets every hour it is staked. ${v.stakedCount
                     ? `You have <strong>${v.stakedCount}</strong> staked with <strong>${v.hashPower}</strong> combined power.`
                     : 'Stake one and its tickets start counting immediately.'} A knight stops earning tickets after a week, so the cap is seven days.`;
             },
@@ -925,7 +925,10 @@ export default function StakingClient() {
  */
 function GenesisCard({ knight, staked = false, busy, canWrite, nowMs, onStake, onClaim, onUnstake }) {
     const hours = staked ? (nowMs - knight.stakedAt) / 3_600_000 : 0;
-    const powerPct = Math.min(100, Math.max(0, knight.hashPower || 0));
+    // The bar measures position inside the collection's published range, not the raw
+    // number: at 300–1000 a raw value would peg the bar full for every knight.
+    const powerPct = Math.min(100, Math.max(0,
+        (((knight.hashPower || 0) - HASH_POWER_MIN) / (HASH_POWER_MAX - HASH_POWER_MIN)) * 100));
 
     return (
         <div className={`sv-card ${staked ? 'is-staked' : ''}`}>
