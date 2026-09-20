@@ -408,7 +408,7 @@ class DungeonSessionManager {
     async calculateRunReward(knightIds) {
         // If we can't fetch knight data, use fallback estimate
         if (!window.walletManager || !window.walletManager.isConnected) {
-            return knightIds.length * 15; // Fallback: 15 DNG average per knight
+            return knightIds.length * this.averageKnightReward(); // Fallback
         }
 
         try {
@@ -432,26 +432,39 @@ class DungeonSessionManager {
 
             const knightNFT = new ethers.Contract(knightNFTAddress, knightNFTABI, provider);
 
-            // Rarity rewards from contract (matches V3/V4 contracts)
-            const rarityRewards = [10, 17, 30, 75, 150]; // Common, Uncommon, Rare, Epic, Legendary
+            // Rarity rewards come from config.js, whose order matches the on-chain
+            // rarity enum (0=common … 4=legendary). Do not inline this ladder again.
+            const rarityRewards = window.DUNGEON_CONFIG.getRarityRewards();
+            const fallback = this.averageKnightReward();
 
             let totalReward = 0;
 
             for (const knightId of knightIds) {
                 try {
                     const [, rarity] = await knightNFT.getKnightInfo(knightId);
-                    totalReward += rarityRewards[rarity];
+                    totalReward += rarityRewards[rarity] ?? fallback;
                 } catch (error) {
-                    console.warn(`⚠️ Failed to get rarity for knight ${knightId}, using average (15 DNG)`);
-                    totalReward += 15; // Fallback
+                    console.warn(`⚠️ Failed to get rarity for knight ${knightId}, using average (${fallback} DNG)`);
+                    totalReward += fallback;
                 }
             }
 
             return totalReward;
         } catch (error) {
             console.warn('⚠️ Failed to fetch knight rarities, using estimate:', error.message);
-            return knightIds.length * 15; // Fallback: 15 DNG average per knight
+            return knightIds.length * this.averageKnightReward(); // Fallback
         }
+    }
+
+    /**
+     * Expected $DNG for one knight from a random clear, weighted by drop rate.
+     * Single home for the "average" estimate that used to be a bare 15.
+     */
+    averageKnightReward() {
+        const avg = window.DUNGEON_CONFIG && window.DUNGEON_CONFIG.averageDungeonReward
+            ? window.DUNGEON_CONFIG.averageDungeonReward()
+            : 0;
+        return avg || 15;
     }
 
     /**

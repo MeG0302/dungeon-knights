@@ -207,6 +207,37 @@ rec('the dungeon has no art for a tier that cannot be rolled',
     !/'(MYTHIC)'\s*:/.test(dungeonJs),
     /'(MYTHIC)'\s*:/.test(dungeonJs) ? "dungeon.js still loads a MYTHIC knight" : 'no phantom tier');
 
+// dungeon-session.js used to carry its own copy of the ladder, commented "matches V3/V4
+// contracts". It is the one place that reads the rarity *enum* off the chain and indexes
+// by it, so drift there misstates a real payout. It must read the config instead.
+const sessionJs = fs.readFileSync(path.join(PUBLIC, 'dungeon-session.js'), 'utf8');
+rec('the run session reads the ladder from config rather than keeping a copy',
+    sessionJs.includes('getRarityRewards()') && !/\[\s*10\s*,\s*17\s*,/.test(sessionJs),
+    /\[\s*10\s*,\s*17\s*,/.test(sessionJs)
+        ? 'dungeon-session.js still inlines a reward ladder'
+        : 'dungeon-session.js → config.getRarityRewards()');
+
+// The old fallback was `knightIds.length * 15` — a magic number that disagreed with the
+// drop-rate weighted average the rest of the UI quotes (19.10 DNG).
+const bareAverage = /return\s+knightIds\.length\s*\*\s*\d/.test(sessionJs);
+rec('the session derives its average from config instead of hard-coding one',
+    !bareAverage && sessionJs.includes('averageKnightReward()')
+        && sessionJs.includes('averageDungeonReward()'),
+    bareAverage
+        ? 'dungeon-session.js still returns knightIds.length * <literal>'
+        : 'averageKnightReward() → config.averageDungeonReward()');
+
+// Same guard for every other page script, so a fourth copy cannot quietly appear. Built
+// from EXPECTED_REWARDS, so it follows the economy instead of pinning today's numbers.
+const ladderLiteral = new RegExp(`\\[\\s*${EXPECTED_REWARDS.join('\\s*,\\s*')}\\s*\\]`);
+const inlinedLadders = ['config.js', 'characters.js', 'dungeon.js', 'game.js', 'ui.js', 'menu.js',
+    'mint-page.js', 'dungeon-session.js']
+    .filter((f) => ladderLiteral.test(fs.readFileSync(path.join(PUBLIC, f), 'utf8')));
+rec('no page script inlines the reward ladder', inlinedLadders.length === 0,
+    inlinedLadders.length
+        ? `${inlinedLadders.join(', ')} carries a literal [${EXPECTED_REWARDS.join(', ')}]`
+        : `${EXPECTED_REWARDS.length} rewards, one home`);
+
 const theme = fs.readFileSync(path.join(PUBLIC, 'theme.css'), 'utf8');
 const missingDots = tiers.filter((t) => !theme.includes(`.dot-${t} `));
 rec('every tier has a swatch for the odds table', missingDots.length === 0,
