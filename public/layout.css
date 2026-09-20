@@ -1,0 +1,208 @@
+/* ==========================================================
+   LAYOUT — game.html page structure
+   ========================================================== */
+
+/* ---------- HEADER ---------- */
+.game-header {
+  height: 56px;
+  padding: 0 20px;
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--bg-dark);
+  border-bottom: 1px solid var(--border-base);
+  flex-shrink: 0;
+}
+
+/* ---------- MAIN ---------- */
+.game-main {
+  flex: 1;
+  display: flex;
+  position: relative;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ---------- SIDE PANELS ---------- */
+.side-panel {
+  width: 260px;
+  flex-shrink: 0;
+  display: flex; flex-direction: column;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border-base);
+  overflow-y: auto;
+}
+.side-panel.right {
+  border-right: none;
+  border-left: 1px solid var(--border-base);
+}
+
+.side-panel-header {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-base);
+  font-family: var(--font-heading);
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 2px; text-transform: uppercase;
+  color: var(--text-secondary);
+  display: flex; align-items: center; gap: 8px;
+  flex-shrink: 0;
+}
+
+.side-panel-body { padding: 12px 14px; flex: 1; overflow-y: auto; }
+
+/* ---------- CANVAS WRAPPER ---------- */
+.canvas-area {
+  flex: 1;
+  display: flex; align-items: center; justify-content: center;
+  position: relative;
+  background: var(--bg-void);
+  overflow: hidden;
+  min-width: 0;
+}
+
+.dungeon-video-bg {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  z-index: 0;
+  opacity: 1;
+  pointer-events: none;
+  filter: brightness(1.15) contrast(1.1) saturate(1.1);
+}
+
+#gameCanvas {
+  position: relative; z-index: 1;
+  display: block;
+}
+
+/* ---------- BOTTOM BAR ---------- */
+.control-bar {
+  height: 64px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 20px;
+  background: var(--bg-dark);
+  border-top: 1px solid var(--border-base);
+  flex-shrink: 0;
+  gap: 16px;
+}
+
+.control-group {
+  display: flex; align-items: center; gap: 10px;
+}
+
+.control-stats {
+  display: flex; align-items: center; gap: 20px;
+}
+
+.control-stat {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--text-muted);
+  letter-spacing: 0.5px;
+}
+.control-stat strong {
+  font-family: var(--font-heading);
+  color: var(--text-primary);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+/* ---------- REWARDS BLOCK ---------- */
+.rewards-block {
+  padding: 16px;
+}
+.rewards-total {
+  font-family: var(--font-heading);
+  font-size: 28px; font-weight: 900;
+  color: var(--accent-gold);
+  letter-spacing: 1px;
+}
+.rewards-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.chest-display {
+  display: flex; align-items: center; justify-content: center;
+  padding: 12px;
+}
+.chest-display-img {
+  width: 80px; height: 80px;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 0 12px rgba(212,175,55,0.25));
+}
+
+/* ---------- NOTIFICATION (bottom-left toast) ---------- */
+.toast {
+  position: absolute;
+  bottom: 80px; left: 16px;
+  z-index: 20;
+  max-width: 300px;
+  padding: 14px 18px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-bronze);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  animation: toast-in 0.3s ease-out;
+}
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.toast-title {
+  font-family: var(--font-heading);
+  font-size: 12px; font-weight: 700;
+  letter-spacing: 1.5px; text-transform: uppercase;
+  color: var(--text-gold);
+  margin-bottom: 4px;
+}
+.toast-body {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* ---------- KNIGHT CARDS ---------- */
+.knight-card {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-md);
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.knight-card:hover { border-color: var(--border-bronze); }
+.knight-card.deployed { border-left: 2px solid var(--accent-gold); }
+
+.knight-avatar {
+  width: 36px; height: 36px;
+  border-radius: var(--radius-sm);
+  image-rendering: pixelated;
+  flex-shrink: 0;
+  border: 1px solid var(--border-dim);
+}
+
+.knight-info { flex: 1; min-width: 0; }
+.knight-name {
+  font-family: var(--font-heading);
+  font-size: 12px; font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.5px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.knight-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* ==========================================================
+   RESPONSIVE
+   ========================================================== */
+@media (max-width: 1200px) {
+  .side-panel { width: 220px; }
+}
+@media (max-width: 900px) {
+  .side-panel { display: none; }
+  .control-stats { display: none; }
+}

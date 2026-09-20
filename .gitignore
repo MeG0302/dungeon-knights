@@ -54,6 +54,14 @@ cache/
 typechain/
 typechain-types/
 
+# Foundry (toolchain installs to ~/.foundry; these are local build dirs)
+broadcast/
+.foundry/
+
 # Coverage
 coverage/
 .nyc_output/
+
+# Security reports (local only)
+REPORT.MD
+REPORT.pdf

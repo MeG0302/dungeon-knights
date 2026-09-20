@@ -1,0 +1,1176 @@
+/* ===========================
+   DUNGEON KNIGHTS - CENTERED FRAMED LAYOUT
+   Pixel art themed UI with game properly centered and framed
+   =========================== */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Georgia', serif;
+    background: #000;
+    color: #f5f5dc;
+    overflow: hidden;
+    height: 100vh;
+    position: relative;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+}
+
+.game-container {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: #0a0a0a;
+}
+
+/* ===========================
+   THEMED HEADER BAR
+   =========================== */
+
+.game-header {
+    background: rgba(20, 15, 10, 0.95);
+    border-bottom: 4px solid #3a3a3a;
+    padding: 8px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 70px;
+    z-index: 200;
+}
+
+.header-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 20px;
+    background: rgba(0, 0, 0, 0.7);
+    border: 3px solid;
+    border-radius: 8px;
+    min-width: 280px;
+}
+
+.header-title-icon {
+    width: 32px;
+    height: 32px;
+    background-size: contain;
+    background-repeat: no-repeat;
+}
+
+.header-title-text {
+    font-size: 24px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.15rem;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9);
+}
+
+.header-stats {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.stat-box {
+    background: rgba(0, 0, 0, 0.7);
+    border: 3px solid #555;
+    border-radius: 6px;
+    padding: 6px 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.stat-icon {
+    width: 24px;
+    height: 24px;
+    background-size: contain;
+    background-repeat: no-repeat;
+}
+
+.stat-label {
+    font-size: 11px;
+    opacity: 0.8;
+    text-transform: uppercase;
+}
+
+.disconnect-btn {
+    background: rgba(60, 60, 60, 0.9);
+    border: 3px solid #555;
+    color: #ddd;
+    padding: 10px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+    text-transform: uppercase;
+    transition: all 0.2s;
+    font-family: 'Georgia', serif;
+}
+
+.disconnect-btn:hover {
+    background: rgba(80, 80, 80, 0.9);
+    transform: translateY(-1px);
+}
+
+/* ===========================
+   MAIN GAME AREA - GRID LAYOUT WITH CENTERED CANVAS
+   =========================== */
+
+.game-main {
+    flex: 1;
+    position: relative;
+    display: grid;
+    grid-template-columns: 240px 1fr 300px;
+    grid-template-areas: "left center right";
+    gap: 20px;
+    padding: 20px;
+    background: #1a1a1a;
+    overflow: hidden;
+}
+
+/* CANVAS WRAPPER - CENTER COLUMN */
+.canvas-wrapper {
+    grid-area: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+#gameCanvas {
+    position: relative;
+    z-index: 5;
+    border: 4px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 
+        0 0 0 10px rgba(0, 0, 0, 0.8),
+        0 0 0 12px rgba(255, 255, 255, 0.1),
+        inset 0 0 50px rgba(0, 0, 0, 0.9);
+    display: block;
+}
+
+/* CORNER DECORATIONS - FRAME THE CANVAS */
+.border-corner {
+    position: absolute;
+    width: 64px;
+    height: 64px;
+    pointer-events: none;
+    z-index: 20;
+    background-size: contain;
+    background-repeat: no-repeat;
+}
+
+/* Position corners around the canvas */
+.corner-tl { top: -8px; left: -8px; }
+.corner-tr { top: -8px; right: -8px; }
+.corner-bl { bottom: -8px; left: -8px; }
+.corner-br { bottom: -8px; right: -8px; }
+
+/* BORDER TILES - FRAME THE CANVAS */
+.border-tile {
+    position: absolute;
+    pointer-events: none;
+    z-index: 19;
+    background-repeat: repeat;
+}
+
+.border-tile.vertical {
+    background-repeat: repeat-y;
+}
+
+.border-top {
+    top: -8px;
+    left: 56px;
+    right: 56px;
+    height: 24px;
+}
+
+.border-bottom {
+    bottom: -8px;
+    left: 56px;
+    right: 56px;
+    height: 24px;
+}
+
+.border-left {
+    left: -8px;
+    top: 56px;
+    bottom: 56px;
+    width: 24px;
+}
+
+.border-right {
+    right: -8px;
+    top: 56px;
+    bottom: 56px;
+    width: 24px;
+}
+
+/* ATMOSPHERIC TEXT OVERLAY */
+.atmosphere-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 72px;
+    font-weight: bold;
+    letter-spacing: 0.3rem;
+    opacity: 0;
+    pointer-events: none;
+    text-shadow: 
+        0 0 20px currentColor,
+        0 0 40px currentColor,
+        2px 2px 8px rgba(0, 0, 0, 0.9);
+    z-index: 100;
+    animation: fadeInOut 4s ease-in-out;
+}
+
+@keyframes fadeInOut {
+    0%, 100% { opacity: 0; }
+    50% { opacity: 0.6; }
+}
+
+/* ===========================
+   LEFT SQUAD PANEL (Compact & Clean)
+   =========================== */
+
+.squad-panel {
+    grid-area: left;
+    background: rgba(20, 15, 10, 0.92);
+    border: 3px solid;
+    border-radius: 6px;
+    z-index: 50;
+    overflow: hidden;
+    backdrop-filter: blur(4px);
+    display: flex;
+    flex-direction: column;
+    max-height: 100%;
+}
+
+.squad-panel-header {
+    padding: 10px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.08rem;
+    border-bottom: 2px solid;
+    background: rgba(0, 0, 0, 0.4);
+    flex-shrink: 0;
+}
+
+.squad-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+.knight-card {
+    background: rgba(0, 0, 0, 0.4);
+    border: 2px solid;
+    border-radius: 4px;
+    padding: 6px;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.knight-card:hover {
+    transform: translateX(3px);
+    background: rgba(0, 0, 0, 0.6);
+}
+
+.knight-portrait {
+    width: 40px;
+    height: 40px;
+    border: 2px solid;
+    border-radius: 3px;
+    background: rgba(0, 0, 0, 0.5);
+    background-size: cover;
+    background-position: center;
+    flex-shrink: 0;
+}
+
+.knight-info {
+    flex: 1;
+    font-size: 11px;
+}
+
+.knight-name {
+    font-weight: bold;
+    margin-bottom: 3px;
+    font-size: 12px;
+}
+
+.knight-status {
+    font-size: 10px;
+    opacity: 0.85;
+}
+
+/* ===========================
+   RIGHT INFO PANEL (Compact & Clean)
+   =========================== */
+
+.info-panel {
+    grid-area: right;
+    background: rgba(20, 15, 10, 0.92);
+    border: 3px solid;
+    border-radius: 6px;
+    padding: 0;
+    z-index: 50;
+    backdrop-filter: blur(4px);
+    display: flex;
+    flex-direction: column;
+    max-height: 100%;
+    overflow-y: auto;
+}
+
+.info-section {
+    padding: 12px;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.08);
+    flex-shrink: 0;
+}
+
+.info-section:last-child {
+    border-bottom: none;
+}
+
+.info-section-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08rem;
+    margin-bottom: 8px;
+    opacity: 0.75;
+    font-weight: bold;
+}
+
+/* OWNER'S MARK */
+.owner-mark {
+    background: linear-gradient(135deg, #d4a574 0%, #c19a6b 100%);
+    border: 2px solid #8b7355;
+    padding: 10px;
+    border-radius: 4px;
+    font-size: 10px;
+    word-break: break-all;
+    font-family: 'Courier New', monospace;
+    color: #2a2a2a;
+    text-align: center;
+    box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* RESOURCE POOL */
+.resource-pool {
+    background: rgba(0, 0, 0, 0.5);
+    border: 2px solid;
+    padding: 12px;
+    border-radius: 4px;
+    text-align: center;
+}
+
+.resource-icon {
+    width: 36px;
+    height: 36px;
+    margin: 0 auto 8px;
+    background-size: contain;
+    background-repeat: no-repeat;
+}
+
+.resource-amount {
+    font-size: 24px;
+    font-weight: bold;
+    font-family: 'Georgia', serif;
+}
+
+/* CHEST ILLUSTRATION */
+.chest-display {
+    text-align: center;
+    padding: 10px 0;
+    position: relative;
+    overflow: visible; /* Allow animation to move outside bounds */
+}
+
+.chest-image {
+    width: 100px;
+    height: 100px;
+    margin: 0 auto;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    transition: all 0.3s ease;
+    position: relative; /* For pseudo-element positioning */
+}
+
+/* CHEST CLAIMING ANIMATION */
+.chest-image.chest-claiming {
+    animation: chestClaim 2s ease-in-out;
+}
+
+@keyframes chestClaim {
+    0% {
+        transform: scale(1) translateY(0) rotate(0deg);
+        filter: brightness(1) drop-shadow(0 0 0px transparent);
+    }
+    15% {
+        transform: scale(1.15) translateY(-10px) rotate(-5deg);
+        filter: brightness(1.5) drop-shadow(0 0 20px rgba(255, 191, 0, 0.8));
+    }
+    30% {
+        transform: scale(1.2) translateY(-20px) rotate(5deg);
+        filter: brightness(1.8) drop-shadow(0 0 30px rgba(255, 191, 0, 1));
+    }
+    45% {
+        transform: scale(1.25) translateY(-15px) rotate(-3deg);
+        filter: brightness(2) drop-shadow(0 0 40px rgba(255, 200, 50, 1));
+    }
+    60% {
+        transform: scale(1.2) translateY(-25px) rotate(3deg);
+        filter: brightness(2.2) drop-shadow(0 0 50px rgba(255, 215, 0, 1));
+    }
+    75% {
+        transform: scale(1.15) translateY(-18px) rotate(-2deg);
+        filter: brightness(1.8) drop-shadow(0 0 35px rgba(255, 200, 50, 0.8));
+    }
+    90% {
+        transform: scale(1.05) translateY(-5px) rotate(1deg);
+        filter: brightness(1.3) drop-shadow(0 0 15px rgba(255, 191, 0, 0.5));
+    }
+    100% {
+        transform: scale(1) translateY(0) rotate(0deg);
+        filter: brightness(1) drop-shadow(0 0 0px transparent);
+    }
+}
+
+/* Add pulsing glow effect during claim */
+.chest-image.chest-claiming::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 120%;
+    height: 120%;
+    background: radial-gradient(circle, rgba(255, 215, 0, 0.4) 0%, transparent 70%);
+    animation: pulseGlow 1s ease-in-out infinite;
+    pointer-events: none;
+    z-index: -1;
+}
+
+@keyframes pulseGlow {
+    0%, 100% {
+        opacity: 0.5;
+        transform: translate(-50%, -50%) scale(1);
+    }
+    50% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1.3);
+    }
+}
+
+/* REWARDS PANEL */
+.rewards-panel {
+    background: rgba(0, 0, 0, 0.5);
+    border: 2px solid;
+    padding: 12px;
+    border-radius: 4px;
+}
+
+.rewards-total {
+    text-align: center;
+    font-size: 22px;
+    font-weight: bold;
+    margin: 8px 0;
+    color: #ffd700;
+}
+
+.rewards-meta {
+    text-align: center;
+    font-size: 10px;
+    margin-bottom: 10px;
+    opacity: 0.75;
+}
+
+.rewards-btn {
+    width: 100%;
+    padding: 8px;
+    border: 2px solid;
+    border-radius: 4px;
+    font-weight: bold;
+    text-transform: uppercase;
+    font-size: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+    margin-bottom: 6px;
+    font-family: 'Georgia', serif;
+}
+
+.rewards-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+}
+
+.rewards-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.claim-btn {
+    background: rgba(139, 92, 46, 0.6);
+    border-color: #8B5C2E;
+    color: #FFD700;
+}
+
+.claim-btn:hover:not(:disabled) {
+    background: rgba(139, 92, 46, 0.8);
+}
+
+.history-btn {
+    background: rgba(60, 60, 60, 0.6);
+    border-color: #555;
+    color: #ddd;
+}
+
+.history-btn:hover {
+    background: rgba(80, 80, 80, 0.6);
+}
+
+/* ===========================
+   BOTTOM CONTROL BAR
+   =========================== */
+
+.control-bar {
+    background: rgba(20, 15, 10, 0.95);
+    border-top: 4px solid #3a3a3a;
+    padding: 12px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 200;
+    height: 70px;
+}
+
+.control-buttons {
+    display: flex;
+    gap: 12px;
+}
+
+.game-btn {
+    background: rgba(40, 35, 30, 0.9);
+    border: 3px solid;
+    padding: 10px 24px;
+    border-radius: 6px;
+    font-weight: bold;
+    text-transform: uppercase;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Georgia', serif;
+}
+
+.game-btn:hover {
+    transform: translateY(-2px);
+}
+
+.game-btn-icon {
+    font-size: 16px;
+}
+
+.status-display {
+    display: flex;
+    gap: 24px;
+    font-size: 13px;
+    font-family: 'Courier New', monospace;
+}
+
+.status-item {
+    opacity: 0.9;
+}
+
+/* ===========================
+   PARCHMENT NOTIFICATION
+   =========================== */
+
+.parchment-note {
+    position: absolute;
+    bottom: 90px;
+    left: 20px;
+    background: linear-gradient(135deg, #d4a574 0%, #c19a6b 100%);
+    border: 3px solid #8b7355;
+    padding: 16px 20px;
+    border-radius: 6px;
+    max-width: 340px;
+    font-size: 13px;
+    line-height: 1.6;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.8);
+    z-index: 60;
+    color: #2a2a2a;
+}
+
+.parchment-title {
+    font-weight: bold;
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+
+.parchment-text {
+    font-size: 12px;
+    margin-bottom: 4px;
+}
+
+
+/* ===========================
+   THEME-SPECIFIC STYLES
+   =========================== */
+
+    text-align: center;
+}
+
+/* ===========================
+   UTILITY CLASSES
+   =========================== */
+
+.hidden {
+    display: none !important;
+}
+
+/* ===========================
+   THEME: GOBLIN MINES (GREEN)
+   =========================== */
+
+body[data-dungeon-theme="mines"] {
+    --theme-primary: #10b981;
+    --theme-secondary: #059669;
+    --theme-accent: #34d399;
+}
+
+body[data-dungeon-theme="mines"] .game-header,
+body[data-dungeon-theme="mines"] .control-bar {
+    border-color: #059669;
+}
+
+body[data-dungeon-theme="mines"] .header-title {
+    border-color: #10b981;
+}
+
+body[data-dungeon-theme="mines"] .header-title-text {
+    color: #10b981;
+}
+
+body[data-dungeon-theme="mines"] .squad-panel,
+body[data-dungeon-theme="mines"] .info-panel {
+    border-color: #10b981;
+}
+
+body[data-dungeon-theme="mines"] .squad-panel-header {
+    border-bottom-color: #059669;
+    color: #34d399;
+}
+
+body[data-dungeon-theme="mines"] .knight-card,
+body[data-dungeon-theme="mines"] .knight-portrait {
+    border-color: #10b981;
+}
+
+body[data-dungeon-theme="mines"] .resource-pool,
+body[data-dungeon-theme="mines"] .rewards-panel {
+    border-color: #10b981;
+}
+
+body[data-dungeon-theme="mines"] .game-btn {
+    border-color: #10b981;
+    color: #10b981;
+}
+
+body[data-dungeon-theme="mines"] .game-btn:hover {
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+}
+
+/* ===========================
+   THEME: MAGMA CHAMBER (ORANGE/FIRE)
+   =========================== */
+
+body[data-dungeon-theme="magma"] {
+    --theme-primary: #f97316;
+    --theme-secondary: #ea580c;
+    --theme-accent: #fb923c;
+}
+
+body[data-dungeon-theme="magma"] .game-header,
+body[data-dungeon-theme="magma"] .control-bar {
+    border-color: #ea580c;
+}
+
+body[data-dungeon-theme="magma"] .header-title {
+    border-color: #f97316;
+}
+
+body[data-dungeon-theme="magma"] .header-title-text {
+    color: #f97316;
+}
+
+body[data-dungeon-theme="magma"] .squad-panel,
+body[data-dungeon-theme="magma"] .info-panel {
+    border-color: #f97316;
+}
+
+body[data-dungeon-theme="magma"] .squad-panel-header {
+    border-bottom-color: #ea580c;
+    color: #fb923c;
+}
+
+body[data-dungeon-theme="magma"] .knight-card,
+body[data-dungeon-theme="magma"] .knight-portrait {
+    border-color: #f97316;
+}
+
+body[data-dungeon-theme="magma"] .resource-pool,
+body[data-dungeon-theme="magma"] .rewards-panel {
+    border-color: #f97316;
+}
+
+body[data-dungeon-theme="magma"] .game-btn {
+    border-color: #f97316;
+    color: #f97316;
+}
+
+body[data-dungeon-theme="magma"] .game-btn:hover {
+    box-shadow: 0 0 20px rgba(249, 115, 22, 0.4);
+}
+
+/* ===========================
+   THEME: VOID RIFT (PURPLE)
+   =========================== */
+
+body[data-dungeon-theme="void"] {
+    --theme-primary: #8b5cf6;
+    --theme-secondary: #7c3aed;
+    --theme-accent: #a78bfa;
+}
+
+body[data-dungeon-theme="void"] .game-header,
+body[data-dungeon-theme="void"] .control-bar {
+    border-color: #7c3aed;
+}
+
+body[data-dungeon-theme="void"] .header-title {
+    border-color: #8b5cf6;
+}
+
+body[data-dungeon-theme="void"] .header-title-text {
+    color: #8b5cf6;
+}
+
+body[data-dungeon-theme="void"] .squad-panel,
+body[data-dungeon-theme="void"] .info-panel {
+    border-color: #8b5cf6;
+}
+
+body[data-dungeon-theme="void"] .squad-panel-header {
+    border-bottom-color: #7c3aed;
+    color: #a78bfa;
+}
+
+body[data-dungeon-theme="void"] .knight-card,
+body[data-dungeon-theme="void"] .knight-portrait {
+    border-color: #8b5cf6;
+}
+
+body[data-dungeon-theme="void"] .resource-pool,
+body[data-dungeon-theme="void"] .rewards-panel {
+    border-color: #8b5cf6;
+}
+
+body[data-dungeon-theme="void"] .game-btn {
+    border-color: #8b5cf6;
+    color: #8b5cf6;
+}
+
+body[data-dungeon-theme="void"] .game-btn:hover {
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.4);
+}
+
+/* ===========================
+   THEME: OVERGROWN TEMPLE (GREEN/VINE)
+   =========================== */
+
+body[data-dungeon-theme="temple"] {
+    --theme-primary: #84cc16;
+    --theme-secondary: #65a30d;
+    --theme-accent: #a3e635;
+}
+
+body[data-dungeon-theme="temple"] .game-header,
+body[data-dungeon-theme="temple"] .control-bar {
+    border-color: #65a30d;
+}
+
+body[data-dungeon-theme="temple"] .header-title {
+    border-color: #84cc16;
+}
+
+body[data-dungeon-theme="temple"] .header-title-text {
+    color: #84cc16;
+}
+
+body[data-dungeon-theme="temple"] .squad-panel,
+body[data-dungeon-theme="temple"] .info-panel {
+    border-color: #84cc16;
+}
+
+body[data-dungeon-theme="temple"] .squad-panel-header {
+    border-bottom-color: #65a30d;
+    color: #a3e635;
+}
+
+body[data-dungeon-theme="temple"] .knight-card,
+body[data-dungeon-theme="temple"] .knight-portrait {
+    border-color: #84cc16;
+}
+
+body[data-dungeon-theme="temple"] .resource-pool,
+body[data-dungeon-theme="temple"] .rewards-panel {
+    border-color: #84cc16;
+}
+
+body[data-dungeon-theme="temple"] .game-btn {
+    border-color: #84cc16;
+    color: #84cc16;
+}
+
+body[data-dungeon-theme="temple"] .game-btn:hover {
+    box-shadow: 0 0 20px rgba(132, 204, 22, 0.4);
+}
+
+/* ===========================
+   THEME: FORGOTTEN CRYPTS (GRAY/STONE)
+   =========================== */
+
+body[data-dungeon-theme="crypts"] {
+    --theme-primary: #78716c;
+    --theme-secondary: #57534e;
+    --theme-accent: #a8a29e;
+}
+
+body[data-dungeon-theme="crypts"] .game-header,
+body[data-dungeon-theme="crypts"] .control-bar {
+    border-color: #57534e;
+}
+
+body[data-dungeon-theme="crypts"] .header-title {
+    border-color: #78716c;
+}
+
+body[data-dungeon-theme="crypts"] .header-title-text {
+    color: #a8a29e;
+}
+
+body[data-dungeon-theme="crypts"] .squad-panel,
+body[data-dungeon-theme="crypts"] .info-panel {
+    border-color: #78716c;
+}
+
+body[data-dungeon-theme="crypts"] .squad-panel-header {
+    border-bottom-color: #57534e;
+    color: #a8a29e;
+}
+
+body[data-dungeon-theme="crypts"] .knight-card,
+body[data-dungeon-theme="crypts"] .knight-portrait {
+    border-color: #78716c;
+}
+
+body[data-dungeon-theme="crypts"] .resource-pool,
+body[data-dungeon-theme="crypts"] .rewards-panel {
+    border-color: #78716c;
+}
+
+body[data-dungeon-theme="crypts"] .game-btn {
+    border-color: #78716c;
+    color: #a8a29e;
+}
+
+body[data-dungeon-theme="crypts"] .game-btn:hover {
+    box-shadow: 0 0 20px rgba(168, 162, 158, 0.4);
+}
+
+
+/* ===========================
+   GOBLIN MINES ASSETS
+   =========================== */
+
+body[data-dungeon-theme="mines"] .corner-tl {
+    background-image: url('./assets/mines/corner-tl.png');
+}
+
+body[data-dungeon-theme="mines"] .corner-tr {
+    background-image: url('./assets/mines/corner-tr.png');
+}
+
+body[data-dungeon-theme="mines"] .corner-bl {
+    background-image: url('./assets/mines/corner-bl.png');
+}
+
+body[data-dungeon-theme="mines"] .corner-br {
+    background-image: url('./assets/mines/corner-br.png');
+}
+
+body[data-dungeon-theme="mines"] .border-top,
+body[data-dungeon-theme="mines"] .border-bottom {
+    background-image: url('./assets/mines/border-horizontal.png');
+    background-size: 64px 64px;
+}
+
+body[data-dungeon-theme="mines"] .border-left,
+body[data-dungeon-theme="mines"] .border-right {
+    background-image: url('./assets/mines/border-vertical.png');
+    background-size: 64px 64px;
+}
+
+body[data-dungeon-theme="mines"] .squad-panel {
+    background-image: url('./assets/mines/panel-left-bg.png');
+    background-size: cover;
+}
+
+body[data-dungeon-theme="mines"] .info-panel {
+    background-image: url('./assets/mines/panel-right-bg.png');
+    background-size: cover;
+}
+
+body[data-dungeon-theme="mines"] .chest-image {
+    background-image: url('./assets/mines/chest.png');
+}
+
+body[data-dungeon-theme="mines"] .resource-icon {
+    background-image: url('./assets/mines/icon-resource.png');
+}
+
+body[data-dungeon-theme="mines"] .header-title-icon {
+    background-image: url('./assets/mines/icon-header.png');
+}
+
+/* ===========================
+   MAGMA CHAMBER ASSETS
+   =========================== */
+
+body[data-dungeon-theme="magma"] .corner-tl {
+    background-image: url('./assets/magma/corner-tl.png');
+}
+
+body[data-dungeon-theme="magma"] .corner-tr {
+    background-image: url('./assets/magma/corner-tr.png');
+}
+
+body[data-dungeon-theme="magma"] .corner-bl {
+    background-image: url('./assets/magma/corner-bl.png');
+}
+
+body[data-dungeon-theme="magma"] .corner-br {
+    background-image: url('./assets/magma/corner-br.png');
+}
+
+body[data-dungeon-theme="magma"] .border-top,
+body[data-dungeon-theme="magma"] .border-bottom {
+    background-image: url('./assets/magma/border-horizontal.png');
+    background-size: 64px 64px;
+}
+
+body[data-dungeon-theme="magma"] .border-left,
+body[data-dungeon-theme="magma"] .border-right {
+    background-image: url('./assets/magma/border-vertical.png');
+    background-size: 64px 64px;
+}
+
+body[data-dungeon-theme="magma"] .squad-panel {
+    background-image: url('./assets/magma/panel-left-bg.png');
+    background-size: cover;
+}
+
+body[data-dungeon-theme="magma"] .info-panel {
+    background-image: url('./assets/magma/panel-right-bg.png');
+    background-size: cover;
+}
+
+body[data-dungeon-theme="magma"] .chest-image {
+    background-image: url('./assets/magma/chest.png');
+}
+
+body[data-dungeon-theme="magma"] .resource-icon {
+    background-image: url('./assets/magma/icon-resource.png');
+}
+
+body[data-dungeon-theme="magma"] .header-title-icon {
+    background-image: url('./assets/magma/icon-header.png');
+}
+
+/* ===========================
+   VOID RIFT ASSETS
+   =========================== */
+
+body[data-dungeon-theme="void"] .corner-tl {
+    background-image: url('./assets/void/corner-tl.png');
+}
+
+body[data-dungeon-theme="void"] .corner-tr {
+    background-image: url('./assets/void/corner-tr.png');
+}
+
+body[data-dungeon-theme="void"] .corner-bl {
+    background-image: url('./assets/void/corner-bl.png');
+}
+
+body[data-dungeon-theme="void"] .corner-br {
+    background-image: url('./assets/void/corner-br.png');
+}
+
+body[data-dungeon-theme="void"] .border-top,
+body[data-dungeon-theme="void"] .border-bottom {
+    background-image: url('./assets/void/border-horizontal.png');
+    background-size: 64px 64px;
+}
+
+body[data-dungeon-theme="void"] .border-left,
+body[data-dungeon-theme="void"] .border-right {
+    background-image: url('./assets/void/border-vertical.png');
+    background-size: 64px 64px;
+}
+
+body[data-dungeon-theme="void"] .squad-panel {
+    background-image: url('./assets/void/panel-left-bg.png');
+    background-size: cover;
+}
+
+body[data-dungeon-theme="void"] .info-panel {
+    background-image: url('./assets/void/panel-right-bg.png');
+    background-size: cover;
+}
+
+body[data-dungeon-theme="void"] .chest-image {
+    background-image: url('./assets/void/chest.png');
+}
+
+body[data-dungeon-theme="void"] .resource-icon {
+    background-image: url('./assets/void/icon-resource.png');
+}
+
+body[data-dungeon-theme="void"] .header-title-icon {
+    background-image: url('./assets/void/icon-header.png');
+}
+
+/* ===========================
+   OVERGROWN TEMPLE ASSETS
+   =========================== */
+
+body[data-dungeon-theme="temple"] .corner-tl {
+    background-image: url('./assets/temple/corner-tl.png');
+}
+
+body[data-dungeon-theme="temple"] .corner-tr {
+    background-image: url('./assets/temple/corner-tr.png');
+}
+
+body[data-dungeon-theme="temple"] .corner-bl {
+    background-image: url('./assets/temple/corner-bl.png');
+}
+
+body[data-dungeon-theme="temple"] .corner-br {
+    background-image: url('./assets/temple/corner-br.png');
+}
+
+body[data-dungeon-theme="temple"] .border-top,
+body[data-dungeon-theme="temple"] .border-bottom {
+    background-image: url('./assets/temple/border-horizontal.png');
+    background-size: 64px 64px;
+}
+
+body[data-dungeon-theme="temple"] .border-left,
+body[data-dungeon-theme="temple"] .border-right {
+    background-image: url('./assets/temple/border-vertical.png');
+    background-size: 64px 64px;
+}
+
+body[data-dungeon-theme="temple"] .squad-panel {
+    background-image: url('./assets/temple/panel-left-bg.png');
+    background-size: cover;
+}
+
+body[data-dungeon-theme="temple"] .info-panel {
+    background-image: url('./assets/temple/panel-right-bg.png');
+    background-size: cover;
+}
+
+body[data-dungeon-theme="temple"] .chest-image {
+    background-image: url('./assets/temple/chest.png');
+}
+
+body[data-dungeon-theme="temple"] .resource-icon {
+    background-image: url('./assets/temple/icon-resource.png');
+}
+
+body[data-dungeon-theme="temple"] .header-title-icon {
+    background-image: url('./assets/temple/icon-header.png');
+}
+
+/* ===========================
+   FORGOTTEN CRYPTS ASSETS
+   =========================== */
+
+body[data-dungeon-theme="crypts"] .corner-tl {
+    background-image: url('./assets/crypts/corner-tl.png');
+}
+
+body[data-dungeon-theme="crypts"] .corner-tr {
+    background-image: url('./assets/crypts/corner-tr.png');
+}
+
+body[data-dungeon-theme="crypts"] .corner-bl {
+    background-image: url('./assets/crypts/corner-bl.png');
+}
+
+body[data-dungeon-theme="crypts"] .corner-br {
+    background-image: url('./assets/crypts/corner-br.png');
+}
+
+body[data-dungeon-theme="crypts"] .border-top,
+body[data-dungeon-theme="crypts"] .border-bottom {
+    background-image: url('./assets/crypts/border-horizontal.png');
+    background-size: 64px 64px;
+}
+
+body[data-dungeon-theme="crypts"] .border-left,
+body[data-dungeon-theme="crypts"] .border-right {
+    background-image: url('./assets/crypts/border-vertical.png');
+    background-size: 64px 64px;
+}
+
+body[data-dungeon-theme="crypts"] .squad-panel {
+    background-image: url('./assets/crypts/panel-left-bg.png');
+    background-size: cover;
+}
+
+body[data-dungeon-theme="crypts"] .info-panel {
+    background-image: url('./assets/crypts/panel-right-bg.png');
+    background-size: cover;
+}
+
+body[data-dungeon-theme="crypts"] .chest-image {
+    background-image: url('./assets/crypts/chest.png');
+}
+
+body[data-dungeon-theme="crypts"] .resource-icon {
+    background-image: url('./assets/crypts/icon-resource.png');
+}
+
+body[data-dungeon-theme="crypts"] .header-title-icon {
+    background-image: url('./assets/crypts/icon-header.png');
+}
