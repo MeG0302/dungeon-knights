@@ -28,7 +28,6 @@ import {
     HASH_POWER_MAX,
     HASH_POWER_MIN,
     TICKET_CAP_HOURS,
-    WEEKLY_POOL_DNG,
     WEEK_MS,
     accruedPoolShare,
     bandFor,
@@ -47,6 +46,8 @@ import {
 import {
     SOURCE_CHAIN,
     SOURCE_PREVIEW,
+    DEFAULT_KNIGHTS_POOL_DNG,
+    DEFAULT_WEEKLY_POOL_DNG,
     applyAction,
     chainSnapshot,
     loadVault,
@@ -54,6 +55,7 @@ import {
     refresh,
     weekInfo,
 } from '../lib/staking-source.js';
+import { STAKING_SHARE_OF_DUNGEON, lineBudgets, weeklyBudgetDng } from '../lib/reward-config.js';
 
 const results = [];
 function rec(label, pass, detail) {
@@ -173,11 +175,21 @@ section('Capsules');
 }
 
 // ------------------------------------------------------------------- the weekly pool
-section('The weekly pool, while the tokenomics are undecided');
+section('The weekly pool, now derived rather than undecided');
 
 {
-    rec('no pool is hard-coded', WEEKLY_POOL_DNG === null, `${WEEKLY_POOL_DNG}`);
-    rec('an unset pool yields null, not zero', dngFromPoolShare(0.5) === null);
+    // The pool used to be `null` and the page printed `TBD` wherever it was needed. It is now
+    // the Genesis staking line of a funded weekly budget, so the page shows real figures
+    // derived from the same file the contracts are deployed from.
+    rec('the pool is derived, not a TBD',
+        Number.isFinite(DEFAULT_WEEKLY_POOL_DNG) && DEFAULT_WEEKLY_POOL_DNG > 0,
+        `${Math.round(DEFAULT_WEEKLY_POOL_DNG)} DNG a week`);
+    rec('the pool is exactly the Genesis staking line of the weekly budget',
+        DEFAULT_WEEKLY_POOL_DNG === lineBudgets().genesisStaking,
+        `${((DEFAULT_WEEKLY_POOL_DNG / weeklyBudgetDng()) * 100).toFixed(2)}% of a ${Math.round(weeklyBudgetDng())} budget`);
+    rec('...and that line is 0.9 x the Genesis dungeon line',
+        Math.abs(lineBudgets().genesisStaking - lineBudgets().genesisDungeon * STAKING_SHARE_OF_DUNGEON) < 1e-6);
+    rec('an unset budget yields null, not zero', dngFromPoolShare(0.5) === null);
     rec('a set pool converts a share to DNG', dngFromPoolShare(0.25, 10_000) === 2500);
     rec('a zero share is zero DNG', dngFromPoolShare(0, 10_000) === 0);
 
@@ -287,9 +299,32 @@ section('Preview holdings');
         rich.staked.every((k) => k.accruedDng !== null && k.accruedDng >= 0),
         `${rich.staked[0]?.accruedDng?.toFixed(2)} DNG on the first knight`);
     rec('a configured pool is reported on the snapshot', rich.pool.dng === 15_000);
-    rec('an unconfigured pool still reports null on the snapshot', a.pool.dng === null);
-    rec('the unconfigured pool leaves per-knight DNG null, never zero',
-        a.staked.every((k) => k.accruedDng === null));
+    // The default is now the derived Genesis staking line rather than a `TBD`, so a fresh
+    // vault shows real DNG figures instead of dashes. The null path still exists — it is what
+    // a deployment with no budget configured renders — so it is still covered, but it has to
+    // be asked for explicitly now.
+    rec('a fresh vault carries the derived Genesis staking line, not a TBD',
+        a.pool.dng === DEFAULT_WEEKLY_POOL_DNG && a.pool.dng > 0,
+        `${Math.round(a.pool.dng)} DNG a week`);
+    rec('and every per-knight figure is priced from it',
+        a.staked.every((k) => k.accruedDng !== null));
+
+    // A caller with no pool to hand over gets the line its own collection is entitled to —
+    // and specifically not the other collection's. This is the regression that put 377,999.99
+    // on a Knights vault, so it is pinned rather than assumed.
+    const unpriced = previewSnapshot(WALLET, T0, null);
+    rec('an unset pool resolves to the collection\u2019s own line',
+        unpriced.pool.dng === DEFAULT_WEEKLY_POOL_DNG,
+        `${Math.round(unpriced.pool.dng)} DNG a week`);
+    rec('the two collections\u2019 lines are actually different numbers',
+        DEFAULT_KNIGHTS_POOL_DNG !== DEFAULT_WEEKLY_POOL_DNG,
+        `${Math.round(DEFAULT_KNIGHTS_POOL_DNG)} vs ${Math.round(DEFAULT_WEEKLY_POOL_DNG)}`);
+    const knightsNullPool = previewSnapshot(WALLET, T0, null, 'knights');
+    rec('and the Knights side falls back to the Knights line, not Genesis\u2019s',
+        knightsNullPool.pool.dng === DEFAULT_KNIGHTS_POOL_DNG,
+        `${Math.round(knightsNullPool.pool.dng)} DNG a week`);
+    rec('so a null pool still prices every per-knight figure',
+        unpriced.staked.every((k) => k.accruedDng !== null));
 
     const empty = previewSnapshot(WALLET, T0);
     const cleared = { ...empty, wallet: null, connected: false, owned: [], staked: [], canWrite: false };
@@ -334,10 +369,17 @@ section('Actions');
         !back.snapshot.staked.some((k) => k.tokenId === one.tokenId));
     rec('unstaking warns that its tickets are forfeited', /forfeit/i.test(back.notice || ''), back.notice);
 
-    // Claiming is the one action that must refuse while the pool is undecided.
-    const claim = applyAction(staked.snapshot, 'claim', { tokenId: one.tokenId }, T0);
-    rec('claiming refuses while the weekly pool is unset', !!claim.error, claim.error);
-    rec('that refusal explains why', /pool is not set/i.test(claim.error || ''));
+    // Claiming must refuse on a line with no budget. That state has to be built by hand now —
+    // the derived default means no snapshot arrives unpriced on its own — so build it on a
+    // fully staked snapshot rather than on a blank one, or the guard would be "covered" by
+    // the wrong branch (nothing staked, nothing accrued).
+    const stakedAll = applyAction(previewSnapshot(WALLET, T0), 'stakeAll', {}, T0).snapshot;
+    const unfunded = { ...stakedAll, pool: { ...stakedAll.pool, dng: 0 } };
+    rec('the unfunded fixture really has knights staked and accrued',
+        unfunded.staked.length > 0 && unfunded.staked.some((k) => k.accruedDng > 0));
+    const claim = applyAction(unfunded, 'claim', { tokenId: unfunded.staked[0].tokenId }, T0);
+    rec('claiming refuses while the line has no budget', !!claim.error, claim.error);
+    rec('that refusal explains why', /no budget/i.test(claim.error || ''));
 
     const withPool = applyAction(previewSnapshot(WALLET, T0, 20_000), 'claim',
         { tokenId: one.tokenId }, T0);
@@ -416,6 +458,111 @@ section('Loading the vault');
     });
     rec('a config fetch that fails still renders the page', broken.source === SOURCE_PREVIEW);
     rec('and it does not silently claim to be on-chain', broken.canWrite === true);
+}
+
+// ---------------------------------------------------------- loading real holdings
+//
+// This is the wiring that replaced the preview with the real collection, and every branch here
+// is a way it could have gone wrong quietly. A `fetchJson` stand-in keeps all of it offline: the
+// vault only ever asks for JSON, so the whole chain can be faked at that seam, and the reader's
+// own behaviour against a live node is proven separately in `check-staking-chain.js`.
+{
+    const CONFIG = {
+        chain: false,
+        reason: 'the staking contracts are not deployed',
+        poolDng: 1000,
+        knightsPoolDng: 500,
+        holdingsLive: true,
+        collections: {
+            genesis: { nft: '', live: false, reason: 'Genesis Knights have not been minted yet.' },
+            knights: { nft: '0x06c7D4b0C35858c78c3B213fbf50fB4A25f20512', live: true, reason: null },
+        },
+    };
+    const KNIGHTS = [
+        { tokenId: 10, name: 'Common Knight #10', rarity: 'common', tierName: 'Common', hashPower: 15 },
+        { tokenId: 24, name: 'Legendary Knight #24', rarity: 'legendary', tierName: 'Legendary', hashPower: 100 },
+    ];
+    const route = (payload) => async (url) => {
+        if (url.startsWith('/api/staking/config')) return CONFIG;
+        if (url.startsWith('/api/staking/holdings')) return payload;
+        throw new Error(`unexpected fetch: ${url}`);
+    };
+
+    const real = await loadVault(WALLET, {
+        config: CONFIG, nowMs: T0, collection: 'knights',
+        fetchJson: route({ ok: true, knights: KNIGHTS, balance: 2, candidates: 2, complete: true, enumerable: false, fromBlock: 0, note: 'Read 2.' }),
+    });
+    rec('a live collection replaces the preview with real holdings',
+        real.source === SOURCE_CHAIN
+        && real.owned.length === 2
+        && real.owned.every((k) => KNIGHTS.some((s) => s.tokenId === k.tokenId)),
+        `${real.owned.length} real knight(s)`);
+    rec('and none of the preview seed survives into it',
+        !real.owned.some((k) => k.tokenId > 10000));
+    rec('real holdings carry the tier hash power, never an invented one',
+        real.owned.find((k) => k.tokenId === 24)?.hashPower === 100);
+    rec('a collection that cannot be enumerated says so on the snapshot',
+        real.holdings?.enumerable === false);
+    rec('nothing is reported as staked, because no staking contract exists',
+        real.staked.length === 0);
+    rec('and the reason staking is refused is carried, not invented on the page',
+        /not deployed/i.test(real.writeBlockedReason || ''), real.writeBlockedReason);
+
+    // The Genesis side: its collection does not exist, so it must NOT be filled with preview
+    // knights while the Knights side shows real ones. Two sources of truth on one page is worse
+    // than either alone.
+    const realGenesis = await loadVault(WALLET, {
+        config: CONFIG, nowMs: T0, collection: 'genesis',
+        fetchJson: route({ ok: true, knights: [], balance: 0, complete: true }),
+    });
+    rec('a side whose collection does not exist is not filled with preview knights',
+        realGenesis.owned.length === 0 && realGenesis.source === SOURCE_CHAIN);
+    rec('and that side explains itself with the collection\u2019s own reason',
+        /minted yet/i.test(realGenesis.writeBlockedReason || ''), realGenesis.writeBlockedReason);
+    rec('the empty side is still not writable', realGenesis.canWrite === false);
+
+    // A short read must travel as short. This is the whole point of the holdings block.
+    const partial = await loadVault(WALLET, {
+        config: CONFIG, nowMs: T0, collection: 'knights',
+        fetchJson: route({
+            ok: true, knights: [KNIGHTS[0]], balance: 9, candidates: 1,
+            complete: false, enumerable: false, fromBlock: 0,
+            note: 'the collection is not enumerable',
+        }),
+    });
+    rec('a read known to be short is flagged short', partial.holdings?.complete === false);
+    rec('and the short read still says how many the contract reports', partial.holdings?.balance === 9,
+        `${partial.owned.length} shown of ${partial.holdings?.balance}`);
+    rec('a complete read is not flagged short', real.holdings?.complete === true);
+
+    // A chain that could not be read is a fact about the wallet, and must not become a preview.
+    const unreachable = await loadVault(WALLET, {
+        config: CONFIG, nowMs: T0, collection: 'knights',
+        fetchJson: route({ ok: false, reason: 'the chain could not be read just now' }),
+    });
+    rec('an unreadable chain does not fall back to invented knights',
+        unreachable.source === SOURCE_CHAIN && unreachable.owned.length === 0);
+    rec('and the reason it could not be read reaches the page',
+        /could not be read/i.test(unreachable.holdings?.reason || ''), unreachable.holdings?.reason);
+
+    const threw = await loadVault(WALLET, {
+        config: CONFIG, nowMs: T0, collection: 'knights',
+        fetchJson: async (url) => {
+            if (url.startsWith('/api/staking/holdings')) throw new Error('HTTP 500');
+            return CONFIG;
+        },
+    });
+    rec('a holdings request that throws is reported, not previewed',
+        threw.source === SOURCE_CHAIN && /could not be read/i.test(threw.holdings?.reason || ''));
+
+    // The old all-or-nothing gate must still work for a deployment that has nothing live.
+    const nothingLive = await loadVault(WALLET, {
+        config: { ...CONFIG, holdingsLive: false }, nowMs: T0, collection: 'knights',
+        fetchJson: route({ ok: true, knights: [] }),
+    });
+    rec('with nothing live the labelled preview still stands in',
+        nothingLive.source === SOURCE_PREVIEW && nothingLive.owned.length > 0);
+    rec('and the preview is still writable, as a preview', nothingLive.canWrite === true);
 }
 
 console.log('');

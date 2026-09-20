@@ -83,13 +83,19 @@ The odds below are the single published table. It is asserted by `tools/check-ra
 against the engine, the shared config, the React helpers and each reward contract's
 constructor, so the interface cannot advertise a tier or a number the contracts do not pay:
 
-| Rarity | Roll | Power × | Base speed | Reward / clear | Daily runs | Max DNG / day |
-|---|---|---|---|---|---|---|
-| Common | 50% | 1.0 | 1.0 | 10 | 5 | 50 |
-| Uncommon | 30% | 1.7 | 1.7 | 17 | 5 | 85 |
-| Rare | 15% | 3.0 | 3.0 | 30 | 4 | 120 |
-| Epic | 4% | 7.5 | 7.5 | 75 | 3 | 225 |
-| Legendary | 1% | 15.0 | 15.0 | 150 | 4 | 600 |
+| Rarity | Roll | Power × | Base speed | Reward / clear | Daily runs | Max DNG / day | Hash power |
+|---|---|---|---|---|---|---|---|
+| Common | 50% | 1.0 | 1.0 | 12 | 5 | 60 | 15 |
+| Uncommon | 30% | 1.7 | 1.7 | 20 | 5 | 100 | 25 |
+| Rare | 15% | 3.0 | 3.0 | 36 | 4 | 144 | 36 |
+| Epic | 4% | 7.5 | 7.5 | 60 | 3 | 180 | 45 |
+| Legendary | 1% | 15.0 | 15.0 | 100 | 4 | 400 | 100 |
+
+**Hash power is `dailyCapacity ÷ 4` for every tier**, which is what makes staking pay exactly
+90% of playing across the whole collection. An earlier table (5 / 8 / 15 / 40 / 100) was not
+proportional to earning power, so a Legendary staker earned 2.1× its own dungeon income
+passively while a Common earned 0.7×. Deriving the value from capacity removes the judgement
+call. `tools/check-rarity.js` asserts this identity in all three tables.
 
 The rolls sum to exactly 100%, which matters: `rollRarity()` accumulates the percentages and
 falls through to Common for anything past the last entry, so a table that summed to less than
@@ -186,7 +192,7 @@ Points are an off-chain record, not a token, and carry no promise of conversion.
 |---|---|
 | Name / symbol | Dungeon Token / **$DNG** |
 | Standard | ERC-20, 18 decimals |
-| Total supply | **1,000,000** as observed on chain, minted at deployment |
+| Total supply | **1,000,000,000**, minted once at deployment |
 | Inflation | **None by design** — the project's stated model is a once-minted fixed supply (see §11.9: the token source is not in this repository, so this is a design statement, not a verified property) |
 | Chain today | Robinhood Chain testnet, ID 46630 |
 | Chain at mainnet | Robinhood Chain, ID 4663 (Arbitrum Orbit L2, ETH for gas) |
@@ -194,22 +200,29 @@ Points are an off-chain record, not a token, and carry no promise of conversion.
 
 ### 5.2 Where $DNG comes from and goes
 
-**Source of rewards — mint fees, not emission.** Summoning a knight costs **500 $DNG**.
-Those fees fund the reward pool the game pays from. The pool cannot pay out what mints
-have not put in (plus any seed). There is no mechanism to create $DNG for rewards, which
+**Source of rewards — a funded vault, not emission.** Summoning a knight costs **500 $DNG**.
+Rewards come from one contract, `RewardVault`, funded by the 45% reward vault, summon fees,
+capsule open fees, and Genesis mint proceeds converted into it. It releases a fixed weekly
+budget with a hard ceiling per line, so **the pool cannot pay out what the project has not
+put in** and cannot be drained inside a week. There is no mechanism to create $DNG for rewards, which
 is the single most important sentence in this document for anyone reasoning about supply.
 
-**Distribution (target, per `tokenomics.md`):**
+**Distribution** (published in full in `tokenomics.md` §2):
 
 | Bucket | Share | Amount | Custody |
 |---|---|---|---|
-| Reward pool | 35% | 350,000 | Reward distributor contract |
-| Liquidity | 30% | 300,000 | DEX pool, LP locked 12 months |
-| Treasury | 15% | 150,000 | Multisig, quarterly vest |
-| Marketing / community | 10% | 100,000 | Multisig, streamed |
-| Team | 10% | 100,000 | 12-month linear vest, 6-month cliff |
+| **Reward vault** | **45%** | **450,000,000** | `RewardVault`, spent on claims |
+| Liquidity | 30% | 300,000,000 | DEX pool, LP locked 12 months |
+| Treasury | 15% | 150,000,000 | Multisig, quarterly release |
+| Marketing / community | 10% | 100,000,000 | Multisig, no cliff, no vesting |
+| Team | **0%** | — | none |
 
-> On testnet this distribution is a **plan, not a fact**. The 1,000,000 supply exists; the
+> Two consequences stated rather than discovered later. **There is no team allocation**, so
+the 15% treasury is the only bucket funding operations and development. And **marketing is
+the only unvested bucket**, so its spend cadence is disclosed publicly instead of enforced
+by a lock.
+>
+> On testnet this distribution is a **plan, not a fact**. The 1,000,000,000 supply exists; the
 > game's reward contract was funded ad hoc (5,000 $DNG, **811 remaining** as of
 > 20 September 2026). The buckets above describe the mainnet intent.
 
@@ -220,17 +233,40 @@ token price cannot break this promise, only a reward table can.
 
 | Rarity | Reward / clear | Clears to 500 | At full daily utilisation |
 |---|---|---|---|
-| Common | 10 | 50 | 10.0 days |
-| Uncommon | 17 | 30 | 5.9 days |
-| Rare | 30 | 17 | 4.2 days |
-| Epic | 75 | 7 | 2.2 days |
-| Legendary | 150 | 4 | 0.83 days |
+| Common | 12 | 42 | 8.3 days |
+| Uncommon | 20 | 25 | 5.0 days |
+| Rare | 36 | 14 | 3.5 days |
+| Epic | 60 | 9 | 2.8 days |
+| Legendary | 100 | 5 | 1.3 days |
 
 Expected value of one fresh summon at the published drop rates, running every daily run:
-`0.65·50 + 0.20·85 + 0.10·120 + 0.045·225 + 0.012·600 ≈ **78.8 $DNG/day**` — a payback of
-roughly **6.3 days** of full play on average, and considerably longer if you do not run
-your knights every day. The economy is designed so that **squad utilisation, not luck, is
-the dominant variable.**
+`Σ p·reward·runs = 0.50·60 + 0.30·100 + 0.15·144 + 0.04·180 + 0.01·400 = **92.8 $DNG/day**` —
+a payback of **5.39 days**, or **24.04 clears**, of full play on average, and considerably
+longer if you do not run your knights every day. The economy is designed so that **squad
+utilisation, not luck, is the dominant variable.**
+
+Note the shape of that sum: it weights each tier's **daily capacity**, and it is a single
+weighted total rather than `E[reward/clear] × E[runs/day]`. Multiplying the two averages
+would say 99.01 $DNG/day, because the tiers that pay the most also get the most runs — the
+two are correlated, and the product of averages is not the average of the product. The
+harness asserts that the two really do differ, so staying with the weighted sum is a
+decision rather than an accident.
+
+**These figures are computed, not typed.** `lib/reward-config.js` and `lib/token-math.js`
+derive every number in this section from the tier table in `lib/knights.js`, and
+`tools/check-token-math.js` fails if this document and the code disagree. That harness exists
+because they had already disagreed: this section used to quote an expected daily earning
+fifteen per cent lower and a payback a third of a day longer, from a six-tier table whose
+probabilities summed to **100.7%** and which predated the removal of Mythic. Nothing failed,
+because the number lived in a sentence.
+
+**The table is a maximum, not a promise.** Since the third revision these rates are the
+*reference* table, and it is the first table in this project's history that cannot be paid
+out in full by accident. The weekly budget is fixed and every payout is `table × epochScale`,
+where the scale is settled each week from the burn the last week actually produced. More
+players than the reference population means **one scale moves every number down together** —
+the table stays exactly as published, at a lower level, and the interface shows the live
+rate. `tokenomics.md` §3 has the mechanism and §8 has the horizon.
 
 ### 5.4 Daily limits as the anti-farm bound
 
@@ -238,6 +274,24 @@ Per-knight daily caps (5/5/4/3/4 runs) are enforced **on chain**, so even a perf
 cannot exceed them. A 15-knight squad of Legendaries caps at 9,000 $DNG/day, and every
 payout must be signed (V4) and must clear the reward-table check. That is the ceiling on
 damage from any farming strategy short of breaking the contract.
+
+But caps are no longer the main bound on a payout, and the third revision is explicit about
+why. At the published rates an average knight can claim **33,872 $DNG a year** running every
+daily cap, so a table left unbounded is a claim on the whole supply rather than a reward
+schedule. Three things bound it now, in order of strength:
+
+1. **The reward vault releases a fixed weekly budget**, `min(configured, balance / 12)`. The
+   vault cannot pay a week it cannot fund, and it cannot outlive itself.
+2. **Each of the four lines has a hard weekly ceiling.** A claim that would exceed its line
+   reverts; see `tokenomics.md` §3.
+3. **One published scale** moves every number together when participation exceeds the
+   reference, so the ladder and the 90% staking rule survive at a lower level instead of
+   being quietly broken.
+
+The whole supply is **29,523 knight-years** of full play, which is enough runway that the
+question is no longer whether the table can be paid — it is how long the project wants the
+reference table to hold at scale 1.0, and that is a published horizon. Every figure in this
+paragraph is derived in `lib/token-math.js`.
 
 ---
 
@@ -309,6 +363,7 @@ and it is on the roadmap rather than in the marketing copy.
 | Contract | Address | Notes |
 |---|---|---|
 | Dungeon Token ($DNG) | `0xA8D54F6FEeAFaf5C2c546D1D1644aE2f46A2d910` | ERC-20, fixed 1,000,000 supply |
+| RewardVault | *not deployed* | The funded pot and the four lines (`contracts/RewardVault.sol`) |
 | Dungeon Knights (NFT) | `0x06c7D4b0C35858c78c3B213fbf50fB4A25f20512` | ERC-721 `KNIGHT`, 500 $DNG per summon, 78 minted |
 | DungeonKnightsGameV3-Simple | `0xD8de9385Db7DfE925882E76849B6e067e47236e5` | Batch claims, rewards, daily caps |
 
@@ -503,10 +558,15 @@ tiers, and `tools/check-rarity.js` fails if any of them drifts — including if 
 promises a tier with no reward slot. The **deployed** contracts are unchanged, but the trap
 can no longer fire, because nothing can mint the sixth tier.
 
-**11.2 — Conflicting reward tables.** `tokenomics.md` quotes 12 / 20 / 36 / 60 / 100 / 150
-per clear; the **live contract pays 10 / 17 / 30 / 75 / 150**. The contract is the truth
-for anything already paid. One table must become canonical before mainnet, and this
-document treats the **contract's** numbers as canonical.
+**11.2 — Conflicting reward tables.** *(Closed, 20 September 2026.)* `tokenomics.md` quoted
+12 / 20 / 36 / 60 / 100 / 150 per clear against the **live contract's 10 / 17 / 30 / 75 /
+150**, and §5.3 of this document quoted a daily expectation derived from an older, six-tier
+probability set. One table is now canonical — the contract's — and `tokenomics.md` was
+rewritten as v2.0 around it. The figures are no longer typed into prose: `lib/token-math.js`
+derives them from `lib/knights.js` and `lib/staking-config.js`, and
+`tools/check-token-math.js` fails if this document, the Genesis paper or `tokenomics.md`
+disagrees with the code. It also fails if a contract's `RARITY_COUNT` stops matching the
+tier count, which is how the missing sixth reward slot was caught.
 
 **11.3 — Stale documentation.** The README's contract-address table and its `0.001 ETH`
 testnet mint price are historical and no longer describe the live system, which charges
@@ -570,6 +630,34 @@ cannot be read here. That matters because the Summoning Chamber now prints §4.1
 fixed odds off the bytecode, is required before §4.1 can be called the mint odds rather than
 the engine's roll.**
 
+**11.14 — Capsules minted knights and were free to open.** *(Closed, third revision.)* This
+was the largest unbudgeted liability in the project: opening a capsule cost nothing, and the
+raffle awards **200 capsules a week** — **10,400 knights a year**, each carrying a full year
+of claim capacity, against a supply that could not pay them. The capsule *odds* were never the
+problem (the four rungs are worth 86.6 / 163.6 / 260.8 / 334.0 $DNG a day and each raises the
+floor); the problem was that odds decide which knight arrives, not whether anyone paid for it.
+
+Three things bound it now, and the first is the one that matters. **Extra knights split a
+fixed pot instead of creating new claims**, because the vault's four lines have hard weekly
+ceilings — so the old compounding liability simply does not exist under a funded budget. On
+top of that the open is **never free** (500 → 5,000 $DNG as the collection fills) and the
+Knights collection has a **hard cap of 10,000**. At the cap each Knights line pays **5.0%** of
+the reference table, and from about 5,746 knights the weekly opens alone cover the whole
+Knights lines. All three figures are derived in `lib/reward-config.js` and asserted by
+`tools/check-token-math.js`.
+
+**11.15 — The weekly staking pool had no number, because it had no funding.** *(Closed, third
+revision.)* The pool is no longer a `TBD`: it is the **Genesis staking line**, 26.71% of a
+weekly budget the vault releases and can actually pay, and the interface shows real DNG figures
+derived from the same file the contracts are deployed from.
+
+The open question that replaced it is smaller and answerable. Holding the reference table at
+scale 1.0 forever costs **73,586,240 $DNG a year**; capsule opens cover roughly 5.2M of it at
+the reference and about 32.1M once the Knights collection passes 5,746, and the remainder has
+to come from Genesis mint proceeds converted into the vault. **The mint price in ETH therefore
+cannot stay open past this**, because it is what funds the table after the 6.1-year runway the
+45% vault provides.
+
 ---
 
 ## 12. Risks
@@ -581,7 +669,11 @@ the engine's roll.**
 | Reward pool exhausted before the economy matures | Contract balance is the loss ceiling, and it is the current binding constraint (811 $DNG, §11.10). Top-up cadence is an operational duty, not a code guarantee |
 | Signer key compromise | Rotatable `trustedSigner`; a compromised signer cannot overpay past the on-chain table, only authorise runs that are capped anyway |
 | $DNG price volatility | ROI is quoted in **clears**, never in USD, so a price move does not break a stated promise |
-| Reward table set unsustainably | Table and caps are owner-adjustable with events emitted; the pool cannot pay what was never funded |
+| Reward table set unsustainably | The vault releases `min(configured, balance / 12)` per week with a hard ceiling per line, so the budget cannot promise what it does not hold. At the published rates an average knight can claim 33,872 $DNG a year, so the whole supply is **29,523 knight-years** of play; the binding constraint is the weekly budget, not the table |
+| Capsule faucet (§11.14) | **Bounded.** Extra knights split a fixed pot rather than creating claims, the open price is never zero (500 → 5,000), and the collection is capped at 10,000 — at which point each Knights line pays a computed 5.0% of reference |
+| The reference population is a guess | Published rather than hidden, and the mechanism does not depend on it being right: above the reference one scale moves every number down together, and the interface shows the live rate |
+| The live contract pays an older table | **Real, and recorded.** `DungeonKnightsGameV3-Simple` pays 10/17/30/75/150 and is what is deployed today; the published table takes effect with V4. `tools/check-rarity.js` asserts both tables and fails if this record disappears |
+| A points-to-$DNG conversion appears | **Unmitigated by design** — there is no conversion, and `tools/check-token-math.js` asserts none has appeared. Wallets are free, so any conversion is an unbounded claim on a fixed supply |
 | Off-chain scoring trust (points) | Server-signed sessions, HMAC tokens, once-a-day guards proven under concurrent load |
 | Thin liquidity at mainnet | 30% of supply reserved for liquidity with a 12-month lock, as a requirement rather than a hope |
 

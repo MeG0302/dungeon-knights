@@ -109,8 +109,36 @@ const engine = window.RARITY || {};
 const page = window.DUNGEON_CONFIG;
 
 const ON_CHAIN = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY'];
-const EXPECTED_REWARDS = [10, 17, 30, 75, 150];
-const EXPECTED_CAPS = [5, 5, 4, 3, 4];
+
+// Derived from the shared table rather than typed, so this harness cannot disagree with
+// `lib/knights.js` about the economy it is supposed to be pinning.
+const EXPECTED_REWARDS = ON_CHAIN.map((t) => RARITY[t].dungeonReward);
+const EXPECTED_CAPS = ON_CHAIN.map((t) => RARITY[t].dailyRuns);
+const EXPECTED_HASH = ON_CHAIN.map((t) => RARITY[t].hashPower);
+
+/**
+ * The contracts whose tables are *not* the published one, and why.
+ *
+ * All four are history: V2 and the two V3s were superseded, and `V3-Simple` is what is
+ * deployed on testnet today. Their sources are deliberately left describing what they were
+ * written with rather than being edited to match the plan, because a repo whose contract
+ * source disagrees with the bytecode it produced is worse than one that admits the gap — and
+ * rewriting a drained contract's reward table would be rewriting history.
+ *
+ * The published table (12 / 20 / 36 / 60 / 100, and the third-revision economy around it)
+ * takes effect with `DungeonKnightsGameV4`, which is why V4 alone is asserted against it and
+ * why this file also checks that the divergence is written down in the whitepaper.
+ */
+const LEGACY_TABLE = { rewards: [10, 17, 30, 75, 150], caps: [5, 5, 4, 3, 4] };
+const LEGACY = [
+    'DungeonKnightsGameV2.sol',
+    'DungeonKnightsGameV3.sol',
+    'DungeonKnightsGameV3.1-RewardsOnly.sol',
+    'DungeonKnightsGameV3-Simple.sol',
+];
+const CANDIDATE = 'DungeonKnightsGameV4.sol';
+/** The one deployed address, named so the whitepaper check below cannot drift from it. */
+const DEPLOYED_LEGACY = { file: 'DungeonKnightsGameV3-Simple.sol', ...LEGACY_TABLE };
 
 console.log('');
 console.log('One economy, four places');
@@ -126,6 +154,16 @@ rec('the engine (characters.js) knows the same five',
 rec('lib/knights.js knows the same five',
     JSON.stringify(Object.keys(RARITY)) === JSON.stringify(ON_CHAIN),
     Object.keys(RARITY).join(', '));
+
+// Hash power is only consistent across the three tables if it is a function of capacity;
+// a hand-typed set (5/8/15/40/100 once was) breaks the 90% staking rule this way.
+rec('hash power is capacity / 4 in every published table',
+    ON_CHAIN.every((t) => RARITY[t].hashPower === RARITY[t].dungeonReward * RARITY[t].dailyRuns / 4),
+    ON_CHAIN.map((t) => `${RARITY[t].hashPower}`).join('/'));
+rec('the engine and the page carry the same hash power as the shared table',
+    ON_CHAIN.every((t) => engine[t]?.hashPower === RARITY[t].hashPower
+        && config[t.toLowerCase()]?.hashPower === RARITY[t].hashPower),
+    ON_CHAIN.map((t) => `${engine[t]?.hashPower}/${config[t.toLowerCase()]?.hashPower}`).join(' '));
 
 const economyText = ['config.js', 'characters.js']
     .map((f) => fs.readFileSync(path.join(PUBLIC, f), 'utf8'))
@@ -144,7 +182,7 @@ for (const tier of ON_CHAIN) {
     const fromEngine = engine[tier] || {};
     const fromLib = RARITY[tier] || {};
 
-    const fields = ['name', 'multiplier', 'color', 'dropRate', 'dungeonReward', 'dailyRuns'];
+    const fields = ['name', 'multiplier', 'color', 'dropRate', 'dungeonReward', 'dailyRuns', 'hashPower'];
     const mismatched = fields.filter((field) =>
         fromConfig[field] !== fromEngine[field] || fromConfig[field] !== fromLib[field]);
 
@@ -164,17 +202,43 @@ console.log('');
 console.log('The contracts pay what the page advertises');
 
 for (const contract of CONTRACTS) {
+    const isLegacy = LEGACY.includes(contract.file);
+    const wantRewards = isLegacy ? LEGACY_TABLE.rewards : EXPECTED_REWARDS;
+    const wantCaps = isLegacy ? LEGACY_TABLE.caps : EXPECTED_CAPS;
     const sameTierCount = contract.rarityCount === ON_CHAIN.length;
-    const rewardsMatch = contract.rewards.every((value, i) => value === EXPECTED_REWARDS[i]);
-    const capsMatch = contract.caps.every((value, i) => value === EXPECTED_CAPS[i]);
+    const rewardsMatch = contract.rewards.every((value, i) => value === wantRewards[i]);
+    const capsMatch = contract.caps.every((value, i) => value === wantCaps[i]);
     const pass = sameTierCount && rewardsMatch && capsMatch;
+    const what = isLegacy ? 'the historical table' : 'the published table';
 
-    rec(`${contract.file}: RARITY_COUNT, rewards and caps`, pass,
+    rec(`${contract.file}: RARITY_COUNT, rewards and caps — ${what}`, pass,
         pass
             ? `${contract.rarityCount} tiers, ${contract.rewards.join('/')} DNG, ${contract.caps.join('/')} runs`
             : `RARITY_COUNT ${contract.rarityCount}, rewards ${contract.rewards.join('/')} `
-              + `(want ${EXPECTED_REWARDS.join('/')}), caps ${contract.caps.join('/')} `
-              + `(want ${EXPECTED_CAPS.join('/')})`);
+              + `(want ${wantRewards.join('/')}), caps ${contract.caps.join('/')} `
+              + `(want ${wantCaps.join('/')})`);
+}
+
+// The published table is what the site advertises, so the contract that will pay it has to
+// carry it. A candidate that quietly kept the old numbers would make the mint page a lie.
+{
+    const candidate = CONTRACTS.find((c) => c.file === CANDIDATE);
+    rec('the deployment candidate (V4) is asserted against the published table, not a legacy one',
+        JSON.stringify(candidate.rewards) === JSON.stringify(EXPECTED_REWARDS)
+        && JSON.stringify(candidate.caps) === JSON.stringify(EXPECTED_CAPS),
+        `${candidate.rewards.join('/')} DNG, ${candidate.caps.join('/')} runs`);
+}
+
+// And the gap between the plan and the chain has to be written down, because on testnet the
+// live contract still pays the older table until V4 is deployed.
+{
+    const white = fs.readFileSync(path.join(ROOT, 'WHITEPAPER.md'), 'utf8');
+    rec('the deployed-vs-published divergence is recorded in the whitepaper',
+        white.includes(DEPLOYED_LEGACY.rewards.join(' / '))
+        || white.includes(DEPLOYED_LEGACY.rewards.join('/')),
+        white.includes('10/17/30/75/150') || white.includes('10 / 17 / 30 / 75 / 150')
+            ? 'the live table is named'
+            : 'WHITEPAPER.md must name the table the deployed contract still pays');
 }
 
 rec('config.js reports the rewards in the contract\'s index order',
@@ -301,6 +365,36 @@ const badLabels = CAPSULE_TYPES
     .map((c) => `${c.name}: ${c.rarity}`);
 rec('every capsule label names a tier or a published band', badLabels.length === 0,
     badLabels.length ? badLabels.join(', ') : CAPSULE_TYPES.map((c) => c.rarity).join(', '));
+
+// ------------------------------------------------- the served pages count the tiers too
+//
+// The landing hero draws a stat card whose number is a literal: `<div>6</div>` over
+// `<div>RARITIES</div>`. It went on saying **6** for a while after Mythic was removed, and
+// nothing caught it — the served bodies are machine-written strings inside
+// `lib/static-pages.js`, so no compiler sees them and no harness was reading them. It is the
+// one place on the live site that advertised a sixth tier.
+const pages = (await import('../lib/static-pages.js')).STATIC_PAGES;
+const tierCount = Object.keys(RARITY).length;
+const claims = [];
+for (const [key, page] of Object.entries(pages)) {
+    const body = page?.body || '';
+    for (const match of body.matchAll(/>\s*(\d+)\s*<\/div>\s*<div[^>]*>\s*RARITIES\s*<\/div>/gi)) {
+        if (Number(match[1]) !== tierCount) claims.push(`${key} says ${match[1]}`);
+    }
+    // Prose counts are the other way this drifts.
+    for (const pattern of [/six rarity/i, /six tiers?/i, /6 rarity tiers/i]) {
+        if (pattern.test(body)) claims.push(`${key}: "${body.match(pattern)[0]}"`);
+    }
+}
+rec('no served page advertises a tier count the economy does not have',
+    claims.length === 0,
+    claims.length ? claims.join(', ') : `${tierCount} tiers everywhere`);
+
+// The same literal is drawn on every page that has the card, so this must actually match
+// something — a regex that stops matching would otherwise pass silently forever.
+const cardsFound = Object.values(pages)
+    .filter((page) => />\s*\d+\s*<\/div>\s*<div[^>]*>\s*RARITIES\s*<\/div>/i.test(page?.body || '')).length;
+rec('and the tier-count card was actually found to check', cardsFound > 0, `${cardsFound} page(s)`);
 
 console.log('');
 const failed = results.filter((r) => !r.pass);

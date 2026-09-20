@@ -452,6 +452,53 @@
 
         rec('the Staking Vault is the page that loaded', /staking/.test(location.pathname), location.pathname);
 
+        // The vault boots asynchronously — a saved wallet means reading it before the tabs
+        // exist — so waiting for the tab bar is what separates "the page is broken" from
+        // "the page has not finished opening". Without it a battery started a moment early
+        // dies on `undefined.focus()` inside the keyboard block, which reads like a real
+        // regression and is not one.
+        for (let i = 0; i < 60 && tabs().length === 0; i++) await sleep(250);
+        rec('the vault finished opening', tabs().length > 0, `${tabs().length} tabs after the boot`);
+
+        // What this deployment can actually do, asked once.
+        //
+        // The vault has three states now, not two: a labelled preview, real holdings with no
+        // staking contract, and a fully deployed vault. The battery used to assume the first,
+        // which made it fail for being *right* — it demanded an accrual figure on staked cards
+        // when nothing can be staked and capsules when nothing can be won. So each assertion
+        // below is made against the state that is actually deployed.
+        const deployment = await fetch('/api/staking/config')
+            .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+        const HOLDINGS_LIVE = !!deployment?.holdingsLive;
+        const STAKING_LIVE = !!deployment?.chain;
+        const KNIGHTS_LIVE = !!deployment?.collections?.knights?.live;
+        console.log(`        [deployment] holdingsLive=${HOLDINGS_LIVE} stakingLive=${STAKING_LIVE} knightsLive=${KNIGHTS_LIVE}`);
+        rec('the deployment published what it can read', !!deployment,
+            deployment ? 'config served' : 'config unreachable');
+
+        // Switching sides now costs a chain round trip when a collection is live, so a fixed
+        // sleep is a coin flip.
+        //
+        // Waiting for "a note exists" is not enough, and finding that out is why this takes a
+        // fingerprint: the *previous* side's note is still on screen the instant the click lands,
+        // so a presence test returns immediately and every assertion after it reads the old side.
+        // The wait has to be for the content to **change**, not to exist.
+        function sideFingerprint() {
+            return {
+                note: document.querySelector('.sv-holdings-note')?.textContent || '',
+                cards: document.querySelectorAll('.sv-card').length,
+            };
+        }
+        async function settle(previous, maxMs = 15000) {
+            const started = Date.now();
+            while (Date.now() - started < maxMs) {
+                const now = sideFingerprint();
+                if (now.note !== previous.note || now.cards !== previous.cards) break;
+                await sleep(200);
+            }
+            await sleep(400);
+        }
+
         // Everything below is measured against a loaded vault, so a run with no wallet
         // stored would report a pile of confusing failures instead of saying what is
         // wrong. Say it once, plainly. (The no-wallet case has its own entry point:
@@ -534,8 +581,16 @@
             const a = read();
             await sleep(4000);
             const b = read();
-            rec('the accrual figure is on the staked cards', a !== null, `${a}`);
-            rec('it moves on its own as time passes', a !== b, `${a} -> ${b}`);
+            if (stakedCards().length === 0) {
+                // Nothing can be staked until the staking contract exists, so there is nothing to
+                // watch accrue. The assertion is the absence: no figure is shown, rather than one
+                // that sits still and looks broken.
+                rec('with nothing stakable there is no accrual figure to show', a === null,
+                    a === null ? 'none shown' : `found ${a}`);
+            } else {
+                rec('the accrual figure is on the staked cards', a !== null, `${a}`);
+                rec('it moves on its own as time passes', a !== b, `${a} -> ${b}`);
+            }
             const live = document.querySelector('.sv-accruing')?.textContent?.trim();
             rec('the summary carries a live accrual line', /accruing now/i.test(live || ''), live);
         }
@@ -558,16 +613,44 @@
 
         // -------------------------------------------------------------------- honesty
         {
-            const config = await fetch('/api/staking/config').then((r) => r.json()).catch(() => null);
+            const config = deployment;
             const onChain = !!config?.chain;
             const badge = document.querySelector('.sv-preview-badge');
-            if (onChain) {
+            if (HOLDINGS_LIVE) {
+                // Real knights are on screen, so the badge must be gone and the page must say
+                // where the list came from. Both halves matter: a badge missing without an
+                // explanation would leave a reader unable to tell real holdings from invented
+                // ones, which is the exact confusion the badge existed to prevent.
+                rec('a vault reading the real collection does not wear the preview badge', !badge);
+                rec('and it states where the holdings came from',
+                    !!document.querySelector('.sv-holdings-note'),
+                    document.querySelector('.sv-holdings-note')?.textContent?.replace(/\s+/g, ' ').trim().slice(0, 60));
+                // Whichever way the read went, the page has to say which it was: a count from the
+                // collection, an empty wallet, a collection that does not exist, or a chain that
+                // could not be reached. A bare note satisfying none of those would be decoration.
+                const note = (document.querySelector('.sv-holdings-note')?.textContent || '').trim();
+                rec('the note describes which of those actually happened',
+                    /minted yet|read .*knight|holds no |could not be read/i.test(note),
+                    note.replace(/\s+/g, ' ').slice(0, 70));
+            } else if (onChain) {
                 rec('a configured vault does not wear the preview badge', !badge);
             } else {
                 rec('an unconfigured vault says it is preview data', !!badge);
                 rec('and it explains why in words', /not deployed|preview/i.test(document.body.textContent));
-                rec('the pool reads TBD rather than an invented number',
-                    /TBD/.test(document.body.textContent));
+                // The pool used to read `TBD` here, because the tokenomics were genuinely
+                // undecided. It is now the Genesis staking line — the weekly budget split
+                // into four — so the honest assertion is the opposite one: the tile is a
+                // published number *and* it is the number the API serves.
+                const stakingLine = config?.economy?.lineBudgets?.genesisStaking;
+                const poolTile = [...document.querySelectorAll('.sv-tile')]
+                    .find((t) => /weekly pool/i.test(t.textContent));
+                const poolShown = Number((poolTile?.querySelector('.sv-tile-value')?.textContent || '')
+                    .replace(/[^0-9]/g, '') || 0);
+                rec('the weekly pool is the published Genesis staking line',
+                    Number.isFinite(stakingLine) && poolShown === Math.round(stakingLine),
+                    `${poolShown} vs ${stakingLine}`);
+                rec('and nothing on the page still reads TBD',
+                    !/TBD/.test(document.body.textContent));
             }
             rec('no write button is offered while the vault is read-only',
                 onChain ? true : true);
@@ -577,7 +660,12 @@
         {
             const rows = [...document.querySelectorAll('.sv-card.is-staked')];
             if (!rows.length) {
-                rec('the vault has something staked to check', false, 'no staked cards');
+                // With no staking contract there is nothing staked to sum. The useful assertion
+                // is the negative one: the vault is not claiming staked holdings it cannot have.
+                rec('with no staking contract the vault claims nothing staked',
+                    document.querySelectorAll('.sv-card.is-staked').length === 0
+                    && !/accrued so far/i.test(document.body.textContent),
+                    '0 staked cards');
             } else {
                 const totalTickets = [...document.querySelectorAll('.sv-summary-value')][1]?.textContent?.replace(/[^0-9]/g, '');
                 const sum = rows.reduce((acc, row) => {
@@ -615,7 +703,14 @@
                     `${stakedCards().length}`);
                 rec('unstaking warns the tickets are forfeited', /forfeit/i.test(banner() || ''), banner());
             } else {
-                rec('a stake action was available to test', false, 'no owned knight with an enabled button');
+                // Either there is no knight to stake, or the button is disabled because the vault
+                // is read-only. Both are correct, and both must be explained rather than silently
+                // inert — a disabled button with no reason is the same experience as a broken one.
+                const reason = document.querySelector('.sv-readonly-note, .sv-holdings-note')?.textContent
+                    || document.body.textContent;
+                rec('an unavailable stake action is explained, not just disabled',
+                    !HOLDINGS_LIVE || /not deployed|minted yet|read-only|could not be read|holds no /i.test(reason),
+                    `owned=${before.owned} staked=${before.staked}`);
             }
 
             // Claiming cannot pay while the pool is undecided, and must say so.
@@ -658,9 +753,18 @@
             selectTab('capsules').click();
             await sleep(300);
             const cardsOnPage = document.querySelectorAll('.sv-panel:not([hidden]) .sv-capsule').length;
-            rec('every capsule type is shown', cardsOnPage === 4, `${cardsOnPage} cards`);
+            // Capsules are won from the Genesis draw, so a vault reading a real collection holds
+            // none — there is no capsule contract and no draw. Assert the honest empty state
+            // instead of demanding inventory that cannot exist.
+            if (cardsOnPage === 0) {
+                rec('a vault with no draw shows no capsules, and says why',
+                    /capsule|draw|not deployed|no capsules/i.test(document.querySelector('.sv-panel:not([hidden])')?.textContent || ''),
+                    '0 capsule cards');
+            } else {
+                rec('every capsule type is shown', cardsOnPage === 4, `${cardsOnPage} cards`);
+            }
             const oddsRows = document.querySelectorAll('.sv-panel:not([hidden]) .sv-odds-row').length;
-            rec('the odds are stated, not hidden', oddsRows >= 4, `${oddsRows} rows`);
+            rec('the odds are stated, not hidden', oddsRows >= 4 || cardsOnPage === 0, `${oddsRows} rows`);
             const sums = [...document.querySelectorAll('.sv-panel:not([hidden]) .sv-capsule')].map((card) =>
                 [...card.querySelectorAll('.sv-odds-row span:last-child')]
                     .reduce((acc, el) => acc + Number(el.textContent.replace(/[^0-9.]/g, '')), 0));
@@ -731,41 +835,171 @@
             rec('the draw ring is drawn in proportion to the week',
                 dash > 100 && offset >= 0 && offset <= dash, `${offset.toFixed(1)} of ${dash.toFixed(1)}`);
 
-            // A staked knight has a deadline, so it is shown one.
+            // A staked knight has a deadline, so it is shown one. With nothing stakable there
+            // is no deadline to show, and inventing one would be worse than showing none.
             rec('a staked card shows its ticket cap',
-                document.querySelectorAll('.sv-card.is-staked .sv-cap-note').length > 0);
+                document.querySelectorAll('.sv-card.is-staked .sv-cap-note').length > 0
+                || document.querySelectorAll('.sv-card.is-staked').length === 0,
+                `${document.querySelectorAll('.sv-card.is-staked').length} staked card(s)`);
 
-            // Every knight is labelled with a band that is actually published.
+            // Every knight is labelled with a band that is actually published. A wallet holding
+            // no Genesis knights (because the collection is not minted) has none to label, and
+            // asserting over an empty list would pass without checking anything.
             const named = [...document.querySelectorAll('.sv-card .sv-chip[data-band]')].map((c) => c.dataset.band);
             const published = bandEls.map((b) => b.dataset.band);
-            rec('every knight wears a published band',
-                named.length > 0 && named.every((key) => published.includes(key)),
-                [...new Set(named)].join(', '));
+            if (named.length === 0) {
+                rec('with no knights to label, no unpublished band is claimed instead',
+                    document.querySelectorAll('.sv-card').length === 0,
+                    `${document.querySelectorAll('.sv-card').length} card(s), 0 labelled`);
+            } else {
+                rec('every knight wears a published band',
+                    named.every((key) => published.includes(key)),
+                    [...new Set(named)].join(', '));
+            }
 
-            // The pool is the one number nobody has set, so it is the one thing a player
-            // may drag — and it must disappear the moment the real number exists.
-            const range = document.querySelector('.sv-range');
-            rec('the what-if slider appears exactly while the pool is undecided',
-                poolSet ? !range : !!range, poolSet ? 'pool is set' : 'pool is TBD');
-            if (range && !poolSet) {
-                const read = () => document.querySelector('.sv-project-out')?.textContent || '';
-                const before = read();
-                // React tracks the value property, so the native setter has to be used or
-                // the change is swallowed as "no change".
-                const setNative = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-                setNative.call(range, String(Number(range.max)));
-                range.dispatchEvent(new Event('input', { bubbles: true }));
-                await sleep(300);
-                const after = read();
-                rec('dragging it moves the projection', before !== after && /DNG/.test(after));
-                rec('the projection says it is one',
-                    /not a promise/i.test(document.querySelector('.sv-project')?.textContent || ''));
-                setNative.call(range, String(Number(range.min)));
-                range.dispatchEvent(new Event('input', { bubbles: true }));
-                await sleep(200);
-                const lowest = read();
-                rec('a smaller pool projects less DNG',
-                    lowest !== after, `${after.replace(/[^0-9,.]/g, '').slice(0, 12)} -> ${lowest.replace(/[^0-9,.]/g, '').slice(0, 12)}`);
+            // The economy panel. It replaced a draggable "if the weekly pool were" slider,
+            // which existed only because the pool was undecided — a number a player could
+            // drag is a number a player can mistake for a promise. The four bars are the
+            // partition `RewardVault` is deployed with, so they are worth pinning: a share
+            // that has drifted from the basis points is a share the contract will not pay.
+            const econ = document.querySelector('.sv-econ');
+            rec('the economy panel is drawn', !!econ);
+            rec('and no slider is offered for a number that is decided',
+                !document.querySelector('.sv-range') && !document.querySelector('.sv-project'));
+
+            if (econ) {
+                const LINES = ['genesisDungeon', 'genesisStaking', 'knightsDungeon', 'knightsStaking'];
+                const rows = [...econ.querySelectorAll('.sv-econ-line')];
+                rec('the partition is drawn as four lines', rows.length === 4, `${rows.length}`);
+
+                const shares = rows.map((r) => Number(
+                    (r.querySelector('.sv-econ-line-share')?.textContent || '').replace(/[^0-9.]/g, '') || 0));
+                const servedShares = LINES.map((k) => +(cfg?.economy?.shares?.[k] * 100 || 0).toFixed(1));
+                rec('every drawn share is the published one',
+                    shares.length === 4 && shares.every((s, i) => Math.abs(s - servedShares[i]) < 0.051),
+                    `${shares.join(' / ')} vs ${servedShares.join(' / ')}`);
+
+                const budgets = rows.map((r) => Number(
+                    (r.querySelector('.sv-econ-line-dng')?.textContent || '').replace(/[^0-9]/g, '') || 0));
+                const servedBudgets = LINES.map((k) => Math.round(cfg?.economy?.lineBudgets?.[k] || 0));
+                rec('every line budget is the one the API serves',
+                    budgets.length === 4 && budgets.every((b, i) => Math.abs(b - servedBudgets[i]) <= 1),
+                    `${budgets.join(' / ')} vs ${servedBudgets.join(' / ')}`);
+
+                const drawnBudget = Number(
+                    (econ.querySelector('.sv-econ-budget-value')?.textContent || '').replace(/[^0-9]/g, ''));
+                rec('the panel names the budget it is parting out',
+                    drawnBudget === Math.round(cfg?.economy?.weeklyBudget || 0),
+                    `${drawnBudget} vs ${cfg?.economy?.weeklyBudget}`);
+
+                // The scale is what makes an absolute promise safe at any participation
+                // level, so it has to be on the page rather than in a document.
+                rec('the epoch scale is shown',
+                    /scale\s*×\s*[0-9.]+/i.test(econ.querySelector('.sv-econ-scale')?.textContent || ''),
+                    econ.querySelector('.sv-econ-scale')?.textContent?.trim());
+
+                const facts = econ.querySelector('.sv-econ-facts')?.textContent || '';
+                rec('the 90% staking rule is stated', /90%/.test(facts));
+                rec('and the vault horizon is stated in years', /years/i.test(facts));
+            }
+
+            // ---------------------------------------------------------- the Knights side
+            //
+            // Two collections, one vault. The Knights side is the half that could most easily
+            // be half-built without anything noticing: it draws a different ladder, quotes a
+            // different pool, and refuses a draw the other side runs. Each of those is a way
+            // to get it quietly wrong.
+            const cfgNow = await fetch('/api/staking/config')
+                .then((res) => (res.ok ? res.json() : null)).catch(() => null);
+            const switchBtns = [...document.querySelectorAll('.sv-collection')];
+            rec('the collection switch offers exactly two sides', switchBtns.length === 2,
+                switchBtns.map((b) => b.dataset.collection).join(', '));
+            rec('and it is a group, not a second tab bar',
+                document.querySelector('.sv-collections')?.getAttribute('role') === 'group');
+
+            const genesisBtn = switchBtns.find((b) => b.dataset.collection === 'genesis');
+            const knightsBtn = switchBtns.find((b) => b.dataset.collection === 'knights');
+            rec('Genesis is the side shown by default', genesisBtn?.getAttribute('aria-pressed') === 'true');
+            rec('the switch states which side is on, not only styles it',
+                genesisBtn?.getAttribute('aria-pressed') === 'true'
+                && knightsBtn?.getAttribute('aria-pressed') === 'false');
+
+            if (knightsBtn && genesisBtn) {
+                const beforeSwitch = sideFingerprint();
+                knightsBtn.click();
+                await settle(beforeSwitch);
+
+                rec('selecting Knights turns the switch over',
+                    knightsBtn.getAttribute('aria-pressed') === 'true'
+                    && genesisBtn.getAttribute('aria-pressed') === 'false');
+
+                // The tier ladder replaces the band ladder. Both are `.sv-ladder` containers,
+                // so the thing that has to differ is the rows inside.
+                const tierRows = [...document.querySelectorAll('.sv-tier-ladder .sv-tier-row')];
+                rec('the Knights ladder draws one row per tier', tierRows.length === 5, `${tierRows.length} rows`);
+                rec('and the Genesis band ladder is no longer drawn',
+                    document.querySelectorAll('.sv-band').length === 0,
+                    `${document.querySelectorAll('.sv-band').length} bands left`);
+
+                // Every drawn power has to be the published one. The table is served now, so
+                // this compares the ladder against the API rather than against itself.
+                const servedTiers = cfgNow?.economy?.referenceTable?.tiers ?? [];
+                rec('the API publishes the tier table the ladder draws', servedTiers.length === 5,
+                    `${servedTiers.length} served`);
+                const drawnTiers = tierRows.map((r) => ({
+                    key: r.dataset.tier,
+                    hp: Number((r.querySelector('.sv-tier-hp')?.textContent || '').replace(/[^0-9]/g, '')),
+                }));
+                const tierMismatch = drawnTiers.filter((d, i) => {
+                    const served = servedTiers[i];
+                    return !served || String(served.key).toLowerCase() !== d.key || served.hashPower !== d.hp;
+                });
+                rec('every published hash power is drawn on the ladder', tierMismatch.length === 0,
+                    tierMismatch.length
+                        ? `drawn ${drawnTiers.map((d) => `${d.key}:${d.hp}`).join(', ')}`
+                        : drawnTiers.map((d) => `${d.key}:${d.hp}`).join(', '));
+
+                // A Knights staker cannot enter the draw — capsules mint Knights, so the draw
+                // is Genesis-only. Refusing has to be stated, not left as a tab that does
+                // nothing, which is how a player reads a broken page.
+                const tilesText = document.querySelector('.sv-tiles')?.textContent || '';
+                rec('the pool tile quotes the Knights line, not Genesis\u2019s',
+                    cfgNow?.knightsPoolDng != null && cfgNow?.poolDng !== cfgNow?.knightsPoolDng
+                    && tilesText.includes(Number(cfgNow.knightsPoolDng).toLocaleString()),
+                    `${cfgNow?.knightsPoolDng} vs ${cfgNow?.poolDng}`);
+                rec('and the tile says which line it is',
+                    /Knights staking line/i.test(tilesText));
+                rec('the refusal of the draw is stated in words',
+                    /Genesis-only|earns yield and nothing else/i.test(tilesText));
+
+                // The economy panel should now mark which two of the four lines are this
+                // collection's, so the partition is readable without adding it up.
+                const activeLines = [...document.querySelectorAll('.sv-econ-line')]
+                    .filter((el) => el.dataset.active === 'yes')
+                    .map((el) => el.dataset.collection);
+                rec('the panel marks this collection\u2019s two lines as active',
+                    activeLines.length === 2 && activeLines.every((c) => c === 'knights'),
+                    activeLines.join(', ') || 'none marked');
+
+                // The yield-falls-as-the-collection-grows fact is the one that makes Knights
+                // staking honest rather than flattering, so it has to survive on the page.
+                const ladderCaption = document.querySelector('.sv-ladder-caption')?.textContent || '';
+                rec('the Knights ladder says the payout falls as the collection grows',
+                    /uncapped|less each one earns/i.test(ladderCaption), ladderCaption.trim().slice(0, 70));
+                rec('and it names the cap it falls to',
+                    /cap/i.test(ladderCaption));
+
+                const beforeBack = sideFingerprint();
+                genesisBtn.click();
+                await settle(beforeBack);
+                rec('switching back restores the Genesis ladder',
+                    document.querySelectorAll('.sv-band').length === 6
+                    && document.querySelectorAll('.sv-tier-ladder .sv-tier-row').length === 0,
+                    `${document.querySelectorAll('.sv-band').length} bands`);
+                rec('and the Genesis pool tile comes back with it',
+                    (document.querySelector('.sv-tiles')?.textContent || '')
+                        .includes(Number(cfgNow?.poolDng).toLocaleString()),
+                    `${cfgNow?.poolDng}`);
             }
         }
 
@@ -860,11 +1094,175 @@
         return results;
     }
 
+    /**
+     * The $DNG economy page (/tokenomics).
+     *
+     * Run it on that page. Every number there is derived from `lib/reward-config.js`, so the
+     * thing worth checking is not the arithmetic — `tools/check-token-math.js` owns that, in
+     * Node, where it can import the module. This checks the two failure modes a page has and
+     * a module does not: **a field that does not exist renders as `NaN`** rather than
+     * throwing (the band floor did exactly that on the first build, printing "NaN HP at the
+     * bottom"), and **the partition drawn on screen drifts from the partition served**, which
+     * is the one number on the page a reader would have to add up by hand to catch.
+     */
+    async function tokenomics() {
+        await sleep(900);
+
+        rec('the $DNG economy is the page that loaded',
+            !!document.querySelector('.tk-hero'), location.pathname);
+
+        // ------------------------------------------------------------- no invented output
+        const text = document.body.innerText || '';
+        const broken = [];
+        for (const match of text.matchAll(/(NaN|undefined|\[object Object\])/g)) {
+            broken.push(text.slice(Math.max(0, match.index - 60), match.index + 40).replace(/\s+/g, ' '));
+        }
+        rec('nothing on the page renders NaN or undefined', broken.length === 0,
+            broken.length ? broken[0] : 'clean');
+
+        // ------------------------------------------------------- the partition on screen
+        const lines = [...document.querySelectorAll('.tk-line')];
+        rec('the four reward lines are drawn', lines.length === 4, `${lines.length}`);
+
+        const cfg = await fetch('/api/staking/config').then((r) => (r.ok ? r.json() : null)).catch(() => null);
+        const KEYS = ['genesisDungeon', 'genesisStaking', 'knightsDungeon', 'knightsStaking'];
+        const shownDng = lines.map((l) => Number(
+            (l.querySelector('.tk-line-dng')?.textContent || '').replace(/[^0-9]/g, '') || 0));
+        const servedDng = KEYS.map((k) => Math.round(cfg?.economy?.lineBudgets?.[k] || 0));
+        rec('every drawn line budget is the one the API serves',
+            shownDng.length === 4 && shownDng.every((v, i) => Math.abs(v - servedDng[i]) <= 1),
+            `${shownDng.join(' / ')} vs ${servedDng.join(' / ')}`);
+
+        const shownShares = lines.map((l) => Number(
+            (l.querySelector('.tk-line-share')?.textContent || '').replace(/[^0-9.]/g, '') || 0));
+        const shareSum = shownShares.reduce((a, b) => a + b, 0);
+        rec('the four shares are a partition, not four opinions',
+            Math.abs(shareSum - 100) <= 0.06, `${shownShares.join(' + ')} = ${shareSum.toFixed(2)}%`);
+
+        const heroBudget = Number(
+            (document.querySelector('.tk-budget-value')?.textContent || '').replace(/[^0-9]/g, ''));
+        rec('the headline budget is the served weekly budget',
+            heroBudget === Math.round(cfg?.economy?.weeklyBudget || 0),
+            `${heroBudget} vs ${cfg?.economy?.weeklyBudget}`);
+        rec('and it is the sum of the lines it is parted into',
+            Math.abs(shownDng.reduce((a, b) => a + b, 0) - heroBudget) <= 2,
+            `${shownDng.reduce((a, b) => a + b, 0)} vs ${heroBudget}`);
+
+        // ----------------------------------------------------------------- distribution
+        const segments = [...document.querySelectorAll('.tk-dist-seg')];
+        const segPct = segments.reduce((sum, s) => sum + Number(s.style.width.replace('%', '')), 0);
+        rec('the distribution bar accounts for the whole supply',
+            Math.abs(segPct - 100) <= 0.01, `${segPct}%`);
+        rec('no bucket is drawn for a zero allocation',
+            !segments.some((s) => s.dataset.bucket === 'team')
+            && document.querySelectorAll('.tk-dist-card').length === 5,
+            `${segments.length} segments, ${document.querySelectorAll('.tk-dist-card').length} cards`);
+
+        // ------------------------------------------------------------------ the tables
+        const rows = [...document.querySelectorAll('.tk-tier-table tbody tr')];
+        rec('one row per payable tier', rows.length === (cfg?.knightTiers?.length || 0),
+            `${rows.length} rows, ${cfg?.knightTiers?.length} tiers served`);
+
+        const rewards = rows.map((r) => Number(r.querySelectorAll('td')[1]?.textContent || 0));
+        rec('the tier rewards are strictly increasing',
+            rewards.every((v, i) => i === 0 || v > rewards[i - 1]), rewards.join(' / '));
+        rec('and the rarer the tier the more runs it loses',
+            new Set(rows.map((r) => r.querySelectorAll('td')[2]?.textContent)).size > 1,
+            'runs are not a flat column');
+
+        // ------------------------------------------------------------------- the scale
+        const range = document.getElementById('tk-multiple');
+        rec('the scale scenario has one control', !!range);
+        if (range) {
+            const scaleText = () => document.querySelector('.tk-scenario-cell.is-key span:nth-child(2)')?.textContent || '';
+            const genesisText = () => [...document.querySelectorAll('.tk-scenario-cell')]
+                .find((c) => /genesis/i.test(c.textContent))?.querySelector('span:nth-child(2)')?.textContent || '';
+            const setNative = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+            const move = async (to) => {
+                setNative.call(range, String(to));
+                range.dispatchEvent(new Event('input', { bubbles: true }));
+                await sleep(250);
+            };
+
+            await move(1);
+            rec('at the reference the scale is exactly 1.00',
+                /×1\.00/.test(scaleText()), scaleText());
+            rec('and a Genesis clear is the published 300',
+                /300/.test(genesisText()), genesisText());
+
+            await move(20);
+            const low = scaleText();
+            rec('more knights than the budget can pay moves the scale down',
+                /×0\.[0-9]+/.test(low), low);
+            rec('and the payout moves with it, not against it',
+                Number(genesisText().replace(/[^0-9.]/g, '')) < 300, genesisText());
+
+            // The cap is the whole point of the mechanism: no amount of demand may push the
+            // scale above 1, or the vault pays more than it holds.
+            let worst = 0;
+            for (const to of [1, 2, 4, 8, 12, 16, 20]) {
+                await move(to);
+                worst = Math.max(worst, Number(scaleText().replace(/[^0-9.]/g, '')) || 0);
+            }
+            rec('the scale never exceeds 1.00 however the control is dragged',
+                worst <= 1.0001, `max ${worst}`);
+            await move(1);
+        }
+
+        // ---------------------------------------------------------------- the capsule
+        const marker = document.querySelector('.tk-capsule-marker');
+        const markerPct = Number((marker?.style.left || '').replace('%', ''));
+        const breakEven = cfg?.economy?.capsuleBreakEvenMinted;
+        const cap = cfg?.economy?.knightsCap;
+        rec('the capsule marker sits where the opens start funding the lines',
+            Number.isFinite(breakEven) && cap
+            && Math.abs(markerPct - (breakEven / cap) * 100) <= 0.5,
+            `${markerPct}% vs ${breakEven}/${cap}`);
+
+        // ---------------------------------------------------------- it is actually styled
+        //
+        // The first build of this page asked for `/css/theme.css`; the file is at `/theme.css`.
+        // A 404 on a stylesheet throws nothing and breaks no assertion — the page simply
+        // rendered with every `var(--accent-gold)` unresolved, i.e. with no theme at all. So
+        // the sheets are fetched, and the theme is checked by applying it rather than by
+        // assuming it loaded.
+        const sheets = [...document.querySelectorAll('link[rel="stylesheet"]')]
+            .map((l) => l.getAttribute('href'));
+        const deadSheets = [];
+        for (const href of sheets) {
+            try {
+                const res = await fetch(href);
+                if (!res.ok) deadSheets.push(`${href} (${res.status})`);
+            } catch { deadSheets.push(`${href} (unreachable)`); }
+        }
+        rec('every stylesheet the page loads actually exists', deadSheets.length === 0,
+            deadSheets.length ? deadSheets.join(', ') : `${sheets.length} sheets`);
+
+        const probe = document.createElement('span');
+        probe.style.color = 'var(--accent-gold)';
+        document.body.appendChild(probe);
+        const themedColour = getComputedStyle(probe).color;
+        probe.remove();
+        const plainColour = getComputedStyle(document.body).color;
+        rec('and a themed colour resolves instead of falling back',
+            themedColour !== plainColour, `${themedColour} vs unthemed ${plainColour}`);
+
+        // -------------------------------------------------------------- reachability
+        const links = [...document.querySelectorAll('.tk-footer-actions button')].map((b) => b.textContent.trim());
+        rec('the page can be left without the browser back button', links.length >= 3, links.join(', '));
+        rec('nothing overflows its box horizontally',
+            document.documentElement.scrollWidth <= window.innerWidth + 1,
+            `${document.documentElement.scrollWidth} vs ${window.innerWidth}`);
+
+        return results;
+    }
+
     window.__check = {
         arya,
         assets,
         engine,
         staking,
+        tokenomics,
         prepareFresh,
         freshState,
         restoreWallet,

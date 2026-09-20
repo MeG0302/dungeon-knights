@@ -1,0 +1,702 @@
+/* ============================================================================
+   The $DNG economy page (/tokenomics).
+
+   Same vault as every other page: the dark ground, the bronze hairlines, the gold for
+   anything a player can count on and the muted grey for anything they cannot. The one
+   idea specific to this page is that it is mostly *reference material* — so it is laid
+   out as a document rather than as a control panel: one column, wide measure, and
+   tables that are worth reading line by line.
+   ============================================================================ */
+
+.tk-page {
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-dark);
+    min-height: 100vh;
+}
+
+/* The whole page is one centred column. There is no side panel here on purpose: the
+   vault and the Summoning Chamber both split left/right because both are *doing*
+   something, and this page is not. */
+.tk-main {
+    width: 100%;
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 26px 20px 80px;
+    display: flex;
+    flex-direction: column;
+    gap: 26px;
+}
+
+.tk-num {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+}
+
+/* ---------------------------------------------------------------------- hero */
+.tk-hero {
+    display: flex;
+    align-items: center;
+    gap: 22px;
+    padding: 22px 24px;
+    border: 1px solid var(--border-bronze);
+    border-radius: var(--radius-md);
+    background:
+        radial-gradient(120% 160% at 8% 0%, rgba(212, 175, 55, 0.10), transparent 62%),
+        var(--bg-raised);
+}
+
+.tk-hero-mark {
+    flex-shrink: 0;
+    width: 92px;
+    height: 92px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--border-gold);
+    border-radius: 50%;
+    background: radial-gradient(circle at 34% 28%, rgba(212, 175, 55, 0.34), rgba(0, 0, 0, 0.5) 70%);
+    box-shadow: inset 0 0 18px rgba(212, 175, 55, 0.22), 0 4px 18px rgba(0, 0, 0, 0.55);
+}
+
+.tk-coin {
+    font-family: var(--font-display);
+    font-size: 17px;
+    letter-spacing: 1.5px;
+    color: var(--accent-gold);
+    text-shadow: 0 0 14px rgba(212, 175, 55, 0.5);
+}
+
+.tk-hero-body { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+
+.tk-h1 {
+    font-family: var(--font-display);
+    font-size: 25px;
+    line-height: 1.2;
+    letter-spacing: 0.6px;
+    color: var(--accent-gold);
+    margin: 0;
+}
+
+.tk-lede {
+    font-size: 13px;
+    line-height: 1.65;
+    color: var(--text-secondary);
+    margin: 0;
+    max-width: 66ch;
+}
+
+.tk-lede strong { color: var(--text-primary); }
+
+.tk-hero-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+
+.tk-chip {
+    font-family: var(--font-heading);
+    font-size: 9.5px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-dim);
+    border-radius: 10px;
+    padding: 2px 9px;
+}
+
+.tk-chip.is-quiet { color: var(--text-muted); border-style: dashed; }
+
+/* ------------------------------------------------------------------ sections */
+.tk-section {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 20px 22px 22px;
+    border: 1px solid var(--border-dim);
+    border-radius: var(--radius-md);
+    background: var(--bg-raised);
+}
+
+.tk-section-head { display: flex; flex-direction: column; gap: 6px; }
+
+.tk-h2 {
+    font-family: var(--font-heading);
+    font-size: 15px;
+    letter-spacing: 1.4px;
+    text-transform: uppercase;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.tk-section-sub {
+    font-size: 12.5px;
+    line-height: 1.65;
+    color: var(--text-muted);
+    margin: 0;
+    max-width: 74ch;
+}
+
+.tk-section-sub strong { color: var(--text-secondary); }
+
+/* The callout used for the consequences of a decision rather than the decision. */
+.tk-note {
+    font-size: 12px;
+    line-height: 1.65;
+    color: var(--text-muted);
+    border-left: 2px solid var(--border-bronze);
+    background: rgba(212, 175, 55, 0.035);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: 10px 14px;
+    max-width: 80ch;
+}
+
+.tk-note strong { color: var(--text-secondary); }
+.tk-note.is-warn { border-left-color: var(--accent-gold-dim); background: rgba(212, 175, 55, 0.06); }
+
+/* -------------------------------------------------------------- distribution */
+.tk-dist-bar {
+    display: flex;
+    height: 26px;
+    border: 1px solid var(--border-dim);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    background: var(--bg-dark);
+}
+
+.tk-dist-seg {
+    display: grid;
+    place-items: center;
+    font-family: var(--font-heading);
+    font-size: 9.5px;
+    letter-spacing: 0.5px;
+    color: rgba(0, 0, 0, 0.62);
+    border-right: 1px solid rgba(0, 0, 0, 0.35);
+    transition: filter 0.15s ease;
+}
+
+.tk-dist-seg:last-child { border-right: none; }
+.tk-dist-seg:hover { filter: brightness(1.12); }
+
+.tk-dist-seg[data-bucket="reward"] { background: linear-gradient(180deg, var(--accent-gold-light), var(--accent-gold-dim)); }
+.tk-dist-seg[data-bucket="liquidity"] { background: linear-gradient(180deg, #7fa8c9, #3f6d92); }
+.tk-dist-seg[data-bucket="treasury"] { background: linear-gradient(180deg, #a89a7c, #6f6650); }
+.tk-dist-seg[data-bucket="marketing"] { background: linear-gradient(180deg, #96736e, #5f4642); }
+.tk-dist-seg[data-bucket="team"] { background: #3a3a3a; }
+
+.tk-dist-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 10px;
+}
+
+.tk-dist-card {
+    border: 1px solid var(--border-dim);
+    border-radius: var(--radius-sm);
+    background: var(--bg-dark);
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.tk-dist-card[data-bucket="reward"] { border-color: var(--border-bronze); }
+
+.tk-dist-head { display: flex; align-items: center; gap: 7px; }
+
+.tk-dist-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    flex-shrink: 0;
+}
+
+[data-bucket="reward"] .tk-dist-dot { background: var(--accent-gold); }
+[data-bucket="liquidity"] .tk-dist-dot { background: #5f8bb0; }
+[data-bucket="treasury"] .tk-dist-dot { background: #90856b; }
+[data-bucket="marketing"] .tk-dist-dot { background: #7d5b56; }
+
+.tk-dist-name { font-size: 11.5px; color: var(--text-secondary); flex: 1; }
+.tk-dist-pct { font-size: 11.5px; color: var(--text-primary); font-weight: 700; }
+.tk-dist-amount { font-family: var(--font-display); font-size: 16px; color: var(--text-primary); }
+.tk-dist-custody { font-size: 10px; line-height: 1.5; color: var(--text-muted); }
+
+/* ----------------------------------------------------------------- the vault */
+.tk-budget {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 18px;
+    border: 1px solid var(--border-bronze);
+    border-radius: var(--radius-md);
+    background: linear-gradient(180deg, rgba(212, 175, 55, 0.06), transparent 70%), var(--bg-dark);
+    padding: 15px 18px;
+}
+
+.tk-budget-main { display: flex; flex-direction: column; gap: 2px; min-width: 200px; flex: 1; }
+
+.tk-budget-value {
+    font-family: var(--font-display);
+    font-size: 34px;
+    line-height: 1.05;
+    color: var(--accent-gold);
+}
+
+.tk-budget-unit {
+    font-family: var(--font-heading);
+    font-size: 9.5px;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.tk-budget-side {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    justify-content: center;
+    border-left: 1px solid var(--border-dim);
+    padding-left: 18px;
+}
+
+.tk-budget-fact { display: flex; gap: 12px; align-items: baseline; font-size: 11px; }
+.tk-budget-fact-label { color: var(--text-muted); min-width: 92px; }
+.tk-budget-fact span:last-child { color: var(--text-secondary); }
+
+.tk-lines { display: flex; flex-direction: column; gap: 12px; }
+
+.tk-line { display: flex; flex-direction: column; gap: 5px; }
+
+.tk-line-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.tk-line-label { font-size: 12.5px; color: var(--text-primary); }
+
+.tk-line-numbers { display: flex; gap: 12px; align-items: baseline; }
+.tk-line-share { font-size: 12px; color: var(--accent-gold-dim); }
+.tk-line-dng { font-size: 12px; color: var(--text-secondary); }
+
+.tk-line-bar {
+    height: 8px;
+    border: 1px solid var(--border-dim);
+    border-radius: 4px;
+    background: var(--bg-dark);
+    overflow: hidden;
+}
+
+.tk-line-fill {
+    display: block;
+    height: 100%;
+    background: linear-gradient(90deg, var(--border-bronze), var(--accent-gold));
+}
+
+.tk-line[data-collection="knights"] .tk-line-fill {
+    background: linear-gradient(90deg, var(--border-dim), #7f8798);
+}
+
+.tk-line-pays { font-size: 10.5px; line-height: 1.55; color: var(--text-muted); }
+
+/* ----------------------------------------------------------------- the scale */
+.tk-formula {
+    align-self: flex-start;
+    border: 1px solid var(--border-dim);
+    border-radius: var(--radius-sm);
+    background: var(--bg-dark);
+    padding: 8px 14px;
+}
+
+.tk-formula code {
+    font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+    font-size: 12px;
+    color: var(--accent-gold-dim);
+    letter-spacing: 0.3px;
+}
+
+.tk-scenario {
+    border: 1px solid var(--border-bronze);
+    border-radius: var(--radius-md);
+    background: linear-gradient(180deg, rgba(212, 175, 55, 0.05), transparent 60%), var(--bg-dark);
+    padding: 14px 16px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+}
+
+.tk-scenario-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+
+.tk-scenario-label {
+    font-family: var(--font-heading);
+    font-size: 10px;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.tk-scenario-value { font-family: var(--font-display); font-size: 17px; color: var(--accent-gold); }
+
+.tk-range {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 22px;
+    margin: 0;
+    background: transparent;
+    cursor: pointer;
+}
+
+.tk-range::-webkit-slider-runnable-track {
+    height: 4px;
+    border: 1px solid var(--border-dim);
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--accent-gold-dim), var(--border-bronze));
+}
+
+.tk-range::-moz-range-track {
+    height: 4px;
+    border: 1px solid var(--border-dim);
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--accent-gold-dim), var(--border-bronze));
+}
+
+.tk-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    margin-top: -6px;
+    border: 1px solid var(--border-gold);
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, var(--accent-gold-light), var(--accent-gold-dim));
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+}
+
+.tk-range::-moz-range-thumb {
+    width: 15px;
+    height: 15px;
+    border: 1px solid var(--border-gold);
+    border-radius: 50%;
+    background: var(--accent-gold);
+}
+
+.tk-range:focus-visible { outline: 2px solid var(--accent-gold); outline-offset: 3px; }
+
+.tk-scenario-ticks {
+    display: flex;
+    justify-content: space-between;
+    font-size: 9px;
+    color: var(--text-muted);
+}
+
+.tk-scenario-out {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    margin-top: 2px;
+}
+
+.tk-scenario-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    border: 1px solid var(--border-dim);
+    border-radius: var(--radius-sm);
+    background: var(--bg-raised);
+    padding: 9px 11px;
+}
+
+.tk-scenario-cell.is-key { border-color: var(--border-bronze); }
+
+.tk-scenario-cell-label {
+    font-family: var(--font-heading);
+    font-size: 9px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.tk-scenario-cell span:nth-child(2) { font-size: 15px; color: var(--text-primary); }
+.tk-scenario-cell span:nth-child(2).is-gold { color: var(--accent-gold); }
+.tk-scenario-cell-sub { font-size: 9.5px; line-height: 1.45; color: var(--text-muted); }
+
+/* The curve: the scale as participation rises. It is `min(1, 1/m)`, drawn rather than
+   asserted, so the shape of the protection is visible at a glance. */
+.tk-curve {
+    width: 100%;
+    height: 80px;
+    display: block;
+    overflow: visible;
+}
+
+.tk-curve-axis { stroke: var(--border-dim); stroke-width: 1; }
+.tk-curve-line { fill: none; stroke: var(--accent-gold-dim); stroke-width: 1.6; }
+.tk-curve-mark { stroke: var(--border-bronze); stroke-width: 1; stroke-dasharray: 3 3; }
+.tk-curve-dot { fill: var(--accent-gold); stroke: var(--bg-dark); stroke-width: 1.5; }
+
+.tk-scenario-fine { font-size: 10px; line-height: 1.6; color: var(--text-muted); max-width: 86ch; }
+
+.tk-limit-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 10px;
+}
+
+.tk-limit {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    border: 1px solid var(--border-dim);
+    border-radius: var(--radius-sm);
+    background: var(--bg-dark);
+    padding: 11px 13px;
+}
+
+.tk-limit-label {
+    font-family: var(--font-heading);
+    font-size: 9px;
+    letter-spacing: 1.1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.tk-limit-value { font-family: var(--font-display); font-size: 19px; color: var(--text-primary); }
+.tk-limit-sub { font-size: 10px; line-height: 1.5; color: var(--text-muted); }
+
+/* ----------------------------------------------------------------- the tables */
+.tk-table-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+    gap: 14px;
+    align-items: start;
+}
+
+.tk-table-card {
+    border: 1px solid var(--border-dim);
+    border-radius: var(--radius-md);
+    background: var(--bg-dark);
+    padding: 14px 15px 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+}
+
+.tk-table-card[data-collection="genesis"] { border-color: var(--border-bronze); }
+
+.tk-table-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+
+.tk-table-title {
+    font-family: var(--font-heading);
+    font-size: 12px;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--accent-gold);
+}
+
+.tk-table-card[data-collection="knights"] .tk-table-title { color: var(--text-secondary); }
+
+.tk-table-tag {
+    font-size: 10px;
+    color: var(--text-muted);
+    border: 1px solid var(--border-dim);
+    border-radius: 9px;
+    padding: 1px 8px;
+}
+
+.tk-table-hero { display: flex; align-items: baseline; gap: 8px; }
+.tk-table-hero-value { font-family: var(--font-display); font-size: 32px; line-height: 1; color: var(--accent-gold); }
+.tk-table-hero-unit { font-size: 11px; color: var(--text-muted); }
+
+.tk-facts {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0;
+    border-top: 1px solid var(--border-dim);
+    padding-top: 9px;
+}
+
+.tk-facts > div { display: flex; justify-content: space-between; gap: 12px; font-size: 11px; line-height: 1.5; }
+.tk-facts dt { color: var(--text-muted); }
+.tk-facts dd { margin: 0; color: var(--text-secondary); text-align: right; }
+
+.tk-band-strip { display: flex; gap: 2px; height: 8px; margin-top: 2px; }
+
+.tk-band {
+    background: linear-gradient(180deg, var(--accent-gold-dim), var(--border-bronze));
+    border-radius: 2px;
+    min-width: 3px;
+    opacity: 0.85;
+}
+
+.tk-table-fine { font-size: 10px; line-height: 1.6; color: var(--text-muted); }
+
+.tk-table-scroll { overflow-x: auto; }
+
+.tk-tier-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+}
+
+.tk-tier-table th,
+.tk-tier-table td {
+    padding: 6px 8px;
+    text-align: right;
+    border-bottom: 1px solid var(--border-dim);
+    white-space: nowrap;
+}
+
+.tk-tier-table thead th {
+    font-family: var(--font-heading);
+    font-size: 8.5px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    font-weight: 400;
+}
+
+.tk-tier-table tbody th {
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.tk-tier-table td { color: var(--text-secondary); }
+.tk-tier-table td.is-strong { color: var(--text-primary); font-weight: 700; }
+.tk-tier-table tbody tr:last-child th,
+.tk-tier-table tbody tr:last-child td { border-bottom: none; }
+.tk-tier-table tbody tr:hover { background: rgba(212, 175, 55, 0.045); }
+
+.tk-tier-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+/* ----------------------------------------------------------------- capsules */
+.tk-capsule {
+    display: flex;
+    gap: 18px;
+    align-items: center;
+    border: 1px solid var(--border-bronze);
+    border-radius: var(--radius-md);
+    background: linear-gradient(180deg, rgba(212, 175, 55, 0.05), transparent 65%), var(--bg-dark);
+    padding: 16px 18px;
+}
+
+.tk-capsule-art {
+    width: 84px;
+    height: 84px;
+    flex-shrink: 0;
+    image-rendering: pixelated;
+    filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.6));
+}
+
+.tk-capsule-body { display: flex; flex-direction: column; gap: 11px; flex: 1; min-width: 0; }
+
+.tk-capsule-price { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.tk-capsule-price-now { display: flex; flex-direction: column; gap: 1px; }
+.tk-capsule-price-now .tk-num { font-family: var(--font-display); font-size: 24px; line-height: 1.05; }
+.tk-capsule-price-now .tk-num.is-gold { color: var(--accent-gold); }
+.tk-capsule-price-unit { font-size: 10px; color: var(--text-muted); }
+.tk-capsule-arrow { color: var(--border-bronze); font-size: 18px; }
+
+.tk-capsule-track {
+    position: relative;
+    height: 8px;
+    border: 1px solid var(--border-dim);
+    border-radius: 4px;
+    background: var(--bg-raised);
+    overflow: hidden;
+}
+
+.tk-capsule-fill {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, var(--border-bronze), var(--accent-gold-dim));
+    opacity: 0.5;
+}
+
+.tk-capsule-marker {
+    position: absolute;
+    top: -3px;
+    width: 2px;
+    height: 14px;
+    background: var(--accent-gold);
+    box-shadow: 0 0 6px rgba(212, 175, 55, 0.8);
+}
+
+.tk-capsule-scale {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 9.5px;
+    color: var(--text-muted);
+}
+
+.tk-capsule-scale .tk-num { color: var(--accent-gold-dim); }
+.tk-capsule-fine { font-size: 10.5px; line-height: 1.6; color: var(--text-muted); max-width: 84ch; }
+.tk-capsule-fine strong { color: var(--text-secondary); }
+
+/* ------------------------------------------------------------------ honesty */
+.tk-truth {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+}
+
+.tk-truth li {
+    position: relative;
+    font-size: 11.5px;
+    line-height: 1.65;
+    color: var(--text-muted);
+    padding-left: 18px;
+    max-width: 84ch;
+}
+
+.tk-truth li::before {
+    content: "";
+    position: absolute;
+    left: 3px;
+    top: 7px;
+    width: 5px;
+    height: 5px;
+    border: 1px solid var(--accent-gold-dim);
+    transform: rotate(45deg);
+}
+
+.tk-truth strong { color: var(--text-secondary); }
+
+/* -------------------------------------------------------------------- footer */
+.tk-footer {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    border-top: 1px solid var(--border-dim);
+    padding-top: 16px;
+}
+
+.tk-footer p { font-size: 10.5px; line-height: 1.65; color: var(--text-muted); margin: 0; max-width: 84ch; }
+.tk-footer-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.tk-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ------------------------------------------------------------------- narrow */
+@media (max-width: 760px) {
+    .tk-main { padding: 16px 12px 60px; gap: 18px; }
+    .tk-hero { flex-direction: column; align-items: flex-start; gap: 14px; padding: 18px; }
+    .tk-h1 { font-size: 20px; }
+    .tk-section { padding: 16px 15px 18px; }
+    .tk-budget { padding: 13px 14px; }
+    .tk-budget-value { font-size: 27px; }
+    .tk-budget-side { border-left: none; border-top: 1px solid var(--border-dim); padding-left: 0; padding-top: 10px; width: 100%; }
+    .tk-capsule { flex-direction: column; align-items: flex-start; gap: 12px; }
+    .tk-capsule-art { width: 62px; height: 62px; }
+    .tk-tier-table th, .tk-tier-table td { padding: 5px 6px; }
+    .tk-dist-seg-label { display: none; }
+}

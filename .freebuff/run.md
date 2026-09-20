@@ -34,7 +34,7 @@ blocked; every one of them is a redeploy away, and no code change is needed.
 | Mobile wallets | `PRIVY_APP_ID` (+ `PRIVY_CLIENT_ID`), and the chain enabled for the app | *Wallets: injected first…* |
 | Server-signed payouts (V4) | the contract deployed in Remix, then `GAME_CONTRACT_V4` + `GAME_SIGNER_PRIVATE_KEY` | *Server-signed runs (Game V4)*, `docs/DEPLOY-GAME-V4.md` |
 | Phone gas | players fund their own embedded wallet | *Wallets: injected first…* |
-| The Staking Vault's DNG pool | `WEEKLY_POOL_DNG` (a number), once the tokenomics are out | *The Staking Vault* |
+| The Capsules collection | a deployed `Capsules.sol`: `CAPSULE_CONTRACT` in `public/config.js` (empty string = not deployed) and `CAPSULE_NFT` for the vault's own read | *The Staking Vault*, and the capsule panel on `/mint` |
 | Real Genesis holdings | the four Phase 2 contracts deployed, then `GENESIS_NFT`, `STAKING_CONTRACT`, `RAFFLE_CONTRACT`, `CAPSULE_NFT` | *The Staking Vault* |
 
 Until the first two are set, the deployment is honest about it: the Points page shows its amber
@@ -181,11 +181,26 @@ switches to real holdings on its own when they do.
 - **Page** — `app/staking/client.js` (React, like `/points`) with its rules in
   `lib/staking-config.js` and its data in `lib/staking-source.js`. Styles are scoped under
   `.staking-page` in `public/css/staking.css`, so `theme.css` and `layout.css` are untouched.
-- **One place for every number** — `lib/staking-config.js`. Tickets are
-  `floor(min(stakedHours, 168) × hashPower)`; the weekly pool is `WEEKLY_POOL_DNG` and is
-  deliberately `null` until the tokenomics land, which is why the page reads `TBD`.
-- **The pool is set by env, not by code.** `WEEKLY_POOL_DNG=15000` in the deployment turns every
-  `TBD` into real DNG — the tile, the per-knight accrual and the claim button — with no rebuild.
+- **One place for every number** — `lib/staking-config.js` for the staking rules, and
+  `lib/reward-config.js` for the economy they are paid from. Tickets are
+  `floor(min(stakedHours, 168) × hashPower)`. The pool is no longer a `TBD`: it is the
+  collection's own line of the vault partition (`lineBudgets().genesisStaking` = 378,000 a week
+  for Genesis, `knightsStaking` = 292,320 for Knights), so a fresh vault shows real DNG.
+- **The pool is set by env, not by code.** `WEEKLY_POOL_DNG=15000` in the deployment overrides
+  the derived Genesis line; `KNIGHTS_STAKING_POOL_DNG` overrides the Knights one. Neither needs
+  a rebuild.
+- **Two collections, one vault — the switch at the top of the left panel.** Genesis stakers earn
+  yield *and* the weekly draw; Knights stakers earn yield only, because a capsule mints a Knight
+  and so the draw is Genesis-only. That refusal is stated in words on the tile rather than left
+  as a tab that does nothing. Each side draws its own ladder: Genesis the six published hash-power
+  bands (counts summing to 1,024), Knights a five-row tier ladder whose powers are
+  `capacity ÷ 4` — 15/25/36/45/100 — because the collection is uncapped, so there are no counts
+  to draw and hash power is the only thing an owner can plan around. The economy panel dims the
+  two lines that are not the side you are on.
+- **Switching sides must not blank the page.** `selectCollection` calls `load(address, { quiet: true })`,
+  which keeps the current board on screen while the new snapshot is fetched. Without `quiet` the
+  whole vault is replaced by "OPENING THE VAULT" for a switch, which is a network round trip of
+  blank page on a chain deployment — the moment a player is most likely to think the vault broke.
 - **Preview vs chain** — `/api/staking/config` reports `chain: false` while any of the four
   addresses is missing, and the left panel wears a **Preview data** badge. Holdings are seeded
   deterministically from the wallet, so the same address always sees the same knights.
@@ -204,10 +219,13 @@ switches to real holdings on its own when they do.
     art colour, because the band is a *checkable* label — this collection publishes no
     per-token rarity, and the old hard-coded `data-rarity="legendary"` was decoration that
     claimed something untrue.
-  - **Pool projector** — a range input that exists **only while `poolDng` is null**, and whose
-    every line says it is a projection. This is the invariant to protect: rendering it once the
-    pool is real would turn a what-if into something a player reads as a quote. The battery
-    asserts it appears exactly while the pool is undecided.
+  - **The economy panel replaced the pool projector.** A range input labelled "if the weekly
+    pool were" existed only because the pool was genuinely undecided; a number a player can drag
+    is a number a player can mistake for a promise. In its place is the partition `RewardVault`
+    is deployed with — four lines, their shares as bars, their weekly budgets, the epoch scale,
+    the 90% rule and the horizon — drawn from `economy` on `/api/staking/config` and compared
+    against it by the battery rather than against literals. It renders **before** a wallet
+    connects, because the economy is a fact about the vault and not about the wallet.
   - **Draw ring** — the week drawn as a ring, filled from the last draw to the next
     (`strokeDashoffset = C × (1 - weekProgress)`), gold-pulsed in the final hour.
   - **Ticket cap** — a staked card draws its progress toward the 168-hour cap and says how many
@@ -234,12 +252,79 @@ switches to real holdings on its own when they do.
   **Still open:** how the 200 weekly capsules split across the four types is undefined, and it
   is the number that actually sets the raffle's economy.
 
+#### Real holdings — how the vault reads the chain
+
+The vault shows the knights a wallet **actually owns**, read from the deployed collection at
+`0x06c7D4b0C35858c78c3B213fbf50fB4A25f20512` (env `KNIGHT_NFT_ADDRESS`, defaulted in
+`lib/game-runs.js`). It used to show invented ones to every visitor.
+
+- **The collection cannot be enumerated.** Measured, not assumed, and asserted by
+  `tools/check-staking-chain.js` so the premise is checked rather than trusted:
+
+  | call | answer |
+  |---|---|
+  | `supportsInterface(0x780e9d63)` (ERC721Enumerable) | **false** |
+  | `totalSupply()` | reverted |
+  | `nextTokenId()` | reverted |
+  | `tokenOfOwnerByIndex(...)` | reverted |
+
+- **So candidates come from the logs, not a scan.** `Transfer` is indexed on `to`, so one
+  `eth_getLogs` filtered to the wallet returns every token it was ever sent — 45 ids in one
+  request. Cost is independent of collection size.
+- **Do not "scan ids until a gap".** It is the obvious approach and it is wrong: ids in this
+  collection are **not contiguous** (one real wallet holds 10–13, 22–55, 67–74, and id `0`
+  exists), so stopping at the first gap reports 4 knights for a wallet with 45. The harness pins
+  this by comparing the confirmed count against the contract's own `balanceOf`, which catches the
+  whole class at once.
+- **Logs give candidates, not holdings** — you keep receiving `Transfer`s for tokens you later
+  send away — so ownership is confirmed afterwards with `getKnightInfo`, which also supplies the
+  rarity the page needs.
+- **`rpcBatch` in `lib/game-runs.js` is the transport, and its limits are measured:** 50
+  `eth_call`s in one POST returns 200, **100 returns 429**, so batches are capped at 50 and a 429
+  is retried with a widening pause. A revert is returned as `{ error }`, not thrown — for a reader
+  asking whether a token exists, "execution reverted" *is* the answer.
+- **Lower-case the address before any ABI encoding.** `ethers` refuses to encode an address whose
+  case does not match its EIP-55 checksum, and it **throws** rather than reverting — so a wallet
+  address pasted in the wrong case was reported as *"the chain could not be read"* without the
+  chain ever being asked. `INVALID_ARGUMENT` is now its own message, because that one is our fault
+  and never the node's.
+- **Three states, not two.** Ownership and staking are separate facts, and collapsing them is what
+  kept real knights off the page: `chain: false` (correctly — three contracts are missing) was
+  also hiding the one collection that *does* exist. `/api/staking/config` now reports per side:
+  `collections.genesis.live`, `collections.knights.live`, `holdingsLive` and `stakingLive`.
+  `chain` still means what it always did. Precedence in `loadVault`: a live collection → real
+  holdings; else deployed staking contracts → the vault itself; else the labelled preview.
+- **Preview seeding stops the moment anything is live.** The Genesis side has no collection, so it
+  shows an empty amber state saying *"Genesis Knights have not been minted yet"* rather than five
+  invented knights sitting next to 45 real ones. Two sources of truth on one page is worse than
+  either alone.
+- **An incomplete read must travel as incomplete.** `readOwnedKnights` returns `complete`, which
+  means exactly one thing: the confirmed count equals `balanceOf`. When it is false the page says
+  the list is short and how many the contract reports. That is the case the whole interface exists
+  for — an unenumerable contract can produce a partial answer, and the only bad outcome is a
+  partial answer that looks finished.
+- **Ownership is read live even while staking is not.** `staked` is always empty and that is not a
+  placeholder: nothing can be staked until the staking contract exists.
+
 Verify it:
 
 ```bash
-node tools/check-staking.js        # 119 checks: week clock, tickets, capsule odds, actions
-node tools/check-rarity.js         # 35 checks: the economy, incl. capsule outcomes
+node tools/check-staking.js        # 143 checks: week clock, tickets, capsule odds, actions,
+                                   #   and the real-holdings wiring (fetch stubbed, no network)
+node tools/check-staking-chain.js  # 19 checks: the collection's shape and a live wallet read
+node tools/check-rarity.js         # 44 checks: the economy, incl. capsule outcomes
+node tools/check-identifiers.js    # 4 checks: every name a bundled module uses is defined
 ```
+
+`check-identifiers.js` is the one to run before believing a page works. It runs ESLint's
+`no-undef` over `app/` and `lib/` — the bundled modules, where a name is either imported or a
+browser global — and it exists because of a specific blank page: the Knights ladder rendered
+`{pct(knightsCap.ratioOfReference)}` for a `pct` that was never defined. **`next build` compiles
+that happily and no Node harness notices**, because none of them render React; the page just
+went *completely blank* the instant a player switched to the Knights side, a `ReferenceError`
+during render having unmounted the tree. It reports a line number instead. `public/` is
+deliberately excluded — those are classic scripts sharing globals across seventeen files by
+design, so every cross-file reference would be a false positive.
 
 In the browser, on `/staking`, after copying the battery into `public/`:
 
@@ -247,21 +332,111 @@ In the browser, on `/staking`, after copying the battery into `public/`:
 window.__check.reset(); await window.__check.staking(); window.__check.report();
 ```
 
-62 checks — tab ARIA wiring, arrow keys and the URL, the tick actually moving, staking and
-unstaking a knight, the claim refusing with a reason while the pool is `TBD`, no horizontal
-overflow, and every capsule offering only a payable tier (checked against the tier list the
-server returns, not against the page). It also covers the interactive layer: the ladder draws
-six bars whose counts sum to 1,024 and marks the bands the wallet holds, a selected band really
-filters the lists and the chip really clears them, the ring's offset stays inside its
-circumference, every knight wears a *published* band, and the projector appears exactly while
-the pool is undecided, moves when dragged and says it is not a promise. The battery puts back
-any knight it stakes. I checked these are not vacuous the same way as the rarity guards: with
+**77 checks on the current deployment** (86 when nothing is live, because the preview-only
+branches have more to assert) — tab ARIA wiring, arrow keys and the URL, no horizontal overflow,
+and every capsule offering only a payable tier (checked against the tier list the server returns,
+not against the page). It also covers the interactive layer: the ladder draws six bars whose
+counts sum to 1,024 and marks the bands the wallet holds, a selected band really filters the lists
+and the chip really clears them, the ring's offset stays inside its
+
+**The battery branches on what is deployed, and it has to.** It used to assume the preview, which
+made it fail *for being right*: it demanded an accrual figure on staked cards when nothing can be
+staked, and four capsule cards when there is no draw. It now reads `/api/staking/config` once into
+`HOLDINGS_LIVE` / `STAKING_LIVE` / `KNIGHTS_LIVE` and asserts whichever state it is looking at — so
+"nothing is staked" is a *pass* that also requires the page to explain itself, rather than a
+failure. When you add a state, branch on it here; do not soften an assertion into `|| true`.
+
+**Switching sides needs a fingerprint, not a presence test.** A collection switch now costs a
+chain round trip, and the wait cannot be "until a holdings note exists" — the *previous* side's
+note is still on screen the instant the click lands, so it returns immediately and every
+assertion after it reads the old side. `settle(before)` waits for the content to **change**:
+`sideFingerprint()` is the note text plus the card count, captured before the click.
+
+> This battery earned its keep again: it caught that the only way to **clear a band filter** lived
+> inside the `{mine.length > 1 && …}` Sort row, so a wallet holding none or one could select a band,
+> watch the list empty, and have nothing on screen to undo it. The escape now renders outside that
+> row, because a filter with no way out is a trap regardless of how many knights are behind it.
+circumference, every knight wears a *published* band, and the **economy panel draws the partition the vault is
+deployed with** — four lines whose shares and budgets are compared against what
+`/api/staking/config` serves, the weekly budget it is parting out, the epoch scale, the 90%
+rule and the horizon. The projector those checks used to cover is gone: it existed because the
+pool was undecided, and a number a player can drag is a number a player can mistake for a
+promise. The battery puts back any knight it stakes.
+
+> The one check that can fail for a reason that is not the code: *"it moves on its own as time
+> passes"*. A hidden page has its timers throttled, and the preview webview is often not
+> composited — check `document.hidden` before believing that failure. The economy page's
+> battery has the same exposure and is documented there in full. I checked these are not vacuous the same way as the rarity guards: with
 `has-mine` dropped, the bar height pinned to 50% and the filter chip removed, five named checks
 fail and the rest still pass.
 
 **Known and deliberate**, so it is not mistaken for a bug: with 200 capsules a week and few
 knights staked, one entry can expect most of a draw. That is the formula working; the raffle tab
 states the expected share rather than hiding it.
+
+### The economy page (`/tokenomics`)
+
+```bash
+# in the browser, on /tokenomics:  cp tools/check-all.js public/_check.js
+#                                  await import('/_check.js?v=' + Date.now())
+#                                  await window.__check.tokenomics()   # 23 checks
+```
+
+The token maths is asserted in Node and spent on `/staking` and `/mint`, but it had no
+*home*: the numbers a player would want to read were only in `WHITEPAPER.md`. `/tokenomics` is
+that home, and it is derived from `lib/reward-config.js` rather than from markup or an API, so
+a page that disagrees with the contract is not a reachable state.
+
+What it shows: the supply and the five-bucket distribution with each bucket's custody; the
+vault, its weekly budget and the four lines with the shares and budgets the vault is deployed
+with; the reward table at scale 1.00 for both collections; the capsule price curve with its
+break-even marker; and a **"what is not true yet"** list — the vault is unfunded, the
+contracts are undeployed, participation is an assumption, the Genesis mint price is undecided,
+and Points are a closed loop.
+
+**The one control is the scale demonstration**, and it is worth knowing why it is allowed to
+exist when the vault's pool slider was deleted: the pool was *unknowable*, while the scale is a
+published formula — `scale = min(1, budget ÷ last week's burn)` — whose behaviour at 1× is
+exactly the published table. The control is labelled a scenario, and the battery proves the cap
+holds at every position it can be dragged to.
+
+The battery is worth reading as a list of things a page can get wrong that a module cannot.
+It caught two real bugs on the first build:
+
+| Bug | How it rendered |
+|---|---|
+| Genesis bands carry `lo`/`hi`, not `hashPower` | *"1,024 knights, **NaN HP** at the bottom"* — a missing field, not a throw |
+| The page asked for `/css/theme.css`; the file is `/theme.css` | **No `box-sizing` reset and no `--accent-gold` at all.** Every DOM assertion still passed, because a 404 stylesheet throws nothing |
+
+The second is why the battery now fetches every stylesheet href and checks that a themed
+colour actually *applies* (`rgb(212, 175, 55)` not the inherited `rgb(232, 224, 212)`) rather
+than assuming it loaded. Both guards were proven non-vacuous by reinstating each bug:
+`/css/theme.css (404)`, an unresolvable colour, and `999 vs 975` horizontal overflow, in three
+named failures. The same missing reset also caused that overflow, so the two are one bug.
+
+**One environment note that will waste an hour if you don't know it.** A hidden page throttles
+its timers, and the preview webview is often not composited. A battery that sleeps between
+steps appears to *hang* rather than fail — one run took 7 minutes and still passed. Check
+`document.hidden` before believing a timeout.
+
+### Capsules are opened on `/mint`, not here
+
+The vault's Capsules tab shows what the wallet holds and hands the player off; the *opening*
+happens on the Summoning Chamber, in a panel drawn by `public/mint-page.js` (bumped to
+`?v=2`). It reads its price from the same `economy` object as the vault — **500 DNG at zero
+Knights rising to 5,000 at the 10,000 cap**, with the break-even marker at **57.46%** of the
+track (5,746 Knights, where the 200 weekly opens alone start covering both Knights reward
+lines). Three things about it are deliberate:
+
+- **The price is never typed into the markup.** A price that lives in two places is a price
+  that will eventually disagree with the contract; the panel quotes the model, and
+  `wallet.openCapsules()` sizes its approval from the contract's own `openPrice()`.
+- **`config.reason` is ignored on purpose.** That string explains why the *Staking Vault* is in
+  preview mode, which is not a fact about this page.
+- **The button says why it is dead.** `public/config.js` gained `CAPSULE_CONTRACTS` +
+  `getCapsuleContract()`, where an **empty string means "not deployed"** — a state the panel
+  reports in words rather than by attempting a call against nothing. Setting that one address
+  (and `CAPSULE_NFT` for the vault's read) is the whole switch.
 
 ### The Points Vault is not an engine dungeon
 
@@ -567,6 +742,112 @@ node tools/check-copies.js   # fails on a root duplicate, or a script loaded fro
   same hazard in slow motion; the check lists the ones that currently do, so the next person to
   edit one knows to add a version rather than assume the browser will notice.
 
+### The token maths (`lib/reward-config.js`, `tools/check-token-math.js`)
+
+```bash
+node tools/check-token-math.js    # 61 checks
+```
+
+**The economy is in its third revision, and the change of shape is the whole story.** The
+first two published *absolute reward promises* — "a Legendary clear pays 100 DNG, a Genesis
+clear pays 300" — and never bounded the total. The bound is the token supply, and at those
+rates all 1,024 Genesis Knights playing for a **single day** would have claimed **123% of it**.
+Nothing in the design said what happens when more players arrive than the table was sized for,
+because nothing in the design could.
+
+What replaced it, in `lib/reward-config.js`:
+
+| | v3 |
+|---|---|
+| Supply | **1,000,000,000 $DNG**, 18 decimals — distribution **45% reward vault / 30% liquidity / 15% treasury / 10% marketing (unvested) / 0% team** |
+| Reward vault | **450,000,000** — the only bucket that is spent |
+| Reference population | **50 Genesis (4.88%) + 500 Knights (5.0%)**, i.e. ~5% of each collection playing daily |
+| Weekly budget `W` | **1,415,120** (202,160/day), partitioned 29.68 / 26.71 / 22.95 / 20.66 across Genesis-dungeon, Genesis-staking, Knights-dungeon, Knights-staking |
+| As basis points | `2968 / 2671 / 2295 / 2066`, which is what `RewardVault`'s constructor takes — it reverts unless they sum to 10,000 |
+| Table at scale 1.0 | Genesis **300/clear × 4 runs**; Knights **12/20/36/60/100** on 5/5/4/3/4 runs |
+| Staking rule | **90% of dungeon income, per collection** — structural (`staking = 0.9 × dungeon`), not an amount |
+| Horizon | **2,226 days = 6.1 years** at the reference; **110 days** if every knight plays *and* stakes, with the scale falling to **×0.35** |
+| Knights cap | **10,000**; at the cap a knight earns **5.00%** of its reference income, because both Knights lines are fixed shares divided by twenty times as many knights |
+| Capsules | **200 a week**, open price ramping **500 → 5,000 DNG**; the crossover is **~5,746 Knights**, from which the weekly opens alone cover both Knights lines |
+
+**The mechanism that makes it safe is one scale.** Every payout is `table × epochScale`, where
+`epochScale = min(1, budget / lastWeekBurn)`. Above the reference the scale falls and **every
+published number moves down together**, so the tier ratios, the 90% rule and the split between
+the collections survive at whatever level is fundable. Two hard ceilings enforce it:
+`spentThisWeek ≤ lineBudget` per line, and `W = min(configured, vaultBalance ÷ 12 weeks)` — so
+**the vault can never outlive itself**, and a bug cannot drain it in a week. `RewardVault.sol`
+is where those live; see *Solidity: Foundry, and what is not installed*.
+
+**Why the reference population is published.** It is what sets `W`, and therefore the whole
+scale of the economy. Calibrating it to 250 Genesis and 1,000 Knights — ~24% of the collection
+— funded the same table for only **1.3 years**; at ~5% of each collection it funds it for
+**6.1 years**, with the same table and the same vault. The honest sentence to publish is
+*"the full table is payable to about 5% of each collection playing daily; above that, one
+scale moves every number down together, and the interface shows today's rate."*
+
+**Two figures that are already derived and must not be re-derived.** Expected daily earning is
+`Σ p · reward · runs`, **not** `E[reward/clear] × E[runs/day]` — the tiers that pay most also
+get the most runs, so the product of averages overstates it. And both Knights lines are
+returned *separately*: quoting a combined dungeon-and-staking figure against dungeon-only
+earnings is how an earlier draft of this plan arrived at "10% of reference" when the truth is
+**5%**, and the harness pins each line so that basis error cannot come back.
+
+The pages read this from one place. `app/api/staking/config` serves the model's `economy`
+object, and **`check-token-math` asserts that every field the two pages read is actually served**
+— the capsule panel once read `economy.capsulesPerWeek`, which the route carried only at the
+top level, and rendered *"the NaN weekly opens alone cover..."* with nothing failing anywhere.
+
+#### Superseded — the v2 arithmetic (history, not current state)
+
+Everything from here to the end of this subsection describes the **second** revision: a
+1,000,000 supply, a six-tier 10/17/30/75/150 table and a `TBD` pool. It is kept because the
+failure mode is the reason this section exists — three documents doing their own sums from two
+different tables, and a `TBD` that stayed `TBD` — not because any of the numbers are still
+true. The current numbers are the table above.
+
+
+The economy is described in three documents — `WHITEPAPER.md`, `GENESIS-HASH-POWER.md` and
+`tokenomics.md` — and each of them used to do its own sums. They disagreed with the code and
+with each other:
+
+| Claimed | Truth |
+|---|---|
+| An expected **78.8 $DNG/day** and a **6.3-day** payback (whitepaper §5.3, Genesis §6.2) | **83.5 $DNG/day**, **5.99 days** (26.18 clears). The old figure came from a six-tier table summing to **100.7%** that predated the removal of Mythic |
+| A `d1000` roll of 650/200/100/45/12/3 (`tokenomics.md`) | **1,010 faces on a thousand-sided die**, and 101% of outcomes |
+| Six tiers, 12–150 per clear, mint 500 | Five tiers, **10/17/30/75/150**. Every reward contract declares `RARITY_COUNT = 5`, so a sixth tier has no slot and reverts on claim |
+| One knight can claim ~28,771 $DNG a year | **30,478** — and the whole 1,000,000 supply is **32.8 knight-years** of full play |
+
+**The fix is that the numbers are now computed, not typed.** `lib/token-math.js` derives every
+published figure from `lib/knights.js` (`RARITY`) and `lib/staking-config.js` (capsule odds),
+and `tools/check-token-math.js` asserts both that the arithmetic is internally sound (Σp = 1,
+the tier count matches the contracts' slot count, a day of capacity is reward × runs) **and
+that the documents quote it** — a changed reward table fails the suite until the prose changes
+with it. `tokenomics.md` was rewritten as v2.0 around this; it is no longer a second universe.
+
+The harness also pins the payback comments in `public/characters.js`, which said *"25 dungeon
+ROI baseline"* for Uncommon long after the table had moved to 17 per clear — the note a
+developer reads while changing a reward was the stale one.
+
+**Two derivations worth not re-deriving.** Expected daily earning is
+`Σ p·reward·runs` = 83.5, **not** `E[reward/clear] × E[runs/day]` = 90.92: the tiers that pay
+most also get the most runs, so the product of averages overstates the truth by 9%. And the
+capsule yields (78.3 / 178.5 / 354.0 / 487.5 $DNG/day) are the same weighted-capacity figure
+per capsule — they were already correct.
+
+**The funding invariant, which is what any pool decision turns on.** A summon is the only
+inflow (500 $DNG) and there is no emission, so a weekly pool is a *mint cadence*: 15,000 $DNG a
+week means **30 summons every week, forever** (1,560 a year), and the published 35% reward
+bucket (350,000) is **11.48 knight-years** of play. The project has minted 78 knights in total.
+The interface shows `TBD` rather than an invented figure, and `WEEKLY_POOL_DNG` stays `null`
+until the cadence exists to fund it.
+
+**Still open, with a known cost each** (see `tokenomics.md` §9): the weekly pool, the capsule
+open cost (`CAPSULE_OPEN_COST_DNG = 0` today, which makes opening a capsule mint a knight for
+nothing — 10,400 free knights a year at **317× the total supply** of claim capacity), the split
+of the 200 weekly capsules across four types, and the Genesis mint price. Points are a
+**closed loop** (1,800/day ceiling, no conversion anywhere): that is safe only while nothing
+converts them, and `check-token-math` asserts no such conversion has appeared quietly.
+
 ### One rarity economy (`tools/check-rarity.js`)
 
 The rarity table used to be written down in four places — `public/config.js`, the engine's
@@ -627,6 +908,27 @@ Install Foundry (`foundryup`) before trusting a build result; the sources change
 
 - **Do not run `npm run build` while the dev server is up** — it overwrites `.next/`, and the dev
   server then 404s its own chunks (`/_next/static/chunks/...`). Restart it after any build.
+
+  The failure mode is worse than it sounds, and worth knowing because it is silent: the server
+  **stays up and keeps answering 200**, so the page renders its server HTML and looks merely
+  early — no error, no overlay. What is missing is `/main-app.js`, so **React never hydrates** and
+  the page is frozen exactly as the server sent it. A vault that had been working sits on
+  "OPENING THE VAULT" forever, and every DOM reading is consistent with it.
+
+  The check that separates this from "the code is broken": ask whether React attached. Zero
+  elements carrying a `__reactFiber$…` key means hydration never ran, which is a server problem,
+  not a page problem:
+
+  ```js
+  [...document.querySelectorAll('div')].filter((el) => Object.keys(el).some((k) => k.startsWith('__react'))).length
+  // 0 → hydrate never ran: restart the dev server with a clean .next/
+  // >0 → React is live, so read the console for the real error
+  ```
+
+  `rm -rf .next` before restarting; the dev server rebuilds it. Servicing the same question from
+  the shell: fetch every chunk the HTML references and confirm none is a 404. The bare
+  `/main-app.js` may 404 while `/main-app.js?v=<hash>` is fine — the `?v=` is part of how Next's
+  dev manifest resolves, so always test the URL as the page writes it.
 - Then register the preview: `register_preview` with `url: http://localhost:3000` and the
   listener pid from `netstat -ano | grep LISTENING | grep ":3000"`.
 

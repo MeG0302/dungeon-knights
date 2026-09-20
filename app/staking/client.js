@@ -9,9 +9,12 @@ import {
 } from '../../lib/points-client';
 import {
     CAPSULES_PER_WEEK, GENESIS_SUPPLY, HASH_POWER_BANDS, HASH_POWER_MAX, HASH_POWER_MIN,
-    TICKET_CAP_HOURS, WEEK_MS, bandFor, ticketsPerHour, weekEnd,
+    KNIGHTS_CAP, TICKET_CAP_HOURS, WEEK_MS, bandFor, ticketsPerHour, weekEnd,
 } from '../../lib/staking-config';
-import { applyAction, loadVault, refresh, SOURCE_PREVIEW } from '../../lib/staking-source';
+import {
+    COLLECTIONS, COLLECTION_LABELS, KNIGHTS_HASH_POWER,
+    applyAction, knightsYieldAtCap, loadVault, refresh, SOURCE_PREVIEW,
+} from '../../lib/staking-source';
 
 const TABS = [
     { key: 'staked', label: 'Staked' },
@@ -43,9 +46,21 @@ const SORTS = [
     { key: 'name', label: 'Name' },
 ];
 
-// The pool projector. Its range is deliberately wide and round: the point is to show how
-// the share maths behaves, not to propose a number the treasury has not agreed to.
-const GUESS_POOL = { min: 5000, max: 100000, step: 5000, start: 15000 };
+/**
+ * The four lines the weekly budget is partitioned into, in the order the vault's
+ * constructor takes them.
+ *
+ * The shares are not decoration: `RewardVault` is deployed with exactly these basis points
+ * and refuses a set that does not sum to 10,000, so what the page draws is what the
+ * contract enforces. Genesis's share is permanent — the uncapped Knights collection cannot
+ * dilute it by growing.
+ */
+const ECONOMY_LINES = [
+    { key: 'genesisDungeon', label: 'Genesis · dungeon', collection: 'genesis' },
+    { key: 'genesisStaking', label: 'Genesis · staking', collection: 'genesis' },
+    { key: 'knightsDungeon', label: 'Knights · dungeon', collection: 'knights' },
+    { key: 'knightsStaking', label: 'Knights · staking', collection: 'knights' },
+];
 
 // The draw ring's circumference, so the fill is `C × (1 - weekProgress)`.
 const RING_C = 2 * Math.PI * 19;
@@ -65,12 +80,15 @@ function sortKnights(list, sort) {
  * when this was written.
  */
 function tourSteps(live, actions) {
-    const now = () => live() || {};
+    // `collection` rides along so a step can tell which side of the vault it is describing:
+    // the rules differ in exactly one place, and a tour that told a Knights holder about the
+    // draw would be telling them about someone else's prize.
+    const now = () => ({ collection: 'genesis', ...(live() || {}) });
     return [
         {
             kind: 'think',
             mood: 'Welcome',
-            text: 'This is the Vault, where your Genesis Knights earn while you are away. Six steps — <strong>Next</strong> to follow me, <strong>Skip</strong> if you would rather explore.',
+            text: 'This is the Vault, where your knights earn while you are away — <strong>Genesis</strong> for yield and the weekly draw, <strong>Knights</strong> for yield only. Six steps — <strong>Next</strong> to follow me, <strong>Skip</strong> if you would rather explore.',
         },
         {
             kind: () => (now().connected ? 'ready' : 'alarm'),
@@ -89,10 +107,17 @@ function tourSteps(live, actions) {
         },
         {
             kind: 'brace',
-            mood: 'My Genesis',
+            mood: 'My knights',
             target: '[data-arya="genesis"]',
             text: () => {
                 const v = now();
+                // The two sides bank the same thing under different names, so the tour reads
+                // the collection it is actually standing on rather than assuming Genesis.
+                if (v.collection === 'knights') {
+                    return `A Knight's <strong>hash power</strong> is fixed by its tier — ${KNIGHTS_HASH_POWER.map((t) => t.hashPower).join(', ')} — and it is what it banks every hour it is staked. ${v.stakedCount
+                        ? `You have <strong>${v.stakedCount}</strong> staked with <strong>${v.hashPower}</strong> combined power.`
+                        : 'Stake one and its weight starts counting immediately.'} Same seven-day cap as Genesis, and unlike Genesis there is <strong>no draw</strong> on this side: Knights earn yield, and that is the whole of it.`;
+                }
                 return `Every Genesis Knight has a <strong>hash power</strong> between ${HASH_POWER_MIN.toLocaleString()} and ${HASH_POWER_MAX.toLocaleString()}, and it decides how fast it earns — a knight banks its hash power in tickets every hour it is staked. ${v.stakedCount
                     ? `You have <strong>${v.stakedCount}</strong> staked with <strong>${v.hashPower}</strong> combined power.`
                     : 'Stake one and its tickets start counting immediately.'} A knight stops earning tickets after a week, so the cap is seven days.`;
@@ -105,9 +130,9 @@ function tourSteps(live, actions) {
             text: () => {
                 const v = now();
                 if (v.poolDng === null) {
-                    return 'The weekly pool is not decided yet — the tokenomics are still being worked out — so the DNG figures read <strong>TBD</strong>. Your <em>share</em> of that pool is real and it grows every second while you watch.';
+                    return 'The weekly pool has not loaded yet, so the DNG figures are blank rather than guessed. Your <em>share</em> of that pool is real either way and it grows every second while you watch.';
                 }
-                return `A pool of <strong>${v.poolDng.toLocaleString()} DNG</strong> is split each week in proportion to tickets, and <strong>${CAPSULES_PER_WEEK}</strong> capsules go to the draw. Both are claimable without unstaking.`;
+                return `A pool of <strong>${v.poolDng.toLocaleString()} DNG</strong> is split each week in proportion to tickets, and <strong>${CAPSULES_PER_WEEK}</strong> capsules go to the draw. Both are claimable without unstaking. That pool is a <em>fixed share</em> of everything the vault releases, so the uncapped Knights collection cannot dilute it by growing.`;
             },
         },
         {
@@ -177,12 +202,31 @@ function fmtDng(value) {
     return `${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} DNG`;
 }
 
+/**
+ * A plain percentage, for a ratio the reader compares rather than tracks.
+ *
+ * Deliberately not `fmtShare`: that one widens to four decimals below 0.01% because a pool
+ * share starts microscopic. A comparison against a reference rate is always a whole number, so
+ * a figure like `5.0000%` would imply a precision the underlying model does not have.
+ */
+function fmtPercent(fraction, digits = 1) {
+    return `${(100 * (fraction || 0)).toFixed(digits)}%`;
+}
+
 export default function StakingClient() {
     const [phase, setPhase] = useState('boot');
     const [vault, setVault] = useState(null);
     const [address, setAddress] = useState(null);
     const [nowMs, setNowMs] = useState(() => Date.now());
     const [tab, setTab] = useState('staked');
+    // Which collection's side of the vault is on screen. Genesis stakes for yield *and* the
+    // weekly draw; Knights stake for yield only, because the draw's prize is a capsule and a
+    // capsule mints a Knight. Both draw from the same weekly budget, each from its own line.
+    const [collection, setCollection] = useState('genesis');
+    // `load` has to read the collection it was called *for*, not the one captured when the
+    // callback was created — a dependency would rebuild it and re-run the boot effect on
+    // every switch, reloading the vault twice.
+    const collectionRef = useRef('genesis');
     const [busy, setBusy] = useState(null);
     const [error, setError] = useState(null);
     const [notice, setNotice] = useState(null);
@@ -193,28 +237,89 @@ export default function StakingClient() {
     const [sort, setSort] = useState('power');
     const [bandFilter, setBandFilter] = useState(null);
     const [hoverBand, setHoverBand] = useState(null);
-    const [guessPool, setGuessPool] = useState(GUESS_POOL.start);
+    // The published economy, straight from `/api/staking/config`. Null only until the fetch
+    // lands, or if it fails — in which case the pool tile still shows the derived default
+    // and this panel is simply absent rather than wrong.
+    const [economy, setEconomy] = useState(null);
 
     const tourOpened = useRef(false);
     const tabRefs = useRef({});
+    // The config is fetched once, and the wallet load reuses it rather than asking twice.
+    const configRef = useRef(null);
 
     const live = useMemo(() => (vault ? refresh(vault, nowMs) : null), [vault, nowMs]);
 
+    // The published economy is a fact about the vault, not about the wallet — so it is
+    // fetched on mount rather than on connect. Someone deciding whether to connect should
+    // be able to read what the vault pays before they connect anything, and the panel used
+    // to be absent for exactly the visitors most likely to be reading it.
+    useEffect(() => {
+        let cancelled = false;
+        fetch('/api/staking/config')
+            .then((r) => (r.ok ? r.json() : null))
+            .then((config) => {
+                if (cancelled) return;
+                configRef.current = config;
+                setEconomy(config?.economy ?? null);
+            })
+            .catch(() => {
+                if (!cancelled) setEconomy(null);
+            });
+        return () => { cancelled = true; };
+    }, []);
+
     // -------------------------------------------------------------- boot the wallet
-    const load = useCallback(async (who) => {
-        setPhase('loading');
+    /**
+     * A JSON fetch that throws on a bad status.
+     *
+     * Passed into `loadVault` so the module stays free of network code: it is imported by the
+     * Node harness too, and a `fetch` call baked into it would make every check against it a
+     * network test. The holdings read needs it — it is the one thing on this page that comes
+     * from the chain rather than from arithmetic.
+     */
+    const fetchJson = useCallback(async (url) => {
+        const response = await fetch(url, { cache: 'no-store' });
+        if (!response.ok) throw new Error(`${url} answered ${response.status}`);
+        return response.json();
+    }, []);
+
+    /**
+     * Read the vault for a wallet.
+     *
+     * `quiet` keeps whatever is on screen while the new snapshot is fetched. It exists for
+     * switching sides: a wallet is already loaded, so replacing the whole vault with
+     * "OPENING THE VAULT" throws away a board the player was reading to show them a loader for
+     * data that is usually already in hand. On a chain deployment that is a network round trip
+     * of blank page, which is the moment a player is most likely to think the vault broke.
+     */
+    const load = useCallback(async (who, { quiet = false } = {}) => {
+        if (!quiet) setPhase('loading');
         try {
-            const config = await fetch('/api/staking/config').then((r) => (r.ok ? r.json() : null)).catch(() => null);
-            const next = await loadVault(who, { config, nowMs: Date.now() });
+            const config = configRef.current
+                || await fetch('/api/staking/config').then((r) => (r.ok ? r.json() : null)).catch(() => null);
+            const next = await loadVault(who, {
+                config,
+                nowMs: Date.now(),
+                collection: collectionRef.current,
+                fetchJson,
+            });
             setVault(next);
             setPhase('ready');
         } catch (err) {
             setError(err?.message || 'Could not open the vault.');
             setPhase('ready');
         }
-    }, []);
+    }, [fetchJson]);
 
     useEffect(() => {
+        // The collection is read *before* the wallet loads, so a bookmarked `?collection=knights`
+        // boots straight into the right vault rather than loading Genesis and then swapping.
+        const fromUrl = new URLSearchParams(window.location.search).get('collection');
+        if (fromUrl && COLLECTIONS.includes(fromUrl)) {
+            collectionRef.current = fromUrl;
+            setCollection(fromUrl);
+        }
+
         const stored = savedAddress();
         if (stored) {
             setAddress(stored);
@@ -249,6 +354,25 @@ export default function StakingClient() {
         window.history.replaceState(null, '', url);
         if (focus) tabRefs.current[key]?.focus();
     }, []);
+
+    /**
+     * Switch sides of the vault.
+     *
+     * The tab is deliberately *kept*, including when it is one of the Genesis-only ones —
+     * landing on the raffle tab with a Knights knight selected is the one moment a player is
+     * in the right place to be told that the draw is Genesis-only, and switching them away
+     * would hide the explanation behind a click they have no reason to make.
+     */
+    const selectCollection = useCallback((key) => {
+        if (key === collectionRef.current || !COLLECTIONS.includes(key)) return;
+        collectionRef.current = key;
+        setCollection(key);
+        setBandFilter(null);
+        const url = new URL(window.location.href);
+        url.searchParams.set('collection', key);
+        window.history.replaceState(null, '', url);
+        if (address) load(address, { quiet: true });
+    }, [address, load]);
 
     // Arrow keys move relative to the tab that has *focus*, not the one that is selected.
     // The two usually agree, but when they do not — a script, an assistive tool or a
@@ -392,7 +516,7 @@ export default function StakingClient() {
     const pageStyles = (
         <>
             <link rel="stylesheet" href="/theme.css" />
-            <link rel="stylesheet" href="/css/staking.css?v=3" />
+            <link rel="stylesheet" href="/css/staking.css?v=4" />
             <link rel="stylesheet" href="/css/wallet-widget.css" />
             <link rel="stylesheet" href="/css/arya.css?v=3" />
             <Script src="/arya.js?v=3" strategy="afterInteractive" />
@@ -431,6 +555,12 @@ export default function StakingClient() {
     // took the whole page down. Every write control now reads this flag instead.
     const canWrite = !!live?.canWrite;
     const isPreview = live?.source === SOURCE_PREVIEW;
+    const isKnights = collection === 'knights';
+    // What the chain read actually managed, when one was attempted. Kept whole rather than
+    // reduced to a count, because the honest part is not how many knights came back — it is
+    // whether that number is the *whole* answer.
+    const holdings = live?.holdings || null;
+    const collectionLabel = COLLECTION_LABELS[collection] || 'Genesis';
     const staked = live?.staked || [];
     const owned = live?.owned || [];
     const totals = live?.totals || {};
@@ -441,10 +571,20 @@ export default function StakingClient() {
     // The ladder counts every knight the wallet holds — staked or not — because it is a
     // picture of what this wallet owns, not of what it is currently earning with.
     const mine = [...staked, ...owned];
-    const bandMatches = (knight) => !bandFilter || bandFor(knight.hashPower)?.key === bandFilter;
-    const shownStaked = sortKnights(staked, sort).filter(bandMatches);
-    const shownOwned = sortKnights(owned, sort).filter(bandMatches);
-    const filterBand = bandFilter ? HASH_POWER_BANDS.find((band) => band.key === bandFilter) : null;
+    // One filter, two vocabularies: a Genesis knight is filtered by the hash-power band it
+    // falls in, a Knights knight by the tier it was minted at. The keys never collide
+    // (`spark`… vs `common`…), so one piece of state serves both and switching sides clears
+    // nothing a player did not set.
+    const groupOf = (knight) => (isKnights ? knight.rarity : bandFor(knight.hashPower)?.key);
+    const matchesFilter = (knight) => !bandFilter || groupOf(knight) === bandFilter;
+    const shownStaked = sortKnights(staked, sort).filter(matchesFilter);
+    const shownOwned = sortKnights(owned, sort).filter(matchesFilter);
+    const filterBand = !isKnights && bandFilter ? HASH_POWER_BANDS.find((band) => band.key === bandFilter) : null;
+    const filterTier = isKnights && bandFilter ? KNIGHTS_HASH_POWER.find((tier) => tier.key === bandFilter) : null;
+    // The ratio a Knights staker is actually exposed to: the pool is a fixed share of the
+    // budget, so filling the uncapped collection divides it. D irectly from the model rather
+    // than written into the copy, so it cannot drift from the economy page.
+    const knightsCap = knightsYieldAtCap();
 
     // Tickets bank at exactly the hash power, so the staked total *is* the hourly rate.
     const hourlyTickets = totals.hashPower || 0;
@@ -459,7 +599,7 @@ export default function StakingClient() {
 
     // One sentence for a screen reader, instead of a tick every second.
     const liveSummary = connected
-        ? `Staked knights ${totals.stakedCount || 0}. Tickets ${fmtInt(totals.myTickets)}. Pool share ${fmtShare(totals.myShare)}. ${poolDng === null ? 'Weekly pool not decided yet.' : `Claimable ${fmtDng(claimable)}.`}`
+        ? `${collectionLabel} staked ${totals.stakedCount || 0}. ${isKnights ? 'Yield weight' : 'Tickets'} ${fmtInt(totals.myTickets)}. Pool share ${fmtShare(totals.myShare)}. ${poolDng === null ? 'Weekly pool not decided yet.' : `Claimable ${fmtDng(claimable)}.`}`
         : 'No wallet connected.';
 
     const connectLabel = (() => {
@@ -501,27 +641,144 @@ export default function StakingClient() {
 
                 <div className="sv-main-row">
 
-                    {/* LEFT — the player's Genesis Knights */}
+                    {/* LEFT — the player's knights, on whichever side of the vault is selected */}
                     <aside className="side-panel sv-aside" data-arya="genesis">
                         <div className="side-panel-header">
                             <img src="assets/ui/shield.png" className="panel-header-icon" alt="" />
-                            My Genesis
+                            My {collectionLabel}
                             {previewBadge}
                         </div>
                         <div className="side-panel-body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+
+                            {/* The switch is the first thing in the panel, because the difference
+                                between the two sides is the one thing a player has to know
+                                before any number below means anything. */}
+                            <div className="sv-collections" role="group" aria-label="Which collection to stake">
+                                {COLLECTIONS.map((key) => (
+                                    <button
+                                        key={key}
+                                        type="button"
+                                        className={`sv-collection${collection === key ? ' is-on' : ''}`}
+                                        data-collection={key}
+                                        aria-pressed={collection === key}
+                                        onClick={() => selectCollection(key)}
+                                    >
+                                        <span className="sv-collection-label">{COLLECTION_LABELS[key]}</span>
+                                        <span className="sv-collection-sub">
+                                            {key === 'genesis' ? 'Yield + the weekly draw' : 'Yield only — no draw'}
+                                        </span>
+                                    </button>
+                                ))}
+                            </div>
 
                             {isPreview && (
                                 <p className="sv-preview-note">
                                     The staking contracts are not deployed yet, so this vault is showing a
                                     preview built from your address: the maths, the countdown and every
-                                    interaction are real, the holdings are not.
+                                    interaction are real, the holdings are not. The Knights vault needs its
+                                    own contract too, so both sides are preview alike.
                                 </p>
+                            )}
+
+                            {/* How the list below was arrived at, stated rather than implied.
+                                The collection has no on-chain list of owners, so a wallet's knights
+                                can only be found from its transfer history and then confirmed one by
+                                one. That method can come up short, and the two cases are different
+                                enough to say differently: unreachable is a failure to try, incomplete
+                                is a try that did not finish. Neither is allowed to look like a
+                                complete answer. */}
+                            {holdings && (
+                                <p className={`sv-holdings-note${holdings.ok && holdings.complete ? '' : ' is-partial'}`}>
+                                    {!holdings.ok ? (
+                                        <>{holdings.reason}</>
+                                    ) : owned.length === 0 && staked.length === 0 ? (
+                                        <>
+                                            This wallet holds no {isKnights ? 'knights' : 'Genesis Knights'}
+                                            {holdings.balance
+                                                ? <> — though the collection reports {fmtInt(holdings.balance)},
+                                                    {' '}so nothing could be confirmed. Treat that as a failed read, not an empty wallet.</>
+                                                : '.'}
+                                        </>
+                                    ) : (
+                                        <>
+                                            {fmtInt(owned.length + staked.length)} knight(s) read straight from the
+                                            collection, each confirmed against its owner.
+                                            {!holdings.complete && (
+                                                <>
+                                                    {' '}<strong>
+                                                        This collection cannot be enumerated, and it reports{' '}
+                                                        {fmtInt(holdings.balance)} owned — so treat this list as short.
+                                                    </strong>
+                                                </>
+                                            )}
+                                        </>
+                                    )}
+                                </p>
+                            )}
+
+                            {/* On the Knights side the ladder is a tier table rather than a
+                                distribution: the collection is uncapped, so there are no band
+                                counts to draw. What a Knight *can* hold is fixed by its tier
+                                — hash power is its dungeon capacity ÷ 4 — so the five powers
+                                are the only thing about the collection its owner can plan
+                                around. Same filter state, same tap-to-filter behaviour. */}
+                            {isKnights && (
+                                <div className="sv-ladder" data-arya="ladder">
+                                    <div className="sv-ladder-head">
+                                        <span className="sv-ladder-title">Tier ladder</span>
+                                        <span className="sv-ladder-rule sv-num">power = tier ÷ 4</span>
+                                    </div>
+                                    <div
+                                        className="sv-tier-ladder"
+                                        role="group"
+                                        aria-label="Hash power by tier. Selecting one filters your own knights."
+                                    >
+                                        {KNIGHTS_HASH_POWER.map((tier) => {
+                                            const here = mine.filter((k) => k.rarity === tier.key).length;
+                                            const active = bandFilter === tier.key;
+                                            return (
+                                                <button
+                                                    key={tier.key}
+                                                    type="button"
+                                                    className={`sv-tier-row${active ? ' is-active' : ''}${here ? ' has-mine' : ''}`}
+                                                    data-tier={tier.key}
+                                                    aria-pressed={active}
+                                                    aria-label={`${tier.name}: ${tier.hashPower} hash power, dropped ${(tier.dropRate * 100).toFixed(1)}% of the time, banking ${tier.hashPower} weight an hour while staked`}
+                                                    onClick={() => setBandFilter(active ? null : tier.key)}
+                                                >
+                                                    <span className="sv-tier-name">
+                                                        <span className="sv-tier-dot" style={{ background: tier.color }} aria-hidden="true" />
+                                                        {tier.name}
+                                                    </span>
+                                                    <span className="sv-tier-bar" aria-hidden="true">
+                                                        <span className="sv-tier-fill" style={{ width: `${tier.hashPower}%` }} />
+                                                    </span>
+                                                    <span className="sv-tier-hp sv-num">{tier.hashPower} HP</span>
+                                                    {here > 0 && <span className="sv-tier-mine sv-num">{here}</span>}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    <p className="sv-ladder-caption">
+                                        {filterTier ? (
+                                            <>Showing only <strong>{filterTier.name}</strong> below. Select it again to clear.</>
+                                        ) : (
+                                            <>
+                                                The pool here is a <strong>fixed share of the weekly budget</strong>, and the
+                                                collection is uncapped — so the more Knights that stake, the less each one
+                                                earns. At the cap of {fmtInt(KNIGHTS_CAP)} a staked Knight earns{' '}
+                                                <strong>{fmtPercent(knightsCap.ratioOfReference)}</strong> of the reference rate.
+                                            </>
+                                        )}
+                                    </p>
+                                </div>
                             )}
 
                             {/* The published distribution, drawn. The band counts *are* the promise
                                 the collection is sold on, so the ladder is a picture of the
                                 contract rather than decoration — and it doubles as the filter
                                 for the lists below, which is what makes it worth a tap. */}
+                            {!isKnights && (
                             <div className="sv-ladder" data-arya="ladder">
                                 <div className="sv-ladder-head">
                                     <span className="sv-ladder-title">Power ladder</span>
@@ -583,12 +840,15 @@ export default function StakingClient() {
                                     )}
                                 </p>
                             </div>
+                            )}
 
                             {!connected ? (
                                 <div className="sv-empty">
                                     <div className="sv-empty-title">The vault is closed</div>
                                     <div className="sv-empty-text">
-                                        Connect a wallet to see your Genesis Knights, stake them, and enter the weekly draw.
+                                        {isKnights
+                                            ? `Connect a wallet to see your Knights and stake them for yield. ${fmtInt(KNIGHTS_CAP)} of them at most, and no draw on this side — that is Genesis territory.`
+                                            : 'Connect a wallet to see your Genesis Knights, stake them, and enter the weekly draw.'}
                                     </div>
                                     <button
                                         className="btn btn-primary btn-md"
@@ -652,7 +912,7 @@ export default function StakingClient() {
                                             {poolDng === null
                                                 ? <>Accruing now · {fmtSharePrecise(myAccruedShare)} of the pool</>
                                                 : <>Accruing now · {fmtDng(claimable)}</>}
-                                            {hourlyTickets > 0 && <> · {fmtInt(hourlyTickets)} tickets/hour</>}
+                                            {hourlyTickets > 0 && <> · {fmtInt(hourlyTickets)} {isKnights ? 'weight' : 'tickets'}/hour</>}
                                         </p>
                                     </div>
 
@@ -676,16 +936,27 @@ export default function StakingClient() {
                                                     </button>
                                                 ))}
                                             </div>
-                                            {filterBand && (
-                                                <button
-                                                    type="button"
-                                                    className="sv-chip is-filter"
-                                                    onClick={() => setBandFilter(null)}
-                                                    title={`Show every band again`}
-                                                >
-                                                    {filterBand.name} ✕
-                                                </button>
-                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* The way out of a filter, and it deliberately lives *outside* the
+                                        Sort row above. It used to sit inside that row, which only
+                                        renders once there is more than one knight — so a wallet
+                                        holding none or one could select a band, watch the list empty,
+                                        and have nothing on screen to undo it. A filter with no way out
+                                        is a trap regardless of how many knights are behind it, so the
+                                        escape is not allowed to depend on the list it escaped from. */}
+                                    {(filterBand || filterTier) && (
+                                        <div className="sv-controls">
+                                            <span className="sv-controls-label">Filter</span>
+                                            <button
+                                                type="button"
+                                                className="sv-chip is-filter"
+                                                onClick={() => setBandFilter(null)}
+                                                title="Show every knight again"
+                                            >
+                                                {filterBand?.name || filterTier?.name} ✕
+                                            </button>
                                         </div>
                                     )}
 
@@ -730,6 +1001,7 @@ export default function StakingClient() {
                                                 <GenesisCard
                                                     key={knight.tokenId}
                                                     knight={knight}
+                                                    collection={collection}
                                                     busy={busy}
                                                     canWrite={canWrite}
                                                     onStake={() => run('stake', { tokenId: knight.tokenId })}
@@ -745,6 +1017,7 @@ export default function StakingClient() {
                                                     key={knight.tokenId}
                                                     knight={knight}
                                                     staked
+                                                    collection={collection}
                                                     busy={busy}
                                                     canWrite={canWrite}
                                                     nowMs={nowMs}
@@ -769,28 +1042,40 @@ export default function StakingClient() {
 
                             <div className="sv-tiles" data-arya="tiles">
                                 <div className="sv-tile">
-                                    <span className="sv-tile-label">Weekly pool</span>
+                                    <span className="sv-tile-label">{isKnights ? 'Weekly yield pool' : 'Weekly pool'}</span>
                                     <span className="sv-tile-value sv-num" aria-hidden="true">
                                         {poolDng === null ? 'TBD' : poolDng.toLocaleString()}
                                     </span>
                                     <span className="sv-tile-sub">
                                         {poolDng === null
-                                            ? 'Split by ticket share once the tokenomics are set.'
-                                            : 'DNG split each week in proportion to tickets.'}
+                                            ? 'Loading this week’s pool.'
+                                            : isKnights
+                                                ? 'The Knights staking line, split by staked weight.'
+                                                : 'The Genesis staking line, split by ticket share.'}
                                     </span>
                                 </div>
                                 <div className="sv-tile">
-                                    <span className="sv-tile-label">Capsules left</span>
+                                    <span className="sv-tile-label">{isKnights ? 'Raffle tickets' : 'Capsules left'}</span>
                                     <span className="sv-tile-value sv-num" aria-hidden="true">
-                                        {pool.left ?? CAPSULES_PER_WEEK} <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>/ {pool.capsulesPerWeek ?? CAPSULES_PER_WEEK}</span>
+                                        {isKnights
+                                            ? '0'
+                                            : <>{pool.left ?? CAPSULES_PER_WEEK} <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>/ {pool.capsulesPerWeek ?? CAPSULES_PER_WEEK}</span></>}
                                     </span>
                                     <span className="sv-tile-sub">
-                                        Your share of the draw: {fmtShare(totals.myShare)} → {fmtInt(totals.expectedCapsules)} expected
+                                        {isKnights
+                                            ? 'The weekly draw is Genesis-only — a capsule mints a Knight, so this side earns yield and nothing else.'
+                                            : <>Your share of the draw: {fmtShare(totals.myShare)} → {fmtInt(totals.expectedCapsules)} expected</>}
                                     </span>
                                 </div>
                                 <div className={`sv-tile ${week.phase === 'pending' ? 'is-drawing' : ''} ${week.phase === 'final' ? 'is-final' : ''}`}>
-                                    <span className="sv-tile-label">Next draw</span>
+                                    <span className="sv-tile-label">{isKnights ? 'Accruing now' : 'Next draw'}</span>
                                     <span className="sv-tile-row">
+                                        {isKnights ? (
+                                            <span className="sv-tile-value sv-num" aria-hidden="true">
+                                                {claimable === null ? '—' : fmtDng(claimable)}
+                                            </span>
+                                        ) : (
+                                        <>
                                         {/* The week, drawn: the ring fills from the last draw to
                                             the next one, so the countdown has a shape as well as
                                             a number. */}
@@ -812,52 +1097,109 @@ export default function StakingClient() {
                                                 now", which is a claim this page cannot make. */}
                                             {week.drawAt ? fmtCountdown(countdownMs, week.phase) : '—'}
                                         </span>
+                                        </>
+                                        )}
                                     </span>
                                     <span className="sv-tile-sub">
-                                        {week.phase === 'pending'
-                                            ? 'This week’s winners are being drawn.'
-                                            : week.drawAt
-                                                ? `Week ${week.number} · Monday 00:00 UTC${week.phase === 'final' ? ' · final hour' : ''}`
-                                                : 'Connect a wallet to load this week’s draw'}
+                                        {isKnights
+                                            ? 'Yield grows every second a Knight is staked, and it is claimable without unstaking.'
+                                            : week.phase === 'pending'
+                                                ? 'This week’s winners are being drawn.'
+                                                : week.drawAt
+                                                    ? `Week ${week.number} · Monday 00:00 UTC${week.phase === 'final' ? ' · final hour' : ''}`
+                                                    : 'Connect a wallet to load this week’s draw'}
                                     </span>
                                 </div>
                             </div>
 
-                            {/* The pool is the one unknown on this page, so it is the one thing a
-                                player can drag. Every figure is their own share recomputed live,
-                                and it says what it is: a projection, not a quote. */}
-                            {poolDng === null && (
-                                <div className="sv-project" data-arya="project">
-                                    <div className="sv-project-head">
-                                        <span className="sv-project-title">If the weekly pool were</span>
-                                        <span className="sv-project-value sv-num" aria-hidden="true">
-                                            {fmtInt(guessPool)} <span className="sv-project-unit">DNG</span>
+                            {/* What the vault releases, and how it is split.
+
+                                This panel used to be a slider labelled "if the weekly pool were" — it
+                                existed because the pool was genuinely undecided. It is now derived from
+                                the economy model the contracts are deployed from, so inviting a guess
+                                would be less honest than showing the partition the vault enforces. */}
+                            {economy && (
+                                <div className="sv-econ" data-arya="economy">
+                                    <div className="sv-econ-head">
+                                        <span className="sv-econ-title">How the vault pays out</span>
+                                        <span
+                                            className="sv-econ-scale sv-num"
+                                            title="Every published reward is the reference table multiplied by this. It only falls when participation outruns the budget, and one scale moves every number together — so the tier ratios and the 90% rule hold at whatever level is fundable."
+                                        >
+                                            SCALE ×{(economy.epochScale ?? 1).toFixed(2)}
                                         </span>
                                     </div>
-                                    <input
-                                        className="sv-range"
-                                        type="range"
-                                        min={GUESS_POOL.min}
-                                        max={GUESS_POOL.max}
-                                        step={GUESS_POOL.step}
-                                        value={guessPool}
-                                        onChange={(event) => setGuessPool(Number(event.target.value))}
-                                        aria-label="Imagine a different weekly pool, in DNG"
-                                        aria-valuetext={`${fmtInt(guessPool)} DNG a week`}
-                                    />
-                                    <div className="sv-project-ticks" aria-hidden="true">
-                                        {[GUESS_POOL.min, (GUESS_POOL.min + GUESS_POOL.max) / 2, GUESS_POOL.max].map((tick) => (
-                                            <span key={tick} className="sv-num">{(tick / 1000)}k</span>
-                                        ))}
+
+                                    <div className="sv-econ-budget">
+                                        <span className="sv-econ-budget-value sv-num">{fmtInt(economy.weeklyBudget)}</span>
+                                        <span className="sv-econ-budget-unit">
+                                            DNG released each week · {fmtInt(economy.dailyBudget)} a day
+                                        </span>
                                     </div>
-                                    <p className="sv-project-out">
-                                        Your <strong className="sv-num">{fmtShare(totals.myShare)}</strong> share{` `}
-                                        <span className="sv-project-arrow" aria-hidden="true">→</span>{` `}
-                                        <strong className="sv-num is-gold">{fmtDng(guessPool * (totals.myShare || 0))}</strong> a week
-                                    </p>
-                                    <p className="sv-project-fine">
-                                        A projection you are dragging, not a promise. The treasury sets this
-                                        number; until it does, every other figure reads TBD.
+
+                                    <div className="sv-econ-lines">
+                                        {ECONOMY_LINES.map((line) => {
+                                            const share = economy.shares?.[line.key] ?? 0;
+                                            const budget = economy.lineBudgets?.[line.key] ?? 0;
+                                            return (
+                                                <div
+                                                    className="sv-econ-line"
+                                                    key={line.key}
+                                                    data-collection={line.collection}
+                                                    data-active={line.collection === collection ? 'yes' : 'no'}
+                                                >
+                                                    <span className="sv-econ-line-label">{line.label}</span>
+                                                    <span className="sv-econ-line-bar" aria-hidden="true">
+                                                        <span className="sv-econ-line-fill" style={{ width: `${(share * 100).toFixed(1)}%` }} />
+                                                    </span>
+                                                    <span className="sv-econ-line-share sv-num">{(share * 100).toFixed(1)}%</span>
+                                                    <span className="sv-econ-line-dng sv-num">{fmtInt(budget)}</span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+
+                                    <dl className="sv-econ-facts">
+                                        <div>
+                                            <dt>Staking vs playing</dt>
+                                            <dd>
+                                                <strong className="sv-num">{Math.round((economy.stakingShareOfDungeon ?? 0) * 100)}%</strong> of
+                                                dungeon income, per collection
+                                            </dd>
+                                        </div>
+                                        <div>
+                                            <dt>Vault horizon</dt>
+                                            <dd>
+                                                <strong className="sv-num">
+                                                    {economy.horizonDays ? (economy.horizonDays / 365.25).toFixed(1) : '—'} years
+                                                </strong>{` `}
+                                                at the reference · {fmtInt(economy.rewardVaultDng)} DNG held
+                                            </dd>
+                                        </div>
+                                        <div>
+                                            <dt>If everyone played</dt>
+                                            <dd>
+                                                <strong className="sv-num">{fmtInt(economy.worstCaseHorizonDays)} days</strong>, scale falling
+                                                to ×{(economy.worstCaseScale ?? 0).toFixed(2)}
+                                            </dd>
+                                        </div>
+                                        <div>
+                                            <dt>Capsule open</dt>
+                                            <dd>
+                                                <strong className="sv-num">{fmtInt(economy.capsuleOpenPriceAtZero)} DNG</strong> rising to{` `}
+                                                {fmtInt(economy.capsuleOpenPriceAtCap)} at {fmtInt(economy.knightsCap)} Knights
+                                            </dd>
+                                        </div>
+                                    </dl>
+
+                                    <p className="sv-econ-fine">
+                                        The published table is sized for {fmtInt(economy.reference?.genesisActive)} Genesis and{` `}
+                                        {fmtInt(economy.reference?.knightsActive)} Knights playing daily — about{` `}
+                                        {Math.round((((economy.reference?.utilisation?.genesis ?? 0)
+                                            + (economy.reference?.utilisation?.knights ?? 0)) / 2) * 100)}% of each
+                                        collection. Past that, one scale moves every figure down together, so the tier
+                                        ratios and the staking rule survive. The budget is capped at the vault balance
+                                        ÷ {fmtInt(economy.minWeeks)} weeks, so it can never promise more than it holds.
                                     </p>
                                 </div>
                             )}
@@ -895,9 +1237,9 @@ export default function StakingClient() {
                                         <div className="sv-empty">
                                             <div className="sv-empty-title">Nothing staked yet</div>
                                             <div className="sv-empty-text">
-                                                Stake a Genesis Knight and two things start at once: tickets for the weekly
-                                                draw, and a share of the weekly DNG pool that grows every second.
-                                                Staking is a transaction — you approve the vault once, then stake.
+                                                {isKnights
+                                                    ? `Stake a Knight and one thing starts: a share of the weekly yield pool that grows every second. There is no draw on this side — that is Genesis territory. Staking is a transaction, so you approve the vault once and then stake.`
+                                                    : 'Stake a Genesis Knight and two things start at once: tickets for the weekly draw, and a share of the weekly DNG pool that grows every second. Staking is a transaction — you approve the vault once, then stake.'}
                                             </div>
                                         </div>
                                     ) : (
@@ -905,8 +1247,7 @@ export default function StakingClient() {
                                             <div className="sv-rows">
                                                 <div className="sv-row sv-row-head">
                                                     <span>Knight</span>
-                                                    <span className="sv-col-hide-narrow">Power</span>
-                                                    <span className="sv-col-hide-narrow">Tickets</span>
+                                                    <span className="sv-col-hide-narrow">Power</span>                                                            <span className="sv-col-hide-narrow">{isKnights ? 'Weight' : 'Tickets'}</span>
                                                     <span>Accrued share</span>
                                                     <span />
                                                 </div>
@@ -959,6 +1300,25 @@ export default function StakingClient() {
                             </section>
 
                             <section className="sv-panel" id="sv-panel-raffle" role="tabpanel" aria-labelledby="sv-tab-raffle" hidden={tab !== 'raffle'}>
+                                {isKnights ? (
+                                    /* The refusal is a panel rather than a hidden tab: the tab stays
+                                       visible and selectable so this is *findable*, and the reason
+                                       is the most useful thing on the page for a Knights holder
+                                       who is looking for a draw they were never in. */
+                                    <div className="sv-empty" data-state="raffle-genesis-only">
+                                        <div className="sv-empty-title">The weekly draw is Genesis-only</div>
+                                        <div className="sv-empty-text">
+                                            Its prize is a capsule, and a capsule mints a Knight — so a Knights stake
+                                            entering it would be paid twice from the same faucet. This side stakes for{' '}
+                                            <strong>yield</strong> instead: {fmtInt(poolDng || 0)} DNG a week at the reference,
+                                            split by staked weight, claimable without unstaking.
+                                        </div>
+                                        <button className="btn btn-primary btn-md" onClick={() => selectCollection('genesis')}>
+                                            Stake a Genesis Knight instead
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <>
                                     <div className="sv-bulk">
                                         <span className="sv-bulk-note">
                                             {live?.entries?.length
@@ -986,7 +1346,7 @@ export default function StakingClient() {
                                             <div className="sv-row sv-row-head">
                                                 <span>Knight</span>
                                                 <span className="sv-col-hide-narrow">Power</span>
-                                                <span className="sv-col-hide-narrow">Tickets</span>
+                                                <span className="sv-col-hide-narrow">{isKnights ? 'Weight' : 'Tickets'}</span>
                                                 <span>Expected</span>
                                                 <span />
                                             </div>
@@ -1076,9 +1436,26 @@ export default function StakingClient() {
                                         The draw takes 200 winning ticket numbers from the whole pool and awards one
                                         capsule each. With few knights staked, one entry can take most of a week.
                                     </p>
+                                    </>
+                                )}
                             </section>
 
                             <section className="sv-panel" id="sv-panel-capsules" role="tabpanel" aria-labelledby="sv-tab-capsules" hidden={tab !== 'capsules'}>
+                                {isKnights ? (
+                                    <div className="sv-empty" data-state="capsules-genesis-only">
+                                        <div className="sv-empty-title">Capsules are the Genesis draw&rsquo;s prize</div>
+                                        <div className="sv-empty-text">
+                                            A capsule is awarded to a staked Genesis Knight and opened in the Summoning
+                                            Chamber, where it mints a Knight. This side of the vault is where those
+                                            Knights come to earn — {fmtInt(poolDng || 0)} DNG a week, split by staked
+                                            weight.
+                                        </div>
+                                        <button className="btn btn-secondary btn-md" onClick={() => { window.location.href = '/mint'; }}>
+                                            Open capsules in the Summoning Chamber
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <>
                                     <p className="sv-summary-label">
                                         Capsules are won in the draw and opened in the Summoning Chamber, where the
                                         knight inside is revealed. These are the published tables: every outcome is a tier
@@ -1115,6 +1492,8 @@ export default function StakingClient() {
                                             </div>
                                         ))}
                                     </div>
+                                    </>
+                                )}
                             </section>
 
                             {!canWrite && connected && (
@@ -1155,7 +1534,13 @@ export default function StakingClient() {
  * `staked` decides whether it is showing what the knight is earning or what it could
  * earn, and the staked face is the one with live numbers on it.
  */
-function GenesisCard({ knight, staked = false, busy, canWrite, nowMs, onStake, onClaim, onUnstake }) {
+function GenesisCard({
+    knight, staked = false, busy, canWrite, nowMs, onStake, onClaim, onUnstake, collection = 'genesis',
+}) {
+    // The card is the same card on both sides — a stake is a stake — but what the hours
+    // *bank* is not: Genesis banks tickets into the weekly draw, Knights bank weight into
+    // the yield split. Naming it correctly is the difference between a number and a promise.
+    const unit = collection === 'knights' ? 'weight' : 'tickets';
     const hours = staked ? (nowMs - knight.stakedAt) / 3_600_000 : 0;
     // The bar measures position inside the collection's published range, not the raw
     // number: at 300–1000 a raw value would peg the bar full for every knight.
@@ -1213,14 +1598,14 @@ function GenesisCard({ knight, staked = false, busy, canWrite, nowMs, onStake, o
             {/* Tickets are time, and the cap is the one deadline a staker has to plan
                 around — so it is drawn rather than implied. */}
             {staked && (
-                <div className="sv-cap" title={`A staked knight banks tickets for ${TICKET_CAP_HOURS} hours, then stops until it is restaked`}>
+                <div className="sv-cap" title={`A staked knight banks ${unit} for ${TICKET_CAP_HOURS} hours, then stops until it is restaked`}>
                     <span className="sv-cap-track" aria-hidden="true">
                         <span className={`sv-cap-fill${capped ? ' is-capped' : ''}`} style={{ width: `${capPct}%` }} />
                     </span>
                     <span className="sv-cap-note sv-num" aria-hidden="true">
                         {capped
-                            ? `${fmtInt(rate)} tickets/hour · cap reached, no more bank`
-                            : `${fmtInt(rate)} tickets/hour · ${fmtInt(TICKET_CAP_HOURS - hours)}h left`}
+                            ? `${fmtInt(rate)} ${unit}/hour · cap reached, no more bank`
+                            : `${fmtInt(rate)} ${unit}/hour · ${fmtInt(TICKET_CAP_HOURS - hours)}h left`}
                     </span>
                 </div>
             )}

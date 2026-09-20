@@ -31,6 +31,7 @@ class LandingPage {
         this.marketplaceBtn.addEventListener('mouseenter', startMusic, { once: true });
         this.pointsBtn.addEventListener('mouseenter', startMusic, { once: true });
         this.stakingBtn.addEventListener('mouseenter', startMusic, { once: true });
+        this.economyBtn.addEventListener('mouseenter', startMusic, { once: true });
         this.leaderboardBtn.addEventListener('mouseenter', startMusic, { once: true });
         
         // Also try on any click
@@ -43,6 +44,7 @@ class LandingPage {
         this.marketplaceBtn = document.getElementById('marketplaceBtn');
         this.pointsBtn = document.getElementById('pointsBtn');
         this.stakingBtn = document.getElementById('stakingBtn');
+        this.economyBtn = document.getElementById('economyBtn');
         this.leaderboardBtn = document.getElementById('leaderboardLandingBtn');
         
         // Stats elements
@@ -196,6 +198,14 @@ class LandingPage {
                 window.audioManager.play('button_click');
             }
             window.location.href = '/points';
+        });
+
+        // The $DNG economy — every published number, in one place
+        this.economyBtn.addEventListener('click', () => {
+            if (window.audioManager) {
+                window.audioManager.play('button_click');
+            }
+            window.location.href = '/tokenomics';
         });
 
         

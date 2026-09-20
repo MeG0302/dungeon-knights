@@ -1,5 +1,7 @@
 // Character System - Stats, Rarity, and Knight Management
-// Rarity system based on CONFIG (Uncommon = 25 dungeon ROI baseline)
+// Rarity system based on CONFIG. The payback figures in the comments below are derived in
+// lib/token-math.js and asserted against these comments by tools/check-token-math.js, so
+// they cannot drift the way the baseline note here did when the reward table changed.
 
 const RARITY = {
     COMMON: { 
@@ -7,40 +9,45 @@ const RARITY = {
         multiplier: 1.0, 
         color: '#9E9E9E', 
         dropRate: 0.50, // 50%
-        dungeonReward: 10, // 50 dungeons to ROI (10-day @ 5/day)
-        dailyRuns: 5 // 5 runs/day = 50 DNG/day = 10 day ROI
+        dungeonReward: 12,
+        dailyRuns: 5, // 42 clears to ROI · 8.3 days at 5 runs/day
+        hashPower: 15 // capacity / 4 — what makes staking pay 90% of playing
     },
     UNCOMMON: { 
         name: 'Uncommon', 
         multiplier: 1.7, 
         color: '#4CAF50', 
         dropRate: 0.30, // 30%
-        dungeonReward: 17, // Must match contract V2
-        dailyRuns: 5 // 5 runs/day = 85 DNG/day
+        dungeonReward: 20,
+        dailyRuns: 5, // 25 clears to ROI · 5.0 days at 5 runs/day
+        hashPower: 25
     },
     RARE: { 
         name: 'Rare', 
         multiplier: 3.0, 
         color: '#2196F3', 
         dropRate: 0.15, // 15%
-        dungeonReward: 30, // ~17 dungeons to ROI
-        dailyRuns: 4 // 4 runs/day = 120 DNG/day = 4.2 day ROI
+        dungeonReward: 36,
+        dailyRuns: 4, // 14 clears to ROI · 3.5 days at 4 runs/day
+        hashPower: 36
     },
     EPIC: { 
         name: 'Epic', 
         multiplier: 7.5, 
         color: '#9C27B0', 
         dropRate: 0.04, // 4%
-        dungeonReward: 75, // ~7 dungeons to ROI
-        dailyRuns: 3 // 3 runs/day = 225 DNG/day = 2.2 day ROI
+        dungeonReward: 60,
+        dailyRuns: 3, // 9 clears to ROI · 2.8 days at 3 runs/day
+        hashPower: 45
     },
     LEGENDARY: { 
         name: 'Legendary', 
         multiplier: 15.0, 
         color: '#FFD700', 
         dropRate: 0.01, // 1%
-        dungeonReward: 150, // ~3 dungeons to ROI (15x Common)
-        dailyRuns: 4 // 4 runs/day = 600 DNG/day = 0.8 day ROI
+        dungeonReward: 100,
+        dailyRuns: 4, // 5 clears to ROI · 1.3 days at 4 runs/day
+        hashPower: 100
     }
 };
 

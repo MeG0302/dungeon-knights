@@ -13,6 +13,20 @@ interface IKnightNFT {
         external view returns (address owner, uint8 rarity, string memory rarityName);
 }
 
+/// @notice The fixed 1,024-supply collection. It carries hash power but no rarity enum:
+///         every Genesis Knight pays the same per clear, so only ownership is checked.
+interface IGenesisKnights {
+    function ownerOf(uint256 tokenId) external view returns (address);
+}
+
+/// @notice The funded pot every reward is paid from (see `RewardVault.sol`).
+interface IRewardVault {
+    /// @dev Line indices are `RewardVault`'s: 0 Genesis dungeon, 1 Genesis staking,
+    ///      2 Knights dungeon, 3 Knights staking. `pay` enforces the line's weekly budget
+    ///      and the vault balance, and reverts rather than overpaying.
+    function pay(uint8 line, address to, uint256 amount) external;
+}
+
 /// @title DungeonKnightsGameV4 - Signed Runs
 /// @notice V3 paid any batch of runs an address sent, which meant a script that never
 ///         opened the game could claim the full daily allowance — the only things V3
@@ -40,6 +54,23 @@ contract DungeonKnightsGameV4 is Ownable2Step, ReentrancyGuard {
     uint256 public constant DUNGEON_COUNT    = 5;     // 1=Crypts … 5=Void Rift
     uint256 public constant MAX_RECEIPT_LIFE = 1 days; // an unused receipt may not outlive this
 
+    /// @notice Which collection a receipt's knights belong to.
+    /// @dev A Genesis Knight and a summonable Knight can share a token id (1…1024), so the
+    ///      contract has to be told which collection to check ownership in. Without this a
+    ///      receipt signed for a Genesis run could be spent against a summonable knight with
+    ///      the same id, and vice versa.
+    enum KnightType { SUMMONABLE, GENESIS }
+
+    /// @notice Genesis pays a flat 300 DNG a clear and gets 4 runs a day, whatever its hash
+    ///         power. Hash power moves its *staking* income only — that is the collection's
+    ///         whole design, so the flat pay is a constant here rather than a table.
+    uint256 public constant GENESIS_REWARD    = 300 ether;
+    uint8   public constant GENESIS_DAILY_CAP = 4;
+
+    /// @dev `RewardVault`'s line indices, named so the call sites cannot be misread.
+    uint8 public constant VAULT_LINE_GENESIS_DUNGEON = 0;
+    uint8 public constant VAULT_LINE_KNIGHTS_DUNGEON = 2;
+
     /// @notice DNG paid per completed run, indexed by rarity. 18 decimals.
     /// @dev 0=common, 1=uncommon, 2=rare, 3=epic, 4=legendary — unchanged from V3.
     uint256[RARITY_COUNT] public rarityReward;
@@ -59,6 +90,19 @@ contract DungeonKnightsGameV4 is Ownable2Step, ReentrancyGuard {
     /// @dev The nonce is chosen by the backend, so this is the replay guard and it
     ///      needs no database behind it.
     mapping(address => mapping(uint256 => bool)) public usedNonce;
+
+    /// @notice Genesis run counters, kept apart from `knightState` because the two
+    ///         collections' token ids overlap — id 7 exists in both.
+    mapping(uint256 => KnightState) public genesisState;
+
+    /// @notice The Genesis collection and the vault rewards are paid from.
+    /// @dev Both may be zero. A zero Genesis address disables the Genesis path with an
+    ///      explicit revert rather than checking ownership in the wrong contract. A zero
+    ///      vault address falls back to paying from this contract's own balance — what V3
+    ///      did. That fallback is for testnet; it is not the funded path, and it has no
+    ///      weekly ceiling at all.
+    IGenesisKnights public genesisNFT;
+    IRewardVault    public rewardVault;
 
     bool public paused;
 
@@ -80,6 +124,8 @@ contract DungeonKnightsGameV4 is Ownable2Step, ReentrancyGuard {
     event RarityRewardUpdated(uint8 rarity, uint256 reward);
     event DailyCapUpdated(uint8 rarity, uint8 cap);
     event PausedSet(bool paused);
+    event GenesisNFTSet(address indexed genesisNFT);
+    event RewardVaultSet(address indexed rewardVault);
     event Funded(address indexed from, uint256 amount);
     event TokensWithdrawn(address indexed to, uint256 amount);
 
@@ -90,12 +136,13 @@ contract DungeonKnightsGameV4 is Ownable2Step, ReentrancyGuard {
     /// @param expiry     Unix time after which the receipt is void.
     /// @param signature  65-byte signature from `trustedSigner` (see receiptHash).
     struct SignedRun {
-        uint256[] knightIds;
-        uint256   dungeonId;
-        uint256   reward;
-        uint256   nonce;
-        uint256   expiry;
-        bytes     signature;
+        uint256[]  knightIds;
+        uint256    dungeonId;
+        uint256    reward;
+        uint256    nonce;
+        uint256    expiry;
+        KnightType knightType; // which collection these ids belong to
+        bytes      signature;
     }
 
     constructor(address _knightNFT, address _dngToken, address _trustedSigner) Ownable(msg.sender) {
@@ -107,14 +154,19 @@ contract DungeonKnightsGameV4 is Ownable2Step, ReentrancyGuard {
         dngToken  = IERC20(_dngToken);
         trustedSigner = _trustedSigner;
 
-        // Rarity rewards — identical to V3 so balances and payouts do not shift.
-        rarityReward[0] =  10 ether; // Common
-        rarityReward[1] =  17 ether; // Uncommon
-        rarityReward[2] =  30 ether; // Rare
-        rarityReward[3] =  75 ether; // Epic
-        rarityReward[4] = 150 ether; // Legendary
+        // The published reward table — `lib/knights.js`, re-derived and asserted by
+        // `tools/check-token-math.js`. It is the third revision of this ladder: V3-Simple,
+        // which is what is deployed today, still pays 10/17/30/75/150. These are the rates
+        // the site advertises, which is why the deployment candidate has to carry them and
+        // `tools/check-rarity.js` refuses to let a candidate keep the old numbers.
+        rarityReward[0] =  12 ether; // Common
+        rarityReward[1] =  20 ether; // Uncommon
+        rarityReward[2] =  36 ether; // Rare
+        rarityReward[3] =  60 ether; // Epic
+        rarityReward[4] = 100 ether; // Legendary
 
-        // Daily run limits — identical to V3.
+        // Daily run limits — reward x runs is each tier's capacity, and hash power is
+        // derived from it (`capacity / 4`) so staking pays exactly 90% of playing.
         dailyCap[0] = 5; // Common
         dailyCap[1] = 5; // Uncommon
         dailyCap[2] = 4; // Rare
@@ -151,7 +203,8 @@ contract DungeonKnightsGameV4 is Ownable2Step, ReentrancyGuard {
         uint256 dungeonId,
         uint256 reward,
         uint256 nonce,
-        uint256 expiry
+        uint256 expiry,
+        KnightType knightType
     ) public view returns (bytes32) {
         return keccak256(abi.encode(
             player,
@@ -160,6 +213,7 @@ contract DungeonKnightsGameV4 is Ownable2Step, ReentrancyGuard {
             reward,
             nonce,
             expiry,
+            knightType,
             block.chainid,
             address(this)
         ));
@@ -177,6 +231,9 @@ contract DungeonKnightsGameV4 is Ownable2Step, ReentrancyGuard {
         uint32  today       = currentDayIndex();
         uint256 totalReward = 0;
         uint256 totalKnights = 0;
+        // Tracked separately because the two collections draw on different vault lines.
+        uint256 genesisReward    = 0;
+        uint256 summonableReward = 0;
 
         for (uint256 i = 0; i < runs.length; i++) {
             SignedRun calldata run = runs[i];
@@ -190,7 +247,7 @@ contract DungeonKnightsGameV4 is Ownable2Step, ReentrancyGuard {
 
             bytes32 digest = keccak256(abi.encodePacked(
                 "\x19Ethereum Signed Message:\n32",
-                receiptHash(msg.sender, run.knightIds, run.dungeonId, run.reward, run.nonce, run.expiry)
+                receiptHash(msg.sender, run.knightIds, run.dungeonId, run.reward, run.nonce, run.expiry, run.knightType)
             ));
             require(_recover(digest, run.signature) == trustedSigner, "Bad signature");
 
@@ -203,25 +260,16 @@ contract DungeonKnightsGameV4 is Ownable2Step, ReentrancyGuard {
 
             for (uint256 j = 0; j < run.knightIds.length; j++) {
                 uint256 knightId = run.knightIds[j];
+                uint8   rarity   = 0;
+                uint256 reward;
 
-                require(knightNFT.ownerOf(knightId) == msg.sender, "Not your knight");
-
-                (, uint8 rarity, ) = knightNFT.getKnightInfo(knightId);
-                require(rarity < RARITY_COUNT, "Bad rarity");
-
-                KnightState storage ks = knightState[knightId];
-
-                if (ks.dayIndex != today) {
-                    ks.dayIndex = today;
-                    ks.runsUsed = 0;
+                if (run.knightType == KnightType.GENESIS) {
+                    reward = _spendGenesis(knightId, today);
+                    genesisReward += reward;
+                } else {
+                    (reward, rarity) = _spendSummonable(knightId, today);
+                    summonableReward += reward;
                 }
-
-                require(ks.runsUsed < dailyCap[rarity], "No runs left today");
-
-                uint256 reward = rarityReward[rarity];
-
-                ks.runsUsed      += 1;
-                ks.totalClaimed  += reward;
 
                 // Accumulated per run, then checked against the signed total below.
                 expected += reward;
@@ -246,8 +294,21 @@ contract DungeonKnightsGameV4 is Ownable2Step, ReentrancyGuard {
             totalKnights += run.knightIds.length;
         }
 
-        require(dngToken.balanceOf(address(this)) >= totalReward, "Treasury empty");
-        dngToken.safeTransfer(msg.sender, totalReward);
+        // Pay from the vault when one is configured: it enforces the week's line budget and
+        // the `balance / MIN_WEEKS` ceiling, which is what keeps the published table inside
+        // what the project can actually fund. Without a vault this falls back to this
+        // contract's own balance — the V3 behaviour, with no weekly bound at all.
+        if (address(rewardVault) != address(0)) {
+            if (summonableReward > 0) {
+                rewardVault.pay(VAULT_LINE_KNIGHTS_DUNGEON, msg.sender, summonableReward);
+            }
+            if (genesisReward > 0) {
+                rewardVault.pay(VAULT_LINE_GENESIS_DUNGEON, msg.sender, genesisReward);
+            }
+        } else {
+            require(dngToken.balanceOf(address(this)) >= totalReward, "Treasury empty");
+            dngToken.safeTransfer(msg.sender, totalReward);
+        }
 
         emit RewardsClaimed(msg.sender, totalReward, runs.length, totalKnights);
     }
@@ -255,6 +316,47 @@ contract DungeonKnightsGameV4 is Ownable2Step, ReentrancyGuard {
     /// @dev Self-contained ECDSA recovery: returns address(0) for a malformed,
     ///      low-s-invalid or high-s (malleable) signature, so a bad receipt can never
     ///      recover the trusted signer by accident.
+    /// @dev Charges one run against a summonable knight and returns what it pays.
+    ///      Split out of the claim loop so the two collections' paths stay legible: this one
+    ///      reads rarity, which decides the reward, and the Genesis one does not.
+    function _spendSummonable(uint256 knightId, uint32 today)
+        internal
+        returns (uint256 reward, uint8 rarity)
+    {
+        require(knightNFT.ownerOf(knightId) == msg.sender, "Not your knight");
+
+        (, rarity, ) = knightNFT.getKnightInfo(knightId);
+        require(rarity < RARITY_COUNT, "Bad rarity");
+
+        KnightState storage ks = knightState[knightId];
+        if (ks.dayIndex != today) {
+            ks.dayIndex = today;
+            ks.runsUsed = 0;
+        }
+        require(ks.runsUsed < dailyCap[rarity], "No runs left today");
+
+        ks.runsUsed += 1;
+        reward = rarityReward[rarity];
+        ks.totalClaimed += reward;
+    }
+
+    /// @dev Charges one run against a Genesis Knight. Flat pay, and its own counter space.
+    function _spendGenesis(uint256 knightId, uint32 today) internal returns (uint256 reward) {
+        require(address(genesisNFT) != address(0), "Genesis path disabled");
+        require(genesisNFT.ownerOf(knightId) == msg.sender, "Not your Genesis knight");
+
+        KnightState storage gs = genesisState[knightId];
+        if (gs.dayIndex != today) {
+            gs.dayIndex = today;
+            gs.runsUsed = 0;
+        }
+        require(gs.runsUsed < GENESIS_DAILY_CAP, "No runs left today");
+
+        gs.runsUsed += 1;
+        reward = GENESIS_REWARD;
+        gs.totalClaimed += reward;
+    }
+
     function _recover(bytes32 digest, bytes calldata signature) internal pure returns (address) {
         if (signature.length != 65) return address(0);
 
@@ -309,6 +411,19 @@ contract DungeonKnightsGameV4 is Ownable2Step, ReentrancyGuard {
         require(rarity < RARITY_COUNT, "Bad rarity");
         dailyCap[rarity] = cap;
         emit DailyCapUpdated(rarity, cap);
+    }
+
+    /// @notice Point the contract at the Genesis collection. Zero disables the Genesis path.
+    function setGenesisNFT(address _genesisNFT) external onlyOwner {
+        genesisNFT = IGenesisKnights(_genesisNFT);
+        emit GenesisNFTSet(_genesisNFT);
+    }
+
+    /// @notice Point the contract at the funded vault. Zero reverts to the V3 fallback,
+    ///         which pays from this contract's own balance with no weekly ceiling.
+    function setRewardVault(address _rewardVault) external onlyOwner {
+        rewardVault = IRewardVault(_rewardVault);
+        emit RewardVaultSet(_rewardVault);
     }
 
     function setPaused(bool _paused) external onlyOwner {

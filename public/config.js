@@ -35,6 +35,17 @@ const CONFIG = {
     mainnet: '0xYOUR_MAINNET_NFT_CONTRACT' // TODO: Deploy NFT to mainnet
   },
   
+  // Capsule Contract Addresses
+  //
+  // Capsules are minted by the weekly raffle rather than sold, and opening one burns it
+  // and mints a Knight at the published odds. The address is empty until the collection
+  // is deployed: the Summoning Chamber reads an empty string as "not deployed yet" and
+  // says so, instead of showing a button that would revert.
+  CAPSULE_CONTRACTS: {
+    testnet: '', // TODO: deploy Capsules.sol, then set this
+    mainnet: '' // TODO: same on mainnet
+  },
+
   // Game Contract Addresses
   GAME_CONTRACTS: {
     testnet: '0xD8de9385Db7DfE925882E76849B6e067e47236e5', // DungeonKnightsGameV3 deployed! (Batch Claims)
@@ -96,6 +107,12 @@ CONFIG.getGameContract = function() {
   return this.GAME_CONTRACTS[this.getCurrentNetwork()];
 };
 
+// Helper function to get current capsule contract. An empty string means "not deployed",
+// which every caller has to handle — it is not the same thing as an address that reverts.
+CONFIG.getCapsuleContract = function() {
+  return this.CAPSULE_CONTRACTS[this.getCurrentNetwork()] || '';
+};
+
 // Helper function to get current token address
 CONFIG.getTokenAddress = function() {
   return this.USE_MAINNET ? this.TOKEN.mainnetAddress : this.TOKEN.testnetAddress;
@@ -153,8 +170,9 @@ window.RARITY_CONFIG = {
     color: '#9E9E9E',
     multiplier: 1.0,
     dropRate: 0.50,       // 50% roll (see WHITEPAPER.md §11.13 before calling this a mint odd)
-    dungeonReward: 10,    // $DNG per dungeon clear
+    dungeonReward: 12,    // $DNG per dungeon clear, at the reference budget (scale 1.0)
     dailyRuns: 5,
+    hashPower: 15,        // capacity / 4 — what makes staking pay 90% of playing
     image: 'characters/Pixel_knight_holding_wooden_shield_2K_202609041402_jpeg_2K_202609041417.png'
   },
   uncommon: {
@@ -163,8 +181,9 @@ window.RARITY_CONFIG = {
     color: '#4CAF50',
     multiplier: 1.7,
     dropRate: 0.30,
-    dungeonReward: 17,
+    dungeonReward: 20,
     dailyRuns: 5,
+    hashPower: 25,
     image: 'characters/Pixel_knight_standing_on_floor_2K_202609041402_jpeg_2K_202609041417.png'
   },
   rare: {
@@ -173,8 +192,9 @@ window.RARITY_CONFIG = {
     color: '#2196F3',
     multiplier: 3.0,
     dropRate: 0.15,
-    dungeonReward: 30,
+    dungeonReward: 36,
     dailyRuns: 4,
+    hashPower: 36,
     image: 'characters/Pixelated_knight_standing_on_tile_2K_202609041402_jpeg_2K_202609041417.png'
   },
   epic: {
@@ -183,8 +203,9 @@ window.RARITY_CONFIG = {
     color: '#9C27B0',
     multiplier: 7.5,
     dropRate: 0.04,
-    dungeonReward: 75,
+    dungeonReward: 60,
     dailyRuns: 3,
+    hashPower: 45,
     image: 'characters/Pixel_knight_holding_cosmic_shield_2K_202609041402_jpeg_2K_202609041417.png'
   },
   legendary: {
@@ -193,8 +214,9 @@ window.RARITY_CONFIG = {
     color: '#FFD700',
     multiplier: 15.0,
     dropRate: 0.01,
-    dungeonReward: 150,
+    dungeonReward: 100,
     dailyRuns: 4,
+    hashPower: 100,
     image: 'characters/Knight_in_golden_armor_stands_2K_202609041404_jpeg_2K_202609041417.png'
   }
 };

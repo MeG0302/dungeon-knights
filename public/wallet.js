@@ -371,6 +371,76 @@ class WalletManager {
     }
   }
 
+  // ------------------------------------------------------------------ capsules
+  //
+  // Capsules are minted by the weekly raffle, never sold, and opening one burns it and
+  // mints a Knight at the published odds. The address lives in `config.js` and is empty
+  // until the collection is deployed — which is why every method below reports "not
+  // deployed" rather than attempting a call against nothing.
+
+  capsuleContractAddress() {
+    const read = window.DUNGEON_CONFIG && window.DUNGEON_CONFIG.getCapsuleContract;
+    const address = typeof read === 'function' ? read.call(window.DUNGEON_CONFIG) : null;
+    return address && String(address).length > 10 ? String(address) : null;
+  }
+
+  /** How many capsules this wallet holds, or `null` when there is nothing to read from. */
+  async getMyCapsules() {
+    const address = this.capsuleContractAddress();
+    if (!address || !this.isConnected || !this.provider) return null;
+
+    try {
+      const provider = new ethers.providers.Web3Provider(this.provider);
+      const contract = new ethers.Contract(address, [
+        'function balanceOf(address owner) view returns (uint256)'
+      ], provider);
+      const balance = await contract.balanceOf(this.userAddress);
+      return balance.toNumber();
+    } catch (error) {
+      console.warn('Could not read capsule balance:', error.message);
+      return null;
+    }
+  }
+
+  /**
+   * Open `quantity` capsules.
+   *
+   * The price is read *from the contract* rather than passed in, so the figure the page
+   * quoted cannot drift from the figure the player is charged. Both come from the same
+   * published economy — the page from `/api/staking/config`, the contract from its own
+   * `openPrice()` — and this approval is sized off the latter.
+   */
+  async openCapsules(quantity) {
+    const address = this.capsuleContractAddress();
+    if (!address) return { success: false, error: 'The Capsules collection is not deployed yet.' };
+    if (!this.isConnected) {
+      alert('Please connect your wallet first!');
+      return { success: false, error: 'Not connected' };
+    }
+
+    try {
+      const provider = new ethers.providers.Web3Provider(this.provider);
+      const signer = provider.getSigner();
+      const contract = new ethers.Contract(address, [
+        'function open(uint256 quantity)',
+        'function openPrice() view returns (uint256)'
+      ], signer);
+
+      const costPer = await contract.openPrice();
+      const cost = costPer.mul(quantity);
+
+      const approved = await this.approveDNG(ethers.utils.formatEther(cost));
+      if (!approved) throw new Error('Token approval failed');
+
+      const tx = await contract.open(quantity);
+      const receipt = await tx.wait();
+      return { success: true, txHash: tx.hash, blockNumber: receipt.blockNumber };
+    } catch (error) {
+      console.error('❌ Capsule open failed:', error);
+      return { success: false, error: error.code === 4001 ? 'Cancelled' : error.message };
+    }
+  }
+
   // Batch mint knights (up to 10 in parallel)
   async batchMintKnights(quantity) {
     if (!this.isConnected) {
