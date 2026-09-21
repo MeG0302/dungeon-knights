@@ -144,6 +144,32 @@ function pointsTourSteps(live) {
  * The tag and the text are the server's (`state.share`), not this component's: what the page shows
  * and what X is asked about have to be the same words.
  */
+/**
+ * The same picture, re-encoded as a PNG.
+ *
+ * The clipboard takes `image/png` and nothing else, so the run card — a JPEG — has to be converted
+ * rather than handed over as it is. Done once, when the kit appears, so the click itself contains a
+ * single clipboard call and no decoding.
+ */
+async function toPngBlob(blob) {
+    if (!blob || blob.type === 'image/png') return blob;
+    if (typeof createImageBitmap !== 'function') return null;
+    try {
+        const bitmap = await createImageBitmap(blob);
+        const canvas = document.createElement('canvas');
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        canvas.getContext('2d').drawImage(bitmap, 0, 0);
+        bitmap.close?.();
+        return await new Promise((resolve, reject) => canvas.toBlob(
+            (out) => (out ? resolve(out) : reject(new Error('png encode failed'))),
+            'image/png',
+        ));
+    } catch {
+        return null;
+    }
+}
+
 function ShareKit({ share, onSave, saveDisabled }) {
     if (!share) return null;
     return (
@@ -153,8 +179,9 @@ function ShareKit({ share, onSave, saveDisabled }) {
                 <img src={share.cardImage} alt="The picture that goes out with your share" loading="lazy" />
             </a>
             <ol className="x-share-steps">
-                <li>The picture travels with the post by itself: your invite link unfurls into a card showing it.</li>
-                <li>Save it as well if you want it attached as a file — that step is yours, because X&rsquo;s composer link can only carry text. On a phone the post button hands the picture to X in one go.</li>
+                <li>On a phone the post button hands the picture to X itself, so it goes up as an attachment.</li>
+                <li>On a computer X&rsquo;s composer link can only carry text, so the button opens the post and puts the picture on your clipboard — press <strong>Ctrl+V</strong> (<strong>&#8984;V</strong> on a Mac) in the post to attach it. If that is not available, the file is saved instead.</li>
+                <li>Your invite link unfurls into a card with the same picture, so the run is visible in the post even when no file is attached.</li>
                 <li>Post the run, then paste the link to your post. X is asked one thing about it: that it tags <strong>@{share.tag}</strong>.</li>
             </ol>
             <button
@@ -759,11 +786,38 @@ export default function PointsPage() {
 
     // -------------------------------------------------------------- the daily share
     // The picture cannot ride in X's composer link — attaching a file on someone's behalf needs the
-    // paid API — so it reaches the post two ways, and neither of them is a lie: the invite link
-    // unfurls into a card built from the same image, and the button saves the file for a player who
-    // would rather attach it by hand. The tag and the text come down from the server
+    // paid API — so it reaches the post by the two routes that are real, and the card says which one
+    // a given device gets: a phone's share sheet attaches it, and on a computer the composer opens
+    // with the picture on the clipboard to paste. The tag and the text come down from the server
     // (`state.share`), so what this page shows and what X is asked about are the same words.
     const shareKit = state?.share || null;
+    // Both routes need the picture **in hand before the click**: `navigator.share()` and `window.open()`
+    // are only allowed the gesture that started it, and fetching inside the handler is an `await`
+    // that spends that gesture. So the kit fetches once, when it appears, and the handler awaits
+    // nothing before it acts.
+    const shareFileRef = useRef(null);   // jpeg — what a share sheet can attach
+    const sharePngRef = useRef(null);    // png — the only thing the clipboard takes
+
+    useEffect(() => {
+        let alive = true;
+        shareFileRef.current = null;
+        sharePngRef.current = null;
+        if (!shareKit?.cardImage || typeof File !== 'function') return () => {};
+        (async () => {
+            try {
+                const blob = await (await fetch(shareKit.cardImage)).blob();
+                if (!alive) return;
+                shareFileRef.current = new File([blob], 'dungeon-knights-points-vault.jpg', {
+                    type: blob.type || 'image/jpeg',
+                });
+                sharePngRef.current = await toPngBlob(blob);
+            } catch {
+                // No picture in hand: the composer still opens, and the invite link still unfurls into
+                // the card. A degraded path, not a broken one.
+            }
+        })();
+        return () => { alive = false; };
+    }, [shareKit?.cardImage]);
 
     /**
      * Save the picture on its own. A real anchor click, so it consumes no gesture the composer
@@ -785,35 +839,64 @@ export default function PointsPage() {
     }, [shareKit?.cardImage]);
 
     /**
-     * Put the run in a post: the picture first, then the composer.
+     * The picture on the clipboard, so it can be pasted into the composer.
      *
-     * The one-tap path is the platform's own share sheet, which can carry a file and the text
-     * together — where it exists. Everywhere else the file is saved and the composer opens
-     * prefilled inside the same click, so the popup blocker sees a window the player opened.
+     * This is the only way an image is ever *attached* on a computer: X's compose link carries text
+     * only, and a desktop browser's share sheet has no X in it to send to. The PNG was encoded when
+     * the card appeared, so there is nothing to await before the one call that matters.
+     */
+    const copyShareImage = useCallback(async () => {
+        const png = sharePngRef.current;
+        if (!png || typeof ClipboardItem !== 'function' || !navigator.clipboard?.write) return false;
+        try {
+            await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
+            return true;
+        } catch {
+            // An unfocused document, a refused permission, a browser that will not take an image —
+            // all the same answer, and the file still saves.
+            return false;
+        }
+    }, []);
+
+    /**
+     * Put the run in a post.
+     *
+     * The order here is the whole point, and it was wrong once. On a computer `navigator.share`
+     * exists, the sheet it opens carries no X, and this returned from that path without ever opening
+     * the composer — a button that did nothing at all. So the sheet is offered only where a touch
+     * pointer says it can reach X, and everywhere else the composer opens **synchronously**, in the
+     * same task as the click, because a window opened after an `await` is one a popup blocker is
+     * entitled to refuse. The clipboard write starts first for the same reason in reverse: a new tab
+     * takes the focus, and a background document cannot write to the clipboard.
      */
     const composeShare = useCallback(async () => {
         const text = shareKit?.text || '';
         const intent = shareKit?.intentUrl
             || `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
-        if (shareKit?.cardImage && typeof navigator !== 'undefined' && navigator.share) {
+        const file = shareFileRef.current;
+        const touches = typeof navigator !== 'undefined'
+            && (navigator.maxTouchPoints > 0
+                || (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches));
+
+        // A phone's share sheet is the one route that puts the picture *in* the post as a file.
+        if (file && touches && typeof navigator.share === 'function' && navigator.canShare?.({ files: [file] })) {
             try {
-                const blob = await (await fetch(shareKit.cardImage)).blob();
-                const file = new File([blob], 'dungeon-knights-points-vault.jpg', {
-                    type: blob.type || 'image/jpeg',
-                });
-                if (navigator.canShare?.({ files: [file] })) {
-                    await navigator.share({ files: [file], text });
-                    return 'shared';
-                }
-            } catch {
-                // A cancelled sheet, an old browser, a refused permission — all the same answer:
-                // fall through to the path that works without any of them.
+                await navigator.share({ files: [file], text });
+                return { post: 'shared', picture: 'attached' };
+            } catch (e) {
+                // Changed their mind — do not follow it with a composer they did not ask for.
+                if (e?.name === 'AbortError') return { post: 'cancelled', picture: 'none' };
+                // Anything else means the sheet could not carry it, and the composer is the answer.
             }
         }
-        saveShareImage();
-        window.open(intent, '_blank', 'noopener');
-        return 'saved';
-    }, [saveShareImage, shareKit?.cardImage, shareKit?.intentUrl, shareKit?.text]);
+
+        const copying = copyShareImage();   // started, not awaited: the tab below is the same task
+        const win = window.open(intent, '_blank', 'noopener');
+        const copied = await copying;
+        if (!win) return { post: 'blocked', picture: copied ? 'copied' : 'none' };
+        if (copied) return { post: 'opened', picture: 'copied' };
+        return { post: 'opened', picture: saveShareImage() ? 'saved' : 'none' };
+    }, [copyShareImage, saveShareImage, shareKit?.intentUrl, shareKit?.text]);
 
     /** Sharing the finished entry doubles it — once a day, and paid by the server. */
     const handleShareX = useCallback(async () => {
@@ -821,16 +904,32 @@ export default function PointsPage() {
             setError('Bind your X account first — the card on the left does it in one tap.');
             return;
         }
-        const how = await composeShare();
+        setError(null);
+        const { post, picture } = await composeShare();
+        // A window the browser refused is not a post, and saying nothing about it is how a button
+        // comes to look dead. The picture may still have made it to the clipboard, which is worth
+        // saying, because that is enough to finish the job by hand.
+        if (post === 'blocked') {
+            setError(picture === 'copied'
+                ? 'Your browser blocked the tab X would have opened, but the run card is on your clipboard — open X\u2019s composer and press Ctrl+V (\u2318V) to attach it.'
+                : 'Your browser blocked the tab X would have opened. Allow pop-ups for this site and press the button again.');
+            return;
+        }
+        if (post === 'cancelled') {
+            flash('Nothing posted — the button is still here whenever you want it.');
+            return;
+        }
         // Opening the composer is only half of it. The doubling is paid when the link to the post
         // comes back here and X confirms the bound handle wrote it, so this hands the player to the
         // card that takes the link rather than claiming a bonus on a tap — including out of the
         // vault, which covers the page.
         setSharePrompt(true);
         setInDungeon(false);
-        flash(how === 'shared'
+        flash(post === 'shared'
             ? 'Picture and text are in your post — finish it on X, then paste the link below to claim the double.'
-            : 'Picture saved. Attach it in the composer, post, then paste the link below to claim the double.');
+            : picture === 'copied'
+                ? 'The post is open in a new tab and the run card is on your clipboard — press Ctrl+V (\u2318V) in it to attach the picture, then paste the link below to claim the double.'
+                : 'The post is open in a new tab. The picture is in your downloads if you want it attached — post the run, then paste the link below to claim the double.');
     }, [bound, composeShare, flash]);
 
     /** Save just the picture, for a player who wants it in hand first. */

@@ -615,14 +615,45 @@ only thing that decides whether a post exists, who wrote it, and what it says.
   are written by one function. The amount is fixed **at submission time**, so clearing another
   floor afterwards cannot raise the bonus on a post already published, and a share whose day rolls
   over before X confirms it is `expired` rather than paid.
-- **The picture reaches the post as the link's card, not as an attachment.** X's composer link
-  (`twitter.com/intent/tweet?text=…`) can prefill **text only** — posting an image on a player's
-  behalf needs the paid API — so `/points` declares `points-og.jpg` as its Open Graph / Twitter card
-  in `app/points/page.js`, and the invite link every share carries unfurls into that picture. The
-  share kit also offers **Save picture** (a real `<a download>`, so the gesture is not consumed) and
-  hands the file to the OS share sheet where `navigator.canShare({files})` says it can — one tap,
-  image and text together. What this cannot be is *verified*: oEmbed cannot see attachments, so X is
-  asked about the author and the tag, and the card says as much rather than implying otherwise.
+- **The picture reaches the post two ways, and which one a device gets is decided *before* the
+  click.** X's composer link (`twitter.com/intent/tweet?text=…`) can prefill **text only** — posting
+  an image on a player's behalf needs the paid API — so `/points` declares `points-og.jpg` as its
+  Open Graph / Twitter card in `app/points/page.js` and the invite link every share carries unfurls
+  into that picture; that works everywhere with nothing to attach. For a real attachment there are
+  two routes, picked by **pointer** rather than by poking at capabilities:
+  - a **touch** pointer where `navigator.canShare({files})` agrees → the OS share sheet, the one path
+    that puts the file *in* the post as a file;
+  - everywhere else → the composer opens and the picture goes on the **clipboard** as a PNG
+    (`toPngBlob` — the clipboard takes nothing but PNG and the card is a JPEG) to paste with Ctrl+V,
+    falling back to a saved file when the write is refused.
+
+  The picture is fetched and encoded **once, when the kit appears**, never inside the handler:
+  `navigator.share()` and `window.open()` are both only allowed the gesture that started the click,
+  and an `await` inside the handler spends it. What this cannot be is *verified* — oEmbed cannot see
+  attachments, so X is asked about the author and the tag, and the card says as much rather than
+  implying otherwise.
+
+  **The share button did nothing at all on a desktop, and the shape of that bug is worth keeping.**
+  `composeShare` tried the share sheet first, guarded on `navigator.share` **existing** — which it does
+  on desktop Chrome/Edge — fetched the picture with an `await`, and then `return`ed from that branch.
+  So on a computer it either handed the run card to the *Windows* share sheet (which has no X in it, so
+  the composer never opened) or, when the sheet could not take files, reached `window.open` only after
+  an `await` — a spent gesture a popup blocker may refuse. Measured by clicking the real button with
+  `navigator.share`, `window.open` and `navigator.clipboard` instrumented, which is the only reason
+  the branch was not guessed at:
+
+  | condition | before | after |
+  |---|---|---|
+  | no `navigator.share` | composer in 5 ms | composer in 1 ms, PNG to clipboard |
+  | `navigator.share`, files shareable (**desktop Chrome**) | **composer never opened** | composer in **0 ms**, PNG to clipboard |
+  | touch + files shareable | share sheet (1 file) | share sheet (1 file) — unchanged |
+  | `navigator.share`, files not shareable | composer after the fetch (12 ms) | composer in 0 ms, PNG to clipboard |
+
+  The fix is the ordering, not a new feature: the sheet is offered only to a touch pointer, and the
+  composer opens **synchronously in the same task as the click** — with the clipboard write *started*
+  before it, since a new tab takes the focus and a background document cannot write to the clipboard.
+  A refused `window.open` now says so on the card instead of leaving a dead-looking button, and it says
+  whether the picture still made it to the clipboard, because that is enough to finish by hand.
 - **The states, and the words for each.** `pending` (X has not indexed it — a real answer, not an
   error), `verified`, `failed` (X answered and the post is not yours / no tag / no link), `expired`
   (no good answer within the attempt ceiling, or the day ended first). The throttle is server-side
@@ -688,6 +719,13 @@ only thing that decides whether a post exists, who wrote it, and what it says.
 - **Privy's Twitter must be enabled for the *proved* path** (see the switches table): without it a
   player can still type a handle and earn. The bridge exposes `getXAccount()`, `linkX()` and
   `getAccessToken()` for exactly this.
+
+**Do not run `next build` while the dev server is up.** Both write `.next`, so the build pulls the
+plugin's state out from under the running server and `/points` starts answering **500** — which looks
+like the change you were testing just broke the page. (Measured: a build during a live session took a
+200 right to a 500 with nothing wrong in the code.) Stop the dev server, `rm -rf .next`, restart it,
+and warm the route before believing anything. The same goes for verifying a fix locally *while*
+deploying one.
 
 A note on the live ones: a `next dev` that has been up for hours and recompiled many times starts
 answering **404 to real routes** under a burst of requests, which reads exactly like a broken change.
