@@ -26,14 +26,20 @@ class MenuSystem {
     loadKnightImages() {
         // Knight art comes from the single rarity config (config.js), so adding a tier is
         // one edit there rather than a second list here that can drift out of step.
+        //
+        // The Hall lists knights — it does not run them — so it shows the **portrait**
+        // (`pfp`), the same picture the Summoning Chamber and the vault use for that tier.
+        // The dungeon keeps `image`, the map sprite, and the two are intentionally not the
+        // same file: this screen is a roster, not the battlefield.
         const tiers = window.RARITY_TIERS || [];
         const config = window.RARITY_CONFIG || {};
 
         tiers.forEach(tier => {
             const entry = config[tier];
-            if (!entry?.image) return;
+            const src = entry?.pfp || entry?.image;
+            if (!src) return;
             const img = new Image();
-            img.src = entry.image;
+            img.src = src;
             this.knightImages[tier.toUpperCase()] = img;
         });
     }

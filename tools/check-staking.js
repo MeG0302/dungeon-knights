@@ -27,6 +27,7 @@ import {
     HASH_POWER_BANDS,
     HASH_POWER_MAX,
     HASH_POWER_MIN,
+    STAKING_WRITES_READY,
     TICKET_CAP_HOURS,
     WEEK_MS,
     accruedPoolShare,
@@ -37,6 +38,7 @@ import {
     hashPowerPool,
     shareOfPool,
     ticketsFor,
+    ticketsInWeekFor,
     ticketsPerHour,
     weekEnd,
     weekNumber,
@@ -468,15 +470,52 @@ section('Loading the vault');
 // vault only ever asks for JSON, so the whole chain can be faked at that seam, and the reader's
 // own behaviour against a live node is proven separately in `check-staking-chain.js`.
 {
+    // Shaped like the route's own payload, `addresses` and `writes` included — the snapshot reads
+    // both to decide whether a side can sign, and a fixture missing them tests a config the route
+    // cannot produce.
     const CONFIG = {
         chain: false,
         reason: 'the staking contracts are not deployed',
+        writes: false,
+        addresses: {
+            genesis: '',
+            staking: '',
+            knightsStaking: '',
+            raffle: '',
+        },
         poolDng: 1000,
         knightsPoolDng: 500,
         holdingsLive: true,
         collections: {
             genesis: { nft: '', live: false, reason: 'Genesis Knights have not been minted yet.' },
-            knights: { nft: '0x06c7D4b0C35858c78c3B213fbf50fB4A25f20512', live: true, reason: null },
+            knights: { nft: '0xFB738bE682a0a60678A393eB7e23742B3137d4c5', live: true, reason: null },
+        },
+    };
+    const KNIGHTS_POOL = '0x5B17C62E315E2DCE233553622fB533F0701eEcD2';
+    const GENESIS_NFT = '0xbd99CD46dd42472fAA7667d5c782eEbe0Abe9e5d';
+    // `900 × 116`: a stake opened 8 hours ago in a week with 116 hours left is counted to the end
+    // of the week by the contract, not to now — see `ticketsInWeekFor`.
+    const WEEKTICKETS = 900 * 116;
+    const WRITABLE = {
+        ...CONFIG,
+        chain: true,
+        reason: null,
+        writes: true,
+        addresses: {
+            ...CONFIG.addresses,
+            knightsStaking: KNIGHTS_POOL,
+            genesis: GENESIS_NFT,
+            staking: '0x173cED7aeb1F0F6871c5110112Ade6f61106D7FD',
+        },
+    };
+    // Both collections live, for the Genesis half of the chain tests — the draw's ticket ledger
+    // exists on one side only, and a fixture that left Genesis uninhabited would test the refusal
+    // instead of the read.
+    const WRITABLE_BOTH = {
+        ...WRITABLE,
+        collections: {
+            ...WRITABLE.collections,
+            genesis: { nft: GENESIS_NFT, live: true, reason: null },
         },
     };
     const KNIGHTS = [
@@ -525,15 +564,240 @@ section('Loading the vault');
     rec('the route\u2019s reason carries no verdict about what the page is showing',
         !/showing preview data/i.test(routeSource));
 
-    // Once staking is deployed the same side must stop claiming to be a simulation.
-    const deployed = await loadVault(WALLET, {
-        config: { ...CONFIG, chain: true, reason: null }, nowMs: T0, collection: 'knights',
+    // The two routes have to agree about which collection `genesis` means. They did not: the config
+    // route reported the side live while the holdings route hard-coded a refusal for it, which put a
+    // playable Genesis side on screen with nothing behind it. One address, resolved once.
+    const holdingsSource = readFileSync(new URL('../app/api/staking/holdings/route.js', import.meta.url), 'utf8');
+    rec('both staking routes resolve the Genesis collection from the same place',
+        !/process\.env\.GENESIS_NFT/.test(routeSource)
+        && /ADDRESSES\.genesisNFT/.test(holdingsSource)
+        && !/collection === 'genesis' \? '' :/.test(holdingsSource));
+    rec('and holdings only refuses a collection that is genuinely not configured',
+        /collection === 'genesis' \? ADDRESSES\.genesisNFT : ADDRESSES\.knightNFT/.test(holdingsSource));
+
+    // Deployed contracts are not the same fact as a page that can stake, and these two states
+    // differ by exactly one field — `writes`. This is the whole reason it exists: a deployment
+    // pointing at real addresses must not be able to delete the warning from a vault whose
+    // buttons still send nothing.
+    const deployedNoPath = await loadVault(WALLET, {
+        config: { ...CONFIG, chain: true, reason: null, writes: false }, nowMs: T0, collection: 'knights',
         fetchJson: route({ ok: true, knights: KNIGHTS, balance: 2, candidates: 2, complete: true }),
     });
-    rec('a deployed staking contract is not reported as a simulation',
+    rec('a deployed staking contract this page cannot write to is still a simulation',
+        deployedNoPath.simulated === true && deployedNoPath.canWrite === true,
+        `simulated=${deployedNoPath.simulated}, canWrite=${deployedNoPath.canWrite}`);
+    rec('and the reason blames the interface, not a missing contract',
+        /deployed on this network/i.test(deployedNoPath.writeBlockedReason || '')
+        && !/not deployed/i.test(deployedNoPath.writeBlockedReason || ''),
+        deployedNoPath.writeBlockedReason);
+    rec('it still says nothing reaches the chain',
+        /nothing .*chain|no transaction/i.test(deployedNoPath.writeBlockedReason || ''));
+
+    // With a transaction path **and** a pool to send to, the same side stops claiming to be a
+    // simulation.
+    const deployed = await loadVault(WALLET, {
+        config: WRITABLE, nowMs: T0, collection: 'knights',
+        fetchJson: route({ ok: true, knights: KNIGHTS, balance: 2, candidates: 2, complete: true }),
+    });
+    rec('a reachable staking contract is not reported as a simulation',
         deployed.simulated === false && deployed.canWrite === true);
     rec('and it carries no blocked reason at all', deployed.writeBlockedReason === null,
         deployed.writeBlockedReason);
+
+    // **Both halves are required, and they fail separately.** The interface can send a transaction,
+    // and there is a pool to send it to. A deployment that configures `writes: true` but names no
+    // staking address must not report a working vault — the plan would be built against an empty
+    // string — and that is the state a missing environment variable actually produces.
+    const noPool = await loadVault(WALLET, {
+        config: { ...WRITABLE, addresses: { ...WRITABLE.addresses, knightsStaking: '' } }, nowMs: T0, collection: 'knights',
+        fetchJson: route({ ok: true, knights: KNIGHTS, balance: 2, candidates: 2, complete: true }),
+    });
+    rec('a writable interface with no pool configured is still a simulation',
+        noPool.simulated === true && noPool.writesToChain === false,
+        `simulated=${noPool.simulated}, writesToChain=${noPool.writesToChain}`);
+    rec('and it names the missing pool rather than blaming the interface',
+        /no staking pool is configured/i.test(noPool.writeBlockedReason || ''), noPool.writeBlockedReason);
+    rec('the reachable side records that its buttons sign', deployed.writesToChain === true);
+
+    // The flag and the code have to agree. A page with no transaction path must not be able to
+    // advertise one, so flipping the constant without writing that path fails here rather than
+    // shipping a vault that looks live and silently does nothing. Since the path moved into its own
+    // module, the check follows it there and *also* requires the page to route through it — a
+    // tested module nobody calls would pass a narrower version of this and stake nothing.
+    const clientSource = readFileSync(new URL('../app/staking/client.js', import.meta.url), 'utf8');
+    const writesSource = readFileSync(new URL('../lib/staking-writes.js', import.meta.url), 'utf8');
+    const sendsTransactions = /eth_sendTransaction|sendTransaction\(|writeContract\(/.test(writesSource);
+    rec('whether the vault can write is stated consistently with its code',
+        STAKING_WRITES_READY === sendsTransactions,
+        `flag=${STAKING_WRITES_READY}, transaction path in lib/staking-writes.js=${sendsTransactions}`);
+    rec('and the page actually routes its four write actions through that path',
+        /from '..\/..\/lib\/staking-writes'/.test(clientSource)
+        && /stakeKnight|stakeMany/.test(clientSource)
+        && /unstakeKnight/.test(clientSource)
+        && /claimRewards/.test(clientSource)
+        && /writesToChain/.test(clientSource));
+    rec('the wallet library the write path signs with is loaded on the route',
+        /\/ethers-5\.7\.2\.umd\.min\.js/.test(clientSource));
+
+    // ------------------------------------------------------- a stake that is really on chain
+    //
+    // `stakedTokens` is the only way a staked knight can appear: the pool holds it, so the
+    // collection reports it as someone else's and a page reading only the collection shows the
+    // knight disappearing the moment it starts earning.
+    const STAKE = {
+        ok: true,
+        staking: KNIGHTS_POOL,
+        collection: 'knights',
+        positions: 2,
+        complete: true,
+        totalHashPower: 145,
+        ratePerDay: 41760,
+        vault: { lineBudget: 292320, lineRemaining: 250000, scaleBps: 10000 },
+        claim: { settled: 0, pending: 12.5, payable: 12.5 },
+        tickets: null,
+        staked: [
+            { tokenId: 10, name: 'Common Knight #10', rarity: 'common', tierName: 'Common', hashPower: 15, stakedAt: T0 - 40 * HOUR, staker: WALLET.toLowerCase() },
+            { tokenId: 24, name: 'Legendary Knight #24', rarity: 'legendary', tierName: 'Legendary', hashPower: 100, stakedAt: T0 - 6 * HOUR, staker: WALLET.toLowerCase() },
+        ],
+    };
+    const withStake = await loadVault(WALLET, {
+        config: WRITABLE, nowMs: T0, collection: 'knights',
+        fetchJson: route({ ok: true, knights: [], balance: 0, candidates: 0, complete: true, stake: STAKE }),
+    });
+    rec('a staked knight comes back from the pool, not from the collection',
+        withStake.staked.length === 2 && withStake.owned.length === 0,
+        `${withStake.staked.length} staked, ${withStake.owned.length} owned`);
+    rec('and it keeps the hash power the pool locked in',
+        withStake.staked.find((k) => k.tokenId === 24)?.hashPower === 100);
+    rec('and the instant it went in, so the card can say how long it has been there',
+        withStake.staked.find((k) => k.tokenId === 24)?.stakedAt === T0 - 6 * HOUR);
+    rec('a real stake knows it came off the chain', withStake.realStakes === true);
+    rec('and it is measured by weight, which is what the Knights line is divided by',
+        withStake.totals.hashPower === 115, `${withStake.totals.hashPower} HP`);
+    // The pool's own claimable figure, not the page's model of it.
+    rec('the DNG the pool would pay is taken from the pool', withStake.claim?.payable === 12.5);
+    rec('and this week\u2019s line budget and remainder travel with it',
+        withStake.claim?.lineBudget === 292320 && withStake.claim?.lineRemaining === 250000);
+    rec('a wallet-level claim is not dressed up as a per-knight payout',
+        withStake.staked.every((k) => k.accruedDng === null),
+        'per-knight DNG is null on a real stake');
+    rec('the pool total the share is a fraction of comes from the chain',
+        withStake.pool?.totalTickets === 145, `${withStake.pool?.totalTickets}`);
+    rec('and the share is computed against it rather than against the wallet alone',
+        Math.abs(withStake.totals.myShare - 115 / 145) < 1e-9,
+        `${withStake.totals.myShare}`);
+
+    // A pool total the page could not read must not become zero. Zero makes every wallet look like
+    // the only entrant in a draw, which is the single most flattering thing a raffle page could
+    // wrongly say — so the share is `null` and every render site prints a dash.
+    const noPoolTotal = await loadVault(WALLET, {
+        config: { ...WRITABLE, addresses: { ...WRITABLE.addresses, knightsStaking: KNIGHTS_POOL } },
+        nowMs: T0,
+        collection: 'knights',
+        fetchJson: route({
+            ok: true, knights: [], balance: 0, complete: true,
+            // What `readStakeState` returns when the pool-weight call does not come back: `null`,
+            // which is the whole point of the assertion below.
+            stake: { ...STAKE, totalHashPower: null },
+        }),
+    });
+    rec('a pool total that could not be read is null, never 0',
+        noPoolTotal.pool?.totalTickets === null,
+        `${noPoolTotal.pool?.totalTickets}`);
+    rec('and the share it backs is null too, so no page can print 0% of an unknown pool',
+        noPoolTotal.totals.myShare === null, `${noPoolTotal.totals.myShare}`);
+    rec('and the wallet knows its own weight regardless, because that is a sum over its own stakes',
+        noPoolTotal.totals.hashPower === 115, `${noPoolTotal.totals.hashPower}`);
+
+    // Genesis, where the tickets are a ledger the draw reads: entering is automatic there, so the
+    // page must not offer a control the chain has no call for.
+    const genesisStake = await loadVault(WALLET, {
+        config: WRITABLE_BOTH, nowMs: T0, collection: 'genesis',
+        fetchJson: route({
+            ok: true, knights: [], balance: 0, complete: true,
+            stake: {
+                ...STAKE,
+                collection: 'genesis',
+                // The pool's own count, kept consistent with the week rule the per-knight column
+                // reproduces: the stake is 116 hours from the week's close and carries 900 HP.
+                tickets: { mine: WEEKTICKETS, poolTotal: 290000, stakerCount: 2, poolReason: null },
+                staked: [{ tokenId: 7, name: 'Genesis #007', hashPower: 900, stakedAt: T0 - 8 * HOUR, staker: WALLET.toLowerCase() }],
+            },
+        }),
+    });
+    rec('a Genesis stake is priced on this week, not on how long it has sat',
+        genesisStake.staked[0]?.tickets === WEEKTICKETS,
+        `${genesisStake.staked[0]?.tickets} tickets for a stake 8 hours old`);
+    rec('and the week rule counts to the week\u2019s close, which is what the draw reads',
+        WEEKTICKETS === 900 * 116, `900 HP over 116 hours = ${WEEKTICKETS}`);
+    rec('the wallet\u2019s total is the ledger\u2019s own count',
+        genesisStake.totals.myTickets === WEEKTICKETS, `${genesisStake.totals.myTickets}`);
+    rec('and the pool total it is a share of is the summed staker ledger',
+        Math.abs(genesisStake.totals.myShare - WEEKTICKETS / 290000) < 1e-9,
+        `${genesisStake.totals.myShare}`);
+
+    // The ledger wins over the reproduction, because the draw acts on the ledger. This is the case
+    // that matters if the two ever disagree: a staker whose positions could not all be read still
+    // sees the number the contract will actually use.
+    const ledgerWins = await loadVault(WALLET, {
+        config: WRITABLE_BOTH, nowMs: T0, collection: 'genesis',
+        fetchJson: route({
+            ok: true, knights: [], balance: 0, complete: true,
+            stake: {
+                ...STAKE,
+                collection: 'genesis',
+                tickets: { mine: 5, poolTotal: 290000, stakerCount: 2, poolReason: null },
+                staked: [{ tokenId: 7, name: 'Genesis #007', hashPower: 900, stakedAt: T0 - 8 * HOUR, staker: WALLET.toLowerCase() }],
+            },
+        }),
+    });
+    rec('a ticket count the ledger reports wins over the page\u2019s reproduction of it',
+        ledgerWins.totals.myTickets === 5, `${ledgerWins.totals.myTickets}`);
+    rec('Genesis entries are a ledger, so no enter or withdraw button can be honest',
+        genesisStake.entriesAutomatic === true && genesisStake.staked.every((k) => k.entered === false));
+    rec('while a Knights side has no draw to be entered', withStake.entriesAutomatic === false);
+
+    // The draw's own counters are not published by the contracts. `200 left` is a preview
+    // assumption, and repeating it on a chain-backed vault would be a number nobody can check —
+    // true only in the first minute of a week, and printed as though it were durable.
+    rec('the remaining capsules in this week\u2019s draw are not invented on a chain-backed vault',
+        genesisStake.pool?.left === null, `${genesisStake.pool?.left}`);
+
+    // The board's labels have to follow the data, not the click. Switching sides is deliberately
+    // quiet — the previous board stays on screen while the new one is fetched — so deriving them
+    // from the pending selection captioned the old side's figures with the new side's words for as
+    // long as the read took. A number under the wrong caption is worse than a brief stale board.
+    rec('the vault labels its board from the snapshot, not from the pending selection',
+        /const boardCollection = live\?\.collection \|\| collection;/.test(clientSource)
+        && !/const isKnights = collection === 'knights';/.test(clientSource));
+
+    // "these holdings are invented" and "these holdings are real, the stake is not" are the two
+    // claims the vault must never confuse. They shared one class once, so a check for the absence
+    // of the preview badge matched the simulation badge — and the simulation badge's own check
+    // passed only because of that collision.
+    const batterySource = readFileSync(new URL('./check-all.js', import.meta.url), 'utf8');
+    rec('the preview and simulation badges have separate classes',
+        /className="sv-sim-badge"/.test(clientSource)
+        && !/className="sv-preview-badge is-sim"/.test(clientSource));
+    rec('and the battery asks for each badge by its own class',
+        /\.sv-sim-badge/.test(batterySource)
+        && !/const badgeText = document\.querySelector\('\.sv-preview-badge'\)/.test(batterySource));
+
+    // The browser's capsule read has to match the standard the contract actually implements. It
+    // did not: `balanceOf(address)` is the ERC-20/721 form, `Capsules` is ERC-1155, and the revert
+    // was caught and returned as `null` — so the failure mode was a player who won a capsule being
+    // shown that they hold none, with nothing on screen looking broken.
+    const walletJs = readFileSync(new URL('../public/wallet.js', import.meta.url), 'utf8');
+    const capsulesSol = readFileSync(new URL('../contracts/Capsules.sol', import.meta.url), 'utf8');
+    const typeCount = Number((capsulesSol.match(/TYPE_COUNT = (\d+)/) || [])[1]);
+    rec('the browser reads a capsule balance with the ERC-1155 signature, not the ERC-20 one',
+        /contract Capsules is ERC1155/.test(capsulesSol)
+        && /function balanceOf\(address owner, uint256 id\)/.test(walletJs),
+        `Capsules TYPE_COUNT=${typeCount}`);
+    rec('and sums the same number of rungs the contract publishes',
+        Number.isInteger(typeCount) && typeCount > 0
+        && new RegExp(`CAPSULE_TYPE_COUNT = ${typeCount}`).test(walletJs),
+        `contract publishes ${typeCount}`);
 
     // The Genesis side: its collection does not exist, so it must NOT be filled with preview
     // knights while the Knights side shows real ones. Two sources of truth on one page is worse

@@ -15,9 +15,24 @@ class WalletManager {
     // use (an embedded one has to be funded before it can pay gas).
     this.walletKind = null;
     
-    // Contract addresses
-    this.nftContractAddress = '0x06c7D4b0C35858c78c3B213fbf50fB4A25f20512';
-    this.tokenContractAddress = '0xA8D54F6FEeAFaf5C2c546D1D1644aE2f46A2d910';
+    // Contract addresses.
+    //
+    // Read from `config.js`, which every page loads before this file — but the literals below
+    // are the same addresses rather than a guess, so a page that reached here without the
+    // config still talks to the live collection.
+    //
+    // The two hardcoded here used to be the **first** collection (`0x06c7…`) and the first
+    // $DNG (`0xA8D5…`). Phase 2 replaced both, and everything server-side moved with them —
+    // while this file did not, which is how the Hall's roster could list knights the vault, the
+    // dungeon and the reward contracts had all stopped recognising. One collection, one token.
+    const readConfig = (fn) => (window.DUNGEON_CONFIG && typeof window.DUNGEON_CONFIG[fn] === 'function'
+      ? window.DUNGEON_CONFIG[fn].call(window.DUNGEON_CONFIG)
+      : null);
+    // The collection was replaced a third time on 21 September (see `docs/DEPLOY-PHASE-2.md`),
+    // which is why this fallback matters more than it looks: a stale value here makes the Hall's
+    // summon approve and call a contract that cannot mint.
+    this.nftContractAddress = readConfig('getNFTContract') || '0x27Cfbb763188a50Fe1C0fFfBe2552b1945eE1B2D';
+    this.tokenContractAddress = readConfig('getTokenAddress') || '0x3D94e56E0d967633830f6d9E42CE43A64FFfD6Ca';
     
     // Chain config
     this.chainId = 46630; // Robinhood Chain Testnet
@@ -277,7 +292,7 @@ class WalletManager {
   }
   
   // Approve $DNG tokens
-  async approveDNG(amount) {
+  async approveDNG(amount, spender = null) {
     if (!this.isConnected) {
       alert('Please connect your wallet first!');
       return false;
@@ -300,9 +315,15 @@ class WalletManager {
       );
       
       const amountWei = ethers.utils.parseEther(amount.toString());
-      
+
+      // Who is allowed to take the $DNG. It is a parameter and not a constant because the two
+      // paths differ: `summon()` moves the money from inside the **collection**, while
+      // `Capsules.open()` moves it from inside the **capsule contract**. Approving the wrong
+      // one reverts on transfer, at gas cost, with a failed transaction for the player.
+      const spenderAddress = spender || this.nftContractAddress;
+
       // Check current allowance
-      const allowance = await contract.allowance(this.userAddress, this.nftContractAddress);
+      const allowance = await contract.allowance(this.userAddress, spenderAddress);
       
       if (allowance.gte(amountWei)) {
         console.log('✅ Already approved');
@@ -310,7 +331,7 @@ class WalletManager {
       }
       
       // Request approval
-      const tx = await contract.approve(this.nftContractAddress, amountWei);
+      const tx = await contract.approve(spenderAddress, amountWei);
       console.log('⏳ Waiting for approval...');
       await tx.wait();
       
@@ -327,46 +348,62 @@ class WalletManager {
   }
   
   // Mint knight
-  async mintKnight() {
+  /**
+   * Summon one knight: `summon()` for `SUMMON_PRICE` $DNG, at the published drop rates.
+   *
+   * This replaced a `mintKnight()` call that **does not exist on the live collection** — the
+   * Phase 2 `Knights` contract has `summon()` and `mintFromCapsule()` and nothing else, so the
+   * old call would have reverted for every player who pressed the button.
+   *
+   * The price is read from the contract rather than from `config.js`, so the number the page
+   * quoted and the number charged come from one place. The $DNG is pulled by the collection
+   * itself (it forwards it into the reward vault), which is why the approval below names the
+   * NFT contract as its spender — approving the token address, or the vault, would leave
+   * `summon()` unable to transfer and it would revert on the allowance check.
+   */
+  /**
+   * The gas limit to send `summon()` with — the estimate, plus a margin that is not optional.
+   *
+   * `_mintTier` writes `rarityOf[tokenId] = rarity`, and a **Common** roll is tier `0`, so that
+   * write is zero-into-zero: an SSTORE of 100 gas instead of 20,000. `eth_estimateGas` runs against
+   * one block's randomness, so an estimate taken when the draw is Common can be ~20k short of what
+   * a transaction that lands on Uncommon or better will actually cost. The result is a transaction
+   * that reverts out of gas — `status 0`, `gasUsed == gasLimit`, and the player pays for it.
+   *
+   * That is not a theory: the first real summon sent from our own deploy script died exactly this
+   * way, at 246,527 of 246,527. A fixed limit would have to be sized for the worst tier and would
+   * overpay on every Common, so the estimate is buffered instead.
+   */
+  async summonGasLimit(contract) {
+    const estimate = await contract.estimateGas.summon();
+    return estimate.mul(130).div(100);
+  }
+
+  async summonKnight() {
     if (!this.isConnected) {
       alert('Please connect your wallet first!');
       return null;
     }
-    
+
     try {
-      console.log('⚔️ Minting knight...');
-      
-      const nftABI = [
-        'function mintKnight() returns (uint256)'
-      ];
-      
       const provider = new ethers.providers.Web3Provider(this.provider);
       const signer = provider.getSigner();
-      const contract = new ethers.Contract(
-        this.nftContractAddress,
-        nftABI,
-        signer
-      );
-      
-      const tx = await contract.mintKnight();
-      console.log('📝 Transaction sent:', tx.hash);
-      
-      console.log('⏳ Waiting for confirmation...');
+      const contract = new ethers.Contract(this.nftContractAddress, [
+        'function summon() returns (uint256)',
+        'function SUMMON_PRICE() view returns (uint256)'
+      ], signer);
+
+      const price = await contract.SUMMON_PRICE();
+      const approved = await this.approveDNG(ethers.utils.formatEther(price));
+      if (!approved) throw new Error('Token approval failed');
+
+      const tx = await contract.summon({ gasLimit: await this.summonGasLimit(contract) });
       const receipt = await tx.wait();
-      
-      console.log('✅ Knight minted!');
-      
-      return {
-        success: true,
-        txHash: tx.hash,
-        blockNumber: receipt.blockNumber
-      };
-      
+
+      return { success: true, txHash: tx.hash, blockNumber: receipt.blockNumber };
     } catch (error) {
-      console.error('❌ Mint failed:', error);
-      if (error.code !== 4001) {
-        alert('Mint failed: ' + error.message);
-      }
+      console.error('❌ Summon failed:', error);
+      if (error.code !== 4001) alert('Summon failed: ' + error.message);
       return null;
     }
   }
@@ -384,18 +421,46 @@ class WalletManager {
     return address && String(address).length > 10 ? String(address) : null;
   }
 
-  /** How many capsules this wallet holds, or `null` when there is nothing to read from. */
+  /**
+   * How many capsules this wallet holds, or `null` when there is nothing to read from.
+   *
+   * **Capsules are ERC-1155, so `balanceOf` takes a token id as well as an owner.** This used
+   * the ERC-20/721 one-argument form, which reverts against the real contract — and because the
+   * revert is caught below it would have reported `null` for every wallet with capsules in it:
+   * not an error on screen, just a player who won one and cannot see it. The ids are
+   * `1..TYPE_COUNT` (the contract rejects `0`), and the four rungs are what
+   * `contracts/Capsules.sol` publishes, so the sum is "capsules held" rather than "capsules of
+   * one rung".
+   */
   async getMyCapsules() {
+    const balances = await this.capsuleBalances();
+    return balances ? balances.reduce((sum, value) => sum + value, 0) : null;
+  }
+
+  /**
+   * How many capsules this wallet holds **per rung**, lowest first, or `null` when there is
+   * nothing to read from.
+   *
+   * Per rung rather than as a total, because `Capsules.open(capsuleId, amount)` names the rung
+   * it burns: a wallet holding three Rare capsules and no Common ones cannot open "three
+   * capsules", it can open three *Rare* capsules. The total is derived from this — see
+   * `getMyCapsules` — so the two can never disagree about what is held.
+   */
+  async capsuleBalances() {
     const address = this.capsuleContractAddress();
     if (!address || !this.isConnected || !this.provider) return null;
+
+    const CAPSULE_TYPE_COUNT = 4; // Capsules.sol `TYPE_COUNT` — ids are 1-based.
 
     try {
       const provider = new ethers.providers.Web3Provider(this.provider);
       const contract = new ethers.Contract(address, [
-        'function balanceOf(address owner) view returns (uint256)'
+        'function balanceOf(address owner, uint256 id) view returns (uint256)'
       ], provider);
-      const balance = await contract.balanceOf(this.userAddress);
-      return balance.toNumber();
+      const balances = await Promise.all(
+        Array.from({ length: CAPSULE_TYPE_COUNT }, (_, i) => contract.balanceOf(this.userAddress, i + 1))
+      );
+      return balances.map((value) => value.toNumber());
     } catch (error) {
       console.warn('Could not read capsule balance:', error.message);
       return null;
@@ -418,23 +483,39 @@ class WalletManager {
       return { success: false, error: 'Not connected' };
     }
 
+    // The rung has to be named, and it has to be one the wallet holds: `open()` burns what it
+    // is told to burn, so opening rung 1 on a wallet holding only rung 3 reverts. Lowest rung
+    // with enough capsules first — a rarer capsule is worth keeping, and spending it should be
+    // a choice rather than something a "x3" button does on the player's behalf.
+    const held = await this.capsuleBalances();
+    const enough = held ? held.findIndex((n) => n >= quantity) : -1;
+    let capsuleId = enough >= 0 ? enough + 1 : 0;
+    if (!capsuleId) {
+      const any = held ? held.findIndex((n) => n > 0) : -1;
+      if (any < 0) return { success: false, error: 'This wallet holds no capsules to open.' };
+      capsuleId = any + 1;
+      quantity = held[any];
+    }
+
     try {
       const provider = new ethers.providers.Web3Provider(this.provider);
       const signer = provider.getSigner();
       const contract = new ethers.Contract(address, [
-        'function open(uint256 quantity)',
+        'function open(uint256 capsuleId, uint256 amount)',
         'function openPrice() view returns (uint256)'
       ], signer);
 
       const costPer = await contract.openPrice();
       const cost = costPer.mul(quantity);
 
-      const approved = await this.approveDNG(ethers.utils.formatEther(cost));
+      // The capsules contract takes the money itself (and forwards it into the vault), so it —
+      // not the collection — is the spender this approval has to name.
+      const approved = await this.approveDNG(ethers.utils.formatEther(cost), address);
       if (!approved) throw new Error('Token approval failed');
 
-      const tx = await contract.open(quantity);
+      const tx = await contract.open(capsuleId, quantity);
       const receipt = await tx.wait();
-      return { success: true, txHash: tx.hash, blockNumber: receipt.blockNumber };
+      return { success: true, txHash: tx.hash, blockNumber: receipt.blockNumber, capsuleId, count: quantity };
     } catch (error) {
       console.error('❌ Capsule open failed:', error);
       return { success: false, error: error.code === 4001 ? 'Cancelled' : error.message };
@@ -456,44 +537,33 @@ class WalletManager {
     try {
       console.log(`⚔️ Batch minting ${quantity} knights...`);
       
-      const nftABI = [
-        'function mintKnight() returns (uint256)'
-      ];
-      
-      const provider = new ethers.providers.Web3Provider(this.provider);
-      const signer = provider.getSigner();
-      const contract = new ethers.Contract(
-        this.nftContractAddress,
-        nftABI,
-        signer
-      );
+      // `summon()` is the only way a knight enters circulation, it charges `SUMMON_PRICE`
+      // each time, and it takes no count — so "batch" is one approval followed by one
+      // transaction per knight. Sent **sequentially on purpose**: each one needs the nonce the
+      // previous one consumed, and firing them concurrently is how a wallet ends up with a
+      // replaced transaction and a player wondering which knight they paid for.
+      const contract = new ethers.Contract(this.nftContractAddress, [
+        'function summon() returns (uint256)',
+        'function SUMMON_PRICE() view returns (uint256)'
+      ], provider.getSigner());
+
+      const price = await contract.SUMMON_PRICE();
+      const total = ethers.utils.formatEther(price.mul(quantity));
+      const approved = await this.approveDNG(total);
+      if (!approved) throw new Error('Token approval failed');
 
       const results = [];
-      const promises = [];
-      
-      // Send all transactions in parallel
       for (let i = 0; i < quantity; i++) {
-        console.log(`📝 Sending mint transaction ${i + 1}/${quantity}...`);
-        promises.push(contract.mintKnight());
+        console.log(`📝 Summoning knight ${i + 1}/${quantity}...`);
+        // Re-estimated per knight, because the cost *changes* with the tier that gets rolled — see
+        // `summonGasLimit` below. Reusing the first estimate for the whole batch would reintroduce
+        // the same failure the buffer exists to prevent.
+        const tx = await contract.summon({ gasLimit: await this.summonGasLimit(contract) });
+        const receipt = await tx.wait();
+        results.push({ success: true, txHash: tx.hash, blockNumber: receipt.blockNumber });
       }
 
-      // Wait for all transactions to be sent
-      const transactions = await Promise.all(promises);
-      console.log(`✅ All ${quantity} transactions sent!`);
-
-      // Wait for all confirmations
-      for (let i = 0; i < transactions.length; i++) {
-        console.log(`⏳ Waiting for confirmation ${i + 1}/${quantity}... (tx: ${transactions[i].hash})`);
-        const receipt = await transactions[i].wait();
-        results.push({
-          success: true,
-          txHash: transactions[i].hash,
-          blockNumber: receipt.blockNumber
-        });
-        console.log(`✅ Knight ${i + 1}/${quantity} minted!`);
-      }
-
-      console.log(`🎉 All ${quantity} knights minted successfully!`);
+      console.log(`🎉 All ${quantity} knights summoned`);
       
       return {
         success: true,
@@ -517,10 +587,18 @@ class WalletManager {
     try {
       console.log('📦 Fetching knights from blockchain...');
       
+      // Read by **ownership**, not by scanning token ids.
+      //
+      // The old ABI asked for `totalMinted()` and swept `0…totalMinted` — a function the live
+      // collection does not have, and a loop that gets slower with every knight ever minted.
+      // `Knights.sol` is `ERC721Enumerable`, so the wallet's own tokens are indexed and this is
+      // `balanceOf` plus that many lookups. `getKnightInfo` is the one call kept from the old
+      // interface: the collection deliberately publishes the same shape so the game contract
+      // and this page do not need a second reader.
       const nftABI = [
         'function balanceOf(address) view returns (uint256)',
-        'function totalMinted() view returns (uint256)',
-        'function getKnightInfo(uint256) view returns (address owner, uint8 rarity, string memory rarityName)'
+        'function tokenOfOwnerByIndex(address owner, uint256 index) view returns (uint256)',
+        'function getKnightInfo(uint256 tokenId) view returns (address owner, uint8 rarity, string memory rarityName)'
       ];
       
       const provider = new ethers.providers.Web3Provider(this.provider);
@@ -538,23 +616,16 @@ class WalletManager {
       if (knightCount === 0) return [];
       
       const knights = [];
-      const totalMinted = (await contract.totalMinted()).toNumber();
-      
-      for (let tokenId = 0; tokenId < totalMinted && knights.length < knightCount; tokenId++) {
-        try {
-          const info = await contract.getKnightInfo(tokenId);
-          
-          if (info.owner.toLowerCase() === this.userAddress.toLowerCase()) {
-            const rarityNames = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
-            knights.push({
-              tokenId,
-              rarity: rarityNames[info.rarity] || 'common',
-              owner: info.owner
-            });
-          }
-        } catch (e) {
-          // Token doesn't exist, skip
-        }
+      const rarityNames = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
+
+      for (let i = 0; i < knightCount; i++) {
+        const tokenId = await contract.tokenOfOwnerByIndex(this.userAddress, i);
+        const info = await contract.getKnightInfo(tokenId);
+        knights.push({
+          tokenId: tokenId.toNumber(),
+          rarity: rarityNames[info.rarity] || 'common',
+          owner: info.owner
+        });
       }
       
       console.log('✅ Loaded', knights.length, 'knights');

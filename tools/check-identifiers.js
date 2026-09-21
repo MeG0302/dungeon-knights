@@ -7,7 +7,7 @@
  * This exists because of a specific failure. The Knights side of the staking vault rendered a
  * ratio through a formatter that was never defined:
  *
- *     <strong>{pct(knightsCap.ratioOfReference)}</strong>
+ *     <strong>{pct(knightsReferenceSize.ratioOfReference)}</strong>
  *
  * `next build` compiles that happily — it is a valid call expression — and so does every Node
  * harness, because none of them renders React. So the build was green, 126 staking checks were

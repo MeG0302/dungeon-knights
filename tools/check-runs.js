@@ -34,7 +34,10 @@ process.env.GAME_SIGNER_PRIVATE_KEY = process.env.GAME_SIGNER_PRIVATE_KEY
 const BASE = process.argv[2] || null;
 const DEGRADED_BASE = process.argv[3] || null;
 const RPC = process.env.GAME_RPC_URL || 'https://rpc.testnet.chain.robinhood.com';
-const NFT = process.env.KNIGHT_NFT_ADDRESS || '0x06c7D4b0C35858c78c3B213fbf50fB4A25f20512';
+// The live collection. It used to default to the first one (`0x06c7…`), which meant this
+// harness read a retired contract the server stopped signing for — a green run against the
+// wrong collection is worse than a red one against the right one.
+const NFT = process.env.KNIGHT_NFT_ADDRESS || '0x27Cfbb763188a50Fe1C0fFfBe2552b1945eE1B2D';
 // Must match the server's POINTS_SESSION_SECRET: game routes authenticate with the same
 // wallet session the Points Program issues.
 const SECRET = process.env.POINTS_SESSION_SECRET || 'dev-only-points-session-secret';

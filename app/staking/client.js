@@ -9,12 +9,21 @@ import {
 } from '../../lib/points-client';
 import {
     CAPSULES_PER_WEEK, GENESIS_SUPPLY, HASH_POWER_BANDS, HASH_POWER_MAX, HASH_POWER_MIN,
-    KNIGHTS_CAP, TICKET_CAP_HOURS, WEEK_MS, bandFor, ticketsPerHour, weekEnd,
+    KNIGHTS_REFERENCE_SIZE, TICKET_CAP_HOURS, WEEK_MS, bandFor, ticketsPerHour, weekEnd,
 } from '../../lib/staking-config';
 import {
     COLLECTIONS, COLLECTION_LABELS, KNIGHTS_HASH_POWER,
-    applyAction, knightsYieldAtCap, loadVault, refresh, SOURCE_PREVIEW,
+    applyAction, knightsYieldAtReference, loadVault, refresh, SOURCE_PREVIEW,
 } from '../../lib/staking-source';
+// The transaction path. Imported here rather than reimplemented: a stake that reaches the chain
+// is one approval plus one call, and the order and the guard rails around it are the same code
+// `tools/check-staking-writes.js` drives without a browser.
+import { claimRewards, stakeKnight, stakeMany, unstakeKnight } from '../../lib/staking-writes';
+// The portraits. `lib/knights.js` holds the tier table, so the vault shows the same face for a
+// tier that the Hall's roster and the Summoning Chamber do — one table, three screens. The
+// choice of portrait is a function rather than a lookup written out here, so the same rule can
+// be asserted without a browser (`tools/check-rarity.js`).
+import { knightPortrait } from '../../lib/knights';
 
 // The tier ladder's own range, for the same reason the Genesis side has one: a bar drawn against
 // the wrong range is not a rough picture of the value, it is a bar that is always empty. Knights
@@ -35,6 +44,21 @@ const TOUR_ID = 'staking-v1';
 
 const TICK_MS = 1000;
 const SEEN_KEY = 'dk_staking_seen';
+
+/**
+ * Which of the vault's buttons are a transaction when the vault is real.
+ *
+ * Four of them, and the four that are missing are missing on purpose. Entering the draw is not
+ * one: on chain the ticket ledger *is* the entry, and `GenesisStaking.ticketsInWeek` is what the
+ * raffle is drawn from — so a button offering to "enter" would be offering a transaction no
+ * contract has. Opening a capsule belongs to the Summoning Chamber, where the knight is revealed.
+ */
+const CHAIN_ACTIONS = new Set(['stake', 'stakeAll', 'unstake', 'claim']);
+
+/** A hash is 66 characters; six and four are enough to recognise it and to paste into an explorer. */
+function shortHash(hash) {
+    return hash ? `${hash.slice(0, 10)}…${hash.slice(-6)}` : '';
+}
 
 // The tallest band sets the scale for the ladder, so the bars compare against the
 // collection rather than against each other.
@@ -161,8 +185,19 @@ function tourSteps(live, actions) {
 }
 
 // ------------------------------------------------------------------- formatting
+/**
+ * A whole number, or an em dash when there is no number to print.
+ *
+ * The dash is load-bearing. Several of these figures are `null` on a chain-backed vault — a pool
+ * total the page declined to read, a count the contracts do not publish — and `Math.round(null || 0)`
+ * turns every one of them into a confident **0**. A missing number printed as zero is the exact
+ * failure this page is built to avoid: "0 tickets in the draw" and "the draw is unreadable" are
+ * opposite messages, and only one of them is true.
+ */
 function fmtInt(value) {
-    return Math.round(value || 0).toLocaleString();
+    if (value === null || value === undefined) return '—';
+    const number = Number(value);
+    return Number.isFinite(number) ? Math.round(number).toLocaleString() : '—';
 }
 
 function fmtHours(hours) {
@@ -184,9 +219,16 @@ function fmtCountdown(ms, phase) {
     return `${mins}m ${secs}s`;
 }
 
-/** Pool share reads as a fraction of a percent for a while, so it needs its own scale. */
+/**
+ * Pool share reads as a fraction of a percent for a while, so it needs its own scale.
+ *
+ * `null` is a share that could not be computed — the pool total it is a fraction *of* was not read —
+ * and it prints as a dash rather than as 0%. The difference is not cosmetic: 0% says "you have no
+ * chance in this draw", which is a much worse thing to tell someone than "this is not known".
+ */
 function fmtShare(fraction) {
-    const pct = 100 * (fraction || 0);
+    if (fraction === null || fraction === undefined) return '—';
+    const pct = 100 * fraction;
     if (pct === 0) return '0%';
     if (pct < 0.01) return `${pct.toFixed(4)}%`;
     return `${pct.toFixed(2)}%`;
@@ -201,7 +243,8 @@ function fmtShare(fraction) {
  * point: the staker can see it earning.
  */
 function fmtSharePrecise(fraction, digits = 5) {
-    return `${(100 * (fraction || 0)).toFixed(digits)}%`;
+    if (fraction === null || fraction === undefined) return '—';
+    return `${(100 * fraction).toFixed(digits)}%`;
 }
 
 function fmtDng(value) {
@@ -299,7 +342,7 @@ export default function StakingClient() {
      * data that is usually already in hand. On a chain deployment that is a network round trip
      * of blank page, which is the moment a player is most likely to think the vault broke.
      */
-    const load = useCallback(async (who, { quiet = false } = {}) => {
+    const load = useCallback(async (who, { quiet = false, fresh = false } = {}) => {
         if (!quiet) setPhase('loading');
         try {
             const config = configRef.current
@@ -309,6 +352,9 @@ export default function StakingClient() {
                 nowMs: Date.now(),
                 collection: collectionRef.current,
                 fetchJson,
+                // Set by the transaction path once the chain has accepted a write, so the read that
+                // follows cannot answer from a cache built before the wallet changed anything.
+                fresh,
             });
             setVault(next);
             setPhase('ready');
@@ -475,10 +521,115 @@ export default function StakingClient() {
     };
 
     // ------------------------------------------------------------------- the actions
-    const run = useCallback((action, payload) => {
+    /**
+     * Show a line for a while, then let it go.
+     *
+     * Guarded against its own timeout: a later message replaces an earlier one, and the older
+     * timer must not then wipe the newer notice off the screen.
+     */
+    const flash = useCallback((message, ms = 6000) => {
+        setNotice(message);
+        if (!message) return;
+        setTimeout(() => setNotice((current) => (current === message ? null : current)), ms);
+    }, []);
+
+    /**
+     * Send a chain action, then re-read the vault from the chain.
+     *
+     * The reload is the point of the whole exercise: a stake moves the knight out of the wallet
+     * and into the pool, so the only way to know the new state is to ask. It is asked **fresh**,
+     * bypassing the route's 30-second cache, because reading back the state from before the
+     * transaction is exactly what makes a working stake look like a vault that did nothing.
+     */
+    const sendChainAction = useCallback(async (action, payload, snapshot) => {
+        const config = configRef.current;
+        const nft = config?.collections?.[snapshot.collection]?.nft;
+        const staking = snapshot.collection === 'knights'
+            ? config?.addresses?.knightsStaking
+            : config?.addresses?.staking;
+
+        // Checked before a wallet is asked to sign anything, so a configuration gap reads as a
+        // configuration gap rather than as a wallet that refused.
+        if (!nft || !staking) {
+            const message = `The ${snapshot.collection === 'knights' ? 'Knights' : 'Genesis'} staking pool is not configured for this network, so there is nothing to send this to.`;
+            setError(message);
+            if (window.Arya?.say) window.Arya.say('alarm', { message });
+            return null;
+        }
+
+        const expectedChainId = config?.chainId || null;
+        const before = snapshot.claim?.payable ?? null;
+        const stage = ({ stage: at, step, hash }) => {
+            if (at === 'sending') flash(`${step.label}…`, 60_000);
+            else if (at === 'sent') flash(`${step.label} — sent ${shortHash(hash)}. Waiting for the chain…`, 60_000);
+        };
+
         setError(null);
         setBusy(action);
-        const result = applyAction(liveRef.current, action, payload, Date.now());
+        try {
+            let done = 0;
+            if (action === 'stake') {
+                await stakeKnight({ staking, collection: nft, tokenId: payload.tokenId, onStage: stage, expectedChainId });
+                done = 1;
+            } else if (action === 'stakeAll') {
+                // Every knight the wallet owns, in one approval. The approval is read once and
+                // reused: re-reading it per knight would be one extra round trip per knight, and
+                // the answer cannot change in the middle of a batch the same wallet is signing.
+                const tokenIds = (snapshot.owned || []).map((knight) => knight.tokenId);
+                if (!tokenIds.length) throw new Error('Nothing left to stake.');
+                await stakeMany({ staking, collection: nft, tokenIds, onStage: stage, expectedChainId });
+                done = tokenIds.length;
+            } else if (action === 'unstake') {
+                await unstakeKnight({ staking, tokenId: payload.tokenId, onStage: stage, expectedChainId });
+                done = 1;
+            } else if (action === 'claim') {
+                await claimRewards({ staking, onStage: stage, expectedChainId });
+                done = 1;
+            }
+
+            await load(snapshot.wallet, { quiet: true, fresh: true });
+
+            const unit = snapshot.collection === 'knights' ? 'knight' : 'Genesis Knight';
+            const message = action === 'claim'
+                ? (before === null
+                    ? 'Claimed. What the staking line could not pay stays claimable and pays out later.'
+                    : `Claimed up to ${fmtDng(before)} from this week’s staking line. Anything it could not pay stays claimable.`)
+                : `${done} ${unit}${done === 1 ? '' : 's'} ${action === 'unstake' ? 'back in your wallet' : 'staked'} — confirmed on chain.`;
+            flash(message);
+            if (window.Arya?.say) window.Arya.say('ready', { message });
+            return { sent: true };
+        } catch (err) {
+            const message = err?.message || 'The transaction failed.';
+            setError(message);
+            flash(null);
+            if (window.Arya?.say) window.Arya.say('alarm', { message });
+            return null;
+        } finally {
+            setBusy(null);
+        }
+    }, [flash, load]);
+
+    /**
+     * What a button does.
+     *
+     * Two implementations behind one entry point, and which one runs is **the snapshot's own
+     * answer** rather than the page's opinion: `writesToChain` is set only on a chain snapshot
+     * whose side has both a reachable interface and a configured pool. Everything else — the
+     * deterministic preview, and a real collection whose pool the page cannot reach — mutates
+     * locally and says so, because a button that looks like a stake and reaches nothing is the one
+     * failure this page must never have.
+     */
+    const run = useCallback(async (action, payload = {}) => {
+        const current = liveRef.current;
+        if (!current) return null;
+
+        if (current.writesToChain && CHAIN_ACTIONS.has(action)) {
+            return sendChainAction(action, payload, current);
+        }
+
+        setError(null);
+        setBusy(action);
+        const result = applyAction(current, action, payload, Date.now());
         setBusy(null);
         if (result.error) {
             setError(result.error);
@@ -486,17 +637,14 @@ export default function StakingClient() {
             return null;
         }
         if (result.snapshot) setVault(result.snapshot);
-        if (result.notice) {
-            setNotice(result.notice);
-            setTimeout(() => setNotice((current) => (current === result.notice ? null : current)), 6000);
-        }
+        if (result.notice) flash(result.notice);
         if (result.redirect) {
             // A capsule opens in the Summoning Chamber, where the knight is revealed.
             setTimeout(() => { window.location.href = result.redirect; }, 1200);
         }
         if (window.Arya?.say) window.Arya.say('ready', { message: result.notice });
         return result;
-    }, []);
+    }, [flash, sendChainAction]);
 
     const handleConnect = async () => {
         setError(null);
@@ -523,9 +671,15 @@ export default function StakingClient() {
     const pageStyles = (
         <>
             <link rel="stylesheet" href="/theme.css" />
-            <link rel="stylesheet" href="/css/staking.css?v=5" />
+            <link rel="stylesheet" href="/css/staking.css?v=7" />
             <link rel="stylesheet" href="/css/wallet-widget.css" />
             <link rel="stylesheet" href="/css/arya.css?v=3" />
+            {/* ethers v5 UMD, the same pinned copy every legacy page loads — first in the list,
+                because it is the one the others and this page sign with. It is loaded here rather
+                than bundled, because a second copy compiled into the React chunk is how
+                `parseEther` and `utils.parseEther` end up in one page. The write path checks for
+                the global before it sends anything and says so plainly when it is not there yet. */}
+            <Script src="/ethers-5.7.2.umd.min.js" strategy="afterInteractive" />
             <Script src="/arya.js?v=3" strategy="afterInteractive" />
             <Script src="/wallet-source.js?v=2" strategy="afterInteractive" />
         </>
@@ -546,7 +700,7 @@ export default function StakingClient() {
                     <div className="sv-main-row is-centered">
                         <div className="sv-empty">
                             <div className="sv-empty-title">Opening the vault</div>
-                            <div className="sv-empty-text">Reading your Genesis Knights{phase === 'boot' ? '' : ' and this week&rsquo;s draw'}…</div>
+                            <div className="sv-empty-text">Reading the vault — your knights{phase === 'boot' ? '' : ' and this week&rsquo;s stake'}…</div>
                         </div>
                     </div>
                 </div>
@@ -566,7 +720,16 @@ export default function StakingClient() {
     // simulation. Read from the snapshot rather than derived here, because the page must not
     // decide for itself whether it can write.
     const simulated = !!live?.simulated;
-    const isKnights = collection === 'knights';
+    // Which side the *board* is showing — read from the snapshot, not from the click.
+    //
+    // Switching sides is deliberately quiet: the previous board stays up while the new one is
+    // fetched, so a player never watches their vault blank out. But the selection flips instantly,
+    // and deriving the labels from it captioned the old side's numbers with the new side's words —
+    // a tile headed "The Genesis staking line" quoting the Knights pool, for as long as the read
+    // took. The snapshot knows which collection it describes, so the labels and the numbers change
+    // together, when the data arrives; the tab highlight follows the click a step ahead of them.
+    const boardCollection = live?.collection || collection;
+    const isKnights = boardCollection === 'knights';
     // What the chain read actually managed, when one was attempted. Kept whole rather than
     // reduced to a count, because the honest part is not how many knights came back — it is
     // whether that number is the *whole* answer.
@@ -595,7 +758,7 @@ export default function StakingClient() {
     // The ratio a Knights staker is actually exposed to: the pool is a fixed share of the
     // budget, so filling the uncapped collection divides it. D irectly from the model rather
     // than written into the copy, so it cannot drift from the economy page.
-    const knightsCap = knightsYieldAtCap();
+    const knightsReferenceSize = knightsYieldAtReference();
 
     // Tickets bank at exactly the hash power, so the staked total *is* the hourly rate.
     const hourlyTickets = totals.hashPower || 0;
@@ -605,8 +768,45 @@ export default function StakingClient() {
     const weekProgress = Math.min(1, Math.max(0, (nowMs - weekOpenAt) / WEEK_MS));
 
     const countdownMs = (week.drawAt || 0) - nowMs;
+    // What the wallet can actually take, and on a chain-backed vault that is the pool's own
+    // `claimableNow` — what `claim()` would pay right now, already clamped by this week's line.
+    // The model's share of the published pool is the fallback, not the answer, because the
+    // contract is the thing that decides. `null` means neither could be computed, which the
+    // summary prints as a dash rather than as zero.
+    const chainClaimable = typeof live?.claim?.payable === 'number' ? live.claim.payable : null;
     const myAccruedShare = staked.reduce((sum, knight) => sum + (knight.accruedShare || 0), 0);
-    const claimable = poolDng === null ? null : myAccruedShare * poolDng;
+    const claimable = chainClaimable !== null
+        ? chainClaimable
+        : (poolDng === null ? null : myAccruedShare * poolDng);
+    // Whether this side's entries into the draw are a ledger the contract keeps. When they are, the
+    // page explains that instead of offering an enter/withdraw button the chain has no call for.
+    const entriesAutomatic = !!live?.entriesAutomatic;
+    // Whether a button on this page signs a transaction. Read from the snapshot, never inferred
+    // from the presence of an address: the same vault can be chain-backed and still unable to send
+    // (a pool that is not configured), and copy that promised a transaction in that state would be
+    // describing a different page.
+    const realWrites = !!live?.writesToChain;
+    // Whether the pool total behind `totals.myShare` was read. When it was not, the share is `null`
+    // and every place that prints it says why rather than showing a percentage of nothing.
+    const poolUnknown = totals.totalTickets === null || totals.totalTickets === undefined;
+
+    // Claim, and the two things a player needs before pressing it.
+    //
+    // `claim()` is a **wallet-level** call — it settles every stake in one pass — so the button is
+    // deliberately the same behind every card, and the title says so. It is disabled when the
+    // pool's own `claimableNow` is zero, because that is precisely the state the contract reverts
+    // in ("Nothing to claim"), and a button whose only outcome is a reverted transaction is worse
+    // than one that explains itself.
+    const claimTitle = live?.claim
+        ? (chainClaimable === null
+            ? 'The pool’s claimable figure could not be read just now.'
+            : chainClaimable > 0
+                ? `Claim ${fmtDng(chainClaimable)} — one call settles every knight this wallet has staked.`
+                : (live.claim.pending > 0
+                    ? 'This week’s staking line is already spent. What has accrued stays claimable and pays out as the line refills.'
+                    : 'Nothing has accrued yet. Yield builds while a knight is staked.'))
+        : (poolDng === null ? 'The weekly pool is not set yet' : 'Claim accrued DNG');
+    const claimDisabled = !!live?.claim && chainClaimable === 0;
 
     // One sentence for a screen reader, instead of a tick every second.
     const liveSummary = connected
@@ -630,10 +830,23 @@ export default function StakingClient() {
     // claims, and a player deciding whether to act needs to know which one they are looking at.
     const simulationBadge = simulated && (
         <span
-            className="sv-preview-badge is-sim"
+            className="sv-sim-badge"
             title="Your knights are real, read from the collection. The staking contract is not deployed, so staking here is a simulation and sends no transaction."
         >
             ● Real knights · simulated staking
+        </span>
+    );
+
+    // The third state, and the one that used to be impossible: a side whose buttons really do sign
+    // transactions. It is stated rather than merely implied by the absence of a warning, because
+    // "nothing warns me" and "I am about to sign a transaction" are very different things to put in
+    // front of someone with a wallet open.
+    const chainBadge = live?.writesToChain && (
+        <span
+            className="sv-chain-badge"
+            title="Staking, unstaking and claiming on this page are transactions you sign in your wallet and that land on chain."
+        >
+            ● On chain · you sign
         </span>
     );
 
@@ -671,6 +884,7 @@ export default function StakingClient() {
                             My {collectionLabel}
                             {previewBadge}
                             {simulationBadge}
+                            {chainBadge}
                         </div>
                         <div className="side-panel-body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
 
@@ -789,9 +1003,11 @@ export default function StakingClient() {
                                         ) : (
                                             <>
                                                 The pool here is a <strong>fixed share of the weekly budget</strong>, and the
-                                                collection is uncapped — so the more Knights that stake, the less each one
-                                                earns. At the cap of {fmtInt(KNIGHTS_CAP)} a staked Knight earns{' '}
-                                                <strong>{fmtPercent(knightsCap.ratioOfReference)}</strong> of the reference rate.
+                                                collection has no supply limit — so the more Knights there are, the less each
+                                                one earns, without a floor. At {fmtInt(KNIGHTS_REFERENCE_SIZE)} Knights a staked
+                                                Knight earns{' '}
+                                                <strong>{fmtPercent(knightsReferenceSize.ratioOfReference)}</strong> of the rate it
+                                                earns while the population is at the reference, and half that at twice the size.
                                             </>
                                         )}
                                     </p>
@@ -871,7 +1087,7 @@ export default function StakingClient() {
                                     <div className="sv-empty-title">The vault is closed</div>
                                     <div className="sv-empty-text">
                                         {isKnights
-                                            ? `Connect a wallet to see your Knights and stake them for yield. ${fmtInt(KNIGHTS_CAP)} of them at most, and no draw on this side — that is Genesis territory.`
+                                            ? `Connect a wallet to see your Knights and stake them for yield. No supply limit on this collection, and no draw on this side — that is Genesis territory.`
                                             : 'Connect a wallet to see your Genesis Knights, stake them, and enter the weekly draw.'}
                                     </div>
                                     <button
@@ -947,7 +1163,7 @@ export default function StakingClient() {
                                     {mine.length > 1 && (
                                         <div className="sv-controls">
                                             <span className="sv-controls-label">Sort</span>
-                                            <div className="sv-seg" role="group" aria-label="Sort your Genesis Knights">
+                                            <div className="sv-seg" role="group" aria-label={`Sort your ${collectionLabel} knights`}>
                                                 {SORTS.map((entry) => (
                                                     <button
                                                         key={entry.key}
@@ -990,7 +1206,9 @@ export default function StakingClient() {
                                         <span className="sv-bulk-note">
                                             {owned.length
                                                 ? `${owned.length} knight${owned.length === 1 ? '' : 's'} ready to stake`
-                                                : 'Every Genesis Knight is staked'}
+                                                : staked.length
+                                                    ? 'Every knight this wallet holds is staked'
+                                                    : 'Nothing here to stake'}
                                         </span>
                                         {owned.length > 1 && (
                                             <button className="btn btn-secondary btn-sm" onClick={() => run('stakeAll')} disabled={!canWrite || !!busy}>
@@ -1001,10 +1219,11 @@ export default function StakingClient() {
 
                                     {!owned.length && !staked.length && (
                                         <div className="sv-empty">
-                                            <div className="sv-empty-title">No Genesis Knights</div>
+                                            <div className="sv-empty-title">No {collectionLabel} Knights</div>
                                             <div className="sv-empty-text">
-                                                This wallet holds none of the 1,024 Genesis Knights. Those are the only
-                                                knights the vault accepts.
+                                                {isKnights
+                                                    ? 'This wallet holds no Knights on this contract. Knights come out of capsules, opened in the Summoning Chamber.'
+                                                    : `This wallet holds none of the ${fmtInt(GENESIS_SUPPLY)} Genesis Knights. Those are the only knights this side of the vault accepts.`}
                                             </div>
                                         </div>
                                     )}
@@ -1049,6 +1268,15 @@ export default function StakingClient() {
                                                     nowMs={nowMs}
                                                     onClaim={() => run('claim', { tokenId: knight.tokenId })}
                                                     onUnstake={() => run('unstake', { tokenId: knight.tokenId })}
+                                                    // The claim state travels into the card as well as the
+                                                    // table. It did not once: the card's own Claim button
+                                                    // ignored `claimDisabled`, so the button that is
+                                                    // actually on screen offered a transaction the contract
+                                                    // reverts ("Nothing to claim") while the table's copy
+                                                    // was correctly disabled — the same action described
+                                                    // two different ways on one page.
+                                                    claimDisabled={claimDisabled}
+                                                    claimTitle={claimTitle}
                                                 />
                                             ))}
                                         </div>
@@ -1081,16 +1309,25 @@ export default function StakingClient() {
                                     </span>
                                 </div>
                                 <div className="sv-tile">
-                                    <span className="sv-tile-label">{isKnights ? 'Raffle tickets' : 'Capsules left'}</span>
+                                    <span className="sv-tile-label">{isKnights ? 'Yield weight' : 'Capsules left'}</span>
                                     <span className="sv-tile-value sv-num" aria-hidden="true">
                                         {isKnights
-                                            ? '0'
-                                            : <>{pool.left ?? CAPSULES_PER_WEEK} <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>/ {pool.capsulesPerWeek ?? CAPSULES_PER_WEEK}</span></>}
+                                            ? fmtInt(totals.hashPower)
+                                            : pool.left === null
+                                                // The contract does not publish how many of this week's
+                                                // capsules have already been awarded, so on a
+                                                // chain-backed vault this is a dash rather than a
+                                                // repeating "200 left" that would be true only on
+                                                // the first minute of the week.
+                                                ? '—'
+                                                : <>{pool.left} <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>/ {pool.capsulesPerWeek ?? CAPSULES_PER_WEEK}</span></>}
                                     </span>
                                     <span className="sv-tile-sub">
                                         {isKnights
                                             ? 'The weekly draw is Genesis-only — a capsule mints a Knight, so this side earns yield and nothing else.'
-                                            : <>Your share of the draw: {fmtShare(totals.myShare)} → {fmtInt(totals.expectedCapsules)} expected</>}
+                                            : poolUnknown
+                                                ? 'The ticket total this week’s share is measured against could not be read, so your odds are not shown rather than guessed.'
+                                                : <>Your share of the draw: {fmtShare(totals.myShare)} → {fmtInt(totals.expectedCapsules)} expected</>}
                                     </span>
                                 </div>
                                 <div className={`sv-tile ${week.phase === 'pending' ? 'is-drawing' : ''} ${week.phase === 'final' ? 'is-final' : ''}`}>
@@ -1213,7 +1450,7 @@ export default function StakingClient() {
                                             <dt>Capsule open</dt>
                                             <dd>
                                                 <strong className="sv-num">{fmtInt(economy.capsuleOpenPriceAtZero)} DNG</strong> rising to{` `}
-                                                {fmtInt(economy.capsuleOpenPriceAtCap)} at {fmtInt(economy.knightsCap)} Knights
+                                                {fmtInt(economy.capsuleOpenPriceAtReference)} at {fmtInt(economy.knightsReferenceSize)} Knights
                                             </dd>
                                         </div>
                                     </dl>
@@ -1264,8 +1501,8 @@ export default function StakingClient() {
                                             <div className="sv-empty-title">Nothing staked yet</div>
                                             <div className="sv-empty-text">
                                                 {isKnights
-                                                    ? `Stake a Knight and one thing starts: a share of the weekly yield pool that grows every second. There is no draw on this side — that is Genesis territory. Staking is a transaction, so you approve the vault once and then stake.`
-                                                    : 'Stake a Genesis Knight and two things start at once: tickets for the weekly draw, and a share of the weekly DNG pool that grows every second. Staking is a transaction — you approve the vault once, then stake.'}
+                                                    ? `Stake a Knight and one thing starts: a share of the weekly yield pool that grows every second. There is no draw on this side — that is Genesis territory. ${realWrites ? 'Staking is a transaction, so you approve the vault once and then stake.' : 'Staking here is a simulation, so nothing you press reaches the chain.'}`
+                                                    : `Stake a Genesis Knight and two things start at once: tickets for the weekly draw, and a share of the weekly DNG pool that grows every second. ${realWrites ? 'Staking is a transaction — you approve the vault once, then stake.' : 'Staking here is a simulation, so nothing you press reaches the chain.'}`}
                                             </div>
                                         </div>
                                     ) : (
@@ -1280,8 +1517,10 @@ export default function StakingClient() {
                                                 {staked.map((knight) => (
                                                     <div className="sv-row" key={knight.tokenId}>
                                                         <span className="sv-row-name">
-                                                            <span className="sv-art" data-rarity="legendary" aria-hidden="true">
-                                                                <span className="sv-art-glyph">✦</span>
+                                                            <span className="sv-art" data-rarity={knight.rarity || 'genesis'} aria-hidden="true">
+                                                                {knightPortrait(knight, isKnights)
+                                                                    ? <img src={knightPortrait(knight, isKnights)} alt="" />
+                                                                    : <span className="sv-art-glyph">✦</span>}
                                                             </span>
                                                             <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                                                                 {knight.name}
@@ -1294,14 +1533,18 @@ export default function StakingClient() {
                                                         <span className="sv-row-num sv-col-hide-narrow">{fmtInt(knight.tickets)}</span>
                                                         <span className="sv-row-num is-gold sv-num" aria-hidden="true">
                                                             {fmtShare(knight.accruedShare)}
-                                                            {poolDng !== null && ` · ${fmtDng(knight.accruedDng)}`}
+                                                            {/* A real stake has no per-knight DNG to show, because the contract
+                                                                publishes only the wallet's total — so the share stands alone
+                                                                rather than being followed by a figure the pool cannot pay. */}
+                                                            {knight.accruedDng !== null && knight.accruedDng !== undefined
+                                                                && ` · ${fmtDng(knight.accruedDng)}`}
                                                         </span>
                                                         <span className="sv-row-actions">
                                                             <button
                                                                 className="btn btn-secondary btn-sm"
                                                                 onClick={() => run('claim', { tokenId: knight.tokenId })}
-                                                                disabled={!canWrite || !!busy}
-                                                                title={poolDng === null ? 'The weekly pool is not set yet' : 'Claim accrued DNG'}
+                                                                disabled={!canWrite || !!busy || claimDisabled}
+                                                                title={claimTitle}
                                                             >
                                                                 Claim
                                                             </button>
@@ -1347,16 +1590,26 @@ export default function StakingClient() {
                                     <>
                                     <div className="sv-bulk">
                                         <span className="sv-bulk-note">
-                                            {live?.entries?.length
-                                                ? `${live.entries.length} of ${staked.length} knights entered · ${fmtInt(totals.myTickets)} tickets`
-                                                : 'No knights entered in this week’s draw'}
+                                            {entriesAutomatic
+                                                ? `Entered by staking · ${fmtInt(totals.myTickets)} tickets this week${poolUnknown ? ' · the pool total could not be read, so no odds are shown' : ''}`
+                                                : live?.entries?.length
+                                                    ? `${live.entries.length} of ${staked.length} knights entered · ${fmtInt(totals.myTickets)} tickets`
+                                                    : 'No knights entered in this week’s draw'}
                                         </span>
-                                        <button className="btn btn-primary btn-sm" onClick={() => run('enterAll')} disabled={!canWrite || !!busy || !staked.length}>
-                                            Enter all
-                                        </button>
-                                        <button className="btn btn-secondary btn-sm" onClick={() => run('withdrawAll')} disabled={!canWrite || !!busy || !live?.entries?.length}>
-                                            Withdraw all
-                                        </button>
+                                        {/* Two controls that only exist where entering is something a wallet can do.
+                                            On chain, tickets accrue to the stake and the draw reads the ledger — so the
+                                            pair is replaced by the sentence above rather than left to send a
+                                            transaction that has no contract behind it. */}
+                                        {!entriesAutomatic && (
+                                            <>
+                                                <button className="btn btn-primary btn-sm" onClick={() => run('enterAll')} disabled={!canWrite || !!busy || !staked.length}>
+                                                    Enter all
+                                                </button>
+                                                <button className="btn btn-secondary btn-sm" onClick={() => run('withdrawAll')} disabled={!canWrite || !!busy || !live?.entries?.length}>
+                                                    Withdraw all
+                                                </button>
+                                            </>
+                                        )}
                                     </div>
 
                                     {!staked.length ? (
@@ -1377,20 +1630,29 @@ export default function StakingClient() {
                                                 <span />
                                             </div>
                                             {staked.map((knight) => {
-                                                const expected = (totals.totalTickets ? knight.tickets / totals.totalTickets : 0) * CAPSULES_PER_WEEK;
+                                                const expected = totals.totalTickets
+                                                    ? (knight.tickets / totals.totalTickets) * CAPSULES_PER_WEEK
+                                                    : null;
                                                 return (
                                                     <div className="sv-row" key={knight.tokenId}>
                                                         <span className="sv-row-name">
                                                             {knight.name}
-                                                            {knight.entered && <span className="sv-chip is-in">In draw</span>}
+                                                            {(knight.entered || entriesAutomatic) && <span className="sv-chip is-in">In draw</span>}
                                                         </span>
                                                         <span className="sv-row-num sv-col-hide-narrow">{knight.hashPower} HP</span>
                                                         <span className="sv-row-num sv-col-hide-narrow">{fmtInt(knight.tickets)}</span>
                                                         <span className="sv-row-num is-gold" title="Expected capsules if the draw were held now">
-                                                            {expected.toFixed(1)}
+                                                            {expected === null ? '—' : expected.toFixed(1)}
                                                         </span>
                                                         <span className="sv-row-actions">
-                                                            {knight.entered ? (
+                                                            {/* Where the tickets are a ledger the draw reads, there is no
+                                                                entry to make: the stake *is* the entry, and offering a button
+                                                                would invent a mechanism no contract has. */}
+                                                            {entriesAutomatic ? (
+                                                                <span className="sv-chip is-in" title="On chain the ticket ledger is the entry — your staked knights are in this week's draw by staking, with no transaction to send.">
+                                                                    In draw
+                                                                </span>
+                                                            ) : knight.entered ? (
                                                                 <button className="btn btn-secondary btn-sm" onClick={() => run('withdrawRaffle', { tokenId: knight.tokenId })} disabled={!canWrite || !!busy}>
                                                                     Withdraw
                                                                 </button>
@@ -1407,7 +1669,7 @@ export default function StakingClient() {
                                     )}
 
                                     <div className="panel-section-title" style={{ fontSize: 11, letterSpacing: 1, color: 'var(--text-muted)' }}>
-                                        THIS WEEK&rsquo;S BOARD · {fmtInt(pool.totalTickets)} TICKETS
+                                        THIS WEEK&rsquo;S BOARD · {poolUnknown ? 'POOL TOTAL NOT READ' : `${fmtInt(pool.totalTickets)} TICKETS`}
                                     </div>
                                     <div className="sv-rows">
                                         <div className="sv-board-row sv-row-head">
@@ -1567,6 +1829,7 @@ export default function StakingClient() {
 function GenesisCard({
     knight, staked = false, busy, canWrite, simulated = false, nowMs,
     onStake, onClaim, onUnstake, collection = 'genesis',
+    claimDisabled = false, claimTitle = null,
 }) {
     // The card is the same card on both sides — a stake is a stake — but what the hours
     // *bank* is not: Genesis banks tickets into the weekly draw, Knights bank weight into
@@ -1587,6 +1850,7 @@ function GenesisCard({
     // so using it on both sides left every real Knight wearing no label at all.
     const band = isKnightsCard ? null : bandFor(knight.hashPower);
     const tierLabel = isKnightsCard ? (knight.tierName || null) : null;
+    const portrait = knightPortrait(knight, isKnightsCard);
     const rate = ticketsPerHour(knight.hashPower);
     const capped = hours >= TICKET_CAP_HOURS;
     const capPct = Math.min(100, (hours / TICKET_CAP_HOURS) * 100);
@@ -1594,8 +1858,8 @@ function GenesisCard({
     return (
         <div className={`sv-card ${staked ? 'is-staked' : ''}`} data-band={band?.key}>
             <div className="sv-card-head">
-                <span className="sv-art" data-band={band?.key} aria-hidden="true">
-                    <span className="sv-art-glyph">✦</span>
+                <span className="sv-art" data-band={band?.key} data-rarity={knight.rarity || 'genesis'} aria-hidden="true">
+                    {portrait ? <img src={portrait} alt="" /> : <span className="sv-art-glyph">✦</span>}
                 </span>
                 <span style={{ flex: 1, minWidth: 0 }}>
                     <span className="sv-card-name">{knight.name}</span>
@@ -1625,7 +1889,10 @@ function GenesisCard({
                         <span className="sv-stat-value sv-num" aria-hidden="true">{fmtHours(hours)}</span>
                     </span>
                     <span className="sv-stat">
-                        <span className="sv-stat-label">Tickets</span>
+                        {/* The label follows the unit the two sides actually bank. It read
+                            "Tickets" on a Knights card, where the number is yield weight — a
+                            staked Knight earns no tickets at all, because the draw is Genesis's. */}
+                        <span className="sv-stat-label">{unit === 'weight' ? 'Weight' : 'Tickets'}</span>
                         <span className="sv-stat-value is-gold sv-num" aria-hidden="true">{fmtInt(knight.tickets)}</span>
                     </span>
                     <span className="sv-stat">
@@ -1657,7 +1924,14 @@ function GenesisCard({
             <div className="sv-card-actions">
                 {staked ? (
                     <>
-                        <button className="btn btn-secondary btn-sm" onClick={onClaim} disabled={!canWrite || !!busy}>Claim</button>
+                        <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={onClaim}
+                            disabled={!canWrite || !!busy || claimDisabled}
+                            title={claimTitle || undefined}
+                        >
+                            Claim
+                        </button>
                         <button className="btn btn-danger btn-sm" onClick={onUnstake} disabled={!canWrite || !!busy}>Unstake</button>
                     </>
                 ) : (

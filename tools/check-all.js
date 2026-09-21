@@ -10,6 +10,8 @@
  *   window.__check.vaultEntry(n)   play n whole vault entries, per-floor metrics
  *   window.__check.staking()       the Staking Vault page (run it on /staking): tabs,
  *                                  keyboard, the live tick, actions, honest states
+ *   window.__check.stakingWrites() what the vault *sends*: drives approve/stake/unstake/claim
+ *                                  through a wallet double and decodes every transaction
  *   window.__check.report()        { total, failed, failures[], results[] }
  *
  * It lives in tools/, which is not served, so to use it from the browser copy it to
@@ -646,6 +648,40 @@
                         !document.querySelector('.sv-preview-badge'),
                         'no collection on this side');
                 }
+
+                // ------------------------------------------------ the third state: signing
+                //
+                // A vault whose buttons send transactions. Here the *absence* of the simulation
+                // warning is the claim, so it is asserted rather than assumed — and it is asserted
+                // together with a positive badge, because "nothing warns me" and "these buttons
+                // sign" are very different things to put in front of someone with a wallet open.
+                // The two sides are per-collection, so the check needs the side's own pool to be
+                // configured, not just a writable interface.
+                // Which side is on screen, read off the economy panel that marks it rather than
+                // guessed: the two sides have their own pools, and one being configured says
+                // nothing about the other.
+                const sideNow = [...document.querySelectorAll('.sv-econ-line[data-active="yes"]')]
+                    .map((el) => el.dataset.collection)[0];
+                const sidePool = sideNow === 'knights'
+                    ? config?.addresses?.knightsStaking
+                    : config?.addresses?.staking;
+                if (config?.writes === true && sidePool) {
+                    const chainBadge = document.querySelector('.sv-chain-badge')?.textContent || '';
+                    rec('a vault that signs transactions says so on its badge',
+                        /on chain/i.test(chainBadge), chainBadge.trim() || 'no badge');
+                    rec('and no warning beside it still calls this side a simulation',
+                        !document.querySelector('.sv-sim-badge') && !document.querySelector('.sv-banner.is-sim'));
+                    // The per-card marker is the one a player reads *after* acting, so it matters more
+                    // than the badge: a knight that says "simulated" while the chain holds it is the
+                    // exact confusion this whole state exists to remove.
+                    rec('and no staked card is marked as a simulation',
+                        document.querySelectorAll('.sv-chip.is-sim').length === 0);
+                    // The holdings note must still describe what was read, transaction path or not:
+                    // "you hold none" is a true and useful sentence, and the write path does not
+                    // change it.
+                    rec('the holdings note still describes the read in this state',
+                        /minted yet|read .*knight|holds no |could not be read/i.test(note));
+                }
             } else if (onChain) {
                 rec('a configured vault does not wear the preview badge', !badge);
             } else {
@@ -1003,8 +1039,12 @@
                 const ladderCaption = document.querySelector('.sv-ladder-caption')?.textContent || '';
                 rec('the Knights ladder says the payout falls as the collection grows',
                     /uncapped|less each one earns/i.test(ladderCaption), ladderCaption.trim().slice(0, 70));
-                rec('and it names the cap it falls to',
-                    /cap/i.test(ladderCaption));
+                // The caption used to call this a *cap*. It is not one — the collection is uncapped,
+                // and the number is the size the payout is quoted at — so the assertion follows the
+                // copy: name the reference size, and name the fall.
+                rec('and it names the size the payout is quoted at',
+                    /no supply limit|uncapped/i.test(ladderCaption) && /10,000/.test(ladderCaption),
+                    ladderCaption.replace(/\s+/g, ' ').trim().slice(0, 90));
 
                 // ------------------------------------------------- the simulated stake
                 //
@@ -1013,7 +1053,10 @@
                 // mechanics, and a live page with no label lets a player believe their NFT is
                 // staked. This is the state a player is most likely to misread.
                 if (SIMULATED) {
-                    const badgeText = document.querySelector('.sv-preview-badge')?.textContent || '';
+                    // Its own class, not `sv-preview-badge is-sim`: sharing one meant the honesty
+                    // check above ("no preview badge on a real vault") matched *this* badge, so the
+                    // two claims could not be told apart by any selector.
+                    const badgeText = document.querySelector('.sv-sim-badge')?.textContent || '';
                     rec('a simulated side says so on its badge',
                         /simulated/i.test(badgeText) && /real/i.test(badgeText), badgeText.trim());
                     const simBanner = document.querySelector('.sv-banner.is-sim')?.textContent || '';
@@ -1275,11 +1318,13 @@
         const marker = document.querySelector('.tk-capsule-marker');
         const markerPct = Number((marker?.style.left || '').replace('%', ''));
         const breakEven = cfg?.economy?.capsuleBreakEvenMinted;
-        const cap = cfg?.economy?.knightsCap;
+        // The ramp is measured against the reference size, which is not a supply cap — the
+        // collection is unlimited, and the marker is placed as a fraction of that anchor.
+        const referenceSize = cfg?.economy?.knightsReferenceSize;
         rec('the capsule marker sits where the opens start funding the lines',
-            Number.isFinite(breakEven) && cap
-            && Math.abs(markerPct - (breakEven / cap) * 100) <= 0.5,
-            `${markerPct}% vs ${breakEven}/${cap}`);
+            Number.isFinite(breakEven) && referenceSize
+            && Math.abs(markerPct - (breakEven / referenceSize) * 100) <= 0.5,
+            `${markerPct}% vs ${breakEven}/${referenceSize}`);
 
         // ---------------------------------------------------------- it is actually styled
         //
@@ -1319,11 +1364,311 @@
         return results;
     }
 
+    // ------------------------------------------------- can the vault actually stake?
+    /**
+     * What the vault *does*, rather than what it says. Run it on /staking with a wallet saved.
+     *
+     * This is the one thing the rest of the battery cannot reach. `staking()` reads the page —
+     * badges, copy, state, disabled buttons — and every one of those passed while the buttons sent
+     * nothing at all, because "simulated" was the honest label for a page with no transaction path.
+     * Now that the path exists, the artifact under test is the **transaction**, so the wallet is a
+     * double: it records every `eth_sendTransaction` the page issues and answers the handful of
+     * reads around it, and the assertions are made on the calldata the page produced — decoded with
+     * ethers, not compared against this file's idea of it.
+     *
+     * It also has to invent a knight. Both pools hold empty collections, so a page showing a wallet's
+     * real holdings has no stake button to press; the holdings response is stubbed for that and only
+     * that. Everything else — the plan, the approval check, the encoding, the reload after the
+     * transaction — is the page's own code.
+     */
+    async function stakingWrites() {
+        await injectScript('/ethers-5.7.2.umd.min.js');
+        const config = await fetch('/api/staking/config').then((r) => (r.ok ? r.json() : null)).catch(() => null);
+        const POOL = config?.addresses?.knightsStaking;
+        const NFT = config?.collections?.knights?.nft;
+
+        rec('this deployment has a Knights pool the page can write to',
+            !!POOL && config?.writes === true, `pool ${POOL || '(none)'}, writes ${config?.writes}`);
+        // A write path that does not know which chain it is signing for cannot guard against being
+        // on the wrong one, so the vault has to publish the number the guard compares against.
+        rec('and it publishes the chain the transactions will be signed for',
+            Number.isInteger(config?.chainId) && config.chainId > 0, `chainId ${config?.chainId}`);
+        if (!POOL || !NFT) return results;
+
+        const ACCOUNT = localStorage.getItem('walletAddress') || '0x038d75aDb74d8e5Db82E6c6797f90dCdF82ef4C9';
+        // `sends` is the current phase's window, which the assertions read. `ledger` is every
+        // transaction ever sent, and it is never cleared: while a *later* phase is being set up, an
+        // earlier transaction may still be being watched for its receipt, and a mock that forgot it
+        // would answer `null` forever and leave the page busy — which looks exactly like a broken
+        // button.
+        const state = { sends: [], ledger: [], methods: [], knightStaked: false, payable: 0 };
+        // The two calls whose *mined* effect this mock has to reproduce, as their 4-byte selectors.
+        const SEL = {
+            stake: window.ethers.utils.id('stake(uint256)').slice(0, 10),
+            unstake: window.ethers.utils.id('unstake(uint256)').slice(0, 10),
+        };
+        const realEthereum = window.ethereum;
+        const realFetch = window.fetch;
+
+        // ---- the wallet. Every response ethers needs, and nothing more: the transactions are the
+        // point, and they are recorded rather than simulated away.
+        const txOf = (s) => ({
+            hash: s.hash, blockHash: '0x' + 'ab'.repeat(32), blockNumber: '0x64',
+            transactionIndex: '0x0', from: s.from || ACCOUNT, to: s.to, value: '0x0',
+            gas: '0x30d40', gasPrice: '0x3b9aca00', nonce: '0x0', input: s.data, data: s.data,
+            v: '0x1b', r: '0x' + '11'.repeat(32), s: '0x' + '22'.repeat(32),
+            type: '0x0', chainId: '0xb626', accessList: [], confirmations: 1,
+        });
+        const receiptOf = (s) => ({
+            transactionHash: s.hash, transactionIndex: '0x0', blockHash: '0x' + 'ab'.repeat(32),
+            blockNumber: '0x64', from: s.from || ACCOUNT, to: s.to,
+            cumulativeGasUsed: '0x5208', gasUsed: '0x5208', contractAddress: null,
+            logs: [], logsBloom: '0x' + '00'.repeat(256), status: '0x1', type: '0x0',
+            effectiveGasPrice: '0x3b9aca00', confirmations: 1,
+        });
+        window.ethereum = {
+            isMetaMask: true,
+            on: () => {}, removeListener: () => {}, addListener: () => {},
+            request: async ({ method, params = [] }) => {
+                state.methods.push(method);
+                switch (method) {
+                    case 'eth_chainId': return '0xb626';           // 46630, the vault's network
+                    case 'net_version': return '46630';
+                    case 'eth_accounts':
+                    case 'eth_requestAccounts': return [ACCOUNT];
+                    case 'eth_blockNumber': return '0x64';
+                    case 'eth_gasPrice': return '0x3b9aca00';
+                    case 'eth_estimateGas': return '0x30d40';
+                    case 'eth_call': return '0x' + '00'.repeat(32); // isApprovedForAll → false
+                    case 'eth_sendTransaction': {
+                        const tx = params[0];
+                        const hash = '0x' + (state.ledger.length + 1).toString(16).padStart(2, '0').repeat(32).slice(0, 64);
+                        const sent = { ...tx, hash };
+                        state.sends.push(sent);
+                        state.ledger.push(sent);
+                        return hash;
+                    }
+                    case 'eth_getTransactionByHash': {
+                        const sent = state.ledger.find((s) => s.hash === params[0]);
+                        return sent ? txOf(sent) : null;
+                    }
+                    case 'eth_getTransactionReceipt': {
+                        const sent = state.ledger.find((s) => s.hash === params[0]);
+                        if (!sent) return null;
+                        // The chain's own answer about what a confirmed transaction did. The knight
+                        // becomes staked when the *stake is mined*, not when the test says so: the
+                        // page re-reads holdings after the receipt, so this is the first moment at
+                        // which "staked" is both true and observable.
+                        const selector = String(sent.data || '').slice(0, 10);
+                        if (selector === SEL.stake) state.knightStaked = true;
+                        if (selector === SEL.unstake) state.knightStaked = false;
+                        return receiptOf(sent);
+                    }
+                    default: return null;
+                }
+            },
+        };
+
+        // ---- the holdings. One Knights knight the collection does not really hold, reported as
+        // staked once the page has sent the transactions that would have staked it.
+        const KNIGHT = { tokenId: 24, name: 'Legendary Knight #24', rarity: 'legendary', tierName: 'Legendary', hashPower: 100 };
+        window.fetch = (input, init) => {
+            const url = typeof input === 'string' ? input : input?.url || '';
+            if (url.includes('/api/staking/holdings') && url.includes('collection=knights')) {
+                const staked = state.knightStaked;
+                return Promise.resolve(new Response(JSON.stringify({
+                    ok: true, collection: 'knights', nft: NFT,
+                    knights: staked ? [] : [KNIGHT], balance: staked ? 0 : 1,
+                    candidates: 1, complete: true, enumerable: false, fromBlock: 0, staking: POOL,
+                    stake: {
+                        ok: true, staking: POOL, collection: 'knights',
+                        positions: staked ? 1 : 0, complete: true,
+                        totalHashPower: staked ? 100 : 0, ratePerDay: 41760,
+                        vault: { lineBudget: 292363.792, lineRemaining: 292363.792, scaleBps: 10000 },
+                        claim: { settled: 0, pending: state.payable, payable: state.payable },
+                        tickets: null,
+                        staked: staked ? [{ ...KNIGHT, stakedAt: Date.now(), staker: ACCOUNT.toLowerCase() }] : [],
+                    },
+                }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+            }
+            return realFetch(input, init);
+        };
+
+        const iface = new window.ethers.utils.Interface([
+            'function setApprovalForAll(address,bool)', 'function stake(uint256)',
+            'function unstake(uint256)', 'function claim() returns (uint256)',
+        ]);
+        const decode = (data) => {
+            try {
+                const parsed = iface.parseTransaction({ data });
+                return `${parsed.name}(${parsed.args.map(String).join(', ')})`;
+            } catch { return 'undecodable'; }
+        };
+        const pickSide = (side) => [...document.querySelectorAll('.sv-collection')]
+            .find((b) => b.dataset.collection === side)?.click();
+        const until = async (test, maxMs = 40000) => {
+            const started = Date.now();
+            while (Date.now() - started < maxMs) {
+                if (test()) return true;
+                await sleep(400);
+            }
+            return false;
+        };
+        // Anchored on purpose: without `^`, "stake" also matches the "Unstake" button on the very
+        // card the test is trying to leave alone.
+        const cardButton = (label) => [...document.querySelectorAll('.sv-card .sv-card-actions .btn')]
+            .find((b) => new RegExp(`^${label}`, 'i').test(b.textContent.trim()));
+        const bannerText = () => document.querySelector('.sv-banner-float')?.textContent?.replace(/\s+/g, ' ').trim() || null;
+
+        try {
+            if (window.Arya?.endTour) window.Arya.endTour();
+            if (window.Arya?.hide) window.Arya.hide();
+            pickSide('knights');
+            await sleep(3000);
+
+            const stake = cardButton('stake');
+            rec('a Knights knight the wallet owns offers a stake button',
+                !!stake && !stake.disabled, stake ? `"${stake.textContent.trim()}"` : 'no button');
+
+            // ---- approve + stake
+            if (stake) {
+                state.sends = [];
+                stake.click();
+                await until(() => state.sends.length >= 2);
+                const sends = state.sends;
+                rec('one press sends the approval and the stake, in that order',
+                    sends.length === 2 && /setApprovalForAll/.test(decode(sends[0].data)) && /^stake\(/.test(decode(sends[1].data)),
+                    sends.map((s) => decode(s.data)).join(' → '));
+                rec('the approval goes to the collection, and names the pool as its operator',
+                    sends[0] && sends[0].to.toLowerCase() === NFT.toLowerCase()
+                    && decode(sends[0].data) === `setApprovalForAll(${POOL}, true)`);
+                rec('the stake goes to the pool, carrying the knight id',
+                    sends[1] && sends[1].to.toLowerCase() === POOL.toLowerCase()
+                    && decode(sends[1].data) === `stake(${KNIGHT.tokenId})`);
+                rec('and no DNG approval is asked for, because staking moves the NFT',
+                    !sends.some((s) => /approve\(/.test(decode(s.data))));
+                rec('the page reports the transactions rather than claiming a silent success',
+                    /sent|confirm/i.test(bannerText() || ''), bannerText());
+                rec('and it is not left showing an error',
+                    !document.querySelector('.sv-banner.is-error'), bannerText());
+
+                // No manual flip here: the mock reports the knight as staked the moment the stake
+                // is mined, which is what "after the chain accepted it" actually means.
+                const sawStaked = await until(() => document.querySelectorAll('.sv-card.is-staked').length > 0);
+                rec('the knight shows as staked after the chain accepted it',
+                    sawStaked, `${document.querySelectorAll('.sv-card.is-staked').length} staked card(s)`);
+                rec('and it is not wearing a simulation marker',
+                    document.querySelectorAll('.sv-chip.is-sim').length === 0);
+                // The vault lists knights, so it shows the portrait — not the map sprite. The mock
+                // knight is Legendary, so the expectation is a specific file rather than "some art".
+                const cardArt = document.querySelector('.sv-card .sv-art img')?.getAttribute('src') || null;
+                rec('and the card is drawn with its own tier’s portrait',
+                    cardArt === '/assets/pfp/legendary.webp', cardArt || 'no portrait');
+            }
+
+            // ---- claim: disabled while the pool would pay nothing, enabled when it would
+            state.payable = 0;
+            pickSide('genesis');
+            await sleep(2600);
+            pickSide('knights');
+            await sleep(3000);
+            rec('a claim with nothing accrued is refused by the button rather than by the chain',
+                cardButton('claim')?.disabled === true,
+                cardButton('claim')?.title || 'no title');
+
+            state.payable = 2.5;
+            pickSide('genesis');
+            await sleep(2600);
+            pickSide('knights');
+            await sleep(3000);
+            const claim = cardButton('claim');
+            rec('and it opens once the pool has something to pay, quoting the pool\u2019s own figure',
+                claim?.disabled === false && /2\.5\d? DNG/.test(claim.title || ''), claim?.title);
+            if (claim && !claim.disabled) {
+                state.sends = [];
+                claim.click();
+                await until(() => state.sends.length >= 1);
+                rec('claiming sends one wallet-level call with no knight named',
+                    state.sends.length === 1 && decode(state.sends[0].data) === 'claim()'
+                    && state.sends[0].to.toLowerCase() === POOL.toLowerCase(),
+                    state.sends.map((s) => decode(s.data)).join(', '));
+            }
+
+            // ---- unstake. Waited for by *enabled*, because the claim that just went out leaves every
+            // button disabled until the page has finished watching it — clicking early would assert
+            // against a button the page was right to ignore, and read as a broken unstake.
+            const unstakeReady = await until(
+                () => { const b = cardButton('unstake'); return !!b && !b.disabled; }, 20000
+            );
+            rec('a staked knight offers an unstake button once the page is idle again', unstakeReady,
+                cardButton('unstake') ? 'present' : 'no unstake button');
+            const unstake = cardButton('unstake');
+            if (unstake && !unstake.disabled) {
+                state.sends = [];
+                unstake.click();
+                await until(() => state.sends.length >= 1);
+                rec('unstaking sends one call to the pool, carrying the knight id',
+                    state.sends.length === 1
+                    && decode(state.sends[0].data) === `unstake(${KNIGHT.tokenId})`
+                    && state.sends[0].to.toLowerCase() === POOL.toLowerCase(),
+                    state.sends.map((s) => decode(s.data)).join(', ') || 'nothing was sent');
+            }
+
+            // The guard that stops a stake being signed on the wrong chain, asserted by making the
+            // wallet wrong: this is the one failure that would otherwise spend real gas on a call the
+            // contract on *that* network may well accept, at an address that means something else.
+            if (stake) {
+                state.sends = [];
+                const wrongChain = window.ethereum.request;
+                // `async` is load-bearing: ethers chains `.then` on whatever an EIP-1193 `request`
+                // returns, and a bare string makes `eth_chainId` *throw* — which ethers swallows by
+                // falling back to `net_version`, i.e. the lie would never be told and the page would
+                // be blamed for a guard that was never given the wrong chain.
+                window.ethereum.request = async ({ method, params = [] }) => (
+                    method === 'eth_chainId' ? '0x1' : wrongChain({ method, params })
+                );
+                state.knightStaked = false;
+                pickSide('genesis');
+                await sleep(2600);
+                pickSide('knights');
+                await sleep(3000);
+                // First: does the lie actually reach ethers? If the patched wallet still reads as
+                // 46630, the mock is what is wrong and the page has nothing to refuse.
+                const seenByEthers = Number(await new window.ethers.providers.Web3Provider(window.ethereum)
+                    .getNetwork().then((n) => n.chainId).catch(() => -1));
+                rec('the wrong-network wallet really does read as chain 1 to ethers',
+                    seenByEthers === 1, `ethers sees ${seenByEthers}`);
+
+                const wrongStake = cardButton('stake');
+                wrongStake?.click();
+                // The error banner is the *only* thing that proves the guard ran: waiting for "some
+                // banner" would read the previous step's success notice and pass on a click that
+                // never happened.
+                const refused = await until(() => !!document.querySelector('.sv-banner.is-error'), 12000)
+                    ? document.querySelector('.sv-banner.is-error').textContent.replace(/\s+/g, ' ').trim()
+                    : null;
+                rec('a wallet on the wrong network is refused before anything is signed',
+                    !!wrongStake && state.sends.length === 0 && /chain/i.test(refused || ''),
+                    [wrongStake ? 'button present' : 'no stake button',
+                        `${state.sends.length} sent${state.sends.length ? ` (${state.sends.map((s) => decode(s.data)).join(', ')})` : ''}`,
+                        refused || 'no error banner'].join(' · '));
+                window.ethereum.request = wrongChain;
+            }
+        } finally {
+            window.ethereum = realEthereum;
+            window.fetch = realFetch;
+            document.querySelector('.sv-banner-x')?.click();
+        }
+
+        return results;
+    }
+
     window.__check = {
         arya,
         assets,
         engine,
         staking,
+        stakingWrites,
         tokenomics,
         prepareFresh,
         freshState,

@@ -421,8 +421,14 @@ class DungeonSessionManager {
             } else if (window.CONTRACT_ADDRESSES) {
                 knightNFTAddress = window.CONTRACT_ADDRESSES.KNIGHT_NFT;
             } else {
-                // Hardcoded fallback
-                knightNFTAddress = '0x06c7D4b0C35858c78c3B213fbf50fB4A25f20512';
+                // The live collection, matching `config.js` and the server's `KNIGHT_NFT_ADDRESS`.
+                // This has been wrong twice, in two different ways, which is why the comment stays:
+                // it was the first collection's address (so the fallback priced a squad against a
+                // contract the rest of the game had stopped reading), and then the Phase 2 address
+                // that could not be minted into. It is a **third** address now — see
+                // `docs/DEPLOY-PHASE-2.md` — and a stale value here estimates rewards from
+                // rarities that do not belong to these knights.
+                knightNFTAddress = '0x27Cfbb763188a50Fe1C0fFfBe2552b1945eE1B2D';
             }
 
             // Knight NFT ABI - just need getKnightInfo

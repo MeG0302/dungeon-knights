@@ -25,17 +25,24 @@ browser fetches `/dungeon.js?v=…` straight off disk, not from a bundle:
 
 ### Switches that still need a human
 
-Four things are built and verified but **off**, each waiting only on a value. Nothing else is
-blocked; every one of them is a redeploy away, and no code change is needed.
+What is built, verified and **off**, waiting only on a value — no code change is needed to
+switch any of these on. The rows that used to sit here for V4, capsules and real Genesis
+holdings are **done**: all nine Phase 2 contracts are deployed on chain 46630 and the site reads
+them (see `docs/DEPLOY-PHASE-2.md`, *The production switch*).
 
 | what | what is missing | where the steps are |
 |---|---|---|
 | Points Program persistence | `KV_REST_API_URL` + `KV_REST_API_TOKEN` (Upstash/Vercel KV) | *The Points Program is server-backed* |
 | Mobile wallets | `PRIVY_APP_ID` (+ `PRIVY_CLIENT_ID`), and the chain enabled for the app | *Wallets: injected first…* |
-| Server-signed payouts (V4) | the contract deployed in Remix, then `GAME_CONTRACT_V4` + `GAME_SIGNER_PRIVATE_KEY` | *Server-signed runs (Game V4)*, `docs/DEPLOY-GAME-V4.md` |
 | Phone gas | players fund their own embedded wallet | *Wallets: injected first…* |
-| The Capsules collection | a deployed `Capsules.sol`: `CAPSULE_CONTRACT` in `public/config.js` (empty string = not deployed) and `CAPSULE_NFT` for the vault's own read | *The Staking Vault*, and the capsule panel on `/mint` |
-| Real Genesis holdings | the four Phase 2 contracts deployed, then `GENESIS_NFT`, `STAKING_CONTRACT`, `RAFFLE_CONTRACT`, `CAPSULE_NFT` | *The Staking Vault* |
+| **Staking writes** | the approve/stake/claim transaction path, then `STAKING_WRITES_READY` in `lib/staking-config.js` — the page stays a labelled simulation until then, by design | *The Staking Vault* |
+
+One thing on chain is **not** a switch at all, because it touches custody: the old **V3** game
+(`0xD8de…36e5`) is not paused and still holds 811 old-token DNG, so its unsigned claim path is
+open to anyone who calls it directly. `tools/check-v4.js` fails on exactly this and nothing else,
+and it is left undone on purpose — pausing V3 ends the legacy claim path the old collection uses,
+and the follow-up `withdrawAllTokens()` moves funds. The intended order is `pause()` →
+`withdrawAllTokens()` → fund V4, and both steps are the owner's call.
 
 Until the first two are set, the deployment is honest about it: the Points page shows its amber
 "not persistent" banner, and the wallet facade stays dormant.
@@ -187,8 +194,7 @@ switches to real holdings on its own when they do.
   collection's own line of the vault partition (`lineBudgets().genesisStaking` = 378,000 a week
   for Genesis, `knightsStaking` = 292,320 for Knights), so a fresh vault shows real DNG.
 - **The pool is set by env, not by code.** `WEEKLY_POOL_DNG=15000` in the deployment overrides
-  the derived Genesis line; `KNIGHTS_STAKING_POOL_DNG` overrides the Knights one. Neither needs
-  a rebuild.
+  the derived Genesis line; `KNIGHTS_POOL_DNG` overrides the Knights one. Neither needs a rebuild.
 - **Two collections, one vault — the switch at the top of the left panel.** Genesis stakers earn
   yield *and* the weekly draw; Knights stakers earn yield only, because a capsule mints a Knight
   and so the draw is Genesis-only. That refusal is stated in words on the tile rather than left
@@ -201,9 +207,31 @@ switches to real holdings on its own when they do.
   which keeps the current board on screen while the new snapshot is fetched. Without `quiet` the
   whole vault is replaced by "OPENING THE VAULT" for a switch, which is a network round trip of
   blank page on a chain deployment — the moment a player is most likely to think the vault broke.
-- **Preview vs chain** — `/api/staking/config` reports `chain: false` while any of the four
-  addresses is missing, and the left panel wears a **Preview data** badge. Holdings are seeded
-  deterministically from the wallet, so the same address always sees the same knights.
+- **Preview vs chain** — `/api/staking/config` reports `chain: false` while any of the five
+  addresses is missing (Genesis NFT, both staking contracts, raffle, capsules — the vault is
+  reported separately because the economy is derived either way), and the left panel wears a
+  **Preview data** badge. Holdings are seeded deterministically from the wallet, so the same
+  address always sees the same knights on a deployment with no contracts configured.
+- **"Deployed" and "this page can stake" are different facts, and the badge depends on the
+  second.** `simulated` used to be derived from `chain`, which meant pointing a deployment at
+  real addresses would have deleted the warning from a page whose buttons still send nothing.
+  It now follows `STAKING_WRITES_READY` (`lib/staking-config.js`), reported by the config route
+  as `writes`. Flip it only alongside an approve/stake/claim path — `tools/check-staking.js`
+  fails if the flag and the client's code disagree, and the banner has a distinct sentence for
+  each of the three states (no collection / contracts deployed but unwritable / reachable).
+- **The two badges have two classes.** `sv-preview-badge` means the holdings are invented;
+  `sv-sim-badge` means they are real and the stake is not. They shared `sv-preview-badge is-sim`
+  once, so a check for the absence of one matched the other. A harness check now fails if they
+  are merged again.
+- **The board is labelled from the snapshot, not from the click.** `selectCollection` keeps the
+  previous board on screen (`quiet`), so deriving `isKnights` from the selected collection
+  captioned the old side's figures with the new side's words for the length of a read — a tile
+  headed "The Genesis staking line" quoting the Knights pool. `boardCollection` reads the
+  collection the snapshot actually describes.
+- **Both collections are read the same way.** `collection=genesis` used to be refused with a
+  hard-coded "not minted yet" while the config route reported the side live — one route claiming
+  a thing the other denied. Both now resolve the address from `ADDRESSES.genesisNFT`, and a
+  deployed-but-empty collection is an empty read (`ok: true, balance: 0`), not a refusal.
 - **The live figure is the accrual line** under the summary (`Accruing now · …`). While the pool is
   `TBD` it counts the share of the pool, printed to five decimals because a week of
   seconds is a small number and two decimals would sit still for half a minute.
@@ -255,27 +283,45 @@ switches to real holdings on its own when they do.
 #### Real holdings — how the vault reads the chain
 
 The vault shows the knights a wallet **actually owns**, read from the deployed collection at
-`0x06c7D4b0C35858c78c3B213fbf50fB4A25f20512` (env `KNIGHT_NFT_ADDRESS`, defaulted in
+`0x27Cfbb763188a50Fe1C0fFfBe2552b1945eE1B2D` (env `KNIGHT_NFT_ADDRESS`, defaulted in
 `lib/game-runs.js`). It used to show invented ones to every visitor.
 
-- **The collection cannot be enumerated.** Measured, not assumed, and asserted by
-  `tools/check-staking-chain.js` so the premise is checked rather than trusted:
+> **This address is the third one, and the history matters more than the address** (September 21).
+> The first collection, `0x06c7D4b0C35858c78c3B213fbf50fB4A25f20512` (symbol `KNIGHT`, **not**
+> enumerable, holding **47** knights in the owner wallet), is **no longer read by the app
+> anywhere** — a deliberate choice, not an oversight, and those 47 knights are inert by decision.
+> The second, `0xFB738bE682a0a60678A393eB7e23742B3137d4c5` (symbol `DKN`), was deployed but could
+> not be minted into at all — `summon()` never collected the player's fee — so it was replaced
+> first, not later. The live one is the repaired collection; **no new knight could exist before
+> it, which is why the vault had nothing to show.** Everything further down that says "45
+> knights", "cannot be enumerated" or "the deployed collection" is history.
 
-  | call | answer |
-  |---|---|
-  | `supportsInterface(0x780e9d63)` (ERC721Enumerable) | **false** |
-  | `totalSupply()` | reverted |
-  | `nextTokenId()` | reverted |
-  | `tokenOfOwnerByIndex(...)` | reverted |
+- **Enumerability is asked, not assumed.** `readOwnedKnights` probes the collection it is handed —
+  `supportsInterface(0x780e9d63)` — and `NFT_ENUMERATION.enumerable` is the *published expectation*
+  that `tools/check-staking-chain.js` asserts the probe against. This is not pedantry: the reader
+  was written when the answer was **false** and now runs against a collection where it is **true**,
+  and a constant used as the reader's own switch would have been wrong in exactly one of those two
+  eras. A collection that does not answer `supportsInterface` is treated as non-enumerable rather
+  than as an error.
 
-- **So candidates come from the logs, not a scan.** `Transfer` is indexed on `to`, so one
-  `eth_getLogs` filtered to the wallet returns every token it was ever sent — 45 ids in one
-  request. Cost is independent of collection size.
-- **Do not "scan ids until a gap".** It is the obvious approach and it is wrong: ids in this
-  collection are **not contiguous** (one real wallet holds 10–13, 22–55, 67–74, and id `0`
-  exists), so stopping at the first gap reports 4 knights for a wallet with 45. The harness pins
-  this by comparing the confirmed count against the contract's own `balanceOf`, which catches the
-  whole class at once.
+  | collection | `supportsInterface(0x780e9d63)` | `totalSupply()` | path taken |
+  |---|---|---|---|
+  | live `0x27Cfbb76…1B2D` (`DKN`) | **true** | 1 (Knight #1) | owner index |
+  | retired `0x06c7D4b0…0512` (`KNIGHT`) | **false** | reverted | transfer logs |
+
+- **Balance first, then ids.** The read asks `balanceOf` before anything else, so a wallet holding
+  nothing is answered without a single per-token call or a chain-wide log query. Asking for ids
+  first is what made an empty wallet look like a failed read.
+- **The log scan is the fallback, and it is kept exercised.** `Transfer` is indexed on `to`, so one
+  `eth_getLogs` filtered to the wallet returns every token it was ever sent — 47 ids for the owner
+  wallet on the retired collection, in one request, with the cost independent of collection size.
+  `tools/check-staking-chain.js` runs this path against that collection on every check, so the
+  fallback cannot rot into untested code now that the live collection no longer needs it.
+- **Do not "scan ids until a gap".** It is the obvious approach and it is wrong: ids in the
+  retired collection are **not contiguous** — the harness reports *47 ids with 4 gap(s) between
+  them* — so stopping at the first gap returns a short list that still looks successful. The
+  harness pins this by comparing the confirmed count against the contract's own `balanceOf`, which
+  catches the whole class at once.
 - **Logs give candidates, not holdings** — you keep receiving `Transfer`s for tokens you later
   send away — so ownership is confirmed afterwards with `getKnightInfo`, which also supplies the
   rarity the page needs.
@@ -448,9 +494,9 @@ steps appears to *hang* rather than fail — one run took 7 minutes and still pa
 The vault's Capsules tab shows what the wallet holds and hands the player off; the *opening*
 happens on the Summoning Chamber, in a panel drawn by `public/mint-page.js` (bumped to
 `?v=2`). It reads its price from the same `economy` object as the vault — **500 DNG at zero
-Knights rising to 5,000 at the 10,000 cap**, with the break-even marker at **57.46%** of the
-track (5,746 Knights, where the 200 weekly opens alone start covering both Knights reward
-lines). Three things about it are deliberate:
+Knights rising to 5,000 at the 10,000 reference size, flat above it**, with the break-even
+marker at **57.46%** of the track (5,746 Knights, where the 200 weekly opens alone start
+covering both Knights reward lines). Three things about it are deliberate:
 
 - **The price is never typed into the markup.** A price that lives in two places is a price
   that will eventually disagree with the contract; the panel quotes the model, and
@@ -766,6 +812,52 @@ node tools/check-copies.js   # fails on a root duplicate, or a script loaded fro
   same hazard in slow motion; the check lists the ones that currently do, so the next person to
   edit one knows to add a version rather than assume the browser will notice.
 
+### Two pictures per tier: the map sprite and the portrait
+
+A tier carries two images, and which one a screen draws is a rule rather than a preference:
+
+| field | what it is | where it is drawn |
+|---|---|---|
+| `image` | the map **sprite**, `characters/*.png` (≈1–2 MB each) | the dungeon: `public/dungeon.js`'s own `imageMap`, and the loading gate that preloads it |
+| `pfp` | the **portrait**, `/assets/pfp/<tier>.webp` (18–65 KB each) | the screens that *list* knights: the Hall's roster (`public/menu.js`), the Summoning Chamber (`public/mint-page.js`), the Staking Vault (`app/staking/client.js`) |
+
+**The map is not a gallery.** A sprite is read at 32–64px against a busy tileset and has to stay
+legible there; a portrait is read at card size against a dark panel, where the sprite reads as mud.
+So `public/dungeon.js` keeps `image` and must keep it — `tools/check-rarity.js` sweeps **every**
+page script and fails if a portrait path appears outside `config.js`, `menu.js` and `mint-page.js`.
+
+The source art is the `knights pfp'` folder next to the project (1000² PNG / 2048² JPG, 0.9–4 MB).
+The served files are centre-cropped squares, generated with ffmpeg (present on this machine at
+`…/WinGet/Packages/Gyan.FFmpeg…/ffmpeg.exe`):
+
+```bash
+ffmpeg -y -i "<source>" \
+  -vf "scale=512:512:force_original_aspect_ratio=increase,crop=512:512" \
+  -c:v libwebp -quality 86 public/assets/pfp/<tier>.webp
+```
+
+`legendry.jpg` in the source folder is the Legendary portrait (the filename's spelling is not
+repeated in the asset name), and `genesis (1).png` is the Genesis collection's — Genesis has no
+tiers, so `GENESIS_PFP` in `lib/knights.js` is the whole table for that side.
+
+The two tables are `public/config.js` (`RARITY_CONFIG[tier].pfp`, read by the two page scripts) and
+`lib/knights.js` (`KNIGHT_PFP` / `GENESIS_PFP` / `knightPortrait()`, read by the vault).
+`tools/check-rarity.js` asserts they agree, that each file resolves, that a Knight is drawn with its
+own tier's portrait while a Genesis Knight is drawn with the collection's, and that a Knight whose
+tier did not come back falls back to the drawn glyph rather than an empty frame.
+
+Speaking of that CSS: `.knight-avatar img` and `.knight-image img` in `public/theme.css` (and
+`.sv-art img` in `public/css/staking.css`) used to force `image-rendering: pixelated`, which is
+correct for a sprite drawn at its own size and wrong for a 512px painting scaled to 80px — it drops
+whole rows of pixels and turns the portrait into a mosaic. They are `auto` now. **`theme.css` is
+loaded by every legacy page and carries no `?v=` history, so it was versioned `?v=1` in
+`lib/static-pages.js` when it changed; `public/menu.css` is a dead file (nothing loads it — checked,
+left alone).**
+
+`public/config.js`, `public/menu.js` and `public/mint-page.js` are served scripts, so all three were
+version-bumped (`config.js?v=1789951300`, `menu.js?v=1` — it had no version at all, and the
+check-copies report had been naming it — and `mint-page.js?v=4`).
+
 ### The token maths (`lib/reward-config.js`, `tools/check-token-math.js`)
 
 ```bash
@@ -791,7 +883,7 @@ What replaced it, in `lib/reward-config.js`:
 | Table at scale 1.0 | Genesis **300/clear × 4 runs**; Knights **12/20/36/60/100** on 5/5/4/3/4 runs |
 | Staking rule | **90% of dungeon income, per collection** — structural (`staking = 0.9 × dungeon`), not an amount |
 | Horizon | **2,226 days = 6.1 years** at the reference; **110 days** if every knight plays *and* stakes, with the scale falling to **×0.35** |
-| Knights cap | **10,000**; at the cap a knight earns **5.00%** of its reference income, because both Knights lines are fixed shares divided by twenty times as many knights |
+| Knights size | **No supply limit.** 10,000 is a *reference size*, not a cap: at it a knight earns **5.00%** of its reference income, and half that at 20,000 — both Knights lines are fixed shares divided by however many knights exist, so per-knight yield falls without a floor. Genesis is protected regardless, because the lines are fixed shares |
 | Capsules | **200 a week**, open price ramping **500 → 5,000 DNG**; the crossover is **~5,746 Knights**, from which the weekly opens alone cover both Knights lines |
 
 **The mechanism that makes it safe is one scale.** Every payout is `table × epochScale`, where
@@ -897,19 +989,121 @@ the three JS tables, odds summing to exactly 1, the contracts' `rarityReward`/`d
 the tier at the same index, every tier's art resolving on disk, and `lib/static-pages.js` still
 carrying the `#rarityChances` container the odds are drawn into.
 
-### Solidity: Foundry, and what is not installed
+### Solidity: the phase 2 contract set, and how it is checked
 
-`foundry.toml` configures `forge` against `contracts/` with `node_modules` as its lib path, so the
-contracts can be compiled and inspected without Hardhat:
+Nine contracts are the deployment set, and `contracts/DNGToken.sol` has the full picture:
+
+| contract | what it is |
+|---|---|
+| `DNGToken` | 1B supply, minted once into four published buckets, no owner and no mint function |
+| `Knights` | five tiers, **unlimited supply**, summoned for 500 DNG or minted by a capsule |
+| `GenesisKnights` | 1,024 fixed, hash power rolled from the six published bands |
+| `Capsules` | ERC-1155, four rungs with published odds, open price ramping 500 → 5,000 DNG |
+| `RewardVault` | the four funded lines every payout is charged against |
+| `GenesisStaking` | vault line 1, plus the raffle's ticket ledger and staker registry |
+| `KnightsStaking` | vault line 3, yield only — no tickets |
+| `RaffleContract` | 200 capsules a week, drawn from Genesis tickets |
+| `DungeonKnightsGameV4` | the signed-run dungeon payout path |
+
+**`forge` is still not installed here, so `forge build` cannot run — but `solc` is**, as a
+project-local devDependency, and it is enough to make compiling a gate instead of a hope:
 
 ```bash
-npm install            # @openzeppelin/contracts is a devDependency, for the solc imports
-forge build            # requires Foundry; `forge` is NOT installed in this environment
+npm run check:contracts        # compile + 28 checks against lib/       (solc 0.8.28)
+npm run check:contracts -- --sizes   # and every deployed size
+npm run check:opcodes          # prove this chain runs PUSH0/MCOPY
+npm run deploy:args            # every constructor argument, derived from lib/
+npm run test:contracts         # forge test — needs Foundry; test/ does not exist yet
 ```
 
-**`forge` is not on PATH here**, so the ported contract changes are reviewed rather than compiled.
-Install Foundry (`foundryup`) before trusting a build result; the sources changed only in ways
-`tools/check-rarity.js` can see, plus signatures no tool in this repo can check.
+`tools/check-contracts.js` is the one that matters. It compiles every file in `contracts/`, then
+reads the published numbers back out of the Solidity and compares them to `lib/`: the reward
+table and daily caps in `DungeonKnightsGameV4`, the hash powers and drop rates in `Knights`, the
+six bands in `GenesisKnights`, the supply split in `DNGToken`, the four capsule odds tables in
+`Capsules`, the 200-a-week in `RaffleContract`, and the line shares and runway floor in
+`RewardVault`. Every one of those comparisons was shown to fail when tampered with.
+
+#### The payment bug this caught (and the fix that is not deployed yet)
+
+Both places a player is **charged** were missing the line that collects the money.
+`RewardVault.fund(amount)` pulls from `msg.sender`, and inside that call the sender is the calling
+*contract* — so `Knights.summon()` and `Capsules.open()` each approved the vault and asked it to
+collect DNG the contract had never held. `summon()` is the **only** mint path into the live
+collection (capsule prizes need the raffle, which needs staked Genesis, and the Genesis supply is
+0), so the collection could not be filled at all:
+
+```
+eth_call summon() from the owner wallet, as deployed
+  → 0xe450d38c  ERC20InsufficientBalance(address,uint256,uint256)
+    arg0 = 0xfb738be682a0a60678a393eb7e23742b3137d4c5   ← the collection, which holds 0 DNG
+```
+
+The fix is one line in each contract — `safeTransferFrom(msg.sender, address(this), <amount>)`
+before the `forceApprove`/`fund` pair — and `tools/check-contracts.js` now asserts it for every
+function that funds the vault, firing on a tampered `Knights.sol` with
+*"Knights.sol:summon() funds the vault without pulling from msg.sender"*.
+
+**The first deployed set had the bug and the fix is now deployed.** The contracts are immutable, so
+`Knights` could not be repaired in place — and `Capsules.knights`, `RaffleContract.capsules`,
+`GameV4.knightNFT` and `StakingPool.collection` are all `immutable`, which is what a fixed
+collection costs. Before that redeploy, what made the fix certain rather than plausible was an
+`eth_call` with the collection's DNG balance overridden to exactly what the missing line would
+leave there: it **succeeds and mints tokenId 1**, so nothing downstream of the pull was broken.
+
+Then it was shipped and proven twice over:
+
+```bash
+tools/redeploy-mint-fix.js            # 5 deploys, 7 wiring txs, 39 checks, all read from the chain
+tools/redeploy-mint-fix.js --verify   # the same checks, sending nothing
+tools/redeploy-mint-fix.js --summon   # approve -> summon() -> Knight #1, Common, 15 hp
+```
+
+| contract | was | now |
+|---|---|---|
+| `Knights` | `0xFB738bE6…d4c5` | **`0x27Cfbb76…1B2D`** |
+| `Capsules` | `0x8772ee6f…8926` | **`0x628ae225…2728`** |
+| `RaffleContract` | `0x56A25ddB…5c7f` | **`0xc26360C6…5b4C`** |
+| `KnightsStaking` | `0x5B17C62E…EcD2` | **`0x27fBBba5…a627`** |
+| `DungeonKnightsGameV4` | `0xF0727532…d895` | **`0xD60FfCb1…d8a8`** |
+
+The vault, the token and both Genesis contracts were **not** redeployed. The two checks that matter
+are read from the chain rather than the source: `summon()` with no allowance must fail with
+`ERC20InsufficientAllowance(spender <new Knights>, 0, 500e18)` — the collection asking for *the
+player's* fee — where the broken set failed with `ERC20InsufficientBalance(<Knights>)`, the vault
+asking the collection for money it never held. Same call, two errors, and the difference is the
+whole bug.
+
+**The first real summon failed out of gas, and that lesson is live code.** `_mintTier` writes
+`rarityOf[tokenId] = rarity`, so a Common roll is a zero-into-zero SSTORE (100 gas) instead of
+20,000 — and `eth_estimateGas` runs against one block's randomness. An estimate taken when the draw
+is Common is ~20k short of a tx that lands on any other tier, so it reverts with `status 0`,
+`gasUsed == gasLimit`, and the player pays. Buffered in both places: `+30%` in the redeploy script
+and `wallet.summonGasLimit` in `public/wallet.js`, which is the Hall's summon button.
+
+**`evmVersion = cancun`, and that was measured.** The chain is Arbitrum Nitro
+(`nitro/v3.12.0-rc.2`), where the usual advice is `paris` — and under paris OpenZeppelin v5 does
+not compile at all, because `Bytes.sol` uses `MCOPY` (reached from `ERC721` through `Strings`).
+`npm run check:opcodes` shows why cancun is right: the deployed token, knight NFT and game V3 all
+**already execute `MCOPY` and `PUSH0`**, and an `eth_call` with those opcodes as its target still
+executes them today. The disassembly walks PUSH immediates — a byte scan finds `0x5e` inside push
+data and lies about it.
+
+**The contracts are deployed.** All nine are live on chain 46630, wired, and verified on chain —
+see `docs/DEPLOY-PHASE-2.md` for the addresses and the three things that are unfinished on
+purpose (the game's signer is the deployer key, 55% of the token sits in the deployer wallet,
+and nothing on the site points at the new set yet). `deployed-phase2.json` is the record.
+
+```bash
+node tools/deploy-phase2.js --verify   # re-check the whole deployment, read-only
+node tools/deploy-phase2.js --list     # what a fresh deploy would do, and with which arguments
+```
+
+**No test has executed a single function of them, though.** There is no Foundry here, so `test/`
+does not exist and `forge test` has never run. Compilation, the published-number checks and the
+post-deploy reads are all green; behavioural testing is the gap, and the deploy was verified
+only in the ways a read can verify it. (One thing the deploy did prove by accident: the vault
+cannot be read at all before its token exists — `balance()` calls `balanceOf` on an address
+with no code, which the ABI decoder reports as a revert.)
 
 ## 2. Run the server
 

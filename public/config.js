@@ -26,12 +26,21 @@ const CONFIG = {
     decimals: 18,
     // Deployed token addresses
     mainnetAddress: '0xYOUR_DNG_TOKEN_ADDRESS', // TODO: Deploy to mainnet
-    testnetAddress: '0xA8D54F6FEeAFaf5C2c546D1D1644aE2f46A2d910' // ✅ Deployed!
+    // Phase 2 $DNG: 1,000,000,000 supply, with 45% minted straight into the reward vault.
+    // The first token (`0xA8D5…`) belonged to the first collection and is not what any
+    // contract in the game pays in any more.
+    testnetAddress: '0x3D94e56E0d967633830f6d9E42CE43A64FFfD6Ca'
   },
   
   // NFT Contract Addresses
+  //
+  // The summonable collection. **Replaced on 21 September**: the previous one could not be
+  // minted into at all, because `summon()` never pulled the player's 500 DNG and the vault asked
+  // the collection for money it had never held. A deployed collection cannot be repaired in
+  // place, so this is a new address — and `NFT_CONTRACTS` here is what the Summoning Chamber
+  // approves and calls, so a stale value here is a summon that reverts.
   NFT_CONTRACTS: {
-    testnet: '0x06c7D4b0C35858c78c3B213fbf50fB4A25f20512', // ✅ Deployed!
+    testnet: '0x27Cfbb763188a50Fe1C0fFfBe2552b1945eE1B2D',
     mainnet: '0xYOUR_MAINNET_NFT_CONTRACT' // TODO: Deploy NFT to mainnet
   },
   
@@ -42,13 +51,18 @@ const CONFIG = {
   // is deployed: the Summoning Chamber reads an empty string as "not deployed yet" and
   // says so, instead of showing a button that would revert.
   CAPSULE_CONTRACTS: {
-    testnet: '', // TODO: deploy Capsules.sol, then set this
+    testnet: '0x628ae2254fFE4aeC68D13b1E46E5628CCcbD2728',
     mainnet: '' // TODO: same on mainnet
   },
 
   // Game Contract Addresses
+  //
+  // `DungeonKnightsGameV4` — runs are signed by the backend, so this contract has no unsigned
+  // claim entry point at all. The V3 address that used to sit here paid the first collection's
+  // knights out of its own balance; it is retired, and a browser pointed at it would be pointed
+  // at a contract the server no longer signs for.
   GAME_CONTRACTS: {
-    testnet: '0xD8de9385Db7DfE925882E76849B6e067e47236e5', // DungeonKnightsGameV3 deployed! (Batch Claims)
+    testnet: '0xD60FfCb1df8ce1163e0a5137651E98BDC0Acd8a8',
     mainnet: '0xYOUR_MAINNET_GAME_CONTRACT' // TODO: Deploy to mainnet
   },
   
@@ -160,6 +174,21 @@ if (typeof window !== 'undefined') {
 // Drives gameplay rewards, the mint odds table, card art and
 // claim estimates. There are exactly 5 tiers to match the
 // on-chain rarity enum (0=common … 4=legendary).
+//
+// A tier carries TWO pictures, because a knight is shown in two
+// different places for two different reasons:
+//
+//   `image` — the art the *dungeon* draws: the sprite the map and
+//             the squad screen have always used. `public/dungeon.js`
+//             mirrors this table, and `tools/check-rarity.js` fails
+//             if the two drift apart.
+//   `pfp`   — the portrait shown wherever a knight appears as a
+//             *record* rather than as a unit: the Knight's Hall
+//             roster and the Summoning Chamber. Absolute paths, so a
+//             page at any depth resolves them.
+//
+// Keeping them apart is the point: the map is not a gallery, and a
+// 512px portrait drawn at 32px next to a tileset reads as mud.
 // ==========================================================
 window.RARITY_TIERS = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
 
@@ -173,7 +202,8 @@ window.RARITY_CONFIG = {
     dungeonReward: 12,    // $DNG per dungeon clear, at the reference budget (scale 1.0)
     dailyRuns: 5,
     hashPower: 15,        // capacity / 4 — what makes staking pay 90% of playing
-    image: 'characters/Pixel_knight_holding_wooden_shield_2K_202609041402_jpeg_2K_202609041417.png'
+    image: 'characters/Pixel_knight_holding_wooden_shield_2K_202609041402_jpeg_2K_202609041417.png',
+    pfp: '/assets/pfp/common.webp'
   },
   uncommon: {
     tier: 'UNCOMMON',
@@ -184,7 +214,8 @@ window.RARITY_CONFIG = {
     dungeonReward: 20,
     dailyRuns: 5,
     hashPower: 25,
-    image: 'characters/Pixel_knight_standing_on_floor_2K_202609041402_jpeg_2K_202609041417.png'
+    image: 'characters/Pixel_knight_standing_on_floor_2K_202609041402_jpeg_2K_202609041417.png',
+    pfp: '/assets/pfp/uncommon.webp'
   },
   rare: {
     tier: 'RARE',
@@ -195,7 +226,8 @@ window.RARITY_CONFIG = {
     dungeonReward: 36,
     dailyRuns: 4,
     hashPower: 36,
-    image: 'characters/Pixelated_knight_standing_on_tile_2K_202609041402_jpeg_2K_202609041417.png'
+    image: 'characters/Pixelated_knight_standing_on_tile_2K_202609041402_jpeg_2K_202609041417.png',
+    pfp: '/assets/pfp/rare.webp'
   },
   epic: {
     tier: 'EPIC',
@@ -206,7 +238,8 @@ window.RARITY_CONFIG = {
     dungeonReward: 60,
     dailyRuns: 3,
     hashPower: 45,
-    image: 'characters/Pixel_knight_holding_cosmic_shield_2K_202609041402_jpeg_2K_202609041417.png'
+    image: 'characters/Pixel_knight_holding_cosmic_shield_2K_202609041402_jpeg_2K_202609041417.png',
+    pfp: '/assets/pfp/epic.webp'
   },
   legendary: {
     tier: 'LEGENDARY',
@@ -217,7 +250,8 @@ window.RARITY_CONFIG = {
     dungeonReward: 100,
     dailyRuns: 4,
     hashPower: 100,
-    image: 'characters/Knight_in_golden_armor_stands_2K_202609041404_jpeg_2K_202609041417.png'
+    image: 'characters/Knight_in_golden_armor_stands_2K_202609041404_jpeg_2K_202609041417.png',
+    pfp: '/assets/pfp/legendary.webp'
   }
 };
 

@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import {
     CAPSULES_PER_WEEK,
     CAPSULE_TYPES,
-    KNIGHTS_CAP,
+    KNIGHTS_REFERENCE_SIZE,
+    STAKING_WRITES_READY,
     TICKET_CAP_HOURS,
     WEEK_EPOCH_UTC,
     WEEK_MS,
@@ -18,7 +19,7 @@ import { KNIGHT_TIERS } from '../../../../lib/knights.js';
 // The deployed knight collection's address and the facts about reading it. Imported from the
 // game's chain module rather than declared again here, so the vault and the game can never
 // disagree about which collection they are talking about.
-import { ADDRESSES as GAME_ADDRESSES } from '../../../../lib/game-runs.js';
+import { ADDRESSES as GAME_ADDRESSES, CHAIN } from '../../../../lib/game-runs.js';
 import { NFT_ENUMERATION } from '../../../../lib/staking-chain.js';
 
 export const dynamic = 'force-dynamic';
@@ -28,8 +29,15 @@ export const runtime = 'nodejs';
 // the same rule the game's config route follows. An empty string means "not deployed
 // yet", and the page degrades to its labelled preview instead of failing.
 const ADDRESSES = {
-    genesis: (process.env.GENESIS_NFT || '').trim(),
-    staking: (process.env.STAKING_CONTRACT || '').trim(),
+    // Read from the game's chain module rather than the environment directly, so this route and
+    // `/api/staking/holdings` cannot disagree about which collection a `collection=genesis` read
+    // means. They did: this one said Genesis was live while the other refused to read it.
+    genesis: GAME_ADDRESSES.genesisNFT,
+    // Both staking pools, from the same place the holdings route resolves them. A single
+    // `STAKING_CONTRACT` could not name both collections, and resolving them separately in the two
+    // routes is how the page ends up reading one pool and sending a stake to another.
+    staking: GAME_ADDRESSES.genesisStaking,
+    knightsStaking: GAME_ADDRESSES.knightsStaking,
     raffle: (process.env.RAFFLE_CONTRACT || '').trim(),
     capsule: (process.env.CAPSULE_NFT || '').trim(),
     vault: (process.env.REWARD_VAULT || '').trim(),
@@ -95,6 +103,23 @@ export async function GET() {
         addresses: ADDRESSES,
         vaultLive: Boolean(ADDRESSES.vault),
 
+        // The network the addresses above live on. Served because the write path has to refuse a
+        // wallet pointed at another chain *before* it signs: a call to a contract address that
+        // means something else on the network the wallet is actually on does not revert politely.
+        chainId: CHAIN.id,
+        explorer: CHAIN.explorer,
+        // Whether the DNG token this vault pays out in is the one the deployment names. The
+        // staking pools pay from `RewardVault`, so nothing here needs an allowance — but a player
+        // looking for their balance does.
+        dngToken: GAME_ADDRESSES.dngToken,
+
+        // What this *page* can do, as opposed to what the chain has. A deployed contract and a
+        // reachable one are different facts, and only the second makes a stake real: the vault
+        // has no approve/stake/claim transaction path yet, so a stake taken here stays in the
+        // browser whatever the addresses below say. Served explicitly so the simulation warning
+        // cannot be deleted by configuring a deployment — see `STAKING_WRITES_READY`.
+        writes: STAKING_WRITES_READY,
+
         poolDng: poolFromEnv(),
         knightsPoolDng: knightsPoolFromEnv(),
 
@@ -157,14 +182,14 @@ export async function GET() {
             worstCaseScale: model.worstCaseScale,
             fundingPerYear: model.fundingPerYear,
             stakingShareOfDungeon: STAKING_SHARE_OF_DUNGEON,
-            knightsCap: KNIGHTS_CAP,
-            knightsPayoutAtCap: model.knightsPayoutAtCap,
+            knightsReferenceSize: KNIGHTS_REFERENCE_SIZE,
+            knightsPayoutAtReference: model.knightsPayoutAtReference,
             // The draw's size belongs to the economy, not only to the vault: the capsule
             // panel quotes it, and it is what makes the open price a funding mechanism
             // rather than a fee. It was top-level only, so the panel read `undefined`.
             capsulesPerWeek: model.capsulesPerWeek,
             capsuleOpenPriceAtZero: capsuleOpenPrice(0),
-            capsuleOpenPriceAtCap: capsuleOpenPrice(KNIGHTS_CAP),
+            capsuleOpenPriceAtReference: capsuleOpenPrice(KNIGHTS_REFERENCE_SIZE),
             capsuleBreakEvenMinted: model.capsuleBreakEvenMinted,
             genesisRewardPerClear: model.genesisRewardPerClear,
             genesisDailyRuns: model.genesisDailyRuns,

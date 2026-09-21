@@ -259,10 +259,15 @@ class MintPage {
     const card = document.createElement('div');
     card.className = `knight-card rarity-${knight.rarity}`;
 
+    // The portrait, not the map sprite: a summoned knight is shown here as a record of what was
+    // minted. The dungeon keeps `image`, and `pfp` falls back to it so a tier added to config.js
+    // without a portrait yet shows *something* rather than a broken image.
     const rarityConfig = window.RARITY_CONFIG?.[knight.rarity] || {
       color: '#9E9E9E',
+      pfp: '/assets/pfp/common.webp',
       image: 'characters/Pixel_knight_holding_wooden_shield_2K_202609041402_jpeg_2K_202609041417.png'
     };
+    const knightArt = rarityConfig.pfp || rarityConfig.image;
 
     card.innerHTML = `
       <div class="knight-header" style="background:linear-gradient(135deg,${rarityConfig.color}20,transparent)">
@@ -270,7 +275,7 @@ class MintPage {
         <span class="rarity-badge" style="background:${rarityConfig.color}">${knight.rarity.toUpperCase()}</span>
       </div>
       <div class="knight-image">
-        <img src="${rarityConfig.image}" alt="${knight.rarity} knight">
+        <img src="${knightArt}" alt="${knight.rarity} knight" loading="lazy">
       </div>
       <div class="knight-stats">
         <div class="stat-bar">
@@ -295,7 +300,8 @@ class MintPage {
    * economy rather than typed into the markup: a price that lives in two places is a price
    * that will eventually disagree with the contract.
    *
-   * It rises with the collection (500 DNG at zero Knights to 5,000 at the cap) because a
+   * It rises with the collection — 500 DNG at zero Knights to 5,000 at the reference size,
+   * flat above it — because a
    * flat fee cannot price a growing collection — at 200 opens a week a 500-DNG fee funds
    * roughly 2% of the reward budget, and per-Knight payouts would fall about ten-fold a
    * year. The marker on the track is the crossover: from about 5,700 Knights the 200 weekly
@@ -304,9 +310,9 @@ class MintPage {
   async renderCapsules() {
     this.capsuleQuantity = 1;
     this.capsulePrice = null;
-    this.capsulePriceAtCap = null;
+    this.capsulePriceAtReference = null;
     this.capsuleBreakEvenMinted = null;
-    this.capsuleCap = null;
+    this.capsuleReferenceSize = null;
     this.capsulesPerWeek = null;
     this.capsulesHeld = null;
     this.capsuleReason = null;
@@ -321,9 +327,9 @@ class MintPage {
       if (!economy) throw new Error('no economy');
 
       this.capsulePrice = economy.capsuleOpenPriceAtZero;
-      this.capsulePriceAtCap = economy.capsuleOpenPriceAtCap;
+      this.capsulePriceAtReference = economy.capsuleOpenPriceAtReference;
       this.capsuleBreakEvenMinted = economy.capsuleBreakEvenMinted;
-      this.capsuleCap = economy.knightsCap;
+      this.capsuleReferenceSize = economy.knightsReferenceSize;
       this.capsulesPerWeek = economy.capsulesPerWeek;
       // `config.reason` is deliberately *not* used here. It explains why the *Staking
       // Vault* is showing preview data, which is not a fact about this page — the button
@@ -373,12 +379,12 @@ class MintPage {
 
     set('capsule-price', this.capsulePrice === null ? '—' : `${fmt(this.capsulePrice)} DNG`);
     set('capsule-price-min', this.capsulePrice === null ? '—' : `${fmt(this.capsulePrice)} DNG`);
-    set('capsule-price-max', this.capsulePriceAtCap === null ? '—' : `${fmt(this.capsulePriceAtCap)} DNG`);
+    set('capsule-price-max', this.capsulePriceAtReference === null ? '—' : `${fmt(this.capsulePriceAtReference)} DNG`);
 
     const marker = document.getElementById('capsule-track-marker');
     if (marker) {
-      const fraction = this.capsuleCap
-        ? (this.capsuleBreakEvenMinted || 0) / this.capsuleCap
+      const fraction = this.capsuleReferenceSize
+        ? (this.capsuleBreakEvenMinted || 0) / this.capsuleReferenceSize
         : 0;
       marker.style.left = `${Math.min(100, Math.max(0, fraction * 100))}%`;
     }
@@ -408,11 +414,11 @@ class MintPage {
     const note = [];
     if (this.capsuleReason) {
       note.push(this.capsuleReason);
-    } else if (this.capsuleCap) {
+    } else if (this.capsuleReferenceSize) {
       note.push('Capsules are awarded by the weekly draw to staked Genesis Knights — never sold. '
         + 'Opening one reveals a Knight at the published odds, and the price rises with the '
-        + `collection: ${fmt(this.capsulePrice)} DNG at zero Knights to ${fmt(this.capsulePriceAtCap)} `
-        + `at ${fmt(this.capsuleCap)}.`);
+        + `collection: ${fmt(this.capsulePrice)} DNG at zero Knights to ${fmt(this.capsulePriceAtReference)} `
+        + `at ${fmt(this.capsuleReferenceSize)}.`);
       if (this.capsuleBreakEvenMinted) {
         note.push(`The marker is the crossover: from about ${fmt(this.capsuleBreakEvenMinted)} Knights `
           + `the ${fmt(this.capsulesPerWeek)} weekly opens alone cover the whole Knights reward line.`);

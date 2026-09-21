@@ -29,13 +29,13 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import {
-    CAPSULE_YIELDS, DNG_SUPPLY, FMT, KNIGHTS_CAP, MIN_WEEKS, REWARD_SLOTS,
+    CAPSULE_YIELDS, DNG_SUPPLY, FMT, KNIGHTS_REFERENCE_SIZE, MIN_WEEKS, REWARD_SLOTS,
     REWARD_VAULT_DNG, STAKING_SHARE_OF_DUNGEON, SUMMON_PRICE_DNG, TIER_ECONOMY,
     annualCapacityPerKnight, capsuleBreakEvenMinted, capsuleFaucet, capsuleOpenPrice,
     effectiveWeeklyBudget, expectedPaybackClears, expectedPaybackDays, expectedRewardPerClear,
     genesisBandStakingRatios, genesisWeightedStakingRatio, headline, knightStakingRatio,
     knightYearsToDrainSupply,
-    knightsPayoutAtCap, lineBudgets, lineShares, pointsPerDayMax, probabilitySum,
+    knightsPayoutAtReference, lineBudgets, lineShares, pointsPerDayMax, probabilitySum,
     referenceBurnPerDay, referenceLines, tier, weeklyBudgetDng,
 } from '../lib/token-math.js';
 import { economy } from '../lib/reward-config.js';
@@ -167,8 +167,8 @@ rec('at the reference, the Knights lines pay exactly the published tier table',
     lines.knightsDungeon === REFERENCE_KNIGHTS_ACTIVE * H.expectedRewardPerDay,
     `${FMT.int(lines.knightsDungeon)}/day for ${REFERENCE_KNIGHTS_ACTIVE} knights`);
 rec('the reference is about 5% of each collection',
-    near(REFERENCE_GENESIS_ACTIVE / 1024, 0.05, 0.002) && REFERENCE_KNIGHTS_ACTIVE / KNIGHTS_CAP === 0.05,
-    `Genesis ${(REFERENCE_GENESIS_ACTIVE / 1024 * 100).toFixed(1)}%, Knights ${(REFERENCE_KNIGHTS_ACTIVE / KNIGHTS_CAP * 100).toFixed(1)}%`);
+    near(REFERENCE_GENESIS_ACTIVE / 1024, 0.05, 0.002) && REFERENCE_KNIGHTS_ACTIVE / KNIGHTS_REFERENCE_SIZE === 0.05,
+    `Genesis ${(REFERENCE_GENESIS_ACTIVE / 1024 * 100).toFixed(1)}%, Knights ${(REFERENCE_KNIGHTS_ACTIVE / KNIGHTS_REFERENCE_SIZE * 100).toFixed(1)}%`);
 
 const budget = weeklyBudgetDng();
 rec('the weekly budget is the reference burn for one week',
@@ -188,10 +188,13 @@ rec('a line budget is its share of the week, and the four sum to the week',
     close(Object.values(lineBudgets(budget)).reduce((s, v) => s + v, 0), budget),
     FMT.int(budget));
 
-const atCap = knightsPayoutAtCap();
-rec('at the 10,000 cap each Knights line pays 5.0% of reference',
-    near(atCap.ratioOfReference, 0.05, 1e-9),
-    `${atCap.dungeonPerKnight.toFixed(2)} dungeon + ${atCap.stakingPerKnight.toFixed(2)} staking vs ${atCap.referencePerKnight.toFixed(2)}`);
+// The collection has no ceiling, so this is a payout *at a size* rather than a floor: 5.0% at
+// the reference size, 2.5% at twice it. Pinned at that size so the direction of travel cannot
+// be quietly restated as a guarantee.
+const atSize = knightsPayoutAtReference();
+rec('at the 10,000 reference size each Knights line pays 5.0% of reference',
+    near(atSize.ratioOfReference, 0.05, 1e-9),
+    `${atSize.dungeonPerKnight.toFixed(2)} dungeon + ${atSize.stakingPerKnight.toFixed(2)} staking vs ${atSize.referencePerKnight.toFixed(2)}`);
 rec('the funding requirement to hold the table forever is 73,586,240 $DNG a year',
     near(H.fundingPerYear, 73_586_240, 1), FMT.int(H.fundingPerYear));
 
@@ -206,14 +209,14 @@ rec('each rarer capsule raises the floor as well as the ceiling',
 rec('every capsule outcome is a tier the contracts can pay',
     CAPSULE_YIELDS.every((c) => c.floor < REWARD_SLOTS));
 rec('the open price rises from 500 to 5,000 across the cap',
-    capsuleOpenPrice(0) === 500 && capsuleOpenPrice(KNIGHTS_CAP) === 5000,
-    `${capsuleOpenPrice(0)} -> ${capsuleOpenPrice(KNIGHTS_CAP)}`);
+    capsuleOpenPrice(0) === 500 && capsuleOpenPrice(KNIGHTS_REFERENCE_SIZE) === 5000,
+    `${capsuleOpenPrice(0)} -> ${capsuleOpenPrice(KNIGHTS_REFERENCE_SIZE)}`);
 rec('the open price is never free, which was the largest unbudgeted liability',
     capsuleOpenPrice(0) > 0);
 const faucet = capsuleFaucet(0);
 rec('the faucet is bounded by the collection cap, not by an open question',
-    faucet.cap === KNIGHTS_CAP && faucet.perYear === CAPSULES_PER_WEEK * 52,
-    `${FMT.int(faucet.perYear)} knights a year against a ${FMT.int(KNIGHTS_CAP)} cap`);
+    faucet.referenceSize === KNIGHTS_REFERENCE_SIZE && faucet.perYear === CAPSULES_PER_WEEK * 52,
+    `${FMT.int(faucet.perYear)} knights a year, stated against the ${FMT.int(KNIGHTS_REFERENCE_SIZE)} reference size`);
 rec('from ~5,746 knights the weekly opens alone cover the whole Knights lines',
     capsuleBreakEvenMinted() === 5746,
     `break-even at ${FMT.int(capsuleBreakEvenMinted())}`);
@@ -304,9 +307,9 @@ for (const [file, needles] of Object.entries(FORBIDDEN)) {
 }
 
 // The one figure that was wrong in an earlier draft of this very plan, and is now pinned.
-rec('no document claims the cap floor is 10% rather than 5% of reference',
+rec('no document claims the floor is 10% rather than 5% of reference',
     Object.keys(REQUIRED).every((f) => !/10% of reference|10% of the reference/.test(doc(f))),
-    'each Knights line pays 5.0% at the cap');
+    'each Knights line pays 5.0% at the reference size');
 
 // ---------------------------------------------------- the served economy is complete
 //
@@ -347,8 +350,8 @@ const servedBlock = economyBlock(routeSource);
 const UI_ECONOMY_FIELDS = [
     'rewardVaultDng', 'reference', 'lines', 'shares', 'lineBudgets', 'weeklyBudget',
     'dailyBudget', 'minWeeks', 'stakingShareOfDungeon', 'horizonDays', 'worstCaseHorizonDays',
-    'worstCaseScale', 'knightsCap', 'capsulesPerWeek',
-    'capsuleOpenPriceAtZero', 'capsuleOpenPriceAtCap', 'capsuleBreakEvenMinted',
+    'worstCaseScale', 'knightsReferenceSize', 'capsulesPerWeek',
+    'capsuleOpenPriceAtZero', 'capsuleOpenPriceAtReference', 'capsuleBreakEvenMinted',
     'referenceTable',
 ];
 const missingFromModel = UI_ECONOMY_FIELDS.filter((f) => !(f in model));

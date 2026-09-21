@@ -34,7 +34,7 @@ import {
     HASH_POWER_BANDS,
     HASH_POWER_MAX,
     HASH_POWER_MIN,
-    KNIGHTS_CAP,
+    KNIGHTS_REFERENCE_SIZE,
 } from '../../lib/staking-config';
 import {
     KNIGHT_TIERS,
@@ -349,7 +349,7 @@ export default function TokenomicsClient() {
                                 This is the part most economies get wrong, so it is worth being exact. The table below is
                                 paid at <strong>scale 1.00</strong> to a published reference population — about{' '}
                                 {pct(REFERENCE_GENESIS_ACTIVE / GENESIS_SUPPLY)} of the Genesis collection and{' '}
-                                {pct(REFERENCE_KNIGHTS_ACTIVE / KNIGHTS_CAP)} of the Knights cap playing daily. Above
+                                {pct(REFERENCE_KNIGHTS_ACTIVE / KNIGHTS_REFERENCE_SIZE)} of the reference Knights population playing daily. Above
                                 that, one scale moves <em>every</em> number down together, so the ratios survive at
                                 whatever level is fundable.
                             </p>
@@ -523,7 +523,7 @@ export default function TokenomicsClient() {
                             <div className="tk-table-card" data-collection="knights">
                                 <div className="tk-table-head">
                                     <span className="tk-table-title">Knights</span>
-                                    <span className="tk-table-tag tk-num">{compact(KNIGHTS_CAP)} cap</span>
+                                    <span className="tk-table-tag tk-num">no supply limit</span>
                                 </div>
                                 <div className="tk-table-scroll">
                                     <table className="tk-tier-table">
@@ -622,23 +622,23 @@ export default function TokenomicsClient() {
                                     </div>
                                     <span className="tk-capsule-arrow" aria-hidden="true">&#10230;</span>
                                     <div className="tk-capsule-price-now">
-                                        <span className="tk-num is-gold">{fmt(capsuleOpenPrice(KNIGHTS_CAP))}</span>
-                                        <span className="tk-capsule-price-unit">DNG at {fmt(KNIGHTS_CAP)}</span>
+                                        <span className="tk-num is-gold">{fmt(capsuleOpenPrice(KNIGHTS_REFERENCE_SIZE))}</span>
+                                        <span className="tk-capsule-price-unit">DNG at {fmt(KNIGHTS_REFERENCE_SIZE)}</span>
                                     </div>
                                 </div>
 
                                 <div className="tk-capsule-track" role="img"
-                                    aria-label={`The open price climbs from ${capsuleOpenPrice(0)} DNG to ${capsuleOpenPrice(KNIGHTS_CAP)} DNG, covering both Knights reward lines from about ${fmt(model.breakEven)} Knights`}>
+                                    aria-label={`The open price climbs from ${capsuleOpenPrice(0)} DNG to ${capsuleOpenPrice(KNIGHTS_REFERENCE_SIZE)} DNG, covering both Knights reward lines from about ${fmt(model.breakEven)} Knights`}>
                                     <span className="tk-capsule-fill" />
                                     <span
                                         className="tk-capsule-marker"
-                                        style={{ left: `${(model.breakEven / KNIGHTS_CAP) * 100}%` }}
+                                        style={{ left: `${(model.breakEven / KNIGHTS_REFERENCE_SIZE) * 100}%` }}
                                     />
                                 </div>
                                 <div className="tk-capsule-scale">
                                     <span>0 Knights</span>
                                     <span className="tk-num">break-even ~{compact(model.breakEven)}</span>
-                                    <span className="tk-num">{compact(KNIGHTS_CAP)} Knights</span>
+                                    <span className="tk-num">{compact(KNIGHTS_REFERENCE_SIZE)} Knights</span>
                                 </div>
 
                                 <p className="tk-capsule-fine">
@@ -648,6 +648,12 @@ export default function TokenomicsClient() {
                                     reference). Below it, the faucet is subsidised — which is the honest thing to state,
                                     because a capsule faucet that funds itself from day one would mean the Knights lines
                                     are nearly empty.
+                                </p>
+                                <p className="tk-capsule-fine">
+                                    The ramp is measured against {fmt(KNIGHTS_REFERENCE_SIZE)} Knights, and it is{' '}
+                                    <strong>flat above that</strong>: the collection has no supply limit, so the ten-thousandth
+                                    knight and the hundred-thousandth cost the same {fmt(capsuleOpenPrice(KNIGHTS_REFERENCE_SIZE))} DNG
+                                    to reveal while each earns less than the one before.
                                 </p>
                             </div>
                         </div>

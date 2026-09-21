@@ -48,10 +48,16 @@
     font-feature-settings: 'tnum' 1;
 }
 
-/* ---------------------------------------------------------------- the preview badge
-   Shown whenever the vault is not reading real contracts. It is deliberately
-   impossible to mistake for decoration. */
-.sv-preview-badge {
+/* ------------------------------------------------------------------ the three badges
+   Three badges, three claims, three classes. `sv-preview-badge` means "these holdings are
+   invented"; `sv-sim-badge` means "these holdings are real and the stake is not";
+   `sv-chain-badge` means "the buttons here sign transactions". They shared a class once
+   (the preview and simulation badges, which made a test for the absence of one match the
+   other), so each keeps its own — a distinction the badge exists to draw must not be
+   something a stylesheet or a selector can lose. */
+.sv-preview-badge,
+.sv-sim-badge,
+.sv-chain-badge {
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -361,12 +367,17 @@
     position: relative;
 }
 
+/* The portrait fills the frame. `object-fit: cover` rather than `contain`: these are square
+   paintings, and a letterboxed square inside a square frame just leaves two grey bars. */
 .sv-art img {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    image-rendering: pixelated;
+    image-rendering: auto;
 }
+
+/* Only the drawn sprite art is pixel art, and only that wants to be stepped up unscaled. */
+.sv-art img.is-sprite { image-rendering: pixelated; }
 
 .sv-art-glyph {
     font-family: var(--font-display);
@@ -692,10 +703,18 @@
     color: #f0d9a8;
 }
 
-.sv-preview-badge.is-sim {
+.sv-sim-badge {
     border-color: #d99a2b;
     background: rgba(217, 154, 43, 0.12);
     color: #f0c674;
+}
+
+/* Green, not gold: this is the only badge that is good news about the *chain* rather than a
+   caveat about the data, and it must not read as one more warning next to an amber one. */
+.sv-chain-badge {
+    border-color: #4f8a5b;
+    background: rgba(79, 138, 91, 0.14);
+    color: #9fd8a8;
 }
 
 .sv-chip.is-sim { border-color: #d99a2b; color: #f0c674; }

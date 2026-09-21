@@ -28,7 +28,7 @@ import fs from 'fs';
 import path from 'path';
 import vm from 'vm';
 import { fileURLToPath } from 'url';
-import { RARITY } from '../lib/knights.js';
+import { RARITY, knightPortrait } from '../lib/knights.js';
 import { CAPSULE_TYPES, HASH_POWER_BANDS } from '../lib/staking-config.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -270,6 +270,75 @@ rec('the dungeon draws the same knight for each tier', staleArt.length === 0,
 rec('the dungeon has no art for a tier that cannot be rolled',
     !/'(MYTHIC)'\s*:/.test(dungeonJs),
     /'(MYTHIC)'\s*:/.test(dungeonJs) ? "dungeon.js still loads a MYTHIC knight" : 'no phantom tier');
+
+// ------------------------------------------------------------------- the portraits
+// A tier now carries two pictures: `image` is the sprite the map draws, `pfp` the portrait the
+// screens that *list* knights draw (the Hall's roster, the Summoning Chamber, the vault). The
+// four checks below are the whole contract of that split: the files exist, the modules agree
+// about which one is which, the pages that list knights use the portrait, and the map does not.
+
+console.log('');
+console.log('Two pictures per tier, and each one used where it belongs');
+
+for (const tier of tiers) {
+    const pfp = config[tier].pfp;
+    const onDisk = pfp && fs.existsSync(path.join(PUBLIC, pfp));
+    rec(`${tier}: the portrait resolves`, !!onDisk,
+        onDisk ? pfp : pfp ? `missing: ${pfp}` : 'no pfp for this tier');
+}
+
+const knightsLib = fs.readFileSync(path.join(ROOT, 'lib', 'knights.js'), 'utf8');
+const libDisagrees = tiers.filter((t) => !knightsLib.includes(config[t].pfp));
+rec('lib/knights.js and config.js name the same portrait for every tier', libDisagrees.length === 0,
+    libDisagrees.length
+        ? `lib/knights.js disagrees on ${libDisagrees.join(', ')}`
+        : `${tiers.length} tiers agree`);
+rec('and the Genesis collection has a portrait of its own, which is a real file',
+    /GENESIS_PFP = '([^']+)'/.test(knightsLib)
+    && fs.existsSync(path.join(PUBLIC, knightsLib.match(/GENESIS_PFP = '([^']+)'/)[1])),
+    knightsLib.match(/GENESIS_PFP = '([^']+)'/)?.[1] || 'GENESIS_PFP is not defined');
+
+// The pages that *list* knights. A page that quietly went back to `image` would still render a
+// knight — just the wrong one, on the screen the split exists for — so it is checked by name.
+const menuJs = fs.readFileSync(path.join(PUBLIC, 'menu.js'), 'utf8');
+rec('the Knight’s Hall roster shows the portrait', /\.pfp\s*\|\|\s*[^)]*\.image/.test(menuJs),
+    /\.pfp\s*\|\|/.test(menuJs) ? 'menu.js reads entry.pfp' : 'menu.js still reads entry.image');
+const mintJs = fs.readFileSync(path.join(PUBLIC, 'mint-page.js'), 'utf8');
+rec('the Summoning Chamber shows the portrait', /rarityConfig\.pfp/.test(mintJs)
+    && !/<img src="\$\{rarityConfig\.image\}"/.test(mintJs),
+    /rarityConfig\.pfp/.test(mintJs) ? 'mint-page.js reads rarityConfig.pfp' : 'mint-page.js still reads rarityConfig.image');
+
+// Which picture a *record* wears, which is the decision the vault makes on every card and the one
+// place the two sides genuinely differ: Genesis has no tiers, a Knight does.
+const legendaryPortrait = knightPortrait({ rarity: 'legendary' }, true);
+rec('a tiered Knight is drawn with its own tier’s portrait',
+    legendaryPortrait === config.legendary.pfp, legendaryPortrait || 'null');
+rec('a Genesis Knight is drawn with the collection’s portrait',
+    knightPortrait({}, false) === knightsLib.match(/GENESIS_PFP = '([^']+)'/)[1],
+    knightPortrait({}, false));
+rec('and a Knight whose tier did not come back falls back rather than inventing one',
+    knightPortrait({}, true) === null && knightPortrait({ rarity: 'mythic' }, true) === null,
+    'null → the drawn glyph');
+
+// And the rule the split exists to protect: the map is not a gallery. If the dungeon ever draws
+// a portrait, the sprite in `image` has become dead weight and the tileset is unreadable at 32px.
+//
+// Swept across *every* page script rather than the handful that draw the map today, because the
+// failure mode is a new file quietly reaching for the portrait — config.js is the table that
+// names them, and menu.js/mint-page.js are the two screens allowed to show one.
+const PFP_PAGES = new Set(['config.js', 'menu.js', 'mint-page.js']);
+const pageScripts = [
+    ...fs.readdirSync(PUBLIC).filter((f) => f.endsWith('.js')),
+    ...['js/core'].flatMap((d) => (fs.existsSync(path.join(PUBLIC, d))
+        ? fs.readdirSync(path.join(PUBLIC, d)).filter((f) => f.endsWith('.js')).map((f) => `${d}/${f}`)
+        : [])),
+];
+const portraitsElsewhere = pageScripts.filter((f) => !PFP_PAGES.has(f)
+    && /assets\/pfp\//.test(fs.readFileSync(path.join(PUBLIC, f), 'utf8')));
+rec('the dungeon still draws the sprite, not the portrait', portraitsElsewhere.length === 0,
+    portraitsElsewhere.length
+        ? `${portraitsElsewhere.join(', ')} draws a portrait on the map`
+        : `${pageScripts.length} page scripts swept, portraits confined to the roster and the Chamber`);
 
 // dungeon-session.js used to carry its own copy of the ladder, commented "matches V3/V4
 // contracts". It is the one place that reads the rarity *enum* off the chain and indexes
