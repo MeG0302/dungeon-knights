@@ -531,6 +531,13 @@ export default function StakingClient() {
      * leave the header still showing an address. The menu does not reach into React; React hands it
      * the one function that can put the page back to how it looks with nobody connected.
      */
+    // The pill is rendered by the *ready* branch, not by the boot/loading one — so on a cold load
+    // this effect first runs while the vault is still reading and `walletPill.current` is null, and
+    // an effect that bails there never runs again: the page ends up with a control and no menu on
+    // it, which is My Portfolio unreachable from the vault. Re-running when the pill appears is the
+    // fix; waiting for the element rather than the phase name would be the other way to say it.
+    const pillRendered = phase !== 'boot' && phase !== 'loading';
+
     useEffect(() => {
         const pill = walletPill.current;
         if (!pill) return undefined;
@@ -550,7 +557,7 @@ export default function StakingClient() {
             return () => { cancelled = true; clearInterval(timer); };
         }
         return () => { cancelled = true; };
-    }, []);
+    }, [pillRendered]);
 
     /** The footer's "Ask Arya" — the walkthrough again, on request, past the seen flag. */
     const askArya = () => {
@@ -711,7 +718,7 @@ export default function StakingClient() {
         <>
             {/* Versioned like every other sheet: an unversioned `/theme.css` is a CSS change
                 that never reaches a returning player. */}
-            <link rel="stylesheet" href="/theme.css?v=5" />
+            <link rel="stylesheet" href="/theme.css?v=6" />
             <link rel="stylesheet" href="/css/staking.css?v=9" />
             <link rel="stylesheet" href="/css/arya.css?v=3" />
             {/* ethers v5 UMD, the same pinned copy every legacy page loads — first in the list,

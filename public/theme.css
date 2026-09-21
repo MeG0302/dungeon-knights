@@ -73,13 +73,27 @@ html, body {
   width: 100%; height: 100%;
   overflow: hidden;
 
-  /* Bone cursor — hotspot at 0 0 (top-left like default cursor) */
-  cursor: url('assets/cursor/bone.png') 0 0, auto;
+  /* The bone cursor. Two things were wrong with it and both are in this one line.
+
+     The art leaned the wrong way. It ran from a knob at the top-right down to one at the
+     bottom-left, which reads as a cursor tilted right; `public/assets/cursor/bone.png` is now
+     that same art mirrored horizontally, so the knob sits at the top-left and the shaft trails
+     down to the right — the direction every system arrow uses.
+
+     And the hotspot was `0 0`, which on the old art was a **transparent corner**: the click
+     point sat off the ink, so the visible bone hung down and right of where a click actually
+     landed. It is now the top-left-most opaque pixel of the mirrored art, measured rather than
+     guessed (7,0 — row 0 of the mirrored image is ink from x=7 to x=9), which is the tip the eye
+     reads as the pointer.
+
+     `?v=2` because the file changed under a URL browsers have already cached; without it a
+     returning player keeps the old bone. */
+  cursor: url('assets/cursor/bone.png?v=2') 7 0, auto;
 }
 
 /* Interactive elements get a pointer bone */
 button, a, .card, .quest-scroll-card, .knight-card, [role="button"] {
-  cursor: url('assets/cursor/bone.png') 0 0, pointer;
+  cursor: url('assets/cursor/bone.png?v=2') 7 0, pointer;
 }
 
 body {

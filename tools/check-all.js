@@ -14,6 +14,8 @@
  *                                  through a wallet double and decodes every transaction
  *   window.__check.mint()          the Summoning Chamber (run it on /mint): approve-then-summon
  *                                  through a wallet double, one transaction per knight
+ *   window.__check.walletMenu()    the header wallet control and its menu, on the route you
+ *                                  are on: attached, opens on tap, My Portfolio inside, Escape
  *   window.__check.report()        { total, failed, failures[], results[] }
  *
  * It lives in tools/, which is not served, so to use it from the browser copy it to
@@ -1857,10 +1859,78 @@
         return results;
     }
 
+    /**
+     * The wallet control and its menu, on **whichever route this is running on**.
+     *
+     * "My Portfolio is reachable from every page" is one claim per route, and the two ways it
+     * breaks are both invisible in a screenshot: a page with no wallet control for the menu to
+     * attach to (`/dungeons` shipped an empty `header-actions`), and a React route whose pill is
+     * rendered after hydration, so the module's own DOM scan never sees it (`/tokenomics` put a
+     * token-supply readout in the pill's class). Run this on each route —
+     * `tools/check-wallet-menu.js` is the source-level half of the same claim.
+     */
+    async function walletMenu() {
+        await sleep(700);
+
+        const pill = document.querySelector('.wallet-pill');
+        rec('this route has a wallet control', !!pill, location.pathname);
+        if (!pill) return results;
+
+        rec('the control is hosted, so the panel has something to hang off',
+            pill.classList.contains('wallet-menu-host'),
+            pill.id || pill.className);
+
+        const menu = pill.querySelector('.wallet-menu');
+        rec('the menu was attached to it', !!menu);
+        if (!menu) return results;
+
+        rec('and it is closed until asked for', menu.hidden === true);
+        rec('the affordance is visible before anyone hovers', !!pill.querySelector('.wallet-menu-caret'));
+
+        // Opened the way a phone opens it — there is no hover on a phone, so a menu that needs
+        // one is a menu half the players do not have.
+        pill.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await sleep(300);
+        // `is-open` is the transition class and it lands on the next animation frame, which a
+        // backgrounded tab throttles — asserting on it made this fail on one route and pass on
+        // another for no reason. The menu being *open* is `hidden` plus the trigger's
+        // `aria-expanded`; the class is only how the panel animates there.
+        rec('a tap opens it',
+            menu.hidden === false && pill.getAttribute('aria-expanded') === 'true',
+            `hidden=${menu.hidden} aria-expanded=${pill.getAttribute('aria-expanded')} is-open=${menu.classList.contains('is-open')}`);
+
+        const portfolio = menu.querySelector('a.wallet-menu-item[href="/portfolio"]');
+        rec('My Portfolio is an item, and it links to the page that exists',
+            !!portfolio && /my portfolio/i.test(portfolio.textContent),
+            portfolio ? portfolio.getAttribute('href') : 'not found');
+
+        const identity = menu.querySelector('.wallet-menu-address .wallet-menu-addr-text');
+        const connectItem = [...menu.querySelectorAll('.wallet-menu-item')]
+            .find((i) => /connect wallet/i.test(i.textContent));
+        rec('a connected wallet is told who it is, a stranger is offered Connect',
+            !!identity || !!connectItem,
+            identity ? identity.textContent : (connectItem ? 'Connect Wallet' : 'neither'));
+
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        // `hide()` removes the transition class immediately and sets `hidden` after 180 ms, so one
+        // fixed sleep here is a race against a timer — it passed on five routes and failed on the
+        // one that re-renders every second. Poll for it instead of guessing a frame.
+        let closed = false;
+        for (let i = 0; i < 12 && !closed; i++) {
+            await sleep(120);
+            closed = menu.hidden === true || !menu.classList.contains('is-open');
+        }
+        rec('Escape closes it again', closed,
+            `hidden=${menu.hidden} is-open=${menu.classList.contains('is-open')}`);
+
+        return results;
+    }
+
     window.__check = {
         arya,
         assets,
         engine,
+        walletMenu,
         mint,
         staking,
         stakingWrites,

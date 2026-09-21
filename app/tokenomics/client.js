@@ -26,8 +26,10 @@
  * pool was unknowable, not because sliders are banned.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import Script from 'next/script';
 import { SITE_NAME } from '../../lib/site';
+import { forgetWallet, savedAddress, shortAddress } from '../../lib/points-client';
 import {
     CAPSULES_PER_WEEK,
     GENESIS_SUPPLY,
@@ -173,6 +175,67 @@ export default function TokenomicsClient() {
     // happened here first time round.
     const hashPowerFloor = Math.min(...HASH_POWER_BANDS.map((b) => b.lo));
 
+    // ------------------------------------------------------------------ the wallet control
+    // Every route in the site puts the same pill in the same corner, and the menu it carries is
+    // the only way to reach My Portfolio. This page used the pill's class for a supply readout
+    // instead, which is a label wearing a control's clothes — the menu would have hung off it and
+    // offered to "Connect Wallet" over a number about the token. The pill is now a wallet and the
+    // supply sits beside it as the label it always was.
+    const [address, setAddress] = useState(null);
+    const [balance, setBalance] = useState(null);
+    const walletPill = useRef(null);
+    const handleDisconnectRef = useRef(() => {});
+
+    useEffect(() => setAddress(savedAddress()), []);
+
+    // The balance is a server read, the same `/api/wallet/balance` the Portfolio page uses: this
+    // page loads no chain library, and the browser contributes an address and nothing else. A
+    // failed read stays `null` and renders an em dash, never a zero it did not read.
+    useEffect(() => {
+        if (!address) {
+            setBalance(null);
+            return undefined;
+        }
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch(`/api/wallet/balance?address=${address}`, { cache: 'no-store' });
+                const body = await res.json();
+                if (!cancelled) setBalance(res.ok && Number.isFinite(Number(body?.amount)) ? Number(body.amount) : null);
+            } catch {
+                if (!cancelled) setBalance(null);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [address]);
+
+    const handleDisconnect = () => {
+        forgetWallet();
+        setAddress(null);
+    };
+    handleDisconnectRef.current = handleDisconnect;
+
+    // Attached by hand: this route mounts after hydration, so a module scanning the DOM at load
+    // would run before the pill exists.
+    useEffect(() => {
+        const pill = walletPill.current;
+        if (!pill) return undefined;
+        let cancelled = false;
+        const attach = () => {
+            if (cancelled || !window.WalletMenu) return false;
+            window.WalletMenu.attach(pill, { onDisconnect: handleDisconnectRef.current });
+            return true;
+        };
+        if (!attach()) {
+            let tries = 0;
+            const timer = setInterval(() => {
+                if (attach() || tries++ > 40) clearInterval(timer);
+            }, 100);
+            return () => { cancelled = true; clearInterval(timer); };
+        }
+        return () => { cancelled = true; };
+    }, []);
+
     // The same two the vault loads, and for the same reason: `theme.css` is what defines every
     // `--accent-gold` this page uses, and it lives at the root, not in `css/`. The first build
     // of this page asked for `/css/theme.css`, which 404s — so it rendered with no variables at
@@ -180,8 +243,14 @@ export default function TokenomicsClient() {
     // The battery now fetches each href and checks that a themed colour really applies.
     const pageStyles = (
         <>
-            <link rel="stylesheet" href="/theme.css" />
-            <link rel="stylesheet" href="/css/tokenomics.css?v=1" />
+            {/* Versioned like every other sheet in the site: an unversioned `/theme.css` is a CSS
+                change that never reaches a returning player. */}
+            <link rel="stylesheet" href="/theme.css?v=6" />
+            <link rel="stylesheet" href="/css/tokenomics.css?v=2" />
+            {/* The header's wallet pill carries the same menu every other route's control has.
+                No ethers: the balance on this page is a server read. */}
+            <Script src="/wallet-source.js?v=3" strategy="afterInteractive" />
+            <Script src="/wallet-menu.js?v=1" strategy="afterInteractive" />
         </>
     );
 
@@ -196,8 +265,24 @@ export default function TokenomicsClient() {
                     </button>
                     <div className="header-title">$DNG ECONOMY</div>
                     <div className="header-actions">
-                        <div className="wallet-pill">
-                            <span className="tk-num">SUPPLY · {compact(DNG_SUPPLY)} DNG</span>
+                        <span className="tk-num tk-supply">SUPPLY · {compact(DNG_SUPPLY)} DNG</span>
+                        {address && (
+                            <button className="btn btn-ghost btn-sm wallet-chip" onClick={handleDisconnect} title="Click to disconnect">
+                                <span className="wallet-chip-dot" aria-hidden="true" />
+                                {shortAddress(address)}
+                            </button>
+                        )}
+                        {/* The pill is the wallet control: the chip beside it says who, this says
+                            what, and the menu off it opens My Portfolio. Connecting is the menu's
+                            own first item, exactly as it is on every legacy page — the pill
+                            deliberately carries no click of its own, because the menu already
+                            owns that click and two meanings for it is worse than one. */}
+                        <div className="wallet-pill" ref={walletPill}>
+                            <span>
+                                {address
+                                    ? (balance === null ? '— DNG' : `${fmt(balance)} DNG`)
+                                    : 'CONNECT'}
+                            </span>
                         </div>
                     </div>
                 </header>

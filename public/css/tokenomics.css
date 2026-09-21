@@ -33,6 +33,17 @@
     letter-spacing: 0.02em;
 }
 
+/* The supply readout that sits beside the wallet pill. It is a label about the token, not a
+   wallet control, so it wears a label's class — the pill has one meaning and the menu that
+   hangs off it is part of it. */
+.tk-supply {
+    font-family: var(--font-heading);
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
 /* ---------------------------------------------------------------------- hero */
 .tk-hero {
     display: flex;

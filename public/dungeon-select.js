@@ -50,4 +50,34 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof AudioManager !== 'undefined') {
         window.audioManager = new AudioManager();
     }
+
+    // ---------------------------------------------------------------- the header pill
+    // The Quest Board's pill is the wallet control every page has — it carries the menu that
+    // opens My Portfolio. It also shows the balance, because the board spends it, and a pill
+    // stuck on "0 DNG" beside a real balance is worse than no pill at all. Same two events
+    // `landing.js` listens for, so a wallet connected on another page already reads correctly
+    // by the time this one paints.
+    const balanceEl = document.getElementById('questBoardBalance');
+
+    async function paintBalance() {
+        if (!balanceEl) return;
+        const manager = window.walletManager;
+        if (!manager || !manager.isConnected) {
+            balanceEl.textContent = '0 DNG';
+            return;
+        }
+        try {
+            const balance = await manager.getDNGBalance();
+            balanceEl.textContent = `${parseFloat(balance).toFixed(0)} DNG`;
+        } catch (error) {
+            // A failed read is said out loud rather than shown as a zero, and the menu still
+            // opens, so the one thing the player actually needs here is not hidden by it.
+            console.warn('Could not read the DNG balance:', error?.message || error);
+            balanceEl.textContent = '— DNG';
+        }
+    }
+
+    window.addEventListener('walletConnected', paintBalance);
+    window.addEventListener('walletDisconnected', paintBalance);
+    paintBalance();
 });
