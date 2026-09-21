@@ -254,7 +254,7 @@ export default function PortfolioClient() {
     const pageStyles = (
         <>
             <link rel="stylesheet" href="/theme.css?v=6" />
-            <link rel="stylesheet" href="/css/portfolio.css?v=1" />
+            <link rel="stylesheet" href="/css/portfolio.css?v=2" />
             {/* No ethers: every figure on this page is read by the server, so the page itself never
                 calls the chain. `wallet-source.js` is still here for the wallet's own session and
                 the menu, which is what connects and disconnects. */}

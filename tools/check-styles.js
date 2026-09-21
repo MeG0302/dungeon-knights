@@ -199,7 +199,7 @@ for (const [key, page] of Object.entries(STATIC_PAGES)) {
     if (key === 'landing') sheets.push('public/landing-mobile.css');
     if (key === 'menu') sheets.push('public/menu-mobile.css');
     if (key === 'mint') sheets.push('public/mint-mobile.css');
-    routes.push({ name: `/${key === 'landing' ? '' : key}`, sources, sheets });
+    routes.push({ name: `/${key === 'landing' ? '' : key}`, sources, sheets, key, page });
 }
 
 for (const dir of fs.readdirSync(path.join(ROOT, 'app'), { withFileTypes: true })) {
@@ -214,10 +214,34 @@ for (const dir of fs.readdirSync(path.join(ROOT, 'app'), { withFileTypes: true }
     });
 }
 
+// ------------------------------------------- a script's runtime dependency, which nothing implies
+//
+// The sweep below reads a route's scripts into `sources`, so it *does* see markup those scripts
+// build — but only for scripts the route actually loads. That is the blind spot this section
+// closes, and it hid a real bug: the landing page's markup holds the "Hall of Fame" card, and
+// `landing.js` drives it by calling `window.leaderboardManager`, but the file that *builds* that
+// modal is a third thing — `leaderboard.js`, which the landing page did not load. So the route had
+// a card, no module, no `leaderboard-modal` class in anything readable, and the sweep reported
+// "all styled". Pressing the card said "Leaderboard is loading..." permanently.
+//
+// Each entry is a claim with three falsifiable halves: a named script is on the route, that script
+// reads a named global, and the route's own markup carries the element the global serves. When all
+// three hold, the file that provides the global — and the sheet it needs — must be loaded too.
+const RUNTIME_DEPS = [
+    {
+        route: '/',
+        script: 'landing.js',
+        global: 'leaderboardManager',
+        markup: 'leaderboardLandingBtn',
+        needs: ['leaderboard.js', 'leaderboard.css'],
+    },
+];
+
 // ------------------------------------------------------------------------- report
 const allowlist = JSON.parse(read('tools/style-allowlist.json') || '{}');
 const globalAllow = allowlist['*'] || {};
 const findings = [];
+const depFindings = [];
 
 console.log('');
 for (const route of routes) {
@@ -244,16 +268,47 @@ for (const route of routes) {
 }
 
 console.log('');
+for (const dep of RUNTIME_DEPS) {
+    const route = routes.find((r) => r.name === dep.route);
+    const scripts = ((route?.page?.scripts) || []).map((s) => String(s).split('?')[0]);
+    const sheets = ((route?.page?.styles) || []).map((s) => String(s).split('?')[0]);
+    const drives = read(`public/${dep.script}`).includes(`window.${dep.global}`);
+    const card = String(route?.page?.body || '').includes(dep.markup);
+    const onRoute = scripts.includes(dep.script);
+    const missing = dep.needs.filter((n) => !scripts.includes(n) && !sheets.includes(n));
+
+    if (!route || !onRoute || !drives || !card) {
+        console.log(`  skip    ${dep.route} — ${dep.script} does not drive ${dep.markup}`);
+        continue;
+    }
+    if (missing.length) {
+        console.log(`  MISSING  ${dep.route} — ${dep.script} calls ${dep.global}, and its markup has ${dep.markup}`);
+        console.log(`           but the route does not load: ${missing.join(', ')}`);
+        depFindings.push({ route: dep.route, missing });
+    } else {
+        console.log(`  ok      ${dep.route} — ${dep.script} drives ${dep.markup}, and ${dep.needs.join(' + ')} are loaded`);
+    }
+}
+
+console.log('');
 if (allowlist['*']) {
     console.log(`Allow-listed everywhere: ${Object.keys(globalAllow).join(', ')}`);
     console.log('');
 }
 
-if (!findings.length) {
+if (!findings.length && !depFindings.length) {
     console.log('Every class each route uses is defined by a sheet that route loads.');
+    console.log('And every script a route runs finds the module it calls for.');
     console.log('');
     process.exit(0);
 }
+
+// A missing module is the louder failure — the control is dead on screen, not merely unstyled — so
+// it is reported first and on its own line.
+for (const dep of depFindings) {
+    console.log(`${dep.route} runs a script whose dependency is not loaded: ${dep.missing.join(', ')}`);
+}
+if (depFindings.length) console.log('');
 
 const total = findings.reduce((sum, f) => sum + f.tokens.length, 0);
 console.log(`${total} class(es) with no rule behind them on the route that uses them:`);

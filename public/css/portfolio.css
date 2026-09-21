@@ -18,14 +18,23 @@
     position: relative;
 }
 
+/* The page's own art, not the Knight's Hall's. It used to borrow `knight-hall.webp`, which meant
+   the Portfolio looked like a room belonging to the roster — the two are different places and now
+   have different pictures.
+
+   The scrim is set the way the hall panels' was: against the art's own mean luma rather than by
+   eye. Measured with `ffmpeg -vf signalstats` (YAVG), this picture is **79 of 255** where the
+   Knight's Hall's is 74 and the Summoning Chamber's 71 — the brightest of the three, and the one
+   wearing the most type, which is why its scrim is the heaviest of the three (0.50 → 0.86 against
+   the panels' 0.45 → 0.82): it stays plainly visible while the numbered rows read over it. */
 .portfolio-page::before {
     content: '';
     position: fixed;
     inset: 0;
     z-index: 0;
     background-image:
-        linear-gradient(180deg, rgba(13, 10, 8, 0.62) 0%, rgba(13, 10, 8, 0.88) 100%),
-        url('/assets/hall/knight-hall.webp');
+        linear-gradient(180deg, rgba(13, 10, 8, 0.5) 0%, rgba(13, 10, 8, 0.86) 100%),
+        url('/assets/hall/portfolio.webp');
     background-size: cover;
     background-position: center;
     pointer-events: none;
@@ -526,8 +535,14 @@
 
 /* --------------------------------------------------------------------------- phone */
 @media (max-width: 900px) {
+    /* This used to drop the art entirely and paint a flat scrim — which is what a phone visitor
+       got instead of the room they were standing in. It is the small file now (79 KB against the
+       desktop's 254 KB), scrimmed harder because a phone reads the same cards through a much
+       narrower column. */
     .portfolio-page::before {
-        background-image: linear-gradient(180deg, rgba(13, 10, 8, 0.82) 0%, rgba(13, 10, 8, 0.94) 100%);
+        background-image:
+            linear-gradient(180deg, rgba(13, 10, 8, 0.64) 0%, rgba(13, 10, 8, 0.9) 100%),
+            url('/assets/hall/portfolio-mobile.webp');
     }
 
     .pf-main {

@@ -6,7 +6,20 @@
     left: 0;
     width: 100vw;
     height: 100vh;
-    background: rgba(0, 0, 0, 0.85);
+    /* The hall, rather than a flat blackout. The Hall of Fame was a card floating on nothing, which
+       made the one screen that is *about* the realm look like a dialog box. The art is the point,
+       so the scrim is only as heavy as reading the table over it needs (0.55 at the top, where the
+       table is not, 0.88 at the bottom, where the rows are).
+
+       Heavier than the other three halls for a measurable reason: this is the brightest of the four
+       pictures (mean luma 81 of 255 against the Knight's Hall's 74, the Portfolio's 79 and the
+       Summoning Chamber's 71), and it is a full-viewport backdrop behind a centred card with no
+       panel to catch the light. The radial shape puts the darkness where the table is rather than
+       across the whole frame. */
+    background:
+        radial-gradient(120% 95% at 50% 0%, rgba(13, 10, 8, 0.55) 0%, rgba(13, 10, 8, 0.88) 100%),
+        url('/assets/hall/hall-of-fame.webp') center / cover no-repeat,
+        #0d0a08;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -19,6 +32,17 @@
 .leaderboard-modal.active {
     opacity: 1;
     pointer-events: all;
+}
+
+/* Phones get the smaller file — the same breakpoint the hall panels switch at, so the art and the
+   layout change over together. */
+@media (max-width: 860px) {
+    .leaderboard-modal {
+        background:
+            radial-gradient(120% 95% at 50% 0%, rgba(13, 10, 8, 0.62) 0%, rgba(13, 10, 8, 0.9) 100%),
+            url('/assets/hall/hall-of-fame-mobile.webp') center / cover no-repeat,
+            #0d0a08;
+    }
 }
 
 .leaderboard-content {

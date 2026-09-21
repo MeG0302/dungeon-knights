@@ -1068,18 +1068,39 @@ the Points Program has no points, and that is not a fault.
 wallet on screen and a mismatch is a sentence naming the other wallet, not that wallet's points
 printed under yours. Test it by signing in on `/points`, switching accounts, and returning here.
 
-**The art.** The Knight's Hall WebP behind the panel you are reading, plus the chest in the empty
-state — the 2K PNG is 1.9 MB for a 96px box, so it is served as an 11 KB resample, generated the
-same way the hall art was (`ffmpeg` is on this machine at
-`…/WinGet/Packages/Gyan.FFmpeg…/ffmpeg.exe`):
+**The art.** Two pictures, and until this change the page had neither of its own: it borrowed
+`knight-hall.webp`, which is the roster's room — the Portfolio is a different place and now has a
+different picture. The chest in the empty state is the third file here. Sources live in
+`points/portfolio and hall of fame tab/` (not served — only `public/` is; the originals stay where
+they are). `ffmpeg` is on this machine at `…/WinGet/Packages/Gyan.FFmpeg…/ffmpeg.exe`.
 
 ```bash
+# the Portfolio's own room, desktop + phone
+ffmpeg -y -i "points/portfolio and hall of fame tab/portfolio.jpg" -vf "scale=1920:-2" -c:v libwebp -quality 78 public/assets/hall/portfolio.webp
+ffmpeg -y -i "points/portfolio and hall of fame tab/portfolio.jpg" -vf "scale=900:-2"  -c:v libwebp -quality 72 public/assets/hall/portfolio-mobile.webp
+
+# the Hall of Fame's room, desktop + phone
+ffmpeg -y -i "points/portfolio and hall of fame tab/hall of fame.jpg" -vf "scale=1920:-2" -c:v libwebp -quality 78 public/assets/hall/hall-of-fame.webp
+ffmpeg -y -i "points/portfolio and hall of fame tab/hall of fame.jpg" -vf "scale=900:-2"  -c:v libwebp -quality 72 public/assets/hall/hall-of-fame-mobile.webp
+
+# the chest (alpha preserved — see the note below)
 ffmpeg -y -i "public/assets/points/Wooden_treasure_chest_illustration_2K_20260919015044-autocrop-hair.png" \
   -vf "scale=192:-2" -pix_fmt yuva420p -c:v libwebp -quality 88 public/assets/hall/portfolio-chest.webp
 ```
 
-`-pix_fmt yuva420p` is the part that matters — without it the WebP is opaque and the chest gets a
-black box around it on the scrim.
+That lands at 260 KB / 172 KB on desktop and 79 KB / 51 KB on phones, all 1920×1072 and 900×502.
+`-pix_fmt yuva420p` is the part that matters on the chest — without it the WebP is opaque and it
+gets a black box around it on the scrim.
+
+**Both scrims were set from the pictures' own measurements, not by eye**, which is the only reason
+the numbers differ between the four halls. `ffmpeg -i <file> -vf "signalstats,metadata=mode=print:file=-" -f null -`
+reports mean luma (YAVG): this room is **79 of 255**, the Hall of Fame's **81**, the Knight's Hall's
+**74** and the Summoning Chamber's **71**. The two new pictures are the brightest of the four, so
+they wear the heaviest scrims — the Portfolio's runs `0.50 → 0.86` against the hall panels'
+`0.45 → 0.82`, and the Hall of Fame's is a radial `0.55 → 0.88` centred where the table is, because
+it is a full-viewport backdrop behind a floating card with no panel to catch the light. Phones then
+swap to the small files *and* darken further, at the hall panels' own 860px breakpoint so art and
+layout change over together.
 
 **One stylesheet move this page forced.** The header's disconnect chip (`.wallet-chip`,
 `.wallet-chip-dot`) was defined twice — in `points.css` and in `staking.css`, because each route
@@ -1099,6 +1120,53 @@ comments stripped, because a guard that reads prose fails on its own explanation
 reported an `eth_call` that existed only in a comment saying the page deliberately avoids one.
 Every guard was falsified before it was trusted: moving `PORTFOLIO_HREF`, restoring the ethers tag,
 and reintroducing `HASH_POWER_BANDS` each fail by name.
+
+### The Hall of Fame, and the card that could not reach it
+
+The Hall of Fame is **not a route** — it is a modal `public/leaderboard.js` injects into
+`document.body` on load, which is why it has a stylesheet (`leaderboard.css`) rather than a page.
+That distinction is what hid a real bug: `landing.css`/`leaderboard.js` were wired into the **game**
+entry in `lib/static-pages.js` only, while the "Hall of Fame" card is on the **landing** page. So
+the one button named after the modal loaded neither the module that builds it nor the sheet that
+styles it, and `public/landing.js` fell through to `alert('Leaderboard is loading...')`. The landing
+entry now carries both (`leaderboard.css?v=2`, `leaderboard.js?v=3`).
+
+The module is appended as a `<script>` by `app/legacy-page.js` in a `useEffect`, so **neither
+appears in the served HTML** — grepping the response for `leaderboard.js` finds nothing on a page
+that loads it perfectly well. (`leaderboard.css` *is* a `<link>` in the response; the two halves of
+this wiring are visible in different places, which is part of how the bug lasted.)
+
+`tools/check-styles.js` now guards it, in a section that exists because the sweep could not see
+this on its own. The sweep reads a route's scripts into its sources, so it *does* see markup those
+scripts build — but only for scripts the route actually loads, and here the card, the handler and
+the module that builds the modal are three different files. So it saw a card, no
+`leaderboard-modal` class anywhere readable, and reported "all styled". The new section (`RUNTIME_DEPS`)
+names a script on a route, a global that script calls, and the element in that route's markup the
+global serves; when all three hold, the providing file and its sheet must be loaded too. Each half
+was falsified — dropping `leaderboard.js` and `leaderboard.css` from the landing entry fails by
+name with exit 1, and with `leaderboard.js` present the sweep also reads its injected markup, so the
+stylesheet half is checked twice over by two different mechanisms.
+
+**The backdrop** is the Hall of Fame's own picture now, full-viewport behind the card
+(`public/leaderboard.css`, `.leaderboard-modal`), with the phone file swapped in at 860px. Same
+measured-scrim rule as above; the shape is a radial gradient rather than a linear one because the
+table occupies the middle of a floating card, so the darkness has to gather there rather than fall
+top-to-bottom.
+
+**The backdrop is fetched eagerly, and that is deliberate.** `.leaderboard-modal` hides itself with
+`opacity: 0`, not `display: none`, so the element is laid out and its background resolves at load —
+the art arrives *before* anyone presses the card, which is what stops the backdrop popping in past a
+finished fade. It costs 168 KB on the landing and game pages; the landing page autoplays a 36 MB
+`intro.mp4`, so that is about 0.5% of the video sitting next to it. If you would rather pay nothing
+until the first open, move the `url(…)` layer from `.leaderboard-modal` to
+`.leaderboard-modal.active` — the trade is a flat backdrop for the first half-second of the first fade.
+
+**One unrelated 404 this turned up.** The landing page's own backdrop was written as
+`assets/ui/menu-background.jpg`, which does not exist — the file is at
+`public/assets/images/menu-background.jpg`, and every other reference in the repo (`landing.css`,
+`menu.css`, `mint.css`, `styles.css`, and `lib/site.js`'s OG image) already said `assets/images/`.
+A one-segment typo in `lib/static-pages.js`, fixed. It was invisible because the intro video paints
+over that div.
 
 ### The wallet menu is on **every** route
 

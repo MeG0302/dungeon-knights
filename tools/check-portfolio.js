@@ -57,6 +57,10 @@ function code(src) {
         .replace(/^[ \t]*\/\/.*$/gm, '');
 }
 const body = code(client);
+// The sheet gets the same treatment, for the same reason: `portfolio.css` explains that it used to
+// borrow the Hall's picture, and naming that file in the comment made the first draft of the check
+// below report the very thing it was proving absent.
+const cssCode = code(css);
 
 // --------------------------------------------------------------------- 1. the route
 rec('the route exists as a page and a client', exists('app/portfolio/page.js') && exists('app/portfolio/client.js'));
@@ -160,13 +164,23 @@ rec('a failed balance cannot render as zero',
     "'—' until it is read");
 
 // --------------------------------------------------------------------- 7. the styling
-rec('the sheet exists and the client asks for it, versioned',
-    exists('public/css/portfolio.css') && /\/css\/portfolio\.css\?v=1/.test(client));
+// The stamp has to be *some* number, not a specific one: pinning `?v=1` here made this check fail
+// every time the sheet legitimately changed, which trains you to edit the assertion instead of
+// reading it. What matters is that an edit to the sheet can actually reach a browser.
+rec('the sheet exists and the client asks for it, with a version stamp',
+    exists('public/css/portfolio.css') && /\/css\/portfolio\.css\?v=\d+/.test(client));
 rec('it styles the four cards and the empty state',
     ['.pf-card', '.pf-tier-strip', '.pf-rows', '.pf-activity', '.pf-empty'].every((sel) => css.includes(sel)));
 rec('and it has a phone layout', /@media \(max-width: 560px\)/.test(css) && /@media \(max-width: 900px\)/.test(css));
-rec('the background art is the same file the Hall serves',
-    /url\('\/assets\/hall\/knight-hall\.webp'\)/.test(css) && exists('public/assets/hall/knight-hall.webp'));
+// The page has its own room. It used to borrow `knight-hall.webp` — the roster's — so a check that
+// only asked "does some hall art resolve" passed on the wrong picture for as long as that lasted.
+rec('the background art is the Portfolio\'s own, not the Hall\'s',
+    /url\('\/assets\/hall\/portfolio\.webp'\)/.test(cssCode)
+    && !/knight-hall\.webp|summon-hall\.webp/.test(cssCode)
+    && exists('public/assets/hall/portfolio.webp'));
+rec('and a phone still gets the room, from the small file',
+    /url\('\/assets\/hall\/portfolio-mobile\.webp'\)/.test(cssCode)
+    && exists('public/assets/hall/portfolio-mobile.webp'));
 
 console.log('');
 const failed = results.filter((r) => !r.pass);
