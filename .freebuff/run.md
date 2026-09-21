@@ -558,11 +558,108 @@ The browser asks; it never decides.
   | route | method | purpose |
   |---|---|---|
   | `/session` | `GET ?address=` / `POST` | the message to sign / exchange a signature for a token |
-  | `/me` | `GET` / `POST {ref}` | the page's state / claim a referral code |
+  | `/me` | `GET` / `POST {ref}` · `POST {attachRef}` | the page's state / claim a referral code carried in a link / attach one a player typed in (this one answers with a refusal code) |
   | `/vault` | `POST {action}` | `clear` a floor, or `share` **with `url`** for the ×2 bonus — the only way points are awarded |
   | `/x` | `GET` / `POST {action}` | what this wallet has bound and whether this deployment can prove a link / `bind` (with an optional Privy `accessToken`) or `unbind` |
   | `/task` | `POST {action, task, url}` | `submit` the link to a post for `campaign` or `share`, or `check` a pending one again |
   | `/leaderboard` | `GET ?limit=` | the public board (`isYou` when a token is sent) |
+
+### Invite codes — five characters, and the loop a late claim makes possible
+
+A referral used to be an **address** (`?ref=0x…`). Links like that are already published in posts, so
+an address is still a valid `?ref=` — refusing it would silently stop crediting invitations that work
+today. But nobody reads 42 hex characters aloud, and a player who arrived by *playing* rather than
+through somebody's link had nothing to hand out at all. So every wallet also gets **five characters
+of its own**.
+
+- **The alphabet** is 31 characters — `23456789ABCDEFGHJKMNPQRSTVWXYZ`, the digits 2–9 and every
+  letter that is not `I`, `L` or `O`. A code's whole job is to survive being read off a screen, typed
+  on a phone and dictated to a friend, and this set contains no pair that differs by a stroke. Codes
+  match case-insensitively with spaces and dashes stripped, and a whole pasted invite link is unwrapped
+  to the code inside it (`refTokenFromInput`) — the page offers the code and the link side by side, so
+  people paste the wrong one.
+- **One code, one wallet.** `dk:points:refcode:<CODE> → address` is a store index in the same shape as
+  the X-account index, and it is listed in `VALUE_INDEXES`, so `walletKeys`/`purgeWallet` find and
+  delete it — a harness's test wallet leaves no code behind (measured: 2 labels per purge, 0
+  survivors). Uniqueness is **checked, not assumed**: 31^5 is only 28.6M, so a collision is retried
+  (`assignRefCode`, 12 attempts) and the store's atomic `SET … NX` is what stops two wallets minting
+  the same code in the same instant. The index, not the wallet record, is the authority, and the two
+  are reconciled on every read — a record whose code the index has lost reclaims it, and a record
+  holding somebody else's draws a fresh one rather than showing a code that credits a stranger.
+- **Minting happens in the read that renders it** (`stateFor`), and on arrival (`registerVisit`).
+  Deliberate: wallets that were playing before codes existed never take the join path again, so their
+  next page load is when they get one.
+- **Adding a code later** (`attachRef`, `POST /api/points/me { attachRef }`) is the new path, and it is
+  the only one that **reports its refusal** (`bad-code`, `unknown-code`, `own-code`, `already-referred`,
+  `cycle`). A link's code stays silent on failure on purpose — a referral is a bonus and must never
+  block the page — while a code a player typed was a deliberate act, so "no wallet holds that code" is
+  an answer they need. A wallet keeps the referrer it has; the box hides itself once it has one.
+- **The cycle guard, and why it is new.** At arrival neither wallet could have a referrer, so a loop
+  was impossible and no guard was needed. Once a claim can happen *after* a referral, A can attach B
+  who attached A — and then `credit`'s second-degree walk (`referrer.referrer`) pays A a commission on
+  A's own points. Held in two places: the chain walk in `attachRef` refuses the claim, and `credit`
+  refuses a self-payment outright, so the path that moves points is safe on its own terms rather than
+  on the other guard's care.
+- **What a late code does not pay for:** commissions are earned forward only. Points a wallet already
+  had are not backdated, and the page says exactly that next to the box.
+
+#### Verified on the running page (`:3000`, driver `file`, September 22)
+
+With a throwaway wallet and a real signed session (both test wallets purged afterwards; the server
+reads `.env.local`, which has no KV pair, so this is the **local file store and production was never
+written to**):
+
+```
+GET  /api/points/me                        → refCode 'ZB9C3', inviteUrl 'http://localhost:3000/points?ref=ZB9C3'
+POST /api/points/me { attachRef: 'qd5wk' } → 200 — the box hid itself and the panel read
+                                             "Invited by 0xa371…a712 — code added later, so their
+                                              share counts from then."
+POST /api/points/me { attachRef: 'QD5WK' } → 400 { code: 'already-referred' }
+POST /api/points/me { attachRef: 'XYZ99' } → 400 { code: 'unknown-code' }
+POST /api/points/me { attachRef: 'oops!!' }→ 400 { code: 'bad-code' }
+POST /api/points/me { attachRef: 'ZB9C3' } → 400 { code: 'own-code' }
+```
+
+The typed code was **lowercase** and still landed, and the pill and invite link on the page read
+`ZB9C3` — the server's own value. A third wallet was then carried in by
+`localStorage.dk_points_ref = 'ZB9C3'` (the **code** form, which is the browser path no Node harness
+can reach): on reload it showed *Invited by 0xdf74…c9f2*, the stash was cleared, and the add-code box
+was already gone. So both link forms work on arrival, and the code is not just a display string.
+
+**Not deployed and not committed.** Production still hands out address links and has no add-a-code
+box; the code form exists only in this tree.
+
+#### The refs harness, falsified by mutation
+
+`node tools/check-refs.js` — **45/45**, offline, in a throwaway `cwd`, against the file driver: no
+network, no key, no rate limit. Eleven mutations, each caught by name:
+
+| mutation | what the run reported |
+|---|---|
+| the already-referred door reopened | `FAIL a second code is refused …`, `FAIL … and the state tells the page who it was` |
+| the cycle walk disabled | `FAIL the wallet a code owner is downstream of cannot attach it` |
+| `credit`'s self-payment guard removed | `FAIL a wallet in a loop is paid its floor and not a commission on it` |
+| the second-degree guards removed | the same two checks |
+| the address branch of `resolveRef` dropped | 11 failures, from `a link carrying an address still works` down |
+| the code branch of `resolveRef` dropped | 11 failures, from `a link carrying a code attaches the wallet that opened it` down |
+| the index-vs-record reconciliation dropped | `FAIL a record whose code the index has lost reclaims the same code` |
+| both code-claim guards removed at once | `FAIL the store refuses to hand one wallet a code another already holds` |
+| `REFCODE_PREFIX` dropped from `VALUE_INDEXES` | `FAIL the store can name the code index …`, `FAIL … and its code credits nobody` |
+| a confusable character added to the alphabet | `FAIL the alphabet cannot be misread …`, `FAIL and a code-shaped string that cannot be one is refused` |
+| `stateFor` building the invite link from the address | `FAIL … and so does the text the player posts` |
+
+**One of those is worth reading twice.** The first attempt at the code-claim mutation removed only the
+sequential read guard, and the suite passed **45/45** — because the atomic `SET … NX` still refused,
+and a single-process harness cannot tell the two apart. The guards are deliberately redundant (one for
+the sequential path, one for the cross-instance race), so neither can be falsified alone, and the
+mutation was re-targeted at the pair: the state they exist to prevent is two wallets holding one code,
+which is an invite that credits a stranger.
+
+**A regression this caught, worth knowing about:** `check-points-x.js` asserted that the share text
+contains `/points?ref=0x…` (the poster's address). It now carries the code, so that check failed — and
+instead of loosening it to match the new string, it now **resolves the ref out of the post back to the
+wallet that posted it**. A check that had kept matching the old form would have passed forever while
+the post credited nobody.
 
 ### Earning on X — the gate, and the two verified rewards
 
@@ -650,10 +747,38 @@ only thing that decides whether a post exists, who wrote it, and what it says.
   | `navigator.share`, files not shareable | composer after the fetch (12 ms) | composer in 0 ms, PNG to clipboard |
 
   The fix is the ordering, not a new feature: the sheet is offered only to a touch pointer, and the
-  composer opens **synchronously in the same task as the click** — with the clipboard write *started*
-  before it, since a new tab takes the focus and a background document cannot write to the clipboard.
-  A refused `window.open` now says so on the card instead of leaving a dead-looking button, and it says
-  whether the picture still made it to the clipboard, because that is enough to finish by hand.
+  composer opens **synchronously in the same task as the click**. A refused `window.open` now says so on
+  the card instead of leaving a dead-looking button, and it says whether the picture still made it to
+  the clipboard, because that is enough to finish by hand.
+
+  **The clipboard write then corrected that ordering, and the reason is worth the sentence.** Writing
+  an image to the clipboard is refused with `NotAllowedError: Document is not focused` if it is still
+  *pending* when the new tab takes the focus — measured by calling the real `clipboard.write` in a
+  document that was not focused, having watched the write be *started* before `window.open` and lost
+  anyway. So there are two orderings, chosen by one question asked in the click:
+
+  ```js
+  const canCopy = document.hasFocus() && typeof ClipboardItem === 'function' && !!navigator.clipboard?.write;
+  const copied = canCopy ? await copyShareImage() : false;   // a pre-encoded PNG: one round trip
+  const win = window.open(intent, '_blank', 'noopener');     // still inside the click's activation
+  ```
+
+  Focused — the normal case, since a click implies focus — the write is awaited first and the tab opens
+  underneath it, because an activation survives a single clipboard round trip but would not survive a
+  fetch. Not focused, and the clipboard is unavailable anyway, so the tab opens inside the click and the
+  file is saved instead. Both paths measured: focused → `clipboard.write` then `window.open`; unfocused
+  → `window.open` only. **What cannot be measured here is a browser accepting the write**: the preview
+  webview's document is never focused, so the clipboard branch can only be exercised with the focus
+  check stubbed. The fallback is what a refusal lands on, and it is a saved file plus a sentence saying so.
+
+- **The button says what it will do, and the kit keeps saying it afterwards.** On a touch device the cta
+  reads *Post the run on X*; on a computer it reads *Copy picture & open X*, because X's compose link
+  cannot carry a file and pretending otherwise is how a player comes to report that the button "did
+  nothing". After a press the kit grows a line — `.x-share-picture` — that outlives the toast, because
+  the toast was being delivered to the tab the composer had just taken the focus from: *The run card is
+  on your clipboard. In the post, press Ctrl+V (⌘V) to attach it*, or the downloads wording when the
+  write was refused. The four steps under the picture were rewritten in the same pass to say per
+  platform what actually happens instead of implying the button attaches a file.
 - **The states, and the words for each.** `pending` (X has not indexed it — a real answer, not an
   error), `verified`, `failed` (X answered and the post is not yours / no tag / no link), `expired`
   (no good answer within the attempt ceiling, or the day ended first). The throttle is server-side
@@ -735,6 +860,8 @@ trusting a live harness (`for p in /points /api/points/session /api/points/vault
 that was never there.
 
 ```bash
+node tools/check-refs.js        # 45 checks, offline: the invite codes — shape, uniqueness, both link
+                                # forms, and the attach-later refusals
 node tools/check-points-x.js    # 161 checks, offline: a stubbed X and a stubbed Privy, real ES256
 node tools/check-x-verify.js    # 63 checks: the verifier alone, against a stubbed oEmbed
 node tools/check-x-webhook.js   # 51 checks: the follow webhook — real HMACs, both envelopes, no network

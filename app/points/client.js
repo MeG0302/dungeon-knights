@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Script from 'next/script';
 import { VAULT_LEVELS, VAULT_ENTRY_TOTAL } from '../../lib/points-config';
 import {
-    claimRef, clearSession, connectWallet, fetchLeaderboard, fetchMe, fetchXStatus, forgetWallet,
+    attachRef, claimRef, clearSession, connectWallet, fetchLeaderboard, fetchMe, fetchXStatus, forgetWallet,
     hasInjectedWallet, isAddress, onAccountsChanged, pendingRef, readRefFromUrl,
     readSession, refLink, requestBindX, requestClear, requestOneTimeClaim, requestShare, requestTask,
     requestTaskCheck, savedAddress, shortAddress, signIn, stashRef,
@@ -145,6 +145,16 @@ function pointsTourSteps(live) {
  * and what X is asked about have to be the same words.
  */
 /**
+ * Whether this device's share sheet is one X could be a target of — a phone or a tablet, in
+ * practice. Used for two things that must agree: which way the post button posts, and what its label
+ * promises. A desktop browser has `navigator.share` too, and the sheet it opens has no X in it.
+ */
+function deviceSharesToX() {
+    if (typeof navigator === 'undefined' || typeof matchMedia !== 'function') return false;
+    return navigator.maxTouchPoints > 0 || matchMedia('(pointer: coarse)').matches;
+}
+
+/**
  * The same picture, re-encoded as a PNG.
  *
  * The clipboard takes `image/png` and nothing else, so the run card — a JPEG — has to be converted
@@ -170,10 +180,24 @@ async function toPngBlob(blob) {
     }
 }
 
-function ShareKit({ share, onSave, saveDisabled }) {
+function ShareKit({ share, onSave, saveDisabled, picture }) {
     if (!share) return null;
     return (
         <div className="x-share-kit">
+            {/* The instruction has to outlive the toast it used to be. The composer takes the focus,
+                so the sentence telling a desktop player to paste was being delivered to the tab they
+                had just left. */}
+            {picture === 'copied' ? (
+                <p className="x-share-picture">
+                    <strong>The run card is on your clipboard.</strong> In the post, press{' '}
+                    <strong>Ctrl+V</strong> (<strong>&#8984;V</strong> on a Mac) to attach it as a file.
+                </p>
+            ) : picture === 'saved' ? (
+                <p className="x-share-picture">
+                    <strong>The run card is in your downloads.</strong> In the post, attach it with the
+                    picture button — the link alone still shows the card, but this puts the file in.
+                </p>
+            ) : null}
             {/* A link rather than an image, so a phone can long-press it to save. */}
             <a className="x-share-photo" href={share.cardImage} target="_blank" rel="noreferrer">
                 <img src={share.cardImage} alt="The picture that goes out with your share" loading="lazy" />
@@ -398,6 +422,11 @@ export default function PointsPage() {
     const [copied, setCopied] = useState(false);
     const [inDungeon, setInDungeon] = useState(false);
     const referralInput = useRef(null);
+    // The add-a-code box: what has been typed, whether a claim is in flight, and the server's own
+    // reason when it refuses — which is shown, because a refusal here is an answer, not a glitch.
+    const [refDraft, setRefDraft] = useState('');
+    const [refBusy, setRefBusy] = useState(false);
+    const [refError, setRefError] = useState(null);
     // Wallet extensions inject `window.ethereum` before page scripts, but not always —
     // a locked-then-unlocked wallet, or a browser that injects late, would otherwise
     // leave the connect button dead until a reload. Detected in an effect (never during
@@ -418,6 +447,13 @@ export default function PointsPage() {
     const [xDrafts, setXDrafts] = useState({ campaign: '', share: '' });
     const [xWait, setXWait] = useState({ campaign: 0, share: 0 });
     const [sharePrompt, setSharePrompt] = useState(false);
+    // Where the picture ended up on the last press of the post button (`copied` / `saved`), so the kit
+    // can keep saying it after the toast has gone. Null until a press has happened.
+    const [sharePicture, setSharePicture] = useState(null);
+    // Whether the post button can hand the picture to X through the platform's share sheet, which is
+    // a question about the device rather than about the click — so it is asked once, after mount.
+    const [sharesToX, setSharesToX] = useState(false);
+    useEffect(() => { setSharesToX(deviceSharesToX()); }, []);
     const noticeTimer = useRef(null);
     // What Arya's walkthrough reads while it talks. A ref and not the state itself,
     // because her steps are written the moment they show, not when the tour is built.
@@ -874,9 +910,7 @@ export default function PointsPage() {
         const intent = shareKit?.intentUrl
             || `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
         const file = shareFileRef.current;
-        const touches = typeof navigator !== 'undefined'
-            && (navigator.maxTouchPoints > 0
-                || (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches));
+        const touches = deviceSharesToX();
 
         // A phone's share sheet is the one route that puts the picture *in* the post as a file.
         if (file && touches && typeof navigator.share === 'function' && navigator.canShare?.({ files: [file] })) {
@@ -890,9 +924,19 @@ export default function PointsPage() {
             }
         }
 
-        const copying = copyShareImage();   // started, not awaited: the tab below is the same task
+        // Two orderings, because one thing pulls the other way. A clipboard write is refused with
+        // `NotAllowedError: Document is not focused` if it is still pending when the new tab takes the
+        // focus (measured, not guessed), while `window.open` wants the click's activation — which
+        // survives a clipboard write, since the PNG is already encoded and the call is a single
+        // round trip, but would not survive a fetch.
+        //
+        // So: focused — the normal case, a click implies focus — the write goes first and is awaited
+        // and the tab opens underneath it. Not focused, and the clipboard is unavailable anyway, so
+        // the tab opens inside the click and the picture is saved instead of copied.
+        const canCopy = typeof document !== 'undefined' && document.hasFocus()
+            && typeof ClipboardItem === 'function' && !!navigator.clipboard?.write;
+        const copied = canCopy ? await copyShareImage() : false;
         const win = window.open(intent, '_blank', 'noopener');
-        const copied = await copying;
         if (!win) return { post: 'blocked', picture: copied ? 'copied' : 'none' };
         if (copied) return { post: 'opened', picture: 'copied' };
         return { post: 'opened', picture: saveShareImage() ? 'saved' : 'none' };
@@ -919,6 +963,7 @@ export default function PointsPage() {
             flash('Nothing posted — the button is still here whenever you want it.');
             return;
         }
+        setSharePicture(picture === 'none' ? null : picture);
         // Opening the composer is only half of it. The doubling is paid when the link to the post
         // comes back here and X confirms the bound handle wrote it, so this hands the player to the
         // card that takes the link rather than claiming a bonus on a tap — including out of the
@@ -1068,7 +1113,9 @@ export default function PointsPage() {
      * end in a dead end, because the link is the whole referral feature.
      */
     const handleCopyReferral = async () => {
-        const link = refLink(state?.address || address);
+        // The code when there is one, the address only as a fallback — both resolve on arrival, but
+        // the code is the form a person can read out loud.
+        const link = refLink(state?.refCode || state?.address || address);
         if (!link) return;
         let done = false;
         try {
@@ -1092,6 +1139,40 @@ export default function PointsPage() {
             flash('Invite link copied — you earn 15% of what they earn.');
         } else {
             flash('Link selected — press Ctrl+C (⌘C on Mac) to copy it.');
+        }
+    };
+
+    /**
+     * Attach a referrer a player typed in — the path for a wallet that played first and met an
+     * inviter later.
+     *
+     * The refusal is reported, unlike the `?ref=` path, which swallows a bad code on purpose: this
+     * one was a deliberate act, so "unknown code" and "that is your own" are answers the player
+     * needs. The server's `code` is what the message switches on, never the prose.
+     */
+    const submitRefCode = async () => {
+        const input = refDraft.trim();
+        if (!input || refBusy) return;
+        setRefBusy(true);
+        setRefError(null);
+        try {
+            const fresh = await attachRef(input);
+            if (fresh) {
+                setState(fresh);
+                setAddress(fresh.address);
+                setRefDraft('');
+                flash(fresh.referrer
+                    ? `Invite code added — ${shortAddress(fresh.referrer)} now earns 15% of your points.`
+                    : 'Invite code added.');
+            }
+        } catch (e) {
+            setRefError(e.code === 'already-referred'
+                // Permanent, and the box is hidden once a wallet has a referrer, so this is the
+                // sentence for two tabs racing rather than for a wrong code.
+                ? 'This wallet already has a referrer, and that does not change. Your own code above still works.'
+                : (e.message || 'The code could not be added.'));
+        } finally {
+            setRefBusy(false);
         }
     };
 
@@ -1442,13 +1523,25 @@ export default function PointsPage() {
                                 icon={`${ASSETS}White_logo_on_black_background_2K_20260919011421-autocrop-hair.png`}
                                 reward={state?.entryTotalToday || VAULT_ENTRY_TOTAL}
                                 hint={`Finish the vault, then post the run: the picture and the text — with @${shareKit?.tag || 'DNGrobinhood'} and your invite link on it — are both ready below. Paste the link to your post and the whole entry doubles (${VAULT_ENTRY_TOTAL} → ${VAULT_ENTRY_TOTAL * 2} PTS). Once a day.`}
-                                kit={<ShareKit share={shareKit} onSave={handleSaveShareImage} saveDisabled={!connected} />}
-                                cta={state?.sharedToday ? 'Shared today — resets with the vault' : 'Post the run on X'}
+                                kit={<ShareKit share={shareKit} onSave={handleSaveShareImage} saveDisabled={!connected} picture={sharePicture} />}
+                                cta={state?.sharedToday
+                                    ? 'Shared today — resets with the vault'
+                                    // The label says what the press will do: on a computer the picture cannot be
+                                    // attached for the player, so the button is honest about the extra keystroke
+                                    // instead of promising something X's composer link cannot carry.
+                                    : (sharesToX ? 'Post the run on X' : 'Copy picture & open X')}
                                 onCta={handleShareX}
                                 ctaDisabled={!connected || !bound || !entryComplete || !!state?.sharedToday}
                                 ctaTitle={!connected
                                     ? 'Connect a wallet first'
-                                    : (!bound ? 'Bind your X account first' : 'Clear all three floors first')}
+                                    : (!bound
+                                        ? 'Bind your X account first'
+                                        : (!entryComplete
+                                            ? 'Clear all three floors first'
+                                            : (sharesToX
+                                                ? 'Opens X with the run text filled in, and hands the picture to X'
+                                                : 'Opens X with the run text filled in, and puts the run card on your clipboard to paste into the post')))}
+
                                 task={state?.tasks?.share}
                                 busy={xBusy}
                                 error={xErrors.share}
@@ -1468,7 +1561,14 @@ export default function PointsPage() {
                             </div>
                             <p className="panel-hint">
                                 15% of what your referrals earn, 5% of what theirs do — paid the moment they do.
+                                Your code is the whole invitation: read it out, or send the link below.
                             </p>
+                            {connected && state?.refCode && (
+                                <div className="ref-code">
+                                    <span className="ref-code-label">Your invite code</span>
+                                    <span className="ref-code-value">{state.refCode}</span>
+                                </div>
+                            )}
                             <div className="referral-row" data-arya="refer">
                                 {/* An input, not a <code>: the full link has to be selectable
                                     by hand when the clipboard API is unavailable. */}
@@ -1476,7 +1576,7 @@ export default function PointsPage() {
                                     ref={referralInput}
                                     className="referral-code"
                                     readOnly
-                                    value={connected ? refLink(state.address) : 'Connect Wallet'}
+                                    value={connected ? refLink(state?.refCode || state.address) : 'Connect Wallet'}
                                     onFocus={(e) => e.target.select()}
                                     aria-label="Your invite link"
                                 />
@@ -1502,9 +1602,51 @@ export default function PointsPage() {
                                     <span className="ref-earnings-value">+{state.referralEarned.toLocaleString()} PTS</span>
                                 </div>
                             )}
+                            {/* ------------------------------------------ a code added later
+                                Shown only while this wallet has no referrer, because that is the
+                                one thing the box cannot change: a wallet keeps the referrer it
+                                already has, so offering the field afterwards would be a lie.
+                                The hint states the rule the server actually enforces — the share
+                                counts from the moment the code is added, never backwards. */}
+                            {connected && state && !state.referrer && (
+                                <div className="ref-attach" data-arya="ref-attach">
+                                    <div className="ref-attach-title">Have a friend’s code?</div>
+                                    <p className="panel-hint">
+                                        Started playing first and met an inviter afterwards? Add their code
+                                        here — their 15% starts from that moment, and points already earned
+                                        are not backdated.
+                                    </p>
+                                    <div className="referral-row">
+                                        <input
+                                            className="referral-code ref-attach-input"
+                                            value={refDraft}
+                                            onChange={(e) => setRefDraft(e.target.value)}
+                                            onKeyDown={(e) => { if (e.key === 'Enter') submitRefCode(); }}
+                                            placeholder="K7M2Q"
+                                            maxLength={64}
+                                            spellCheck={false}
+                                            autoComplete="off"
+                                            autoCapitalize="characters"
+                                            disabled={refBusy}
+                                            aria-label="Friend’s invite code"
+                                        />
+                                        <button
+                                            type="button"
+                                            className="btn btn-primary btn-sm"
+                                            onClick={submitRefCode}
+                                            disabled={refBusy || !refDraft.trim()}
+                                            style={{ padding: '4px 12px' }}
+                                        >
+                                            {refBusy ? 'Checking…' : 'Add code'}
+                                        </button>
+                                    </div>
+                                    {refError && <div className="ref-attach-error" role="alert">{refError}</div>}
+                                </div>
+                            )}
                             {state?.referrer && (
                                 <div className="referral-meta">
                                     Invited by {shortAddress(state.referrer)}
+                                    {state.referredAt ? ' — code added later, so their share counts from then.' : ''}
                                 </div>
                             )}
                                 </>

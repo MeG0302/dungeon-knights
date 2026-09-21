@@ -548,6 +548,76 @@ it, so the tab still shows what has been done — the count of what is left is t
     background: rgba(212, 168, 67, 0.35);
 }
 
+/* The code itself, set large — it exists to be read off the screen and typed by somebody
+   else, so it is the one piece of text in the panel that is allowed to be bigger than the
+   body copy. Letters and digits only, so the letter-spacing does not break words apart. */
+.ref-code {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 10px;
+    margin-bottom: 8px;
+    border: 1px solid var(--border-base);
+    border-radius: 4px;
+    background: var(--bg-dark);
+}
+
+.ref-code-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.ref-code-value {
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 4px;
+    color: var(--accent-gold);
+    user-select: all;
+}
+
+/* Add-a-code box: shown only while the wallet has no referrer (see the page). Separated by a
+   rule because it is the one control here that changes the wallet rather than advertising it. */
+.ref-attach {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-base);
+}
+
+.ref-attach-title {
+    margin-bottom: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+}
+
+.ref-attach-input {
+    color: var(--text-primary);
+    font-size: 13px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+}
+
+.ref-attach-input::placeholder {
+    color: var(--text-muted);
+    letter-spacing: 3px;
+}
+
+/* Same palette as `.points-banner-error` — a refusal is a refusal wherever it is shown. */
+.ref-attach-error {
+    padding: 6px 10px;
+    border: 1px solid rgba(200, 70, 60, 0.5);
+    border-radius: 4px;
+    background: rgba(200, 70, 60, 0.12);
+    font-size: 11px;
+    line-height: 1.45;
+    color: #e8a49b;
+}
+
 .referral-meta {
     padding: 0 4px;
     font-size: 11px;
@@ -911,6 +981,21 @@ link, and X is asked about it before anything is paid.
     display: block;
     width: 100%;
     height: auto;
+}
+
+/* Where the picture went on the last press of the post button. It outlives the toast on purpose:
+   the composer takes the focus, so a fading sentence in the tab the player just left is a sentence
+   nobody reads — this one is still here when they come back for the link. */
+.x-share-picture {
+    margin: 0;
+    padding: 8px 9px;
+    border: 1px solid rgba(212, 175, 55, 0.45);
+    border-left-width: 3px;
+    border-radius: 4px;
+    background: rgba(212, 175, 55, 0.10);
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--text-primary, #eee);
 }
 
 .x-share-steps {

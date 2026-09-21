@@ -288,8 +288,16 @@ globalThis.fetch = async (url, options = {}) => {
         kit.tag === Config.X_SHARE_TAG && kit.text.includes(`@${Config.X_SHARE_TAG}`), kit.tag);
     rec('the text claims the doubled total, not the run total',
         kit.text.includes(String((await stateOf(gate)).entryTotalToday * 2)), kit.text);
-    rec('and it carries this wallet\u2019s own invite link',
-        kit.text.includes(`/points?ref=${gate}`), kit.text);
+    // What matters is not the string but the property: the link in the post credits the wallet that
+    // posted it. It now carries a five-character code rather than the address (see
+    // `tools/check-refs.js`), so this resolves the code out of the text back to the wallet instead of
+    // matching the old form — a check that kept matching `/points?ref=0x…` would pass forever while
+    // the post credited nobody.
+    const postedRef = /\/points\?ref=([A-Za-z0-9]+)/.exec(kit.text)?.[1] || null;
+    const postedOwner = postedRef ? await Store.refCodeOwner(postedRef) : null;
+    rec('and the invite link in the post credits the wallet that posted it',
+        postedRef === (await stateOf(gate)).refCode && postedOwner === gate,
+        `ref=${postedRef} → ${postedOwner === gate ? 'this wallet' : String(postedOwner)}`);
     rec('the composer link is prefilled with exactly that text',
         kit.intentUrl.includes(encodeURIComponent(kit.text)), '');
     rec('and the card picture is the one the page offers for download',
