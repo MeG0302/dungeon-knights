@@ -120,6 +120,11 @@ export default function PointsPage() {
     // What Arya's walkthrough reads while it talks. A ref and not the state itself,
     // because her steps are written the moment they show, not when the tour is built.
     const liveRef = useRef({});
+    // The header's wallet pill and the page's own disconnect handler, for the wallet menu.
+    // The handler lives in a ref because the menu attaches once and must not re-attach every
+    // render, while `handleDisconnect` is rebuilt on each one.
+    const walletPill = useRef(null);
+    const handleDisconnectRef = useRef(() => {});
     // Her walkthrough opens once per visit. It runs on every arrival, but connecting a
     // wallet or leaving the vault re-runs this effect and must not drag her back out.
     const tourOpened = useRef(false);
@@ -229,6 +234,33 @@ export default function PointsPage() {
         };
     });
 
+    // The header's wallet menu, on the control this route renders.
+    //
+    // `onDisconnect` is the page's own handler: the Points page holds its wallet in state, so a
+    // disconnect performed by the menu alone would clear localStorage and leave the header still
+    // showing an address. React hands the menu the one function that puts the page back to how it
+    // looks with nobody connected.
+    useEffect(() => {
+        const pill = walletPill.current;
+        if (!pill) return undefined;
+        let cancelled = false;
+        const attach = () => {
+            if (cancelled || !window.WalletMenu) return false;
+            window.WalletMenu.attach(pill, { onDisconnect: handleDisconnectRef.current });
+            return true;
+        };
+        if (!attach()) {
+            // `afterInteractive`, so on a cold load the script can land after this effect. A few
+            // polls beat assuming a load order the framework chooses.
+            let tries = 0;
+            const timer = setInterval(() => {
+                if (attach() || tries++ > 40) clearInterval(timer);
+            }, 100);
+            return () => { cancelled = true; clearInterval(timer); };
+        }
+        return () => { cancelled = true; };
+    }, []);
+
     // She walks a first-time player through the page, and only a first-time player.
     // No `force` here on purpose: `/arya.js` remembers that she has been through this on
     // this browser (finishing, skipping, or leaving mid-walkthrough all count), so a second
@@ -323,6 +355,7 @@ export default function PointsPage() {
         setPhase('anon');
         flash('Disconnected. Your points stay on the server.');
     };
+    handleDisconnectRef.current = handleDisconnect;
 
     const handleEnterDungeon = () => {
         if (!connected || entryComplete) return;
@@ -434,11 +467,14 @@ export default function PointsPage() {
         <>
             {/* Versioned like every other sheet: an unversioned `/theme.css` is a CSS change
                 that never reaches a returning player. */}
-            <link rel="stylesheet" href="/theme.css?v=3" />
+            <link rel="stylesheet" href="/theme.css?v=5" />
             <link rel="stylesheet" href="/css/points.css?v=5" />
-            <link rel="stylesheet" href="/css/wallet-widget.css" />
             <link rel="stylesheet" href="/css/arya.css?v=3" />
             <Script src="/arya.js?v=4" strategy="afterInteractive" />
+            {/* The header's wallet pill gets the same menu every other page's control has. It is
+                attached by hand below rather than by selector, because this route renders after
+                hydration and a script that scanned the DOM at load would find nothing. */}
+            <Script src="/wallet-menu.js?v=1" strategy="afterInteractive" />
             {/* The one page that is a React route rather than a legacy page, so it has to
                 pull the wallet source in itself. It is what makes `window.ethereum`
                 exist on a phone, where nothing injects one — and what drops it in the
@@ -492,7 +528,7 @@ export default function PointsPage() {
                                 {shortAddress(state.address)}
                             </button>
                         )}
-                        <div className="wallet-pill">
+                        <div className="wallet-pill" ref={walletPill}>
                             <img src={`${ASSETS}Gold_coin_badge_with_PTS_2K_20260919011438-autocrop-hair.png`} alt="" className="points-icon" width={18} height={18} />
                             <span>{(connected ? points : 0).toLocaleString()} PTS</span>
                         </div>

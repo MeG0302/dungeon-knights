@@ -42,7 +42,9 @@
 }
 
 /* Ticking counters must not shove their neighbours around as the digits change
-   width, so every live figure is tabular. */
+   width, so every live figure on this page is tabular. This stays here rather than moving to
+   `theme.css` with the header chip: it is used 31 times across the vault's readouts and nowhere
+   else, and the Portfolio page's pill has no ticking figure that needs it. */
 .sv-num {
     font-variant-numeric: tabular-nums;
     font-feature-settings: 'tnum' 1;
@@ -778,6 +780,37 @@
 .sv-arya-btn:hover {
     color: var(--accent-gold);
     border-color: var(--border-bronze);
+}
+
+/* Her mark in that button — the "?" in "? Ask Arya". It is the one element in the footer that
+   says who is being asked, and it had no rule: an unstyled span at body size, sitting inside a
+   10px uppercase button. Sized as a badge so it reads as a mark rather than as punctuation. */
+.sv-arya-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    border: 1px solid var(--border-bronze);
+    color: var(--accent-gold);
+    font-size: 9px;
+    line-height: 1;
+}
+
+/* The header's disconnect chip, its "live" dot and the tabular-figure helper all live in
+   `theme.css` now. This sheet and `points.css` each carried a copy, and the Portfolio page would
+   have been a third; one definition every route loads is the version that cannot drift. */
+
+/* Panel section headings ("Your position", "The pool"). The class carried no rule and every use
+   site repeated the same three declarations inline; the rule is here now and the call sites are
+   plain, so a heading cannot drift from the other heading on the same panel. */
+.panel-section-title {
+    font-family: var(--font-heading);
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
 }
 
 /* Screen-reader-only live summary: the ticking numbers themselves are decorative to a

@@ -31,8 +31,10 @@
  * worse than one that fails.
  */
 
+import fs from 'node:fs';
+import path from 'node:path';
 import { utils } from 'ethers';
-import { rpcBatch } from '../lib/game-runs.js';
+import { rpcBatch, ADDRESSES } from '../lib/game-runs.js';
 import { NFT_ENUMERATION, readOwnedKnights } from '../lib/staking-chain.js';
 import { RARITY } from '../lib/knights.js';
 
@@ -68,6 +70,9 @@ const IFACE = new utils.Interface([
     'function nextTokenId() view returns (uint256)',
     'function tokenOfOwnerByIndex(address,uint256) view returns (uint256)',
     'function balanceOf(address) view returns (uint256)',
+    // The Genesis collection's own supply view: 1,024 knights in six bands, and how many rolls are
+    // left in each. It is what the portfolio's Genesis section reads for progress.
+    'function bandRemaining() view returns (uint16[6])',
 ]);
 
 async function probe(fn, args, to = NFT) {
@@ -249,6 +254,83 @@ if (online) {
         'the reader does not assume contiguous ids',
         'the configured collection is not the retired one',
     ]) skip(label, 'no chain');
+}
+
+// ------------------------------------------------------------------- the two shapes
+//
+// The two collections answer **different questions**. `Knights` publishes a tier through
+// `getKnightInfo`; `GenesisKnights` has no tiers at all and publishes hash power through
+// `getGenesisKnightInfo`. Neither has the other's function, and that asymmetry is a landmine
+// rather than an inconvenience: the wrong call **reverts**, the reader's per-token guard skips the
+// token, and the wallet's own knights come back as a complete-looking **empty list** while the
+// contract still reports a non-zero balance. It stayed hidden because Genesis has never been
+// minted, so every Genesis read took the `balanceOf == 0` exit before reaching the question — the
+// fault was one mint away, and the portfolio is the first screen that would have shown it.
+//
+// The first check is the permanent half, because it needs no chain: the reader must choose the
+// function by asking the collection, not by naming one.
+section('The two collections answer different questions');
+{
+    const source = fs.readFileSync(path.join(process.cwd(), 'lib', 'staking-chain.js'), 'utf8');
+    // The per-token batch must go through the decided function. This is the exact line the
+    // Genesis bug was: `encodeFunctionData('getKnightInfo', …)` written into the loop.
+    const batch = source.slice(source.indexOf('const infoFn'), source.indexOf('const complete ='));
+    rec('the reader chooses the info function by shape rather than naming one',
+        /const infoFn = shape === 'genesis' \? 'getGenesisKnightInfo' : 'getKnightInfo'/.test(source)
+        && /encodeFunctionData\(infoFn, \[tokenId\]\)/.test(batch)
+        && !/encodeFunctionData\('getKnightInfo', \[tokenId\]\)/.test(batch),
+        'the batch encodes infoFn');
+
+    // And the choice itself must be a probe. Asking only one of the two and assuming from the
+    // answer is how the other collection silently reads as empty.
+    const shapeFn = source.slice(source.indexOf('async function infoShapeFor'), source.indexOf('export async function readOwnedKnights'));
+    rec('and it asks both collections’ own questions before trusting either',
+        /'getKnightInfo'/.test(shapeFn) && /'getGenesisKnightInfo'/.test(shapeFn)
+        && /infoShapeFor\(candidates, nftAddress\)/.test(source),
+        'both shapes probed, then remembered for the read');
+    rec('and a collection answering neither is a failed read, not an empty wallet',
+        /if \(!shape\) \{/.test(source) && /the collection could not be read just now/.test(source),
+        'neither shape → ok:false');
+}
+
+section('The Genesis collection, asked its own question');
+if (!ADDRESSES.genesisNFT) {
+    for (const label of [
+        'the Genesis collection is configured, so its shape can be asked at all',
+        'it answers getGenesisKnightInfo and not getKnightInfo',
+        'and reading it is a true, empty read rather than a failure',
+    ]) skip(label, 'no Genesis address configured');
+} else if (!online) {
+    for (const label of [
+        'the Genesis collection is configured, so its shape can be asked at all',
+        'it answers getGenesisKnightInfo and not getKnightInfo',
+        'and reading it is a true, empty read rather than a failure',
+    ]) skip(label, 'no chain');
+} else {
+    const GENESIS = ADDRESSES.genesisNFT;
+    rec('the Genesis collection is configured, so its shape can be asked at all',
+        /^0x[0-9a-fA-F]{40}$/.test(GENESIS), GENESIS);
+
+    const enumerable = await probe('supportsInterface', ['0x780e9d63'], GENESIS);
+    rec('it is enumerable too, so a wallet’s Genesis knights are indexed the same way',
+        enumerable.value === true, enumerable.reverted ? 'reverted' : String(enumerable.value));
+
+    // A real read through the reader, which is the surface the bug lived on. On an unminted
+    // collection it must still be a *true* read (`ok`, a count that matches the contract) rather
+    // than a failure or a silent zero.
+    const held = await probe('balanceOf', [HOLDER], GENESIS);
+    const read = await readOwnedKnights(HOLDER, { nftAddress: GENESIS });
+    rec('reading it is a true read rather than a failure — the bug this section exists for',
+        read.ok === true, read.reason || read.note);
+    rec('and its count is the contract’s own balanceOf, not zero by accident',
+        read.balance === Number(held.value), `${read.balance} vs balanceOf ${held.value}`);
+
+    // And nothing is minted into it yet, which is what the portfolio's Genesis section has to say
+    // out loud. Asserted so the day someone mints one, this harness says so instead of the page
+    // quietly changing what it claims.
+    const KNIGHTS_SUPPLY = await probe('bandRemaining', [], GENESIS);
+    rec('the collection publishes its remaining supply in bands, so progress is readable',
+        KNIGHTS_SUPPLY.reverted !== true, KNIGHTS_SUPPLY.reverted ? 'bandRemaining reverted' : 'six bands answered');
 }
 
 console.log('');

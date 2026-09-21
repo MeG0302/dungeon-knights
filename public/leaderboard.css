@@ -71,6 +71,18 @@
 }
 
 /* Loading State */
+/*
+ * The claim-history body. `public/reward-claim-ui.js` builds this modal and swaps four different
+ * states into `.history-body` — loading, empty, error, a list of claims — and the container itself
+ * had no rule, so it inherited nothing: no minimum height to hold the modal steady while the chain
+ * is read, and no separation from the title above it. The states inside it were all styled; the box
+ * they arrive in was not.
+ */
+.history-body {
+    min-height: 120px;
+    margin-bottom: 20px;
+}
+
 .leaderboard-loading {
     text-align: center;
     padding: 40px;

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { readOwnedKnights, readStakeState } from '../../../../lib/staking-chain.js';
+import { readGenesisSupply, readOwnedKnights, readStakeState } from '../../../../lib/staking-chain.js';
 import { ADDRESSES } from '../../../../lib/game-runs.js';
 
 export const dynamic = 'force-dynamic';
@@ -116,7 +116,12 @@ export async function GET(request) {
         ? await readStakeState(address, { staking, nftAddress: nft, collection })
         : { ok: false, reason: 'no staking contract is configured for this collection' };
 
-    const payload = { ...holdings, collection, nft, staking: staking || null, stake };
+    // Genesis is the only side with a fixed supply, so it is the only side that has progress to
+    // report. Read here rather than in the page for the same reason the holdings are: one place
+    // knows how to ask, and the answer is cacheable with the rest of the wallet's answer.
+    const supply = collection === 'genesis' ? await readGenesisSupply(nft) : null;
+
+    const payload = { ...holdings, collection, nft, staking: staking || null, stake, supply };
 
     // A failed read is never remembered, so the next request actually tries again.
     return NextResponse.json(holdings.ok ? remember(key, payload) : payload);

@@ -500,6 +500,12 @@ export default function StakingClient() {
     const liveRef = useRef(live);
     liveRef.current = live;
 
+    // The header's wallet pill, and the page's own disconnect handler for the menu to call.
+    // The handler is held in a ref because the menu attaches once, in an effect that must not
+    // re-run every render — while `handleDisconnect` is rebuilt on each one.
+    const walletPill = useRef(null);
+    const handleDisconnectRef = useRef(() => {});
+
     // A first-time visitor gets the walkthrough; everyone else gets the page. The gate is
     // `/arya.js`'s own memory of this tour id — finishing, skipping or leaving mid-way all
     // mark it seen — so there is deliberately no `force` in this effect. `force` belongs to
@@ -516,6 +522,35 @@ export default function StakingClient() {
         }, 900);
         return () => { cancelled = true; clearTimeout(timer); };
     }, [phase]);
+
+    /**
+     * The header's wallet menu, on the control this route renders.
+     *
+     * `onDisconnect` is the page's own handler, and that is the point of the option: the vault holds
+     * its wallet in state, so a disconnect the page does not perform would clear localStorage and
+     * leave the header still showing an address. The menu does not reach into React; React hands it
+     * the one function that can put the page back to how it looks with nobody connected.
+     */
+    useEffect(() => {
+        const pill = walletPill.current;
+        if (!pill) return undefined;
+        let cancelled = false;
+        const attach = () => {
+            if (cancelled || !window.WalletMenu) return false;
+            window.WalletMenu.attach(pill, { onDisconnect: handleDisconnectRef.current });
+            return true;
+        };
+        if (!attach()) {
+            // `/wallet-menu.js` is `afterInteractive`, so on a cold load it can arrive after this
+            // effect. Polling a few times beats assuming a load order the framework chooses.
+            let tries = 0;
+            const timer = setInterval(() => {
+                if (attach() || tries++ > 40) clearInterval(timer);
+            }, 100);
+            return () => { cancelled = true; clearInterval(timer); };
+        }
+        return () => { cancelled = true; };
+    }, []);
 
     /** The footer's "Ask Arya" — the walkthrough again, on request, past the seen flag. */
     const askArya = () => {
@@ -669,15 +704,15 @@ export default function StakingClient() {
         setVault(null);
         if (window.Arya?.hide) window.Arya.hide();
     };
+    handleDisconnectRef.current = handleDisconnect;
 
     // ------------------------------------------------------------------------ render
     const pageStyles = (
         <>
             {/* Versioned like every other sheet: an unversioned `/theme.css` is a CSS change
                 that never reaches a returning player. */}
-            <link rel="stylesheet" href="/theme.css?v=3" />
-            <link rel="stylesheet" href="/css/staking.css?v=7" />
-            <link rel="stylesheet" href="/css/wallet-widget.css" />
+            <link rel="stylesheet" href="/theme.css?v=5" />
+            <link rel="stylesheet" href="/css/staking.css?v=9" />
             <link rel="stylesheet" href="/css/arya.css?v=3" />
             {/* ethers v5 UMD, the same pinned copy every legacy page loads — first in the list,
                 because it is the one the others and this page sign with. It is loaded here rather
@@ -686,6 +721,10 @@ export default function StakingClient() {
                 the global before it sends anything and says so plainly when it is not there yet. */}
             <Script src="/ethers-5.7.2.umd.min.js" strategy="afterInteractive" />
             <Script src="/arya.js?v=4" strategy="afterInteractive" />
+            {/* The header's wallet pill gets the same menu every other page's control has. Attached
+                by hand in an effect below, because a script scanning the DOM at load would run
+                before this route has rendered anything. */}
+            <Script src="/wallet-menu.js?v=1" strategy="afterInteractive" />
             <Script src="/wallet-source.js?v=3" strategy="afterInteractive" />
         </>
     );
@@ -872,7 +911,7 @@ export default function StakingClient() {
                                 {shortAddress(live.wallet)}
                             </button>
                         )}
-                        <div className="wallet-pill">
+                        <div className="wallet-pill" ref={walletPill}>
                             <span className="sv-num">
                                 {poolDng === null ? 'POOL · TBD' : `POOL · ${poolDng.toLocaleString()} DNG`}
                             </span>
@@ -1673,7 +1712,7 @@ export default function StakingClient() {
                                         </div>
                                     )}
 
-                                    <div className="panel-section-title" style={{ fontSize: 11, letterSpacing: 1, color: 'var(--text-muted)' }}>
+                                    <div className="panel-section-title">
                                         THIS WEEK&rsquo;S BOARD · {poolUnknown ? 'POOL TOTAL NOT READ' : `${fmtInt(pool.totalTickets)} TICKETS`}
                                     </div>
                                     <div className="sv-rows">
@@ -1712,7 +1751,7 @@ export default function StakingClient() {
                                         )}
                                     </div>
 
-                                    <div className="panel-section-title" style={{ fontSize: 11, letterSpacing: 1, color: 'var(--text-muted)' }}>
+                                    <div className="panel-section-title">
                                         PAST DRAWS
                                     </div>
                                     <div className="sv-rows">

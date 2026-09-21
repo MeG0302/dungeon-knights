@@ -132,20 +132,9 @@
     color: var(--text-muted);
 }
 
-/* The little "live" dot next to the address, in the card and in the header. */
-.wallet-chip-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #5fbf6a;
-    box-shadow: 0 0 6px rgba(95, 191, 106, 0.8);
-    flex-shrink: 0;
-}
-
-.wallet-chip {
-    font-variant-numeric: tabular-nums;
-    letter-spacing: 0.5px;
-}
+/* The "live" dot next to the address and the chip it sits in are defined in `theme.css` now,
+   where every route can load them — this sheet, `staking.css` and the Portfolio page each need
+   the same control. */
 
 /* Transient feedback: "+100 PTS banked", "Signed in…" */
 .points-notice {

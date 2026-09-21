@@ -920,6 +920,175 @@ body {
   font-size: 13px;
 }
 
+/* ==========================================================
+   THE WALLET MENU
+
+   `public/wallet-menu.js` attaches this to every wallet control in the site — the legacy
+   `.wallet-pill` ids and the pill a React route renders. It lives in this sheet rather than in
+   `wallet-widget.css` because every route already loads theme.css and only two routes load the
+   other; a menu styled by a sheet most pages never fetch is a menu that is invisible on them.
+
+   The trigger becomes `position: relative` (`.wallet-menu-host`) so the panel hangs off its own
+   corner instead of a measured position, and the panel is a second layer: no layout in the header
+   changes when it opens.
+   ========================================================== */
+.wallet-menu-host {
+  position: relative;
+  cursor: pointer;
+}
+
+.wallet-menu-caret {
+  font-size: 9px;
+  opacity: 0.55;
+  margin-left: 2px;
+  transition: opacity 0.15s, transform 0.15s;
+}
+
+.wallet-menu-host:hover .wallet-menu-caret,
+.wallet-menu-host:focus-visible .wallet-menu-caret {
+  opacity: 1;
+}
+
+.wallet-menu-host[aria-expanded="true"] .wallet-menu-caret {
+  transform: rotate(180deg);
+}
+
+.wallet-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 1200;
+  min-width: 216px;
+  padding: 6px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-bronze);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  text-align: left;
+  cursor: default;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.wallet-menu.is-open {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.wallet-menu-address {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px 6px;
+  font-family: var(--font-heading);
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+
+/* The same "live" dot the Points page and the vault use for a connected wallet. */
+.wallet-menu-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 6px rgba(74, 222, 128, 0.7);
+  flex-shrink: 0;
+}
+
+.wallet-menu-addr-text {
+  font-variant-numeric: tabular-nums;
+  user-select: text;
+}
+
+.wallet-menu-sep {
+  height: 1px;
+  margin: 5px 4px;
+  background: var(--border-base);
+}
+
+.wallet-menu-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  padding: 8px 10px;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-heading);
+  font-size: 11.5px;
+  letter-spacing: 0.5px;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.wallet-menu-item:hover,
+.wallet-menu-item:focus-visible {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--accent-gold);
+  outline: none;
+}
+
+.wallet-menu-note {
+  font-family: var(--font-body);
+  font-size: 10px;
+  letter-spacing: 0;
+  color: var(--text-muted);
+}
+
+.wallet-menu-item.is-primary .wallet-menu-label {
+  color: var(--accent-gold);
+}
+
+/* Why a connect did not happen — no extension, a locked wallet, a declined prompt. Shown in
+   place of the menu rather than as a toast, because the menu is still open on the button that
+   caused it. */
+.wallet-menu-error {
+  margin-top: 4px;
+  padding: 7px 10px;
+  border-top: 1px solid var(--border-base);
+  color: var(--danger-hover);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+.wallet-menu-item.is-danger:hover,
+.wallet-menu-item.is-danger:focus-visible {
+  color: var(--danger-hover);
+}
+
+/* ==========================================================
+   THE WALLET CHIP — the address control in a page header
+   ==========================================================
+   Moved here from `points.css` and `staking.css`, which each carried an identical copy of these
+   two rules. Both routes needed the chip and neither sheet could serve the other, so it was
+   duplicated; the Portfolio page would have made it a third copy, which is where copying stops
+   being cheaper than giving it a home. `theme.css` is loaded by every route and already owns
+   `.wallet-pill` and the whole `.wallet-menu-*` family, so the header's chrome has one
+   definition now instead of one per page.
+
+   `tools/check-styles.js` fails on any route whose markup uses a class no loaded sheet defines,
+   and that is what found the original gap: the vault's chip carried the classes and none of the
+   behaviour — no tabular figures, and a "live" dot that rendered as a 0x0 span taking a gap in
+   a flex row.
+   ========================================================== */
+.wallet-chip-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #5fbf6a;
+  box-shadow: 0 0 6px rgba(95,191,106,0.8);
+  flex-shrink: 0;
+}
+
+.wallet-chip {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.5px;
+}
+
 /* Rarity colors on knight cards */
 .rarity-common { border-color: #9CA3AF; }
 .rarity-uncommon { border-color: #4ADE80; }

@@ -963,6 +963,82 @@ single teardown writing the flag, that nobody calls `stopTour(false)`, and that 
 and `pagehide` are asserted by pattern, not by structure); moving the flag write out of `stopTour`
 fails it by name.
 
+### My Portfolio (`/portfolio`)
+
+One wallet's holdings in one place, entered from the header's wallet menu (*My Portfolio*), which
+`public/wallet-menu.js` links on every route that has a wallet control. Before it, the answer to
+"what do I own?" was spread over four screens — DNG in whichever page's pill you were looking at,
+knights in the Hall, Genesis and reward on the vault — and no screen could show a total.
+
+**Five reads, and all five of them are the server's.** The sections are `$DNG`, `Knights`,
+`Genesis`, `Points` and `Recent activity`, built from:
+
+| section | source |
+|---|---|
+| $DNG (balance) | `/api/wallet/balance` → `readDngBalance` in `lib/staking-chain.js` |
+| staked / claimable | the `stake` block of both `/api/staking/holdings` responses |
+| Knights | `/api/staking/holdings?collection=knights` |
+| Genesis + supply + bands | `/api/staking/holdings?collection=genesis` |
+| Points | `/api/points/me`, through `fetchMe()` |
+| Recent activity | `/api/game/history?address=` (the contract's own events) |
+
+The browser contributes an **address and nothing else** — the page loads no chain library at all.
+That is the second version of it. The first read the balance from the wallet's own provider with one
+`eth_call`, which is the obvious thing and produced a page whose other four sections showed real
+chain data while its headline read *"the wallet is not available in this browser"*: a saved address
+and a live extension are two different facts, and a browser with the first and not the second is not
+an edge case, it is most of them. `readDngBalance` asks the token for its own `symbol` and
+`decimals` rather than assuming 18 — a balance scaled by a guessed decimal count is wrong by a
+billion and looks precise — and it is verified against the token directly: the page printed
+549,982,095 for a wallet the public RPC's `balanceOf` decodes to 549,982,095.231.
+
+**Failure is per section.** The five settle through `Promise.allSettled`, so a node that is down
+cannot turn "you own 47 knights" into "you own none": the failed section prints its own sentence in
+`.pf-warn` and the other four keep their numbers. A failed balance renders `—`, never `0`, because
+zero is a claim about a wallet nobody managed to ask about.
+
+**Three states that are not errors**, and each says which it is:
+
+- **No wallet** — an empty state with the chest, what the page will show, and a Connect button.
+- **Not signed in to Points** — a sentence and a link, because a wallet that has never signed into
+the Points Program has no points, and that is not a fault.
+- **Signed in as a different wallet** — a 30-day session outlives the wallet that made it, and
+`/api/points/me` answers for whoever *signed*. So the session's address is checked against the
+wallet on screen and a mismatch is a sentence naming the other wallet, not that wallet's points
+printed under yours. Test it by signing in on `/points`, switching accounts, and returning here.
+
+**The art.** The Knight's Hall WebP behind the panel you are reading, plus the chest in the empty
+state — the 2K PNG is 1.9 MB for a 96px box, so it is served as an 11 KB resample, generated the
+same way the hall art was (`ffmpeg` is on this machine at
+`…/WinGet/Packages/Gyan.FFmpeg…/ffmpeg.exe`):
+
+```bash
+ffmpeg -y -i "public/assets/points/Wooden_treasure_chest_illustration_2K_20260919015044-autocrop-hair.png" \
+  -vf "scale=192:-2" -pix_fmt yuva420p -c:v libwebp -quality 88 public/assets/hall/portfolio-chest.webp
+```
+
+`-pix_fmt yuva420p` is the part that matters — without it the WebP is opaque and the chest gets a
+black box around it on the scrim.
+
+**One stylesheet move this page forced.** The header's disconnect chip (`.wallet-chip`,
+`.wallet-chip-dot`) was defined twice — in `points.css` and in `staking.css`, because each route
+loads only its own sheet and neither could serve the other. A third route made that a third copy, so
+the two rules now live in `theme.css`, which every route loads and which already owns `.wallet-pill`
+and the `.wallet-menu-*` family. `theme.css` therefore moved to `?v=5` (and `staking.css` to
+`?v=9`). `tools/check-styles.js` found the whole thing: it reports any class a route's markup uses
+that none of that route's sheets defines, which is also how the vault's missing chip rules were
+found the first time.
+
+**Checking it.** `node tools/check-portfolio.js` — 30 checks. The ones worth knowing: every
+`/api/…` path the page reads is checked against the filesystem (a one-word typo there is a section
+that says "the chain could not be read" forever, which looks like a node problem and is a bug); the
+page must not contain a chain call, a signer or a provider; the Genesis bands must come from the
+collection's own table rather than a second copy of it; and the whole file is checked with its
+comments stripped, because a guard that reads prose fails on its own explanation — the first draft
+reported an `eth_call` that existed only in a comment saying the page deliberately avoids one.
+Every guard was falsified before it was trusted: moving `PORTFOLIO_HREF`, restoring the ethers tag,
+and reintroducing `HASH_POWER_BANDS` each fail by name.
+
 ### The token maths (`lib/reward-config.js`, `tools/check-token-math.js`)
 
 ```bash

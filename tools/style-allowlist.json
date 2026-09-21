@@ -1,0 +1,19 @@
+{
+  "_": "Classes that a route uses and no sheet it loads defines, which are nevertheless deliberate. Every entry needs a reason: `node tools/check-styles.js` prints them beside the token, and a token with no reason would be indistinguishable from an oversight. If a rule can be written, write the rule — this file is for class names that are hooks, or that live in code nothing can reach yet.",
+  "/game": {
+    "ripple": "Written by medieval-effects.js on click; nothing styles it, so the element is 0x0 and the effect is a no-op. Styling it is a design decision about a decoration, not a fix, so the audit reports it rather than inventing rules for UI nobody asked for.",
+    "notification-toast": "The toast API in medieval-effects.js. Nothing in the repo calls window.medievalEffects.showToast (verified by grep across public/, app/ and lib/), and no sheet defines the class, so this is unreachable markup rather than a broken screen.",
+    "toast-header": "Part of the unreachable toast markup in medieval-effects.js — see notification-toast.",
+    "toast-icon": "Part of the unreachable toast markup in medieval-effects.js — see notification-toast.",
+    "toast-message": "Part of the unreachable toast markup in medieval-effects.js — see notification-toast.",
+    "toast-close": "Part of the unreachable toast markup in medieval-effects.js — see notification-toast.",
+    "fade-in": "A state class on the unreachable toast in medieval-effects.js — see notification-toast.",
+    "page-transition-overlay": "The page-transition API in medieval-effects.js. Unreachable and unstyled: the class is built inside a helper nothing calls.",
+    "transition-content": "Part of the unreachable page transition — see page-transition-overlay.",
+    "transition-icon": "Part of the unreachable page transition — see page-transition-overlay.",
+    "transition-text": "Part of the unreachable page transition — see page-transition-overlay.",
+    "medieval-loader": "The loader API in medieval-effects.js. Unreachable and unstyled; the game's real loading cover is #mapLoadingGate in the game body, which is styled in theme.css.",
+    "loader-ring": "Part of the unreachable medieval loader — see medieval-loader.",
+    "loader-center": "Part of the unreachable medieval loader — see medieval-loader."
+  }
+}
