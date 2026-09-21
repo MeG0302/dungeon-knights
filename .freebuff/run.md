@@ -28,11 +28,13 @@ browser fetches `/dungeon.js?v=…` straight off disk, not from a bundle:
 What is built, verified and **off**, waiting only on a value — no code change is needed to
 switch any of these on. The rows that used to sit here for V4, capsules and real Genesis
 holdings are **done**: all nine Phase 2 contracts are deployed on chain 46630 and the site reads
-them (see `docs/DEPLOY-PHASE-2.md`, *The production switch*).
+them (see `docs/DEPLOY-PHASE-2.md`, *The production switch*). So is **Points Program persistence**:
+Upstash Redis was provisioned in this thread, `KV_REST_API_URL` + `KV_REST_API_TOKEN` are set for
+Production, and the live deployment was measured reading the shared store — the evidence is in
+*The Points Program is server-backed*, **KV: provisioned**.
 
 | what | what is missing | where the steps are |
 |---|---|---|
-| Points Program persistence | `KV_REST_API_URL` + `KV_REST_API_TOKEN` (Upstash/Vercel KV) — **still unset in production**, so the `memory` driver is live and `check-kv-store.js` is the measurement of what that costs (one floor paid twice across two processes). The Vercel CLI cannot provision a store (`vercel storage` is not a subcommand); it is a dashboard step, and the env vars arrive with it | *The Points Program is server-backed* |
 | The X-account gate | nothing — it is enforced server-side and works today. A **provisional** binding (a typed handle) is enough to earn; proving it needs Privy's Twitter method enabled on the app | *Earning on X* |
 | The +500 engagement task | `X_CAMPAIGN_POST` — the campaign post's URL. Until it is set, `tasks.campaign` is `null` and the card hides itself rather than offering a reward with nothing to quote. `X_ENGAGEMENT_REWARD` (default 500) and `X_CAMPAIGN_KEYWORD` (an alternative to the site link) are optional | *Earning on X* |
 | Mobile wallets | `PRIVY_APP_ID` (+ `PRIVY_CLIENT_ID`), and the chain enabled for the app | *Wallets: injected first…* |
@@ -46,8 +48,11 @@ and it is left undone on purpose — pausing V3 ends the legacy claim path the o
 and the follow-up `withdrawAllTokens()` moves funds. The intended order is `pause()` →
 `withdrawAllTokens()` → fund V4, and both steps are the owner's call.
 
-Until the first two are set, the deployment is honest about it: the Points page shows its amber
-"not persistent" banner, and the wallet facade stays dormant.
+Until each one is set, the deployment is honest about it rather than pretending: the X-binding card
+says a typed handle is enough to earn while proving it needs Privy's Twitter method, the campaign
+card hides itself when there is no post to quote, and the Staking Vault labels itself a simulation.
+(A fifth row used to sit here for points persistence. It no longer does — the store is live, and the
+page's amber "not persistent" banner is gone with it.)
 
 Confirm a served file on the live domain is the one you edited — hashes, not eyeballing:
 
@@ -621,12 +626,21 @@ only thing that decides whether a post exists, who wrote it, and what it says.
   error), `verified`, `failed` (X answered and the post is not yours / no tag / no link), `expired`
   (no good answer within the attempt ceiling, or the day ended first). The throttle is server-side
   and handed back as `retryInSeconds`, so the button counts down instead of looking broken.
+- **The one-time tab, and the one reward nothing checks.** The second tab on the left panel pays
+  once per wallet, ever, under the same atomic claim the floors use (`claimGuard`) — and it requires
+  a bound X account exactly as every other award does. Its first task is a **follow**, and no free X
+  endpoint can see who a player follows (oEmbed has no view of follows, likes or reposts either), so
+  the card says "taken on your word" rather than implying a check that never runs. What is *not* on
+  their word is the account: a binding cannot be moved to a second wallet, so one X account cannot
+  claim the same task twice. The record (`one:follow`) is namespaced so it cannot collide with the X
+  tasks' ids, and its copy carries the handle as `{handle}` for the **server** to fill in —
+  `X_SHARE_TAG` is not `NEXT_PUBLIC_`, so a client that read it would render "follow @undefined".
 - **Privy's Twitter must be enabled for the *proved* path** (see the switches table): without it a
   player can still type a handle and earn. The bridge exposes `getXAccount()`, `linkX()` and
   `getAccessToken()` for exactly this.
 
 ```bash
-node tools/check-points-x.js    # 92 checks, offline: a stubbed X and a stubbed Privy, real ES256
+node tools/check-points-x.js    # 110 checks, offline: a stubbed X and a stubbed Privy, real ES256
 node tools/check-x-verify.js    # 63 checks: the verifier alone, against a stubbed oEmbed
 node tools/check-kv-store.js    # 6 checks: the guard across two processes (and why KV matters)
 node tools/check-points-guard.js http://localhost:3000   # 21 checks: the live routes, gate included
@@ -1597,7 +1611,7 @@ not the deployment URL.
 |---|---|
 | `PRIVY_APP_ID` | **Set** (type `config`). Turns the embedded wallet on for the phone flow. Before it was set, production answered `embedded: null` and the whole embedded path stayed dormant. Env changes need a **redeploy** — the route is `force-dynamic`, but the deployment still has to exist. |
 | `POINTS_SESSION_SECRET` | **Set.** Sessions are HMACs. Without it each serverless instance generates its own random secret, so a token minted by one instance is rejected by the next: a player connects, clears a floor, and is randomly logged out. Measured before/after: 1-of-8 authenticated calls succeeded, then 8-of-8 once set. |
-| `KV_REST_API_URL` + `KV_REST_API_TOKEN` (or `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`) | **NOT set — required before the Points Program means anything.** Without it the store falls back to per-instance memory. |
+| `KV_REST_API_URL` + `KV_REST_API_TOKEN` (or `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`) | **Set, in this thread** — the Upstash store below. Before it, the store fell back to per-instance memory. |
 
 Without a shared store the once-per-day rule is enforced **per instance**, so under concurrent
 traffic the numbers go wrong in exactly the way a rewards program must not. Measured on a
@@ -1610,29 +1624,80 @@ six concurrent re-clears of the SAME floor -> credited 100, 100, 100, 0, 100, 0 
 ```
 
 That is why the page reports the driver and shows an amber banner when `persistent` is false.
-Provisioning a store needs the account owner: `vercel integration add` requires an interactive
-terminal and a human accepting marketplace terms.
 
-**Decision, updated in this thread: provision KV.** The earlier choice was to stay on the
-in-memory store; the user has since asked for a shared one, so the code is ready and waiting on
-two env vars. Nothing else has to change — the driver is already picked by environment.
+### KV: provisioned (this thread)
 
-**Click-through (needs the account owner; `vercel integration add` is interactive and requires a
-human to accept marketplace terms, so it cannot be scripted):**
+The earlier choice in this project was to stay on the in-memory store. The user has since asked for
+a shared one, and it is now **live in production** — nothing else in the code had to change, because
+the driver is picked by environment.
 
-1. Vercel → project → **Storage** → **Create Database** → **Upstash for Redis** → free tier.
-2. Connect it to this project, **Production and Preview**. Vercel writes `KV_REST_API_URL` and
-   `KV_REST_API_TOKEN` into the project automatically (an Upstash-direct pair,
-   `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`, is picked up too).
-3. **Redeploy** — env changes do not apply to an existing deployment.
-4. Confirm it took: `curl -s https://dungeon-knights.vercel.app/api/points/me` will still 401, so
-   check the page instead — the amber "points are not persistent" banner disappears on its own,
-   because it is driven by the store's own report:
+**How it was done, and the one step that needs a human.** `vercel storage` is still not a
+subcommand, but the marketplace path exists and halts only at the terms page:
 
-   ```bash
-   curl -s https://dungeon-knights.vercel.app/api/points/leaderboard | head -c 200
-   # after a real sign-in, GET /api/points/me reports storage.driver = "redis", persistent = true
-   ```
+```bash
+npx vercel integration add upstash/upstash-kv -e production
+# first run → "status": "action_required", "reason": "integration_terms_acceptance_required",
+#   "verification_uri": "https://vercel.com/<scope>/~/integrations/accept-terms/upstash?source=cli"
+#   (nothing is created — `npx vercel integration installations` still printed "No … found")
+# → the account owner opened that URL and accepted the terms
+# second run, unchanged → creates the database, connects it to this project, pulls env
+```
+
+Only the account owner can accept the terms: `vercel integration accept-terms` documents that it
+needs an interactive terminal and a human confirmation, so it is deliberately not scriptable. The
+dashboard route to the same place is Storage → Create Database → Upstash for Redis.
+
+The install also pushed two agent "skills" (`.agents/`, `.claude/skills/`, `skills-lock.json`) and
+added `.env*` to `.gitignore`. Those were removed — they are the installer's, not the project's.
+
+**What Vercel wrote** (`npx vercel env ls production`): `KV_REST_API_URL`, `KV_REST_API_TOKEN`,
+`KV_URL`, `REDIS_URL`, `KV_REST_API_READ_ONLY_TOKEN`, all Production, all created by the install.
+`UPSTASH_REDIS_REST_*` is not written — the `KV_*` pair is the one this project uses, and the other
+pair is only a fallback in `lib/points-store.js`.
+
+**Then a redeploy**, because env changes do not apply to an existing deployment:
+
+```bash
+npx vercel --prod --yes --scope meglast320-1694
+npx vercel alias set <deployment> dungeon-knights.vercel.app --scope meglast320-1694
+```
+
+**The evidence, and why it needed a round trip rather than an env listing.** An env var being set
+is not the same as the deployment using it, and a 200 from the leaderboard does not tell the two
+drivers apart — a fresh `memory` store answers `[]` exactly like a fresh Redis does. So a sentinel
+wallet was written *through the shared store* and then asked for **through the live deployment**:
+
+```
+the driver the production variables pick    → "redis"
+write + read through those credentials      → points 7, probe "kv-wiring-check"
+GET <new deployment>/api/points/leaderboard → {"rows":[{"address":"0xabab…abab",…}]}  ✅ the same store
+GET dungeon-knights.vercel.app (pre-alias)  → {"rows":[]}  ← the deployment that still had no KV
+```
+
+The sentinel was then deleted (`DEL` → 1, `ZREM` → 1, `ZCARD` → 0) and the pulled `.env` file
+removed. **The shared board starts empty and that is not a loss:** the points that existed before
+only ever lived in one process's memory, so they were already being reset by every redeploy.
+
+**And permanence was tested rather than assumed**, because "shared" and "survives a deploy" are not
+the same claim. A second sentinel was written, then production was redeployed, and the **brand-new
+deployment was asked for a wallet that existed before it did**:
+
+```
+write 0xcdcd…cdcd (42 PTS)      → shared store, driver "redis"
+npx vercel --prod --yes --scope meglast320-1694   → a new deployment, a new set of processes
+GET <brand-new deployment>/api/points/leaderboard → {"rows":[{"address":"0xcdcd…cdcd","points":42,…}]}  ✅
+```
+
+That is the whole question answered: nothing in the app's memory could have carried that write across
+a deploy. The sentinel was deleted afterwards and the domain re-aliased (`GET …/api/points/leaderboard`
+→ `{"rows":[]}`).
+
+**Confirming it later.** `check-kv-store.js` is the concurrency measurement; for the live driver,
+`GET /api/points/me` reports `storage.driver = "redis", persistent: true` after a real sign-in, and
+the amber banner on the page is driven by that same field — so the banner is gone on any deployment
+whose store is shared. `curl .../api/points/leaderboard` still 401s for nobody, but it only proves
+the route answers; the two drivers cannot be told apart from a public read alone (both are empty
+until someone plays), which is exactly why the sentinel round trip above is the test that counts.
 
 ### The once-a-day guard (`claimGuard`)
 
@@ -1645,10 +1710,11 @@ six concurrent re-clears of the same floor -> credited 100, 100, 100, 100, 0, 10
 ```
 
 Redis does this with `SET … NX EX` (atomic across instances); the file and memory drivers use an
-in-process set, which is only enough inside one process. **The guard is therefore only
-cross-instance once KV exists** — and production does not have KV yet, which was measured on the
-live deployment rather than assumed. Twelve simultaneous clears of today's first floor on one
-wallet, signed in as a throwaway wallet through the real challenge/signature flow:
+in-process set, which is only enough inside one process. **The guard is cross-instance now that KV
+exists**, which it did not used to be — the measurement below was taken on the live deployment while
+it was still on the memory driver, and is kept here because it is the reason the store was
+provisioned at all. Twelve simultaneous clears of today's first floor on one wallet, signed in as a
+throwaway wallet through the real challenge/signature flow:
 
 ```
 said-credited: 12 of 12, final balance: 100

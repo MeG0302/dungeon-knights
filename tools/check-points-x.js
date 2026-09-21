@@ -565,6 +565,105 @@ globalThis.fetch = async (url, options = {}) => {
     rec('when Privy cannot be read, the answer is "unverified" — never a guess',
         unreadable.ok === false && unreadable.code === 'user-unreadable', unreadable.code);
 
+    // --------------------------------------------------------------- the one-time tab
+    // The one reward in this program that nothing checks. What is testable is everything *around*
+    // that: who may claim, how many times, and whether the card can even be rendered correctly.
+    console.log('');
+    console.log('The one-time tasks');
+
+    const taskIds = Config.ONE_TIME_TASKS.map((t) => t.id);
+    rec('the registry is a list of ids with a reward each',
+        taskIds.length > 0
+        && Config.ONE_TIME_TASKS.every((t) => /^[a-z][a-z0-9-]*$/.test(t.id) && Number.isInteger(t.reward) && t.reward > 0),
+        taskIds.join(', '));
+    rec('  … and an unknown id is refused rather than guessed at',
+        (await Program.claimOneTime(gate, 'no-such-task')).code === 'unknown-task', 'unknown-task');
+
+    const unfunded = fresh();
+    const unbindRefusal = await Program.claimOneTime(unfunded, taskIds[0]);
+    rec('a wallet with no X account cannot claim one',
+        unbindRefusal.code === Program.X_REQUIRED, `${unbindRefusal.code}: ${unbindRefusal.error}`);
+    rec('  … and it was paid nothing', (await points(unfunded)) === 0, `${await points(unfunded)} PTS`);
+
+    // Ids of its own: an account id is global here, and re-using one that an earlier case already
+    // claimed would make this section fail for a reason that has nothing to do with one-time tasks.
+    const claimant = fresh();
+    await Program.bindX(claimant, { id: '5101', username: 'follower' });
+    const claimed = await Program.claimOneTime(claimant, taskIds[0]);
+    rec('a bound wallet claims it once',
+        claimed.credited === Config.ONE_TIME_TASKS[0].reward,
+        `${claimed.credited} PTS`);
+    rec('  … and the balance agrees',
+        (await points(claimant)) === Config.ONE_TIME_TASKS[0].reward, `${await points(claimant)} PTS`);
+
+    const afterOneTime = (await stateOf(claimant)).oneTime;
+    rec('the state reports it as claimed, with what was paid',
+        afterOneTime.length === taskIds.length
+        && afterOneTime[0].claimed === true
+        && afterOneTime[0].credited === Config.ONE_TIME_TASKS[0].reward,
+        JSON.stringify(afterOneTime[0]));
+    rec('  … and claims it on the player\'s word rather than implying a check',
+        afterOneTime[0].proof === 'claim', afterOneTime[0].proof);
+
+    const secondClaim = await Program.claimOneTime(claimant, taskIds[0]);
+    rec('and a second claim pays nothing',
+        secondClaim.credited === 0 && secondClaim.alreadyCredited === true, `${secondClaim.credited} PTS`);
+    rec('  … and the balance did not move',
+        (await points(claimant)) === Config.ONE_TIME_TASKS[0].reward, `${await points(claimant)} PTS`);
+
+    // The guard is a TTL, not a fact — it lapses after ten minutes, on purpose, so a crash between
+    // claiming and recording cannot lock a player out of a task they were never paid for. What
+    // makes the claim *permanent* is the record, so this releases the guard by hand and asks again:
+    // exactly what the clock would do, without waiting for it.
+    await Store.releaseGuard(`one-time:${claimant}:${taskIds[0]}`);
+    const afterGuardLapses = await Program.claimOneTime(claimant, taskIds[0]);
+    rec('the claim outlives its guard — the record is what makes it permanent',
+        afterGuardLapses.credited === 0 && afterGuardLapses.alreadyCredited === true,
+        `${afterGuardLapses.credited} PTS after the guard lapsed`);
+
+    // Two taps at once, the shape a player with two tabs actually produces. The record check is a
+    // read and the write is a second step, so the atomic guard is the only thing standing here.
+    const racer3 = fresh();
+    await Program.bindX(racer3, { id: '5102', username: 'onetimeracer' });
+    const raced = await Promise.all([
+        Program.claimOneTime(racer3, taskIds[0]),
+        Program.claimOneTime(racer3, taskIds[0]),
+    ]);
+    const raceTotal = (raced[0].credited || 0) + (raced[1].credited || 0);
+    rec('two claims at once pay exactly one reward',
+        raceTotal === Config.ONE_TIME_TASKS[0].reward, `${raceTotal} PTS between two requests`);
+    rec('  … and the balance agrees',
+        (await points(racer3)) === Config.ONE_TIME_TASKS[0].reward, `${await points(racer3)} PTS`);
+
+    // The task record shares a map with the X tasks (`share`, `x:<status id>`), so a one-time claim
+    // must not be able to land on one of their ids — or be read as one of them.
+    rec('a one-time claim does not masquerade as the daily share',
+        (await tasksOf(claimant)).share.state === 'none', (await tasksOf(claimant)).share.state);
+
+    // It goes through the same credit path as every other award, commission and all — a bespoke
+    // payout here would be a second place for the referral rules to be wrong.
+    const inviter = fresh();
+    const invited = fresh();
+    await Store.updateWallet(inviter, (w) => w);
+    await Program.registerVisit(invited, inviter);
+    await Program.bindX(invited, { id: '5103', username: 'invited' });
+    await Program.claimOneTime(invited, taskIds[0]);
+    rec('a one-time reward pays the referral commission like any other',
+        (await points(inviter)) === Math.floor(Config.ONE_TIME_TASKS[0].reward * Config.REFERRAL_1ST_PCT),
+        `${await points(inviter)} PTS to the inviter`);
+
+    // The card is rendered from `state.oneTime`, which the server fills in. The tag lives in that
+    // copy as `{handle}`, and a client cannot read the value it is replaced with — so a leftover
+    // placeholder here is a page telling players to follow @undefined.
+    const copy = afterOneTime[0];
+    rec('the server fills the handle into every string the card renders',
+        [copy.cta, copy.url, copy.blurb].every((s) => !s.includes('{handle}'))
+        && copy.blurb.includes(`@${Config.X_SHARE_TAG}`)
+        && copy.url === `https://x.com/${Config.X_SHARE_TAG}`,
+        `${copy.cta} → ${copy.url}`);
+    rec('  … and a wallet that has not claimed one is told so',
+        (await stateOf(fresh())).oneTime.every((t) => t.claimed === false), 'none claimed');
+
     // ------------------------------------------------------------------- the last mile
     console.log('');
     console.log('The route layer');
@@ -585,6 +684,9 @@ globalThis.fetch = async (url, options = {}) => {
         ), '');
     rec('the unbind action is answered with the refusal rather than served',
         /unbindX\(address\)/.test(Routes.x) && /x-locked/.test(Routes.x), '');
+    rec('the one-time claim goes through the same route as the verified tasks',
+        /claimOneTime\(address, kind\)/.test(Routes.task)
+        && /body\?\.action === 'claim'/.test(Routes.task), '');
 
     // ------------------------------------------- with no campaign configured, it hides
     // A child process, because this module reads the environment once at import time — the only

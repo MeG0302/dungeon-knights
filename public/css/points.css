@@ -60,6 +60,122 @@
     line-height: 1;
 }
 
+/* ---------------------------------------------------------------------------
+   The left panel's two tabs
+
+The daily run and the one-time tasks are different bargains, so they get a tab each rather than
+sitting in one long column. The strip is the first thing in the panel — above the wallet card —
+because choosing between the two is the first decision a returning player makes. Styled from the
+same tokens as the rankings tabs on the right, at a size that fits a 400px column.
+   */
+.points-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 3px;
+    border: 1px solid var(--border-base);
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.35);
+}
+
+.points-tab {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 7px 10px;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.points-tab:hover {
+    color: var(--accent-gold);
+}
+
+.points-tab.is-active {
+    border-color: var(--border-bronze, var(--border-accent, var(--accent-gold)));
+    background: rgba(212, 168, 67, 0.12);
+    color: var(--accent-gold);
+}
+
+.points-tab:focus-visible {
+    outline: 1px solid var(--accent-gold);
+    outline-offset: 1px;
+}
+
+/* How many one-time tasks are still unclaimed. Only rendered when the answer is above zero, so
+   it reads as a nudge rather than a permanent badge. */
+.points-tab-badge {
+    min-width: 16px;
+    padding: 0 4px;
+    border-radius: 8px;
+    background: var(--accent-gold, #d4a843);
+    color: #14100a;
+    font-size: 9.5px;
+    line-height: 16px;
+    text-align: center;
+    letter-spacing: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   A one-time task
+
+A claim rather than a proof: the reward is stated, the step is a button, and the card says in the
+small print that nothing was checked. The claimed state dims the whole card instead of removing
+it, so the tab still shows what has been done — the count of what is left is the point of the tab.
+   */
+.one-task {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid var(--border-base);
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.28);
+}
+
+.one-task.is-claimed {
+    border-color: rgba(90, 160, 90, 0.4);
+    background: rgba(90, 160, 90, 0.05);
+}
+
+.one-task-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+}
+
+/* An anchor here, not a button: it opens X in a new tab, and a real link is what a long-press or
+   a middle-click can use. It has to wear the button's clothes, so it borrows them rather than
+   being styled twice. */
+.one-task-actions > .btn {
+    justify-content: center;
+    text-decoration: none;
+}
+
+.one-task-footer {
+    padding: 4px;
+    font-size: 10px;
+    line-height: 1.5;
+    color: var(--text-muted);
+}
+
+/* A narrow column stacks the two buttons instead of squeezing them. */
+@media (max-width: 520px) {
+    .one-task-actions {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* Section headings inside the left panel (vault progress, share, referrals) */
 .panel-section-title {
     display: flex;

@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
 import { sessionFromRequest } from '../../../../lib/points-session.js';
-import { submitTask, checkTask } from '../../../../lib/points-program.js';
+import { submitTask, checkTask, claimOneTime } from '../../../../lib/points-program.js';
 
 // Every answer here depends on a live X lookup and on stored state, so nothing may be cached.
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 /**
- * POST { action: 'submit' | 'check', task, url? } — the campaign reward and the daily share.
+ * POST { action: 'submit' | 'check' | 'claim', task, url? } — the campaign reward, the daily share,
+ * and the one-time tab.
  *
  * The client sends the link to a post and nothing else about it. Whether that post is real, whose
  * it is, and what it carries are all decided in `lib/points-program.js` from X's own record of the
@@ -16,6 +17,9 @@ export const runtime = 'nodejs';
  * `submit` files a post (or files a new one) and answers straight away with one of three states:
  * paid, **pending** (X has not indexed it yet — a real answer, not an error), or failed.
  * `check` asks X again about the pending submission, and is rate-limited server-side.
+ * `claim` is the one-time tab: `task` is a task id from the registry rather than a post kind, there
+ * is no url, and the server pays it once per wallet under an atomic guard. Its reward is a claim
+ * rather than a proof — see `claimOneTime` for why that is the honest shape for a follow.
  */
 export async function POST(request) {
     const address = sessionFromRequest(request);
@@ -46,6 +50,14 @@ export async function POST(request) {
         return NextResponse.json(result);
     }
 
+    if (body?.action === 'claim') {
+        const result = await claimOneTime(address, kind);
+        if (result.error) {
+            return NextResponse.json(result, { status: result.code === 'x-required' ? 403 : 400 });
+        }
+        return NextResponse.json(result);
+    }
+
     if (body?.action === 'check') {
         const result = await checkTask(address, kind);
         if (result.error) {
@@ -55,5 +67,5 @@ export async function POST(request) {
         return NextResponse.json(result);
     }
 
-    return NextResponse.json({ error: "action must be 'submit' or 'check'" }, { status: 400 });
+    return NextResponse.json({ error: "action must be 'submit', 'check' or 'claim'" }, { status: 400 });
 }

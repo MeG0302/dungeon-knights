@@ -8,8 +8,8 @@ import { VAULT_LEVELS, VAULT_ENTRY_TOTAL } from '../../lib/points-config';
 import {
     claimRef, clearSession, connectWallet, fetchLeaderboard, fetchMe, fetchXStatus, forgetWallet,
     hasInjectedWallet, isAddress, onAccountsChanged, pendingRef, readRefFromUrl,
-    readSession, refLink, requestBindX, requestClear, requestShare, requestTask, requestTaskCheck,
-    savedAddress, shortAddress, signIn, stashRef,
+    readSession, refLink, requestBindX, requestClear, requestOneTimeClaim, requestShare, requestTask,
+    requestTaskCheck, savedAddress, shortAddress, signIn, stashRef,
 } from '../../lib/points-client';
 import PointsDungeon from './dungeon';
 
@@ -29,13 +29,14 @@ const TOUR_ID = 'points-v1';
  */
 function pointsTourSteps(live) {
     const now = () => live() || {};
-    return [
+    const steps = [
         {
             kind: 'think',
             // She greets every visit, not only the first, so this welcome has to read
-            // correctly to someone who has completed the vault ten times.
+            // correctly to someone who has completed the vault ten times. What it says is filled
+            // in at the end of this function rather than typed here, so a step added later cannot
+            // leave her telling a newcomer the wrong number.
             mood: 'Welcome',
-            text: 'I am Arya, keeper of the gate. Seven steps and this page will make sense — <strong>Next</strong> to follow me, <strong>Skip</strong> if you would rather work it out yourself.',
         },
         {
             // The wallet step is the one that genuinely differs per visitor, so it also
@@ -87,6 +88,14 @@ function pointsTourSteps(live) {
                 : `Clear all three floors and this unlocks. The picture and the text are ready for you here: save the picture, post the run, and paste the link to your post. The text tags <strong>@${(now().share && now().share.tag) || 'DNGrobinhood'}</strong> and carries your invite link. I ask X one thing about that post before paying — that it tags us — and then the whole entry doubles: <strong>${VAULT_ENTRY_TOTAL} becomes ${VAULT_ENTRY_TOTAL * 2} PTS</strong>. Once a day, same as the vault.`),
         },
         {
+            // The tab, not its contents: the contents only exist while that tab is open, and a
+            // spotlight aimed at markup that is not on the page is a spotlight aimed at nothing.
+            kind: 'think',
+            mood: 'Once and done',
+            target: '[data-arya="onetime-tab"]',
+            text: () => `The second tab is different: those tasks pay <strong>once</strong>, ever — no daily reset. There is ${(now().openOneTime || 0) === 1 ? 'one waiting for you now' : `${(now().openOneTime || 0)} waiting for you now`}, and the tab carries the count. Read the small print on each card: where a step cannot be checked — and a follow cannot — the card says it is taken on your word rather than pretending otherwise.`,
+        },
+        {
             kind: 'think',
             mood: 'Raise your banner',
             target: '[data-arya="refer"]',
@@ -103,9 +112,13 @@ function pointsTourSteps(live) {
         {
             kind: 'clear',
             mood: 'That is everything',
-            text: 'So: connect, clear three floors, double it on X, and bring friends. The gate is yours — go and earn.',
+            text: 'So: connect, clear three floors, double it on X, claim the one-time tasks, and bring friends. The gate is yours — go and earn.',
         },
     ];
+
+    // Counted, not typed. The farewell is not a step, hence the minus one.
+    steps[0].text = `I am Arya, keeper of the gate. <strong>${steps.length - 1} steps</strong> and this page will make sense — <strong>Next</strong> to follow me, <strong>Skip</strong> if you would rather work it out yourself.`;
+    return steps;
 }
 
 /**
@@ -244,6 +257,64 @@ function XTaskCard({
     );
 }
 
+/**
+ * One task from the one-time tab.
+ *
+ * A different shape from `XTaskCard` on purpose, because it is a different bargain: nothing is
+ * checked, so there is no link to paste and no pending state to render. The card states the reward,
+ * opens the account in a new tab, and pays on a claim — and it says in as many words that no check
+ * runs, because a card that quietly paid on trust while the rest of the page demanded proof would
+ * teach a player that the rules here are decoration.
+ *
+ * The step the task asks for is a button rather than a link in prose, so the one thing it wants is
+ * the one thing under the player's thumb.
+ */
+function OneTimeTaskCard({ task, busy, error, onClaim, canClaim, blockedWhy }) {
+    if (!task) return null;
+    const claimed = !!task.claimed;
+
+    return (
+        <div className={`one-task ${claimed ? 'is-claimed' : ''}`} data-arya="onetime">
+            <div className="panel-section-title">
+                <img src={`${ASSETS}White_logo_on_black_background_2K_20260919011421-autocrop-hair.png`} alt="" className="points-icon" width={16} height={16} style={{ filter: 'brightness(0) invert(1)' }} />
+                {task.title}
+                <span className={`x-task-reward ${claimed ? 'is-paid' : ''}`}>
+                    {claimed ? `+${task.credited || task.reward} \u2713` : `+${task.reward} PTS`}
+                </span>
+            </div>
+            <p className="panel-hint">{task.blurb}</p>
+            <div className="one-task-actions">
+                <a
+                    className="btn btn-secondary btn-sm"
+                    href={task.url}
+                    target="_blank"
+                    rel="noreferrer"
+                >
+                    {task.cta}
+                </a>
+                <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    onClick={onClaim}
+                    disabled={busy || claimed || !canClaim}
+                    title={!canClaim && blockedWhy ? blockedWhy : undefined}
+                >
+                    {claimed ? 'Claimed' : busy ? 'Claiming\u2026' : `Claim ${task.reward} PTS`}
+                </button>
+            </div>
+            {claimed && (
+                <div className="x-task-line is-paid">
+                    <span>
+                        Paid {task.claimedOn}
+                        {task.proof === 'claim' ? ' \u00b7 claimed on your word, no check ran' : ''}
+                    </span>
+                </div>
+            )}
+            {error && <div className="x-task-line is-error">{error}</div>}
+        </div>
+    );
+}
+
 export default function PointsPage() {
     // boot → anon (no session) → ready (signed in). `error` is only used when the page
     // itself cannot work, never for a rejected signature the player can retry.
@@ -255,6 +326,9 @@ export default function PointsPage() {
     const [notice, setNotice] = useState(null);
     const [error, setError] = useState(null);
     const [tab, setTab] = useState('leaderboard');
+    // Which half of the left panel is showing: the daily run, or the tasks that pay once. The
+    // wallet card and the X binding sit above both, because they are what either half needs.
+    const [panel, setPanel] = useState('daily');
     const [copied, setCopied] = useState(false);
     const [inDungeon, setInDungeon] = useState(false);
     const referralInput = useRef(null);
@@ -296,6 +370,9 @@ export default function PointsPage() {
     const connected = phase === 'ready';
     const entryComplete = !!state?.entryComplete;
     const bound = !!state?.x?.username;
+    // What the one-time tab's badge counts: tasks this wallet has not been paid for yet. Nothing
+    // to count before there is a wallet to claim with, so an anonymous visitor sees no badge.
+    const openOneTime = connected ? (state?.oneTime || []).filter((task) => !task.claimed).length : 0;
     const live = () => liveRef.current;
 
     const flash = useCallback((message) => {
@@ -395,6 +472,9 @@ export default function PointsPage() {
             bound: !!state?.x?.username,
             rank: state?.rank || 0,
             players: state?.players || 0,
+            // Her "once and done" line counts what is still unclaimed, so it has to read the same
+            // number the tab's badge does rather than the state it was built from.
+            openOneTime,
         };
     });
 
@@ -767,6 +847,35 @@ export default function PointsPage() {
         }
     }, [flash, loadBoard]);
 
+    /**
+     * Claim a one-time task.
+     *
+     * Nothing is verified here and the server does not pretend otherwise — it pays once per wallet,
+     * under the same atomic guard the floors use, and refuses without a bound X account. The card
+     * carries the sentence about what is not checked.
+     */
+    const handleOneTimeClaim = useCallback(async (taskId) => {
+        setXBusy(taskId);
+        setError(null);
+        setXErrors((e) => ({ ...e, [taskId]: null }));
+        try {
+            const result = await requestOneTimeClaim(taskId);
+            if (result.state) setState(result.state);
+            if (result.credited > 0) flash(`Claimed — +${result.credited} PTS.`);
+            else if (result.alreadyCredited) flash('That one is already paid.');
+            loadBoard();
+        } catch (e) {
+            setXErrors((prev) => ({
+                ...prev,
+                [taskId]: e.code === 'x-required'
+                    ? 'Bind your X account first — this task is paid against it.'
+                    : e.message,
+            }));
+        } finally {
+            setXBusy(null);
+        }
+    }, [flash, loadBoard]);
+
     const handleEnterDungeon = () => {
         if (!connected || entryComplete || !bound) return;
         // The vault covers the page, so her walkthrough and its spotlight must not still
@@ -858,7 +967,7 @@ export default function PointsPage() {
             {/* Versioned like every other sheet: an unversioned `/theme.css` is a CSS change
                 that never reaches a returning player. */}
             <link rel="stylesheet" href="/theme.css?v=6" />
-            <link rel="stylesheet" href="/css/points.css?v=7" />
+            <link rel="stylesheet" href="/css/points.css?v=8" />
             <link rel="stylesheet" href="/css/arya.css?v=3" />
             <Script src="/arya.js?v=4" strategy="afterInteractive" />
             {/* The header's wallet pill gets the same menu every other page's control has. It is
@@ -938,6 +1047,34 @@ export default function PointsPage() {
                             Points Vault
                         </div>
                         <div className="side-panel-body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+
+                            {/* Two tabs, because there are two kinds of earning on this page and
+                                they are different bargains: the daily run resets at midnight, a
+                                one-time task pays once and never again. The strip sits at the top so
+                                the two are the first thing read, and the badge counts what is still
+                                unclaimed for this wallet. */}
+                            <div className="points-tabs" role="tablist" aria-label="Ways to earn">
+                                <button
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={panel === 'daily'}
+                                    className={`points-tab ${panel === 'daily' ? 'is-active' : ''}`}
+                                    onClick={() => setPanel('daily')}
+                                >
+                                    Daily Run
+                                </button>
+                                <button
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={panel === 'onetime'}
+                                    className={`points-tab ${panel === 'onetime' ? 'is-active' : ''}`}
+                                    onClick={() => setPanel('onetime')}
+                                    data-arya="onetime-tab"
+                                >
+                                    One-time Tasks
+                                    {openOneTime > 0 && <span className="points-tab-badge">{openOneTime}</span>}
+                                </button>
+                            </div>
 
                             {/* A deployment with no persistent store still works, but the
                                 points reset when the server restarts. Say it plainly. */}
@@ -1065,6 +1202,15 @@ export default function PointsPage() {
                                 )}
                                 {xErrors.bind && <div className="x-task-line is-error">{xErrors.bind}</div>}
                             </div>
+
+                            {/* The wallet and the X binding sit above both tabs, because each half of
+                                the panel earns into that wallet and is paid against that account —
+                                hiding them behind a tab would hide the reason the other tab is
+                                locked. Everything below is what resets at midnight; a fragment
+                                rather than a wrapper element, because the panel already lays its
+                                children out in a column and an extra box would break the gaps. */}
+                            {panel === 'daily' && (
+                                <>
 
                             <button
                                 className="btn btn-primary btn-md w-full"
@@ -1209,6 +1355,56 @@ export default function PointsPage() {
                                 <div className="referral-meta">
                                     Invited by {shortAddress(state.referrer)}
                                 </div>
+                            )}
+                                </>
+                            )}
+
+                            {/* ---------------------------------------------------- one-time tasks
+                                Steps a player takes once, paid once. The tab exists because the
+                                bargain differs from everything above it, and the cards are written
+                                to match: where a reward cannot be checked, the card says so instead
+                                of implying a check that never runs. */}
+                            {panel === 'onetime' && (
+                                <>
+                                    <div className="panel-section-title">
+                                        <img src={`${ASSETS}Golden_trophy_pixel_art_icon_2K_20260919011419-autocrop-hair.png`} alt="" className="points-icon" width={16} height={16} />
+                                        One-time Tasks
+                                    </div>
+                                    <p className="panel-hint">
+                                        Steps you take once. Each one pays a single time, per X account — and
+                                        where nothing can be checked, the card says so rather than pretending.
+                                    </p>
+
+                                    {!connected ? (
+                                        <div className="lb-state">
+                                            <img src={`${ASSETS}White_logo_on_black_background_2K_20260919011421-autocrop-hair.png`} alt="" className="points-icon empty-state-icon" width={40} height={40} style={{ filter: 'brightness(0) invert(1)' }} />
+                                            <p style={{ fontStyle: 'italic' }}>Connect your wallet to see and claim these.</p>
+                                        </div>
+                                    ) : (state?.oneTime || []).length === 0 ? (
+                                        <div className="lb-state">
+                                            <p style={{ fontStyle: 'italic' }}>No one-time tasks are open right now — check back soon.</p>
+                                        </div>
+                                    ) : (
+                                        state.oneTime.map((task) => (
+                                            <OneTimeTaskCard
+                                                key={task.id}
+                                                task={task}
+                                                busy={xBusy === task.id}
+                                                error={xErrors[task.id]}
+                                                onClaim={() => handleOneTimeClaim(task.id)}
+                                                canClaim={connected && bound}
+                                                blockedWhy={!bound
+                                                    ? 'Bind your X account first — this task is paid against it'
+                                                    : undefined}
+                                            />
+                                        ))
+                                    )}
+
+                                    <div className="one-task-footer">
+                                        New tasks are added here as the campaign runs. The tab carries a count
+                                        whenever one is waiting for you.
+                                    </div>
+                                </>
                             )}
                         </div>
                     </aside>
