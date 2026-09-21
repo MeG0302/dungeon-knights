@@ -1,4 +1,12 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "nextjs"
+  "framework": "nextjs",
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "has": [{ "type": "host", "value": "www.dungeonknights.io" }],
+      "destination": "https://dungeonknights.io/$1",
+      "permanent": true
+    }
+  ]
 }

@@ -346,15 +346,47 @@ function code(source) {
     console.log('');
     console.log('What the page is allowed to claim');
 
-    rec('the task registry carries both sentences, so the mode picks rather than writes',
-        Config.ONE_TIME_TASKS.every((t) => {
+    // Both sentences live in the registry so the *server* can pick one; a client that chose between
+    // them could advertise a check nothing is running. What each says is now the interesting part:
+    // the unverified one must describe the review window (a real wait, credited at the end of it) and
+    // must not borrow the claim that X checked anything.
+    //
+    // Only the **claimed** tasks have two sentences to pick between. A task X settles itself is
+    // checked the same way in every mode, so it carries one sentence and no `blurbChecked` at all —
+    // and one appearing there would be copy no deployment could ever show.
+    const claimTasks = Config.ONE_TIME_TASKS.filter((t) => t.proof === 'claim');
+    rec('the claimed tasks carry both sentences, so the mode picks rather than writes',
+        claimTasks.length > 0 && claimTasks.every((t) => {
             const unanswered = !t.blurb || !t.blurbChecked;
             if (unanswered) return false;
             return t.blurb !== t.blurbChecked
-                && /no check runs/i.test(t.blurb)
-                && !/no check runs/i.test(t.blurbChecked);
+                && /review/i.test(t.blurb)
+                && !/own record|checked against/i.test(t.blurb)
+                && /own record|checked against/i.test(t.blurbChecked);
         }),
-        'one says it is taken on your word, the other says it is checked');
+        'one promises a review, the other says X’s own record was checked');
+
+    rec('and the unverified sentence promises the window the claims are actually given',
+        Config.ONE_TIME_TASKS.every((t) => !t.review
+            || (/verified manually/i.test(t.blurb) && /30\u201345 minutes/.test(t.blurb))),
+        'the card’s wait and review.minMinutes/maxMinutes are written in one file for this reason');
+
+    // The quote-reposts are the same principle from the other side: their copy names the two things X
+    // is actually asked — authorship and the tag — and says out loud the one thing it cannot see. A
+    // quote task that implied the quote itself was checked would be the identical lie in reverse, and
+    // it is the failure this tab is most exposed to, because four tasks ask nearly the same thing.
+    const postTasks = Config.ONE_TIME_TASKS.filter((t) => t.proof === 'verify');
+    rec('the quote-repost tasks say what is checked and what cannot be',
+        postTasks.length === Config.ONE_TIME_POSTS.length && postTasks.every((t) =>
+            !t.blurb && !t.blurbChecked
+            && /tags @\{handle\}/.test(t.hint)
+            && /cannot see which post/i.test(t.hint)),
+        `${postTasks.length} quote task(s), each naming the tag and admitting the quote is invisible`);
+
+    rec('and each one quotes its own post, addressed by the kind the page sends back',
+        new Set(postTasks.map((t) => t.url)).size === postTasks.length
+        && postTasks.every((t) => t.kind === `onetime:${t.id}` && /\/status\/\d{5,25}$/.test(t.url)),
+        'a task id, a kind and a post each — no two posts the same');
 
     console.log('');
     const failed = results.filter((r) => !r.pass);

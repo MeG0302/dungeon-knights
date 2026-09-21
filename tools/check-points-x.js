@@ -238,10 +238,14 @@ globalThis.fetch = async (url, options = {}) => {
     stub.x.author = 'someoneelse';
     const wrongAuthor = await Program.submitTask(gate, 'share', CAMPAIGN);
     rec('a post written by somebody else never pays', wrongAuthor.credited === 0, `${wrongAuthor.credited} PTS`);
+    // `reason` is null whenever a task did not fail, which is exactly what a broken guard produces —
+    // so it is read through a string, or the mutation under test crashes the suite instead of
+    // failing a check and every later check goes unreported.
+    const reasonOf = async (id) => String(((await tasksOf(gate))[id] || {}).reason || '');
     rec('  … and the state says whose post it was',
         (await tasksOf(gate)).share.state === 'failed'
-        && (await tasksOf(gate)).share.reason.includes('someoneelse'),
-        (await tasksOf(gate)).share.reason);
+        && (await reasonOf('share')).includes('someoneelse'),
+        await reasonOf('share'));
     rec('  … and no points moved', (await points(gate)) === beforeShare, `${await points(gate)} PTS`);
 
     stub.x.author = 'alice';
@@ -251,8 +255,8 @@ globalThis.fetch = async (url, options = {}) => {
         noTag.credited === 0 && (await tasksOf(gate)).share.state === 'failed',
         (await tasksOf(gate)).share.reason);
     rec('  … and the refusal names the account it had to tag',
-        (await tasksOf(gate)).share.reason.includes(`@${Config.X_SHARE_TAG}`),
-        (await tasksOf(gate)).share.reason);
+        (await reasonOf('share')).includes(`@${Config.X_SHARE_TAG}`),
+        await reasonOf('share'));
 
     // The throttle is what makes "check again" honest rather than free: the same link cannot be
     // re-checked on demand. The rest of this section moves past it the way a minute would.
@@ -585,31 +589,78 @@ globalThis.fetch = async (url, options = {}) => {
         unbindRefusal.code === Program.X_REQUIRED, `${unbindRefusal.code}: ${unbindRefusal.error}`);
     rec('  … and it was paid nothing', (await points(unfunded)) === 0, `${await points(unfunded)} PTS`);
 
+    // A harness cannot spend forty minutes, so the wait is closed by hand: the record's deadline is
+    // moved into the past and the same settle path the page triggers is run. Everything after this
+    // point is the real code — only the clock is pretend.
+    // Note the states this back-dates: `pending` **and** `rejected`. A rejected claim has a deadline
+    // too, and it is precisely the one that must never pay when that deadline passes — so the harness
+    // has to move *its* clock as well, or the check would pass for a reason that has nothing to do
+    // with the rule (nothing ever became due).
+    const closeWindow = async (address) => {
+        await Store.updateWallet(address, (w) => {
+            w.tasks = { ...(w.tasks || {}) };
+            for (const [id, record] of Object.entries(w.tasks)) {
+                if (record?.state === 'pending' || record?.state === 'rejected') {
+                    w.tasks[id] = { ...record, settleAfter: new Date(Date.now() - 60_000).toISOString() };
+                }
+            }
+            return w;
+        });
+        return Program.settleDueClaims(address);
+    };
+
+    const reward = Config.ONE_TIME_TASKS[0].reward;
+    const window_ = Config.ONE_TIME_TASKS[0].review;
+    rec('the task declares the window its claims wait out',
+        window_ && window_.minMinutes > 0 && window_.maxMinutes >= window_.minMinutes,
+        `${window_?.minMinutes}\u2013${window_?.maxMinutes} min`);
+
     // Ids of its own: an account id is global here, and re-using one that an earlier case already
     // claimed would make this section fail for a reason that has nothing to do with one-time tasks.
     const claimant = fresh();
     await Program.bindX(claimant, { id: '5101', username: 'follower' });
     const claimed = await Program.claimOneTime(claimant, taskIds[0]);
-    rec('a bound wallet claims it once',
-        claimed.credited === Config.ONE_TIME_TASKS[0].reward,
-        `${claimed.credited} PTS`);
-    rec('  … and the balance agrees',
-        (await points(claimant)) === Config.ONE_TIME_TASKS[0].reward, `${await points(claimant)} PTS`);
+    rec('a bound wallet claims it, and gets a window rather than the points',
+        claimed.pending === true && claimed.credited === 0,
+        `${claimed.pending ? 'pending' : 'NOT pending'}, settleAt ${claimed.settleAt}`);
+    rec('  … and nothing is credited while it waits',
+        (await points(claimant)) === 0, `${await points(claimant)} PTS`);
 
-    const afterOneTime = (await stateOf(claimant)).oneTime;
-    rec('the state reports it as claimed, with what was paid',
-        afterOneTime.length === taskIds.length
-        && afterOneTime[0].claimed === true
-        && afterOneTime[0].credited === Config.ONE_TIME_TASKS[0].reward,
-        JSON.stringify(afterOneTime[0]));
-    rec('  … and claims it on the player\'s word rather than implying a check',
-        afterOneTime[0].proof === 'claim', afterOneTime[0].proof);
+    const settleMs = Date.parse(claimed.settleAt) - Date.now();
+    rec('  … and the deadline it was given is inside the declared window',
+        Number.isFinite(settleMs)
+        && settleMs > (window_.minMinutes - 1) * 60_000
+        && settleMs <= window_.maxMinutes * 60_000 + 5_000,
+        `${Math.round(settleMs / 60_000)} min`);
 
-    const secondClaim = await Program.claimOneTime(claimant, taskIds[0]);
-    rec('and a second claim pays nothing',
-        secondClaim.credited === 0 && secondClaim.alreadyCredited === true, `${secondClaim.credited} PTS`);
-    rec('  … and the balance did not move',
-        (await points(claimant)) === Config.ONE_TIME_TASKS[0].reward, `${await points(claimant)} PTS`);
+    // Drawn per claim, not computed from the clock: a fixed timer would be a countdown anybody can
+    // read off the page, and a deadline recomputed on every read would wander under a refresh — both
+    // of which make the same claim settle at a different minute every time it is looked at.
+    const minutes = [claimed.reviewMinutes];
+    for (const id of ['5108', '5109', '5110', '5111', '5112']) {
+        const draw = fresh();
+        await Program.bindX(draw, { id, username: `draw${id}` });
+        minutes.push((await Program.claimOneTime(draw, taskIds[0])).reviewMinutes);
+    }
+    rec('the window is drawn per claim, not fixed',
+        new Set(minutes).size > 1
+        && minutes.every((m) => m >= window_.minMinutes && m <= window_.maxMinutes),
+        minutes.join(', ') + ' min');
+
+    const pendingView = (await stateOf(claimant)).oneTime[0];
+    rec('the state reports it as pending, with the deadline the record holds',
+        pendingView.pending === true && pendingView.claimed === false
+        && pendingView.credited === 0 && pendingView.settleAt === claimed.settleAt,
+        `${pendingView.pendingNote} \u00b7 by ${pendingView.settleAt}`);
+    rec('  … and the deadline does not move when the page is reloaded',
+        (await stateOf(claimant)).oneTime[0].settleAt === claimed.settleAt, 'same deadline on a re-read');
+    rec('  … and a wallet inside its window is not counted as still to do',
+        pendingView.pending === true, 'the badge reads claimed-or-pending, never "unclaimed"');
+
+    const insideWindow = await Program.claimOneTime(claimant, taskIds[0]);
+    rec('a second claim inside the window repeats the deadline and pays nothing',
+        insideWindow.pending === true && insideWindow.settleAt === claimed.settleAt && insideWindow.credited === 0,
+        `${insideWindow.credited} PTS, same deadline ${insideWindow.settleAt === claimed.settleAt}`);
 
     // The guard is a TTL, not a fact — it lapses after ten minutes, on purpose, so a crash between
     // claiming and recording cannot lock a player out of a task they were never paid for. What
@@ -617,9 +668,20 @@ globalThis.fetch = async (url, options = {}) => {
     // exactly what the clock would do, without waiting for it.
     await Store.releaseGuard(`one-time:${claimant}:${taskIds[0]}`);
     const afterGuardLapses = await Program.claimOneTime(claimant, taskIds[0]);
-    rec('the claim outlives its guard — the record is what makes it permanent',
-        afterGuardLapses.credited === 0 && afterGuardLapses.alreadyCredited === true,
-        `${afterGuardLapses.credited} PTS after the guard lapsed`);
+    rec('the claim outlives its guard — the record is what keeps it',
+        afterGuardLapses.pending === true && afterGuardLapses.settleAt === claimed.settleAt
+        && afterGuardLapses.credited === 0,
+        `still pending after the guard lapsed`);
+
+    // The queue the review tool reads. A window that nothing can act on would be decoration, so the
+    // claim has to be visible from outside the wallet it belongs to.
+    const queued = (await Program.reviewQueue()).find((row) => row.address === claimant);
+    rec('the review queue lists the waiting claim, and whose it is',
+        Boolean(queued) && queued.taskId === taskIds[0] && queued.handle === 'follower'
+        && queued.credited === 0 && queued.minutesLeft > 0,
+        queued ? `@${queued.handle}, ${queued.minutesLeft} min left` : 'not listed');
+    rec('  … and a claim no wallet has made is not in it',
+        (await Program.reviewQueue()).every((row) => row.address !== fresh()), 'only claimed ones are listed');
 
     // Two taps at once, the shape a player with two tabs actually produces. The record check is a
     // read and the write is a second step, so the atomic guard is the only thing standing here.
@@ -629,11 +691,73 @@ globalThis.fetch = async (url, options = {}) => {
         Program.claimOneTime(racer3, taskIds[0]),
         Program.claimOneTime(racer3, taskIds[0]),
     ]);
-    const raceTotal = (raced[0].credited || 0) + (raced[1].credited || 0);
-    rec('two claims at once pay exactly one reward',
-        raceTotal === Config.ONE_TIME_TASKS[0].reward, `${raceTotal} PTS between two requests`);
-    rec('  … and the balance agrees',
-        (await points(racer3)) === Config.ONE_TIME_TASKS[0].reward, `${await points(racer3)} PTS`);
+    // The *response shape* is deliberately not asserted for both callers: the request that loses the
+    // guard may read the wallet before the winner has written the record, in which case it answers
+    // "already settled" a moment too early. Nothing is wrong with the claim — the page renders the
+    // pending card from the state that comes back, which is authoritative — so what is pinned here
+    // is the substance: one window, no credit, and one row in the queue.
+    const raceDeadlines = raced.map((r) => r.settleAt).filter(Boolean);
+    rec('two taps at once produce one claim and one window',
+        raced.every((r) => !r.error && r.credited === 0)
+        && new Set(raceDeadlines).size === 1
+        && (await Program.reviewQueue()).filter((row) => row.address === racer3).length === 1,
+        `${raceDeadlines.length}/2 reported a window, all the same: ${new Set(raceDeadlines).size === 1}`);
+    rec('  … and nothing is paid for them yet', (await points(racer3)) === 0, `${await points(racer3)} PTS`);
+
+    // ---------------------------------------------------------- the window closes
+    const paidIds = await closeWindow(claimant);
+    rec('closing the window pays the claim exactly once',
+        paidIds.includes(taskIds[0]) && (await points(claimant)) === reward,
+        `${await points(claimant)} PTS, ${paidIds.length} claim(s) settled`);
+    rec('  … and a second pass credits nothing more',
+        (await closeWindow(claimant)).length === 0 && (await points(claimant)) === reward,
+        `${await points(claimant)} PTS after two settles`);
+    rec('  … and closing the other two windows pays each of them once',
+        (await closeWindow(racer3)).includes(taskIds[0]) && (await points(racer3)) === reward,
+        `${await points(racer3)} PTS`);
+
+    const settledView = (await stateOf(claimant)).oneTime[0];
+    rec('the state reports it as paid, with what was credited',
+        settledView.claimed === true && settledView.pending === false
+        && settledView.credited === reward && settledView.claimedOn,
+        JSON.stringify({ claimed: settledView.claimed, credited: settledView.credited }));
+    rec('  … and the queue no longer lists it',
+        (await Program.reviewQueue()).every((row) => row.address !== claimant), 'settled claims drop out');
+    rec('a settled claim is reported as done, not as newly paid',
+        (await Program.claimOneTime(claimant, taskIds[0])).alreadyCredited === true, 'already credited');
+
+    // ------------------------------------------------- reviewing one by hand
+    // The window is the *automatic* close. These two are the manual ones, and between them they are
+    // what makes the word "review" on the card a thing that happens.
+    const approved = fresh();
+    await Program.bindX(approved, { id: '5104', username: 'approved' });
+    await Program.claimOneTime(approved, taskIds[0]);
+    const approval = await Program.approvePendingClaim(approved, taskIds[0]);
+    rec('a claim approved in review is paid before its window closes',
+        approval.credited === reward && (await points(approved)) === reward, `${approval.credited} PTS`);
+    rec('  … and approving it again pays nothing',
+        (await Program.approvePendingClaim(approved, taskIds[0])).alreadyCredited === true, 'already credited');
+    rec('  … and the card says it was approved, not that a window closed',
+        /approved in review/.test((await stateOf(approved)).oneTime[0].claimedNote || ''),
+        (await stateOf(approved)).oneTime[0].claimedNote);
+
+    const turnedDown = fresh();
+    await Program.bindX(turnedDown, { id: '5105', username: 'refused' });
+    await Program.claimOneTime(turnedDown, taskIds[0]);
+    const rejection = await Program.rejectPendingClaim(turnedDown, taskIds[0], 'no follow visible');
+    rec('a claim turned down in review is never credited',
+        rejection.rejected === true && (await points(turnedDown)) === 0, `${await points(turnedDown)} PTS`);
+    rec('  … and its window closing later cannot pay it',
+        (await closeWindow(turnedDown)).length === 0 && (await points(turnedDown)) === 0,
+        `${await points(turnedDown)} PTS after the deadline passed`);
+    const afterReject = (await stateOf(turnedDown)).oneTime[0];
+    rec('  … and it cannot be claimed again',
+        (await Program.claimOneTime(turnedDown, taskIds[0])).code === 'rejected', 'rejected');
+    rec('  … and the card says so, with the reason',
+        afterReject.rejected === true && afterReject.rejectedNote === 'no follow visible',
+        `${afterReject.rejectedNote}`);
+    rec('  … and a claim already paid cannot be turned down',
+        Boolean((await Program.rejectPendingClaim(approved, taskIds[0])).error), 'a paid claim is not re-judged');
 
     // The task record shares a map with the X tasks (`share`, `x:<status id>`), so a one-time claim
     // must not be able to land on one of their ids — or be read as one of them.
@@ -648,6 +772,9 @@ globalThis.fetch = async (url, options = {}) => {
     await Program.registerVisit(invited, inviter);
     await Program.bindX(invited, { id: '5103', username: 'invited' });
     await Program.claimOneTime(invited, taskIds[0]);
+    // Paid when the review closes, which is when the points actually move — so the commission lands
+    // with the reward rather than forty minutes before it.
+    await closeWindow(invited);
     rec('a one-time reward pays the referral commission like any other',
         (await points(inviter)) === Math.floor(Config.ONE_TIME_TASKS[0].reward * Config.REFERRAL_1ST_PCT),
         `${await points(inviter)} PTS to the inviter`);
@@ -655,7 +782,7 @@ globalThis.fetch = async (url, options = {}) => {
     // The card is rendered from `state.oneTime`, which the server fills in. The tag lives in that
     // copy as `{handle}`, and a client cannot read the value it is replaced with — so a leftover
     // placeholder here is a page telling players to follow @undefined.
-    const copy = afterOneTime[0];
+    const copy = settledView;
     rec('the server fills the handle into every string the card renders',
         [copy.cta, copy.url, copy.blurb].every((s) => !s.includes('{handle}'))
         && copy.blurb.includes(`@${Config.X_SHARE_TAG}`)
@@ -664,14 +791,15 @@ globalThis.fetch = async (url, options = {}) => {
     rec('  … and a wallet that has not claimed one is told so',
         (await stateOf(fresh())).oneTime.every((t) => t.claimed === false), 'none claimed');
 
-    // The claim above was paid under the word, and that must stay readable on the card however the
-    // deployment is wired afterwards. "Verified" is a statement about a specific check at a specific
-    // time, not a property a task acquires retroactively — a redeploy does not go back and prove
-    // anything a player did last week.
-    rec('a claim paid under the word records that nothing checked it',
-        afterOneTime[0].claimedProof === 'claim'
-        && /no check ran/.test(afterOneTime[0].claimedNote || ''),
-        afterOneTime[0].claimedNote);
+    // What the card says about a settled claim has to stay readable however the deployment is wired
+    // afterwards. "Checked by X" is a statement about a specific check at a specific time, not a
+    // property a task acquires retroactively — and a claim that was reviewed by us must never be
+    // rewritten as one X verified, or the tab would be advertising a check that never ran.
+    rec('a claim settled by its review window records the review, not a check by X',
+        settledView.claimedProof === 'claim'
+        && /credited after review/.test(settledView.claimedNote || '')
+        && !/own follow record/.test(settledView.claimedNote || ''),
+        settledView.claimedNote);
 
     // ------------------------------------------- when X is the one doing the telling
     // The other half of the follow task: instead of taking the player's word, the reward can be paid
@@ -723,13 +851,15 @@ globalThis.fetch = async (url, options = {}) => {
     rec('  … and the reward itself is unchanged by which proof stands behind it',
         checkedCard.credited === Config.ONE_TIME_TASKS[0].reward, `${checkedCard.credited} PTS`);
 
-    // And the earlier claim, paid under the word, is still described that way on the same page — with
-    // the same deployment, in the same request. If it flipped to "checked" the moment the webhook was
-    // configured, the card would be vouching for a check that never ran.
+    // And the earlier claim — made while follows were taken on trust, settled when its window closed
+    // — is still described that way on the same page, with the same deployment, in the same request.
+    // If it flipped to "checked" the moment the webhook was configured, the card would be vouching
+    // for a check that never ran on it.
     const retro = (await stateOf(claimant)).oneTime[0];
-    rec('a claim made under the word is not upgraded by the wiring',
+    rec('a claim settled by review is not upgraded to a check by the wiring',
         retro.claimed === true && retro.claimedProof === 'claim'
-        && /no check ran/.test(retro.claimedNote || ''),
+        && /credited after review/.test(retro.claimedNote || '')
+        && !/own follow record/.test(retro.claimedNote || ''),
         retro.claimedNote);
 
     // An unfollow is a fact too, and the latest one wins: X's record is a state, not a trophy case.
@@ -753,6 +883,120 @@ globalThis.fetch = async (url, options = {}) => {
 
     delete process.env.FOLLOW_PROOF_MODE;
     delete process.env.X_CONSUMER_SECRET;
+
+    // ------------------------------------------------------- the quote-reposts, verified
+    // Four tasks that ask X the same two questions of a pasted link: did the bound account write the
+    // post, and does it tag us. Everything below runs the real verifier against the stubbed embed, so
+    // what is under test is the **wiring** — that a quote task is settled by a post rather than by a
+    // claim, that the claim endpoint cannot be used to skip that, and that one post cannot carry two
+    // of the four. The quote itself is not testable here or anywhere else: X's embed does not carry
+    // the post that was quoted, which is why the copy says so instead of a check pretending to.
+    console.log('');
+    console.log('The quote-reposts');
+
+    const quoteTasks = Config.ONE_TIME_TASKS.filter((t) => t.proof === 'verify');
+    rec('the registry carries a quote-repost per campaign post, no two the same',
+        quoteTasks.length === 4
+        && new Set(quoteTasks.map((t) => t.id)).size === 4
+        && new Set(quoteTasks.map((t) => t.url)).size === 4,
+        quoteTasks.map((t) => t.id).join(', '));
+
+    // A registry that lost its quote tasks would otherwise throw on the first dereference below and
+    // take every check under it down with it, which is a broken registry reading like a short suite.
+    // This hands back a task-shaped hole instead — a kind the engine refuses and a reward nothing
+    // equals — so each check below fails on its own merits rather than not being run at all.
+    const quoteTaskAt = (n) => quoteTasks[n] || {
+        id: `missing-${n}`, kind: `onetime:missing-${n}`, url: '', reward: Number.NaN,
+    };
+
+    const quoter = fresh();
+    await Program.bindX(quoter, { id: '6101', username: 'quoter' });
+    stub.x.kind = 'ok';
+    stub.x.author = 'quoter';
+    stub.x.text = `Quoting the announcement @${Config.X_SHARE_TAG} ⚔️`;
+    // Distinct status ids, because the throttle is scoped to the link: two cases that used one id
+    // would be measuring the guard rather than the rule they are about.
+    const quotePost = (n) => `https://x.com/quoter/status/19200000000000000${n}0`;
+
+    const paidQuote = await Program.submitTask(quoter, quoteTaskAt(0).kind, quotePost(1));
+    rec('a quote task pays against a post that is the player’s and tags us',
+        paidQuote.credited === quoteTaskAt(0).reward, `${paidQuote.credited} PTS`);
+    // Read through the view the card is rendered from rather than the raw record: the card needs the
+    // player's post back (it links to it once paid) and that is what would break silently.
+    const firstQuoteView = (await stateOf(quoter)).oneTime.find((t) => t.id === quoteTaskAt(0).id);
+    rec('  … and the card is handed that same post back',
+        firstQuoteView?.url === quotePost(1)
+        && firstQuoteView?.claimed === true
+        && firstQuoteView?.credited === quoteTaskAt(0).reward,
+        `${firstQuoteView?.url}`);
+
+    const anotherQuote = await Program.submitTask(quoter, quoteTaskAt(0).kind, quotePost(2));
+    rec('a second post for a task already paid pays nothing',
+        anotherQuote.credited === 0 && anotherQuote.alreadyCredited === true, `${anotherQuote.credited} PTS`);
+    rec('  … and the balance is one reward, not two',
+        (await points(quoter)) === quoteTaskAt(0).reward, `${await points(quoter)} PTS`);
+
+    // The hole four identical asks would otherwise leave: one post, four rewards.
+    const reused = await Program.submitTask(quoter, quoteTaskAt(1).kind, quotePost(1));
+    rec('the same post cannot pay a second one-time task', reused.code === 'post-already-used', reused.code);
+    rec('  … and nothing was credited for trying',
+        (await points(quoter)) === quoteTaskAt(0).reward, `${await points(quoter)} PTS`);
+
+    const ownPost = await Program.submitTask(quoter, quoteTaskAt(1).kind, quotePost(3));
+    rec('a post of its own pays the next task',
+        ownPost.credited === quoteTaskAt(1).reward, `${ownPost.credited} PTS`);
+
+    // The two things the check does turn on.
+    const stranger = fresh();
+    await Program.bindX(stranger, { id: '6102', username: 'stranger' });
+    stub.x.author = 'somebodyelse';
+    const notTheirs = await Program.submitTask(stranger, quoteTaskAt(2).kind, quotePost(4));
+    rec('a post written by another account is refused',
+        notTheirs.verdict?.code === 'wrong-author', notTheirs.verdict?.code);
+    stub.x.author = 'stranger';
+    stub.x.text = 'quoting it, with no mention of anybody at all';
+    const untagged = await Program.submitTask(stranger, quoteTaskAt(2).kind, quotePost(5));
+    rec('and a post of theirs that does not tag us is refused',
+        untagged.verdict?.code === 'missing-tag', untagged.verdict?.code);
+    rec('  … and neither of those paid anything', (await points(stranger)) === 0, `${await points(stranger)} PTS`);
+
+    // Not indexed yet is a wait rather than a refusal, and the wait ends on the same link.
+    stub.x.kind = '404';
+    const lateQuote = await Program.submitTask(stranger, quoteTaskAt(2).kind, quotePost(6));
+    rec('a post X cannot see yet is held pending rather than refused',
+        lateQuote.pending === true && lateQuote.credited === 0, `pending=${lateQuote.pending}`);
+    await Store.updateWallet(stranger, (w) => {
+        // Back-dated so the throttle opens. A registry under mutation has no record here to move, and
+        // that has to fail the check below rather than throw out of the store's own callback.
+        const stale = w.tasks[`one:${quoteTaskAt(2).id}`];
+        if (stale) stale.lastCheckedAt = new Date(Date.now() - 61_000).toISOString();
+        return w;
+    });
+    stub.x.kind = 'ok';
+    stub.x.text = `tagging @${Config.X_SHARE_TAG} this time`;
+    const foundQuote = await Program.checkTask(stranger, quoteTaskAt(2).kind);
+    rec('  … and pays on the check that finds it',
+        foundQuote.credited === quoteTaskAt(2).reward, `${foundQuote.credited} PTS`);
+
+    // The claim endpoint is the other door into the same record, and for these it has to be shut —
+    // otherwise a checked task is payable on a tap with its own verifier bypassed.
+    const claimedFree = await Program.claimOneTime(quoter, quoteTaskAt(3).id);
+    rec('a checked task cannot be claimed with no post at all',
+        claimedFree.code === 'submit-required', claimedFree.code);
+    rec('  … and the balance is unmoved by the attempt',
+        (await points(quoter)) === quoteTaskAt(0).reward + quoteTaskAt(1).reward, `${await points(quoter)} PTS`);
+
+    const quoteState = (await stateOf(quoter)).oneTime;
+    const lastQuote = quoteState.find((t) => t.id === quoteTaskAt(3).id);
+    rec('the card is handed the kind the page sends back, and the post to quote',
+        lastQuote?.kind === quoteTaskAt(3).kind && lastQuote?.postUrl === quoteTaskAt(3).url
+        && lastQuote?.claimed === false && lastQuote?.state === 'none',
+        `${lastQuote?.kind} — ${lastQuote?.state}`);
+    rec('  … and every task renders the shape its card needs',
+        quoteState.every((t) => (t.proof === 'verify'
+            ? Boolean(t.kind && t.hint && t.cta && t.title) && Number.isInteger(t.reward)
+            : Boolean(t.blurb && t.cta))),
+        `${quoteState.length} task(s) in the tab`);
 
     // ------------------------------------------------------------------- the last mile
     console.log('');

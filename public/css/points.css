@@ -147,6 +147,16 @@ it, so the tab still shows what has been done — the count of what is left is t
     border-color: rgba(90, 160, 90, 0.4);
     background: rgba(90, 160, 90, 0.05);
 }
+/* Waiting on its review window: not paid, not refused, and deliberately not styled like an error —
+   the claim is already the player's, so the card reads as in-progress rather than incomplete. */
+.one-task.is-pending {
+    border-color: rgba(200, 168, 96, 0.45);
+    background: rgba(200, 168, 96, 0.05);
+}
+.one-task.is-rejected {
+    border-color: rgba(232, 164, 155, 0.35);
+    background: rgba(232, 164, 155, 0.04);
+}
 
 .one-task-actions {
     display: grid;
@@ -945,6 +955,9 @@ link, and X is asked about it before anything is paid.
 .x-task-reward.is-paid {
     color: #96d096;
 }
+.x-task-reward.is-pending {
+    color: var(--accent-gold);
+}
 
 .x-task-submit {
     display: flex;
@@ -987,6 +1000,10 @@ link, and X is asked about it before anything is paid.
 
 .x-task-line.is-error {
     color: #e8a49b;
+}
+.x-task-line.is-pending {
+    color: var(--accent-gold);
+    opacity: 0.9;
 }
 
 .x-task-link {

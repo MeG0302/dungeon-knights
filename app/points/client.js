@@ -278,13 +278,22 @@ function XTaskCard({
 function OneTimeTaskCard({ task, busy, error, onClaim, canClaim, blockedWhy }) {
     if (!task) return null;
     const claimed = !!task.claimed;
+    const pending = !!task.pending;
+    const rejected = !!task.rejected;
+
+    // The deadline is the server's, rendered in the player's own clock: counting down from a number
+    // in this bundle would tick towards a different minute than the record actually closes on.
+    const settleAt = task.settleAt ? new Date(task.settleAt) : null;
+    const settleLabel = settleAt && !Number.isNaN(settleAt.getTime())
+        ? settleAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        : null;
 
     return (
-        <div className={`one-task ${claimed ? 'is-claimed' : ''}`} data-arya="onetime">
+        <div className={`one-task ${claimed ? 'is-claimed' : ''} ${pending ? 'is-pending' : ''} ${rejected ? 'is-rejected' : ''}`} data-arya="onetime">
             <div className="panel-section-title">
                 <img src={`${ASSETS}White_logo_on_black_background_2K_20260919011421-autocrop-hair.png`} alt="" className="points-icon" width={16} height={16} style={{ filter: 'brightness(0) invert(1)' }} />
                 {task.title}
-                <span className={`x-task-reward ${claimed ? 'is-paid' : ''}`}>
+                <span className={`x-task-reward ${claimed ? 'is-paid' : ''} ${pending ? 'is-pending' : ''}`}>
                     {claimed ? `+${task.credited || task.reward} \u2713` : `+${task.reward} PTS`}
                 </span>
             </div>
@@ -302,17 +311,41 @@ function OneTimeTaskCard({ task, busy, error, onClaim, canClaim, blockedWhy }) {
                     type="button"
                     className="btn btn-primary btn-sm"
                     onClick={onClaim}
-                    disabled={busy || claimed || !canClaim}
+                    disabled={busy || claimed || rejected || !canClaim}
                     title={!canClaim && blockedWhy ? blockedWhy : undefined}
                 >
-                    {claimed ? 'Claimed' : busy ? 'Claiming\u2026' : `Claim ${task.reward} PTS`}
+                    {claimed
+                        ? 'Claimed'
+                        : rejected
+                            ? 'Not approved'
+                            : busy
+                                ? 'Checking\u2026'
+                                : pending
+                                    ? 'Check status'
+                                    : `Claim ${task.reward} PTS`}
                 </button>
             </div>
+            {pending && (
+                <div className="x-task-line is-pending">
+                    <span>
+                        {task.pendingNote || 'Claim received \u00b7 credited after review'}
+                        {settleLabel ? ` \u00b7 by ${settleLabel}` : ''}
+                    </span>
+                </div>
+            )}
             {claimed && (
                 <div className="x-task-line is-paid">
                     <span>
                         Paid {task.claimedOn}
                         {task.claimedNote ? ` \u00b7 ${task.claimedNote}` : ''}
+                    </span>
+                </div>
+            )}
+            {rejected && (
+                <div className="x-task-line is-error">
+                    <span>
+                        Reviewed {task.rejectedOn} \u00b7 not approved
+                        {task.rejectedNote ? ` \u2014 ${task.rejectedNote}` : ''}
                     </span>
                 </div>
             )}
@@ -378,7 +411,11 @@ export default function PointsPage() {
     const bound = !!state?.x?.username;
     // What the one-time tab's badge counts: tasks this wallet has not been paid for yet. Nothing
     // to count before there is a wallet to claim with, so an anonymous visitor sees no badge.
-    const openOneTime = connected ? (state?.oneTime || []).filter((task) => !task.claimed).length : 0;
+    // A claim inside its review window is not still *waiting for the player* — it is waiting on us,
+    // so the badge must not send them back for something they have already done.
+    const openOneTime = connected
+        ? (state?.oneTime || []).filter((task) => !task.claimed && !task.pending && !task.rejected).length
+        : 0;
     const live = () => liveRef.current;
 
     const flash = useCallback((message) => {
@@ -656,11 +693,13 @@ export default function PointsPage() {
     // The throttle is a number of seconds the server hands back, so the page counts it down instead
     // of leaving a button that looks broken while it is really just early.
     useEffect(() => {
-        if (!xWait.campaign && !xWait.share) return undefined;
-        const timer = setTimeout(() => setXWait((w) => ({
-            campaign: Math.max(0, w.campaign - 1),
-            share: Math.max(0, w.share - 1),
-        })), 1000);
+        // Keyed by task rather than named: the campaign, the share and each of the quote-reposts
+        // carry their own server-issued throttle, so this ticks whatever is counting down instead of
+        // needing to know their names.
+        if (!Object.values(xWait).some((seconds) => seconds > 0)) return undefined;
+        const timer = setTimeout(() => setXWait((w) => Object.fromEntries(
+            Object.entries(w).map(([task, seconds]) => [task, Math.max(0, seconds - 1)])
+        )), 1000);
         return () => clearTimeout(timer);
     }, [xWait]);
 
@@ -854,11 +893,12 @@ export default function PointsPage() {
     }, [flash, loadBoard]);
 
     /**
-     * Claim a one-time task.
+     * Claim a one-time task — and, while one is in its review window, check on it.
      *
-     * Nothing is verified here and the server does not pretend otherwise — it pays once per wallet,
-     * under the same atomic guard the floors use, and refuses without a bound X account. The card
-     * carries the sentence about what is not checked.
+     * The same call does both, because the server decides which is which: a claim inside its window
+     * answers with the window, and one whose window has closed is settled on the way in and answers
+     * with the credit. That keeps "is it done yet?" from needing a second endpoint that could
+     * disagree with this one.
      */
     const handleOneTimeClaim = useCallback(async (taskId) => {
         setXBusy(taskId);
@@ -867,9 +907,15 @@ export default function PointsPage() {
         try {
             const result = await requestOneTimeClaim(taskId);
             if (result.state) setState(result.state);
-            if (result.credited > 0) flash(`Claimed — +${result.credited} PTS.`);
-            else if (result.alreadyCredited) flash('That one is already paid.');
             loadBoard();
+            // The flash is read off the state that came back rather than off the response's own
+            // summary: a second tap racing the first can win nothing and still be told "already
+            // paid" a moment before the first one's claim is even written. The state is the
+            // authority on what is true, and it always has the claim in it by the time it answers.
+            const view = (result.state?.oneTime || []).find((task) => task.id === taskId);
+            if (result.credited > 0) flash(`Claimed — +${result.credited} PTS.`);
+            else if (view?.pending) flash('Claim received — points are credited after review.');
+            else if (view?.claimed || result.alreadyCredited) flash('That one is already paid.');
         } catch (e) {
             setXErrors((prev) => ({
                 ...prev,
@@ -973,7 +1019,7 @@ export default function PointsPage() {
             {/* Versioned like every other sheet: an unversioned `/theme.css` is a CSS change
                 that never reaches a returning player. */}
             <link rel="stylesheet" href="/theme.css?v=6" />
-            <link rel="stylesheet" href="/css/points.css?v=8" />
+            <link rel="stylesheet" href="/css/points.css?v=9" />
             <link rel="stylesheet" href="/css/arya.css?v=3" />
             <Script src="/arya.js?v=4" strategy="afterInteractive" />
             {/* The header's wallet pill gets the same menu every other page's control has. It is
@@ -1380,7 +1426,7 @@ export default function PointsPage() {
                                         Steps you take once. Each one pays a single time, per X account —
                                         {(state?.followProof?.mode === 'webhook')
                                             ? ' and a follow is checked against X\u2019s own record before it pays.'
-                                            : ' and where nothing can be checked, the card says so rather than pretending.'}
+                                            : ' and a follow claim is reviewed before it is credited, usually within 30\u201345 minutes.'}
                                     </p>
 
                                     {!connected ? (
@@ -1394,6 +1440,29 @@ export default function PointsPage() {
                                         </div>
                                     ) : (
                                         state.oneTime.map((task) => (
+                                            task.proof === 'verify' ? (
+                                                /* A quote-repost: the same card the campaign and the share use, because
+                                                   it is the same bargain — paste the link to your post and X is asked about it.
+                                                   `id` is the task's `kind`, which is the string the server is asked to
+                                                   settle; nothing here rebuilds it from the id. */
+                                                <XTaskCard
+                                                    key={task.id}
+                                                    id={task.kind}
+                                                    title={task.title}
+                                                    reward={task.reward}
+                                                    hint={task.hint}
+                                                    cta={task.cta}
+                                                    onCta={() => window.open(task.postUrl, '_blank', 'noopener')}
+                                                    task={task}
+                                                    busy={xBusy}
+                                                    error={xErrors[task.kind]}
+                                                    draft={xDrafts[task.kind] || ''}
+                                                    onDraft={(value) => setXDrafts((d) => ({ ...d, [task.kind]: value }))}
+                                                    onSubmit={(url) => submitXTask(task.kind, url)}
+                                                    onCheck={() => checkXTask(task.kind)}
+                                                    wait={xWait[task.kind] || 0}
+                                                />
+                                            ) : (
                                             <OneTimeTaskCard
                                                 key={task.id}
                                                 task={task}
@@ -1405,6 +1474,7 @@ export default function PointsPage() {
                                                     ? 'Bind your X account first — this task is paid against it'
                                                     : undefined}
                                             />
+                                            )
                                         ))
                                     )}
 

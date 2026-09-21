@@ -632,20 +632,54 @@ only thing that decides whether a post exists, who wrote it, and what it says.
   and it requires a bound X account exactly as every other award does. Its first task is a **follow**,
   and no free X endpoint can see who a player follows (oEmbed has no view of follows, likes or
   reposts either), so the reward has **two modes** and the card is written from whichever is live:
-  - **`claim`** — the honest default, and what production runs today: nothing about the follow is
-    checked, and the card says so in those words rather than implying a check that never runs.
+  - **`claim`** — the default, and what production runs today. Nothing about the follow is checked,
+    so a claim is **not paid on the spot either**: it is recorded as `pending`, given a window drawn
+    once per claim (30–45 minutes, `review.minMinutes`/`maxMinutes` in `lib/points-config.js`), and
+    credited when that window closes — on the player's next visit, or on a tap of **Check status**,
+    since there is no scheduler here and the player's own request is the clock (`settleDueClaims`,
+    called from `stateFor` and `claimOneTime`). The window is a real closure, not a flourish: an
+    entry that still waits can be **turned down** before it pays, and a real follower can be paid
+    early, through `tools/points-pending.js`. That is what the word "review" on the card is standing
+    on — without that tool it would be a word the page said about nothing. A rejection is final
+    (`state: 'rejected'` is refused by `claimOneTime` before anything else), and a claim already
+    paid is never re-judged.
   - **`webhook`** — X pushes a `follow.follow` event to us (see below), so the reward is paid
     against **X's own record**. A wallet X has said nothing about is refused with
     `code: 'follow-required'` **before** the guard is taken, so a player who has not been seen
     following us yet is not locked out of the claim for the guard's ten minutes.
   The mode is decided by `followProofMode()` in `lib/x-webhook.js` and chosen by the **server**:
-  `state.oneTime[].blurb` / `claimedNote` and `state.followProof.mode` are built in
+  `state.oneTime[].blurb` / `claimedNote` / `pendingNote` and `state.followProof.mode` are built in
   `lib/points-program.js`, because a page that answered that question from its own bundle could
   advertise a check nothing is running. What is *not* on their word in either mode is the account: a
   binding cannot be moved to a second wallet, so one X account cannot claim the same task twice. The
   record (`one:follow`) is namespaced so it cannot collide with the X tasks' ids, and its copy
   carries the handle as `{handle}` for the **server** to fill in — `X_SHARE_TAG` is not
   `NEXT_PUBLIC_`, so a client that read it would render "follow @undefined".
+- **Four quote-reposts, one per campaign post, and each one is *checked*.** A second kind of
+  one-time task lives beside the follow: `lib/points-config.js`'s `ONE_TIME_POSTS` names one of our
+  posts per task (`X_QUOTE_REWARD`, 500 each), and `ONE_TIME_TASKS` spreads it with `proof: 'verify'`.
+  The bargain is the one the campaign and the daily share already use — **paste the link to your
+  post** and `submitTask` asks X about it — so the card is the same `XTaskCard`, and the claim
+  endpoint is shut for them (`submit-required`), or the tap would pay a checked task with its
+  verifier bypassed.
+  - **What the check can and cannot see.** X's free embed carries only the *quoting* post's own text
+    — the post it quotes is not in it — so neither the verifier nor anything else free can tell
+    **which** post was quoted. X is therefore asked two things: that the post is the player's, and
+    that it tags `@DNGrobinhood`. Quoting the post named on the card is on the player, and every
+    card says so in those words (`QUOTE_CHECK_NOTE`), which is the same rule the follow card lives
+    by: never imply a check that cannot run.
+  - **Four asks are four chances to be paid once, so the wire refuses that.** `submitTask` records
+    the post against the task that paid it and answers `post-already-used` to any other one-time
+    task trying to file the same link, so a single post cannot collect all four. The worst case is
+    four junk posts, not one post and 2,000 points.
+  - **Different words per card, on purpose.** Four cards reading the same sentence read like one
+    task repeated and give the player no way to tell which post a card is about without opening it,
+    so each carries its own `title`, `cta` and `hint`; only the `QUOTE_CHECK_NOTE` sentence about
+    what is checked is shared.
+  - **`taskConfig` grew a `onetime:<id>` kind** (`lib/points-program.js`) that resolves through
+    `oneTimeTaskByKind`, so the verified path and the claim path ask different questions of the
+    registry: the claim path takes an **id**, the verified path takes a **kind**, and a task that is
+    `claim` has no `kind` at all — which is what keeps the follow out of the post-paid path for good.
 - **Proof is recorded per claim, not per task.** The record keeps `proof` as it was **on the day it
   was paid** (`claimedProof` in state), so wiring the webhook later does not retroactively upgrade a
   claim that was taken on trust — the card keeps saying "claimed on your word, no check ran" for
@@ -655,19 +689,152 @@ only thing that decides whether a post exists, who wrote it, and what it says.
   player can still type a handle and earn. The bridge exposes `getXAccount()`, `linkX()` and
   `getAccessToken()` for exactly this.
 
+A note on the live ones: a `next dev` that has been up for hours and recompiled many times starts
+answering **404 to real routes** under a burst of requests, which reads exactly like a broken change.
+It is the server, not the code — restart it and warm the routes with a couple of curls before
+trusting a live harness (`for p in /points /api/points/session /api/points/vault; do curl -s -o
+/dev/null -w "$p %{http_code}\n" localhost:3000$p; done`). This cost an hour of chasing a failure
+that was never there.
+
 ```bash
-node tools/check-points-x.js    # 125 checks, offline: a stubbed X and a stubbed Privy, real ES256
+node tools/check-points-x.js    # 161 checks, offline: a stubbed X and a stubbed Privy, real ES256
 node tools/check-x-verify.js    # 63 checks: the verifier alone, against a stubbed oEmbed
-node tools/check-x-webhook.js   # 48 checks: the follow webhook — real HMACs, both envelopes, no network
+node tools/check-x-webhook.js   # 51 checks: the follow webhook — real HMACs, both envelopes, no network
 node tools/check-kv-store.js    # 6 checks: the guard across two processes (and why KV matters)
 node tools/check-points-guard.js http://localhost:3000   # 21 checks: the live routes, gate included
+node tools/points-pending.js                            # the review queue: list, --approve, --reject
+node tools/check-follow-gate.js http://localhost:3100   # 17 checks: the follow gate, live — needs
+                                                        # X_CONSUMER_SECRET + a server in webhook mode
+node tools/check-follow-gate.js http://localhost:3000   # 11 checks: the review window, live — it
+                                                        # closes its own window by hand on loopback
+node tools/check-follow-gate.js https://dungeon-knights.vercel.app --read-only   # 1 check: which mode
+                                                                                 # the deployment runs
+node --env-file=<pulled.env> tools/check-follow-gate.js \   # 9 checks: the review window on the
+  https://dungeon-knights.vercel.app --against-live          # live store — writes, then cleans up
 ```
+
+`--against-live` **needs the store's credentials in this process** (`npx vercel env pull … --yes`),
+because it has to take its own wallets back out again; without them the run refuses to write rather
+than leaving test data in production. The pull is not optional and not a formality — see below.
+
+#### The review window, verified on the deployment (September 21)
+
+The deployment is the only place `claim` mode's window can be measured end to end, because it is the
+only one whose store is shared — and that is also why the harness has to be *asked* to do it:
+
+```
+node tools/check-follow-gate.js https://dungeon-knights.vercel.app --read-only      → mode: claim
+node --env-file=<pulled.env> tools/check-follow-gate.js … --against-live            → 9/9
+  ok  the server publishes its follow-proof mode (claim)
+  ok  this shell reaches the store the server uses (redis)         server redis · this process redis
+  ok  a binding succeeds without a Privy proof
+  ok  the claim is recorded rather than paid, and given a window   HTTP 200 credited 0 pending true
+  ok    … and the balance is untouched while it waits              points 0
+  ok    … and the deadline is inside the window the task declares  33 min of 30–45
+  ok  a second claim repeats that deadline and pays nothing        HTTP 200 pending true
+  .   window not closed by hand — the store is not the local file, so the claim stays pending
+  ok  2 wallet(s) this run created: nothing of them is left in the store
+  ok    … and the once-only guard slot the claim took              1 guard key(s) removed
+```
+
+and what the live page is *handed* for that wallet (a real signed session against the deployment,
+`GET /api/points/me`) — these are the fields the card prints, so the card's sentence is the
+**server's**, not the bundle's:
+
+```json
+{ "title": "Follow us on X", "reward": 500, "cta": "Follow @DNGrobinhood",
+  "blurb": "Follow @DNGrobinhood on X, then claim. Follows are verified manually, so points are
+            granted after review — usually within 30–45 minutes — and the task pays once per X
+            account, ever.",
+  "claimed": false, "pending": true, "rejected": false,
+  "settleAt": "2026-09-21T18:53:00.432Z",
+  "pendingNote": "Claim received · credited after review",
+  "reviewWindow": { "minMinutes": 30, "maxMinutes": 45 } }
+```
+
+That renders as `Claim received · credited after review · by 6:53 PM` over a **Check status** button.
+Both halves were confirmed present in the *deployed* chunk
+(`/_next/static/chunks/app/points/page-*.js`, found by grepping every chunk `/points` references for
+`Check status` / `credited after review` / `Not approved` / `settleAt`) — the card cannot be driven
+from here, because the preview webview is loopback-only and there is no headless browser in
+`node_modules`, so the render path is pinned by string and the *data* is pinned by the live API.
+
+#### Cleaning up on a shared store — and why the run now does it itself
+
+A shared store has no file to put back, so the first live run of this harness **left its test wallets
+in production** — a pending claim, a binding, a guard key and a leaderboard entry, cleaned up by hand
+with a one-off `SCAN`. That is not a state a harness should be able to get into, so it no longer can:
+
+- **`purgeWallet(address, { ids, handles })`** (`lib/points-store.js`) removes one wallet completely —
+  its record, its X-account claims, its guard slots, its review-queue member, its board entry, and the
+  follow facts filed under the identities the caller says it created. It is **driven by
+  `walletKeys(address, …)`**: that function finds every key naming the wallet, purge deletes what it
+  returned, and then asks again — so `survived` is *measured*, and the one remaining piece of key-shape
+  knowledge is the two member sets (`SREM`/`ZREM` rather than `DEL`). Every match is on the **whole
+  address**, lower-cased; the X-account index is matched on its **value**, because the key is the
+  account and that shape belongs to `points-program`. `ids`/`handles` are arguments rather than
+derivations for a reason: a fact is filed against an X account, and guessing them would eventually
+delete a fact about **our own** account — a real follower told they are not following.
+- **The harness refuses to write to a store it cannot reach.** It compares the driver the *server*
+  reports (`state.storage.driver`) with the driver its own process would use, and stops before the
+  first binding if they differ, naming the fix. That is the guard that matters: the original mess was
+  produced by `--against-live` from a shell with no credentials, where cleanup was impossible by
+  construction. Measured: `--against-live` with no `--env-file` → `FAIL this shell reaches the store
+  the server uses (redis) — server redis · this process file`, one check passed, nothing written, and
+  the store census unchanged.
+- **So does the residue check.** Two lenses, because they fail differently: the purge's own read-back
+  catches a deletion that did not happen (a stubbed `DEL`, a key its scan never matched), and the
+  store's *public* reads (`getWallet`, `rankOf`, `pendingList`, `xBindingOwner`, `followFact`) catch a
+  record still answering questions after its keys are gone.
+- **Two drivers, two shapes for the guard.** On `redis` the once-only guard is a key
+  (`dk:points:guard:<name>`) and the purge removes it, which is asserted by name. On `file` and
+  `memory` it is a slot in the **server's own process** (`memoryGuards`, TTL and nothing else), so
+  there is no key to find and the check *says so* rather than failing — the first version of it
+  reported "the guard scan matched nothing" on a clean file run, which is a check failing for being
+  right. The file driver's purge is otherwise the same code and was verified directly, from a
+  throwaway cwd: **5 labels found → 5 removed, 0 survived** (record, X binding, both follow facts,
+  queue member), and `getWallet` / `rankOf` / `followFact` / `xBindingOwner` / `pendingList` all
+  answering nothing afterwards. Worth doing directly because the loopback harness normally takes the
+  *snapshot* path and never reaches the file purge at all — it only does when there is no store file
+  yet, which is exactly a fresh checkout's first run.
+
+Verified on the live store, key census before and after: **16 keys → 16 keys, 5 guard keys → 5, the
+queue holding only the real claim, board 5 → 5, zero keys naming a test wallet.** (Guard keys carry a
+600-second TTL, so later censuses read lower on their own — that is expiry, not cleanup.)
+
+Three mutations were run against the cleanup, and each is caught by a *different* check:
+
+| mutation | what the run reported |
+|---|---|
+| the queue-member `SREM` stubbed | `FAIL … dk:points:pending follow:0xa2b5… ; a pending claim` — both lenses name it |
+| the guard-key `DEL` stubbed | `… BUT 1 SURVIVED`, then `FAIL … dk:points:guard:one-time:0x2e05…:follow` |
+| the guard **scan** made to match nothing | `FAIL … and the once-only guard slot the claim took — the guard scan matched nothing` |
+
+The second row is the one that earned the rewrite: that mutation originally passed **9/9**, because
+the guard check counted what purge *said* it deleted. The third is why the discovery check exists at
+all — a read-back only sees what the purge looked at, so "did it even find the key?" has to be asked
+separately.
+
+**One pitfall from building this, worth a line:** the throwaway mutation script first kept its
+backup across edits, and a later `--restore` silently reverted a rewrite of `purgeWallet` made after
+that backup was taken. It now takes the backup fresh on every apply and refuses to apply over a file
+that already carries a mutation. A backup is a claim about a moment; reusing it makes the claim false.
 
 Every guard added for the share and the lock was **falsified by mutation** before it was trusted —
 and two of them had to be broken *twice*: the earned-claim rule and the handle claim are each
 enforced in two places, so weakening one left the behaviour intact and the checks still green. Only
 breaking both made them fail by name. That is the point of the exercise; an equivalent mutant looks
 exactly like a working guard.
+
+The review window's guards were falsified the same way, and **two of the seven mutants survived the
+first attempt** — which is the whole reason for doing it. "A refused claim cannot be paid when its
+window closes" passed because the harness only ever back-dated *pending* records, so the rejected
+one's deadline never arrived; "a settled claim pays once" passed because the record state is checked
+in two places, and removing one left the other holding. Both checks were rewritten and both mutants
+now fail by name. The other five: the window removed (six checks fail), the deadline recomputed on
+every read (the card's deadline moves under a refresh), a refused claim made claimable again, a claim
+inside its window treated as unknown, and an approving tool with both its guard and its paid-check
+gone (the second approval pays a second 500).
 
 The follow webhook's guards were falsified the same way — eight mutations, each caught by the check
 that names it: an unconfigured deployment accepting an unsigned delivery, an unknown event type
@@ -676,6 +843,79 @@ checking the signature over it, a claim paid without asking what X said, a claim
 checked by a redeploy, the handle fallback removed so a typed binding cannot find its fact, and the
 direction check dropped so an event where *we* followed somebody would pay as a follower (45/48,
 failing on that check by name).
+
+The four quote-reposts' guards were falsified the same way. Each mutation removes exactly one rule,
+and each is caught by name — three of them by a check that only exists because the mutation was run:
+
+| mutation | what the run reported |
+|---|---|
+| the claim path stops refusing a `verify` task | `FAIL a checked task cannot be claimed with no post at all`, `FAIL … and the balance is unmoved by the attempt` |
+| the one-post-one-task guard dropped | `FAIL the same post cannot pay a second one-time task`, `FAIL … and nothing was credited for trying`, `FAIL a post of its own pays the next task` |
+| the `@DNGrobinhood` requirement dropped | `FAIL a post that does not tag us never pays` … and, in the quote section, `FAIL and a post of theirs that does not tag us is refused` |
+| a registry entry flipped to `proof: 'claim'` | 16 failures, from `the registry carries a quote-repost per campaign post` down to `every task renders the shape its card needs` |
+
+**Two of those mutations crashed the suite instead of failing it, and that mattered more than the
+mutations.** Dropping the tag requirement made the *next* check dereference the `reason` of a task
+that had not failed — `reason` is `null` exactly when a guard is broken — so the run ended at
+`TypeError` with every check after it unreported; and a registry with no quote tasks made the section
+throw on its first dereference. A guard that turns a failure into a stack trace is a guard that hides
+the next one, so both were rewritten: `reason` is now read through a string (`reasonOf`), and the
+quote section reads its tasks through `quoteTaskAt(n)`, which hands back a **task-shaped hole** — a
+kind the engine refuses and a reward `Number.NaN` equals nothing — so each check below fails on its
+own merits rather than not being run at all. The registry mutation went from one `TypeError` to 16
+named failures, and the tag mutation from one `TypeError` to 8.
+
+**What the live page was actually handed and did** (`:3000`, `driver: file`, a throwaway wallet with
+a real signed session, purged afterwards with `purgeWallet`). `GET /api/points/me` returned **five**
+one-time tasks — the follow (`proof: 'claim'`, `followProof.mode: 'claim'`) and the four quotes
+(`proof: 'verify'`), each with its own `postUrl`, `title`, `cta` and `hint`, and the shared
+`QUOTE_CHECK_NOTE` sentence. In the DOM all four render as `.x-task` cards with an **Open…** button,
+a *Paste the link to your post* input and a **Verify** button, and the left tab carries the count
+badge `5`. The two refusals, measured through the page's own session rather than asserted:
+
+```
+POST /api/points/task { action:'claim', task:'quote-points' }
+  → 400 { code: 'submit-required',
+          error: 'That task is paid against a post — paste the link to the post you made.' }
+POST /api/points/task { action:'submit', task:'onetime:quote-points', url:<our own post> }
+  → { credited: 0, verdict: { code: 'wrong-author',
+        reason: 'That post was written by @dngrobinhood, but this wallet has @knighttester bound to it.',
+        post: { author: 'dngrobinhood', text: '⚔️ The Points Program is coming to Dungeon Knights…' } } }
+  points 0 → 0
+```
+
+The second one is the one worth keeping: the verifier **fetched the real post**, read its author and
+text off X, and refused on the mismatch — so the check is live, not a stub wearing a card. A wallet
+with no X bound gets `Bind your X account first…` on the same button instead. The service worker for
+the preview webview is not composited in this environment, so `preview_screenshot` fails here; the
+DOM and the API are the evidence, not a picture.
+
+**`tools/check-follow-gate.js` is the half the offline harness cannot reach**: that a *running
+server* wires those rules to a wallet's points. It signs in a fresh wallet the way the page does
+(real challenge, real signature), then proves the sequence that matters — refused with
+`follow-required` while X has said nothing, **nothing paid and no claim recorded** so the refusal did
+not spend the once-only guard, paid 500 the moment a signed follow event lands, nothing on a second
+claim — plus an unfollow taking it away again, an unsigned delivery and one whose body changed after
+signing both refused 401, a signed event of an unknown type accepted with `recorded: 0` (billed, but
+not a retry storm), and an event where **we** followed somebody recorded as nothing. Deliveries are
+signed here because X cannot be asked to follow us on demand: the transport is real and the event is
+synthetic, which is why a real follow stays the last step rather than this file. Two mutations were
+run against it — taking the once-only guard before reading the fact (14/17, failing *the claim is
+PAID once X's own record says so*, which is the lock-out), and recording every fact as a follow
+(16/17, failing *the claim is refused again — the latest fact is what counts*).
+
+Against a loopback server it snapshots and restores `.data/points.json`, so the local leaderboard
+does not collect test wallets. `--read-only` asks only which mode the deployment runs and stops
+before anything is bound or paid, which is how production was measured as `claim`. To reproduce the
+refusal locally, a server in webhook mode with a secret of your own choosing — `.env.local` is
+deliberately not used, so nothing here can point at the live store:
+
+```bash
+X_CONSUMER_SECRET=dev-follow-secret FOLLOW_PROOF_MODE=webhook X_FOLLOW_TARGET_ID=123456789 \
+  PORT=3100 npm run dev &
+X_CONSUMER_SECRET=dev-follow-secret X_FOLLOW_TARGET_ID=123456789 \
+  node tools/check-follow-gate.js http://localhost:3100
+```
 
 #### Proving a follow: X's Activity API
 
@@ -712,8 +952,19 @@ configured"}` there today) and **not yet wired**: the three variables below do n
 Production, so no CRCs can be answered and no deliveries can be verified. The registration sequence,
 the moment those values exist:
 
+**The order below is not decoration — step 0 fails until step −1 is done.** The CRC is answered by the
+*deployment*, with its own copy of the secret, so `X_CONSUMER_SECRET` has to be in Production and
+deployed **before** the preflight can pass; today the live route answers
+`400 {"error":"no consumer secret configured"}` to any challenge, which is the correct answer for a
+deployment that has none. Then the mode is flipped **last**, after a delivery has actually been seen:
+another way round, every player is refused while X is silent.
+
 ```bash
-# 0. Preflight FIRST. Registering makes X call our URL with a CRC challenge, and it answers only
+# -1. The secret into Production FIRST, then redeploy (an env change does not reach a live build).
+#     `npx vercel env add X_CONSUMER_SECRET production` — a dashboard job or a piped value, and the
+#     same value goes into the shell for the steps below. NEVER into .env.local.
+
+# 0. Preflight. Registering makes X call our URL with a CRC challenge, and it answers only
 #    `CrcValidationFailed` — with no detail. This asks our own URL the same question and compares the
 #    answer to the HMAC it computes locally, so it can say which half is wrong.
 node tools/x-webhook-register.js
@@ -735,6 +986,14 @@ node tools/x-webhook-register.js --status
 # 4. The follows that happened BEFORE the subscription — billed per row, so it will not run
 #    without --yes, and --max-pages bounds it:
 node tools/x-followers-backfill.js --yes --max-pages 1
+
+# 5. LAST: flip the mode, once a delivery has actually been seen. Until then the card keeps saying the
+#    follow is taken on the player's word, which is true — and a mode turned on early refuses
+#    everybody for as long as X stays silent.
+npx vercel env add FOLLOW_PROOF_MODE production   # webhook
+npx vercel env add X_FOLLOW_TARGET_ID production # our numeric id, as the tool prints on a missing
+                                                 # one: GET /2/users/by/username/DNGrobinhood
+#    then redeploy, and check it took: node tools/check-follow-gate.js <url> --read-only
 ```
 
 Needed for that sequence, all from the X developer portal for the app that owns @DNGrobinhood:
@@ -756,11 +1015,19 @@ would put a live consumer secret on a dev machine):
 | `FOLLOW_PROOF_MODE` | `webhook` to check follows. Anything else, or unset, is `claim` — the honest default |
 | `X_CONSUMER_SECRET` | Verifies the CRC handshake **and** every delivery. Without it the mode stays `claim`, because a deployment that cannot tell a forgery from a delivery must not say "verified" |
 | `X_FOLLOW_TARGET_ID` | Our own numeric account id — filters deliveries to our account and fills the claim's sentence |
-| `X_BEARER_TOKEN` | Only for `tools/x-followers-backfill.js`. App-only; the webhook itself needs no read token |
+| `X_BEARER_TOKEN` | App-only, and used **only by the tools** — `/2/webhooks` and `/2/activity/subscriptions` in `x-webhook-register.js`, and the followers read in `x-followers-backfill.js`. The receiver itself needs no read token, so this one never has to be on the deployment |
 
 Two things to know before switching it on. **Production runs `claim` mode today** — the variables
-above do not exist there, so `followProofMode()` returns `claim` and the card keeps its current
-wording. That is the safe direction: the mode only turns on when there is a secret to check with.
+above do not exist there, so `followProofMode()` returns `claim`; the tab therefore pays after the
+review window rather than instantly, and says so. That is the safe direction: the mode only turns on
+when there is a secret to check with. The review window applies **only while the follow is
+unverified**: once X is telling us, a claim is decided at the moment it is made (`reviewMinutes` is
+null) and there is nothing to wait for.
+**This build is deployed, and the review window is live** (September 21, `dungeon-knights-lx9kknkvv`).
+Production runs `claim` mode *with* the window, so the card says so in the present tense: *"Follows are
+verified manually, so points are granted after review — usually within 30–45 minutes — and the task
+pays once per X account, ever."* Measured on the deployment, not read off the code — the transcript is
+under *the review window, verified live* above.
 And **deliveries can silently not arrive**: an unsubscribed, unauthorised or over-limit account gets
 no events at all, which at this end is indistinguishable from "nobody followed us". Every accepted
 delivery is logged (`[x-events] …`), so the two can be told apart from the log — subscribers on X's
@@ -1723,6 +1990,142 @@ dungeon-knights-meglast320-1694.vercel.app, and leaves the project's custom doma
 is invisible at the URL people actually open. Always re-alias, then verify the *custom* domain,
 not the deployment URL.
 
+**The last deploy** (September 22): `dungeon-knights-qhfbkph32-meglast320-1694` — the domain
+switchover, the four quote-repost tasks, and the `www` redirect. It replaced
+`dungeon-knights-9mtzahslz-meglast320-1694` (env var set, `/:path*` redirect that missed the root) and
+`dungeon-knights-lx9kknkvv-meglast320-1694` (the one-time tab's review window).
+
+**The four quote-repost tasks went live with the domain switchover** (September 22): the deploy that
+set `NEXT_PUBLIC_SITE_URL` was built from the working tree, so it carried them. Verified afterwards on
+the live deployment — `/api/points/me` returns **five** one-time tasks (the follow plus the four quote
+posts). Note the shape of that: a `vercel --prod` uploads the **working directory**, not a commit, so
+anything uncommitted ships. That is why the run doc records what is outstanding.
+
+**Not committed as of this writing:** the quote-repost work and the domain change —
+`lib/points-config.js`, `lib/points-program.js`, `app/points/client.js`, `lib/points-client.js`,
+`lib/points-store.js`, `public/css/points.css`, `vercel.json` and the two harnesses are modified, plus
+`tools/check-follow-gate.js` and `tools/points-pending.js` as untracked files. Production is therefore
+running code that git does not have yet. Two operational details from it: `vercel env pull` writes the **sensitive** values as
+`[SENSITIVE]` placeholders (8 of them — `GAME_RUN_SECRET`, `POINTS_SESSION_SECRET`, the signer key and
+the rest), while `KV_REST_API_URL` / `KV_REST_API_TOKEN` **do** come through, which is what lets
+`tools/points-pending.js` read the production queue at all; and that pull needs **`--yes`**, or it
+stops on a prompt that looks exactly like a hang (a 180 s timeout, twice).
+
+### The custom domain — `dungeonknights.io`
+
+Bought from **Namecheap** on 2026-09-21T18:50:29Z (the registry's `add period` runs for the first five
+days). **Live since September 22** — DNS on Namecheap's BasicDNS (`dns1/dns2.registrar-servers.com`),
+both hosts answering from Vercel, TLS issued per host.
+
+Two things about reading a domain's state, both of which misled me once:
+
+- **`rdap.org` can be wrong; the registry is not.** It returned 404 for this domain while the .io
+  registry's own RDAP (`https://rdap.identitydigital.services/rdap/domain/<d>`) returned 200 with the
+  registration. `rdap.org` is a proxy, and its redirect for `.io` did not resolve the record. Ask the
+  registry.
+- **NXDOMAIN right after a purchase is negative caching, not a failed registration.** `8.8.8.8`
+  answered NXDOMAIN because the name genuinely did not exist minutes earlier; it had cached that
+  answer. `nslookup <domain> dns1.registrar-servers.com` asks the authoritative server and skips the
+  cache entirely — that is how the records were confirmed *before* Vercel's own check ran.
+
+Read the record set off Vercel itself rather than from memory — `vercel domains verify <domain>`
+prints it, and it is the only authority on what the deployment expects:
+
+```bash
+npx vercel domains verify dungeonknights.io     --scope meglast320-1694
+npx vercel domains verify www.dungeonknights.io --scope meglast320-1694
+```
+
+At Namecheap (Advanced DNS), apex and `www` need **different** record types:
+
+| Type | Host | Value |
+|---|---|---|
+| A | `@` | `216.198.79.1` |
+| A | `@` | `64.29.17.1` |
+| CNAME | `www` | `03e3c9616dec48fa.vercel-dns-017.com.` |
+
+(`vercel domains inspect` suggests the older shared `A dungeonknights.io 76.76.21.21` instead. Both
+route, but the pair above is what this domain is actually assigned, so use that.)
+
+#### The switchover, in the order it has to happen
+
+`NEXT_PUBLIC_SITE_URL` was **unset** in Production, so `lib/site.js` fell back to
+`https://dungeon-knights.vercel.app` — which is also what `SITE_LINK_HOST` derives from, and that host
+is what the **campaign task requires a player's post to link to**. Flipping the env var before DNS
+answered would make production demand links to a domain serving a parking page and hand every player a
+`share.text` pointing there, so the order is: records → `√ Valid Configuration` → env var → rebuild →
+re-point every host. Done that way. What moves with the env var: the share text and its `intentUrl`,
+the OG/canonical URLs, and `SITE_LINK_HOST`. What does **not**: the player's own invite-link box, which
+is built from `window.location.origin` (`lib/points-client.js` → `refLink`) and so follows whichever
+host the player is on.
+
+`NEXT_PUBLIC_*` is inlined at **build** time, so this is a rebuild and not a config toggle.
+
+**Two traps, both found by verifying instead of assuming.**
+
+1. **`vercel domains add` pins an alias to the deployment that existed at that moment, and it does
+   *not* follow later `--prod` deploys.** After the first switchover deploy, `dungeon-knights.vercel.app`
+   served the new build while both new domains still served the *previous* one — the alias list showed
+   them pinned to `dungeon-knights-lx9kknkvv-…` with an age of 16 minutes. So **every** deploy has to
+   re-point **all** the hosts, not just the `.vercel.app` one:
+
+   ```bash
+   NEW=dungeon-knights-<hash>-meglast320-1694.vercel.app
+   for d in dungeonknights.io www.dungeonknights.io dungeon-knights.vercel.app; do
+     npx vercel alias set "$NEW" "$d" --scope meglast320-1694
+   done
+   ```
+
+2. **`"source": "/:path*"` does not match the bare root.** The first `vercel.json` redirect left
+   `https://www.dungeonknights.io/` answering **200** while `/points` and `/game` correctly 308'd — and
+   it was not caching (a cache-buster and `Cache-Control: no-cache` both still got 200). `"/(.*)"` with
+   `"destination": "https://dungeonknights.io/$1"` is the form that includes the root.
+
+Both are verified rather than asserted, by comparing the built chunk name every host serves — equal
+means the same build:
+
+```bash
+for h in https://dungeonknights.io https://dungeon-knights.vercel.app https://$NEW; do
+  printf '%-45s ' "$h"; curl -s "$h/" | grep -oE '/_next/static/chunks/main-app-[a-z0-9]+\.js' | head -1
+done
+# all three: /_next/static/chunks/main-app-be3d940aef6bd3eb.js
+
+curl -sI https://www.dungeonknights.io/        → 308 → https://dungeonknights.io/
+curl -sI https://www.dungeonknights.io/game?x=1 → 308 → https://dungeonknights.io/game?x=1
+```
+
+A throwaway probe (signed in the way the page does, then purged) read the **live** `/api/points/me` and
+confirmed what the switchover put in front of players: `linkHost: dungeonknights.io`, `share.text`
+carrying `https://dungeonknights.io/points?ref=…`, store `redis`, and the one-time tab at **five**
+tasks — the follow plus the four quote-reposts on their own posts.
+
+**Keep `dungeon-knights.vercel.app` alive** — `tools/x-webhook-register.js` defaults the webhook URL to
+`https://dungeon-knights.vercel.app/api/x/events`, and re-pointing a registration is another billed
+management call to X.
+
+#### Still external — dashboards, not code
+
+- **Privy: add `https://dungeonknights.io` to the app's allowed origins.** `app/providers.js` mounts
+  `PrivyProvider` with only an `appId` and a `config` — the origin allowlist lives in Privy's own
+  dashboard, not in this repo, and Privy's hosted components are origin-checked. This is the one thing
+  about the switchover that **could not be verified from here** (the preview webview only reaches
+  loopback, so the public domain cannot be driven from the tools, and the Privy dashboard is not
+  readable from this shell). Worth opening the app in a real browser and signing in with an embedded
+  wallet on the new domain specifically.
+- **X developer app:** nothing to change. The webhook stays registered on
+  `dungeon-knights.vercel.app`, which is why that alias is kept alive; the app's website field is
+  cosmetic.
+- **Search/marketing:** the new host is where canonical URLs now point, so Search Console (or any
+  similar) should be re-verified for it whenever that matters — nothing in the app depends on it.
+
+#### The one consequence to accept knowingly
+
+The campaign task's `expect.host` now reads `dungeonknights.io`, so a post that links the **old** domain
+no longer qualifies for that reward. That is the derivation in `SITE_LINK_HOST` working as designed ("a
+custom domain moves the rule with it"), and the daily share and the four quote tasks are unaffected
+because they check the `@DNGrobinhood` tag only. If a transition window is wanted, the fix is to accept
+either host rather than to keep the old one in the config.
+
 ### Environment variables (production)
 
 `vercel env ls production` is the source of truth; env changes need a **redeploy** to apply.
@@ -1732,6 +2135,7 @@ not the deployment URL.
 | `PRIVY_APP_ID` | **Set** (type `config`). Turns the embedded wallet on for the phone flow. Before it was set, production answered `embedded: null` and the whole embedded path stayed dormant. Env changes need a **redeploy** — the route is `force-dynamic`, but the deployment still has to exist. |
 | `POINTS_SESSION_SECRET` | **Set.** Sessions are HMACs. Without it each serverless instance generates its own random secret, so a token minted by one instance is rejected by the next: a player connects, clears a floor, and is randomly logged out. Measured before/after: 1-of-8 authenticated calls succeeded, then 8-of-8 once set. |
 | `KV_REST_API_URL` + `KV_REST_API_TOKEN` (or `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`) | **Set, in this thread** — the Upstash store below. Before it, the store fell back to per-instance memory. |
+| `NEXT_PUBLIC_SITE_URL` | **Set to `https://dungeonknights.io` (Production only), September 22.** Before it, every built link fell back to `https://dungeon-knights.vercel.app` in `lib/site.js`. Set only *after* the domain answered — see the domain section above for what it moves, why the old URL stays aliased, and the campaign-link consequence. Preview/Development deliberately leave it unset. |
 
 Without a shared store the once-per-day rule is enforced **per instance**, so under concurrent
 traffic the numbers go wrong in exactly the way a rewards program must not. Measured on a
