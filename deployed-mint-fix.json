@@ -1,0 +1,48 @@
+{
+  "chainId": 46630,
+  "deployer": "0x038d75aDb74d8e5Db82E6c6797f90dCdF82ef4C9",
+  "kept": {
+    "token": "0x3D94e56E0d967633830f6d9E42CE43A64FFfD6Ca",
+    "vault": "0x6Cc2cA52F24Df5fE752e2792E1acA8783413e0Cc",
+    "genesis": "0xbd99CD46dd42472fAA7667d5c782eEbe0Abe9e5d",
+    "genesisStaking": "0x173cED7aeb1F0F6871c5110112Ade6f61106D7FD"
+  },
+  "retired": {
+    "knights": "0xFB738bE682a0a60678A393eB7e23742B3137d4c5",
+    "capsules": "0x8772ee6f8b99595D60EF7Ac5fC1A9d1E8CD78926",
+    "raffle": "0x56A25ddBdD3F9D9A92446dd24d2D203FFb335c7f",
+    "knightsStaking": "0x5B17C62E315E2DCE233553622fB533F0701eEcD2",
+    "game": "0xF072753265690aE68a534464B33ECd5FA03dd895"
+  },
+  "contracts": {
+    "knights": "0x27Cfbb763188a50Fe1C0fFfBe2552b1945eE1B2D",
+    "capsules": "0x628ae2254fFE4aeC68D13b1E46E5628CCcbD2728",
+    "raffle": "0xc26360C6CC4B67720558F71fB32Dc413e27E5b4C",
+    "knightsStaking": "0x27fBBba5feCD0Bc4a83d51b4f2832a13c6E0a627",
+    "game": "0xD60FfCb1df8ce1163e0a5137651E98BDC0Acd8a8",
+    "wire-capsules-to-knights": "wired",
+    "wire-raffle-to-capsules": "wired",
+    "wire-vault-payers": "wired",
+    "wire-game-to-vault": "wired",
+    "prove-the-pull": "proven"
+  },
+  "done": [
+    "knights",
+    "capsules",
+    "raffle",
+    "knightsStaking",
+    "game",
+    "wire-capsules-to-knights",
+    "wire-raffle-to-capsules",
+    "wire-vault-payers",
+    "wire-game-to-vault",
+    "prove-the-pull"
+  ],
+  "signer": "0x69EF5fF256051DE3edF1AA64Efe10eDD6C2d643C",
+  "summoned": {
+    "tokenId": 1,
+    "rarityName": "Common",
+    "hashPower": 15,
+    "tx": "0x9bc4eddecaec9e12eff56fd7b5117ea2f7f811e707a6bcb9e40f439630e05a93"
+  }
+}

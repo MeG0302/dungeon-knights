@@ -1,0 +1,37 @@
+{
+  "chainId": 46630,
+  "deployer": "0x038d75aDb74d8e5Db82E6c6797f90dCdF82ef4C9",
+  "contracts": {
+    "vault": "0x6Cc2cA52F24Df5fE752e2792E1acA8783413e0Cc",
+    "token": "0x3D94e56E0d967633830f6d9E42CE43A64FFfD6Ca",
+    "genesis": "0xbd99CD46dd42472fAA7667d5c782eEbe0Abe9e5d",
+    "knights": "0xFB738bE682a0a60678A393eB7e23742B3137d4c5",
+    "capsules": "0x8772ee6f8b99595D60EF7Ac5fC1A9d1E8CD78926",
+    "genesisStaking": "0x173cED7aeb1F0F6871c5110112Ade6f61106D7FD",
+    "knightsStaking": "0x5B17C62E315E2DCE233553622fB533F0701eEcD2",
+    "raffle": "0x56A25ddBdD3F9D9A92446dd24d2D203FFb335c7f",
+    "game": "0xF072753265690aE68a534464B33ECd5FA03dd895",
+    "wire-capsules-to-knights": "wired",
+    "wire-raffle-to-capsules": "wired",
+    "wire-vault-payers": "wired",
+    "wire-game-to-vault": "wired"
+  },
+  "done": [
+    "vault",
+    "token",
+    "genesis",
+    "knights",
+    "capsules",
+    "genesisStaking",
+    "knightsStaking",
+    "raffle",
+    "game",
+    "wire-capsules-to-knights",
+    "wire-raffle-to-capsules",
+    "wire-vault-payers",
+    "wire-game-to-vault"
+  ],
+  "predictions": {
+    "token": "0x3D94e56E0d967633830f6d9E42CE43A64FFfD6Ca"
+  }
+}

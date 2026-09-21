@@ -77,12 +77,16 @@ contract RewardVault is Ownable2Step, ReentrancyGuard {
     uint256 public lastWeekBurn;
     uint16 public epochScaleBps = BPS;
 
-    /// @notice Who may charge a line — the game contract on the dungeon lines, the staking
-    ///         contract on the staking lines. Kept explicit so a compromised caller cannot
-    ///         spend a line it has nothing to do with.
-    mapping(address => bool) public payers;
+    /// @notice Who may charge which line — the game contract on the dungeon lines, the
+    ///         staking contracts on the staking lines.
+    /// @dev Per line, not per address, and that distinction is the whole point of having
+    ///      this list at all. `payers[address] = true` would let the Genesis staking pool
+    ///      spend the Knights dungeon line: the caller is trusted, so the call succeeds, and
+    ///      the only thing that notices is a budget being drawn down by the wrong product.
+    ///      A compromised or buggy payer can then only drain the line it was granted.
+    mapping(uint8 => mapping(address => bool)) public linePayers;
 
-    event PayerSet(address indexed payer, bool allowed);
+    event PayerSet(uint8 indexed line, address indexed payer, bool allowed);
     event BudgetSet(uint256 weeklyBudget);
     event LineBpsSet(uint8 indexed line, uint16 bps);
     event EpochSettled(uint256 indexed epoch, uint256 burn, uint16 scaleBps, uint256 budget);
@@ -90,8 +94,9 @@ contract RewardVault is Ownable2Step, ReentrancyGuard {
     event Funded(address indexed from, uint256 amount);
     event TokensWithdrawn(address indexed to, uint256 amount);
 
-    modifier onlyPayer() {
-        require(payers[msg.sender], "Not a payer");
+    modifier onlyPayer(uint8 line) {
+        require(line < LINE_COUNT, "Bad line");
+        require(linePayers[line][msg.sender], "Not a payer for this line");
         _;
     }
 
@@ -191,8 +196,7 @@ contract RewardVault is Ownable2Step, ReentrancyGuard {
     ///      The balance check is not redundant with `weeklyBudget()` — a line's budget is
     ///      computed from the *whole* vault balance, so lines spent out of order can still
     ///      run the vault down before the week is over.
-    function pay(uint8 line, address to, uint256 amount) external nonReentrant onlyPayer {
-        require(line < LINE_COUNT, "Bad line");
+    function pay(uint8 line, address to, uint256 amount) external nonReentrant onlyPayer(line) {
         require(to != address(0), "Zero address: to");
         require(amount > 0, "Nothing to pay");
 
@@ -215,9 +219,18 @@ contract RewardVault is Ownable2Step, ReentrancyGuard {
     }
 
     // ------------------------------------------------------------------ the owner
-    function setPayer(address payer, bool allowed) external onlyOwner {
-        payers[payer] = allowed;
-        emit PayerSet(payer, allowed);
+    /// @notice Grant or revoke one address's right to charge one line.
+    function setPayer(uint8 line, address payer, bool allowed) external onlyOwner {
+        require(line < LINE_COUNT, "Bad line");
+        require(payer != address(0), "Zero address: payer");
+        linePayers[line][payer] = allowed;
+        emit PayerSet(line, payer, allowed);
+    }
+
+    /// @notice Whether `payer` may charge `line` — the read the interface and the deploy check
+    ///         both want, since a missing grant is a line that can never be paid.
+    function canPay(uint8 line, address payer) external view returns (bool) {
+        return line < LINE_COUNT && linePayers[line][payer];
     }
 
     function setLineBps(uint16[LINE_COUNT] calldata _lineBps) external onlyOwner {

@@ -1,11 +1,24 @@
 [profile.default]
 src = "contracts"
 out = "out"
+test = "test"
 libs = ["node_modules"]
 remappings = ["@openzeppelin/contracts/=node_modules/@openzeppelin/contracts/"]
 solc = "0.8.28"
 optimizer = true
 optimizer_runs = 200
+
+# Cancun, measured rather than assumed — see the header of `tools/check-contracts.js`.
+# The chain is Arbitrum Nitro (`nitro/v3.12.0-rc.2`), which is normally a reason to pick
+# `paris`; but OpenZeppelin v5.6 uses `MCOPY` in `Bytes.sol` (reached from `ERC721` via
+# `Strings`) and will not compile under paris at all, and the chain turns out to run both
+# `MCOPY` and `PUSH0` today. `tools/check-opcodes.js` re-checks that on demand.
+evm_version = "cancun"
+
+# Tests are run with `forge test`. There is no forge in the environment this repo's changes
+# were written in, so `test/` is written to be run by whoever has it — the invariants it
+# asserts are also asserted against the source by the Node harnesses, which do run here.
+fuzz = { runs = 256 }
 
 [fmt]
 line_length = 100
