@@ -204,6 +204,34 @@
         rec('shift resets when no dialog is open', root()?.style.getPropertyValue('--arya-shift') === '0px',
             root()?.style.getPropertyValue('--arya-shift'));
         window.Arya.hide();
+
+        // --- the walkthrough runs once, and being asked is what brings it back
+        //
+        // Tested on the module with a synthetic id rather than on whichever page this is
+        // running against, because that is where the rule lives: `/arya.js` remembers the id,
+        // and the pages deliberately do not pass `force` on their automatic call. The probe
+        // does interrupt anything already touring (`startTour` ends it first), so run this
+        // battery on a page whose own walkthrough has already been seen or is not up.
+        const PROBE = 'probe-once-only';
+        const probeSteps = [{ kind: 'think', text: 'Battery probe — ignore me.' }];
+        window.Arya.forgetTour(PROBE);
+        rec('a fresh walkthrough id is unseen', window.Arya.hasSeenTour(PROBE) === false);
+        const firstRun = window.Arya.tour(PROBE, { steps: probeSteps });
+        await sleep(450);
+        rec('an unseen walkthrough starts without being forced', firstRun === true, String(firstRun));
+        document.querySelector('#arya-root .arya-tour [data-act="skip"]')?.click();
+        await sleep(450);
+        rec('skipping it is remembered', window.Arya.hasSeenTour(PROBE) === true);
+        const secondRun = window.Arya.tour(PROBE, { steps: probeSteps });
+        await sleep(350);
+        rec('so it will not run itself again', secondRun === false, String(secondRun));
+        const asked = window.Arya.tour(PROBE, { steps: probeSteps, force: true });
+        await sleep(450);
+        rec('and "Ask Arya" still runs it on request', asked === true, String(asked));
+        window.Arya.endTour();
+        window.Arya.hide();
+        window.Arya.forgetTour(PROBE);
+        await sleep(300);
         return results.slice();
     }
 

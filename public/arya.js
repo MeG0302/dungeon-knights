@@ -26,11 +26,14 @@
 
    while (window.Arya.hasSeenTour('points') === false). A step leaves its bubble up
    (no timer), dims the page around the element its `target` selector points at, and
-   offers Back / Next / Skip. Finishing or skipping is remembered in localStorage, so
-   a walkthrough meant for newcomers runs once — `force: true` is the opt-out, and it
-   covers both cases at once: the Points page passes it so every visit gets the tour
-   (Skip is one click for anyone who knows the page), and its "Ask Arya" button passes
-   it to replay the tour mid-visit. Pass both and she is one Skip away, every time.
+   offers Back / Next / Skip. Finishing, skipping, and leaving the page mid-walkthrough
+   are all remembered in localStorage, so **a walkthrough meant for newcomers runs once**
+   and a returning player goes straight to the page.
+
+   `force: true` is the opt-out, and it exists for the buttons rather than the pages: the
+   Staking Vault's and the Points Program's footer "Ask Arya" controls pass it to replay
+   the walkthrough on request, which is why being quiet by default costs the player
+   nothing. A page's own automatic call should not pass it.
    ========================================================================== */
 
 (function () {
@@ -622,6 +625,15 @@
         showStep();
         return true;
     }
+
+    // Leaving the tab mid-walkthrough is the likeliest way a player declines it — and the
+    // only exit that runs no code of ours, so nothing above ever gets to mark it. A player
+    // who closes the tour by closing the page has still seen it; coming back must not start
+    // it over. `pagehide` fires for a normal navigation and for the back-forward cache,
+    // unlike `unload`, which browsers increasingly skip.
+    window.addEventListener('pagehide', () => {
+        if (tour) stopTour(true);
+    });
 
     // ---------------------------------------------------------------- flags
     // Small session helpers, used by the "left the game for the Knights tab" flow.

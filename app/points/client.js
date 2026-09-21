@@ -16,9 +16,10 @@ import PointsDungeon from './dungeon';
 const ASSETS = '/assets/points/';
 const BOARD_LIMIT = 25;
 
-// Arya's walkthrough of this page. It runs on every visit — a newcomer learns the page,
-// a regular can press Skip in one click — so this key is only an identity, not a
-// once-ever latch. The footer's "Ask Arya" replays it mid-visit without a reload.
+// Arya's walkthrough of this page. The key is both an identity and the once-ever latch:
+// `/arya.js` remembers `dk_arya_tour_<id>`, so this runs for a newcomer and stays quiet for
+// anyone who has already been through it — including anyone who skipped it. The footer's
+// "Ask Arya" passes `force` and replays it mid-visit without a reload.
 const TOUR_ID = 'points-v1';
 
 /**
@@ -228,11 +229,18 @@ export default function PointsPage() {
         };
     });
 
-    // She walks every visitor through the page — once per visit, not once per browser,
-    // since a returning player is one Skip away from the page they already know.
-    // `/arya.js` arrives afterInteractive, so this waits for her instead of assuming she
-    // is already there, and gives up quietly if she never turns up, because the page
-    // works without her. `force` is what makes it run again despite the "seen" flag.
+    // She walks a first-time player through the page, and only a first-time player.
+    // No `force` here on purpose: `/arya.js` remembers that she has been through this on
+    // this browser (finishing, skipping, or leaving mid-walkthrough all count), so a second
+    // visit goes straight to the page. She is never gone, only quiet — the footer's
+    // "Ask Arya" passes `force` and brings her straight back, which is why the tour does not
+    // need to be re-run at people who have already read it.
+    //
+    // `/arya.js` arrives afterInteractive, so this waits for her instead of assuming she is
+    // already there, and gives up quietly if she never turns up, because the page works
+    // without her. A `false` from `tour()` means she declined this once — already seen, or
+    // no steps to walk yet — and nothing retries it: one click on the footer button is the
+    // recovery, and repeatedly interrupting is the thing this is here to avoid.
     useEffect(() => {
         if (phase === 'boot' || inDungeon || tourOpened.current) return;
         let tries = 0;
@@ -243,9 +251,7 @@ export default function PointsPage() {
                 clearInterval(timer);
                 if (tourOpened.current || arya.isTouring()) return;
                 tourOpened.current = true;
-                if (!arya.tour(TOUR_ID, { steps: pointsTourSteps(live), force: true })) {
-                    tourOpened.current = false;
-                }
+                arya.tour(TOUR_ID, { steps: pointsTourSteps(live) });
             } else if (tries > 40) {
                 clearInterval(timer);
             }
@@ -253,7 +259,7 @@ export default function PointsPage() {
         return () => clearInterval(timer);
     }, [phase, inDungeon]);
 
-    /** The footer's "Ask Arya" — the walkthrough again, on request. */
+    /** The footer's "Ask Arya" — the walkthrough again, on request, past the seen flag. */
     const handleGuide = () => {
         if (!window.Arya) return;
         window.Arya.tour(TOUR_ID, { steps: pointsTourSteps(live), force: true });
@@ -426,11 +432,13 @@ export default function PointsPage() {
 
     const pageStyles = (
         <>
-            <link rel="stylesheet" href="/theme.css" />
+            {/* Versioned like every other sheet: an unversioned `/theme.css` is a CSS change
+                that never reaches a returning player. */}
+            <link rel="stylesheet" href="/theme.css?v=3" />
             <link rel="stylesheet" href="/css/points.css?v=5" />
             <link rel="stylesheet" href="/css/wallet-widget.css" />
             <link rel="stylesheet" href="/css/arya.css?v=3" />
-            <Script src="/arya.js?v=3" strategy="afterInteractive" />
+            <Script src="/arya.js?v=4" strategy="afterInteractive" />
             {/* The one page that is a React route rather than a legacy page, so it has to
                 pull the wallet source in itself. It is what makes `window.ethereum`
                 exist on a phone, where nothing injects one — and what drops it in the

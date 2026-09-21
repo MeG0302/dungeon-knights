@@ -500,6 +500,10 @@ export default function StakingClient() {
     const liveRef = useRef(live);
     liveRef.current = live;
 
+    // A first-time visitor gets the walkthrough; everyone else gets the page. The gate is
+    // `/arya.js`'s own memory of this tour id — finishing, skipping or leaving mid-way all
+    // mark it seen — so there is deliberately no `force` in this effect. `force` belongs to
+    // the footer's "Ask Arya", which is how a returning player asks for it again.
     useEffect(() => {
         if (phase !== 'ready' || tourOpened.current) return undefined;
         let cancelled = false;
@@ -508,13 +512,12 @@ export default function StakingClient() {
             const arya = window.Arya;
             if (!arya || arya.isTouring?.()) return;
             tourOpened.current = true;
-            if (!arya.tour(TOUR_ID, { steps: tourSteps(() => liveRef.current, {}), force: true })) {
-                tourOpened.current = false;
-            }
+            arya.tour(TOUR_ID, { steps: tourSteps(() => liveRef.current, {}) });
         }, 900);
         return () => { cancelled = true; clearTimeout(timer); };
     }, [phase]);
 
+    /** The footer's "Ask Arya" — the walkthrough again, on request, past the seen flag. */
     const askArya = () => {
         if (!window.Arya) return;
         window.Arya.tour(TOUR_ID, { steps: tourSteps(() => liveRef.current, {}), force: true });
@@ -670,7 +673,9 @@ export default function StakingClient() {
     // ------------------------------------------------------------------------ render
     const pageStyles = (
         <>
-            <link rel="stylesheet" href="/theme.css" />
+            {/* Versioned like every other sheet: an unversioned `/theme.css` is a CSS change
+                that never reaches a returning player. */}
+            <link rel="stylesheet" href="/theme.css?v=3" />
             <link rel="stylesheet" href="/css/staking.css?v=7" />
             <link rel="stylesheet" href="/css/wallet-widget.css" />
             <link rel="stylesheet" href="/css/arya.css?v=3" />
@@ -680,7 +685,7 @@ export default function StakingClient() {
                 `parseEther` and `utils.parseEther` end up in one page. The write path checks for
                 the global before it sends anything and says so plainly when it is not there yet. */}
             <Script src="/ethers-5.7.2.umd.min.js" strategy="afterInteractive" />
-            <Script src="/arya.js?v=3" strategy="afterInteractive" />
+            <Script src="/arya.js?v=4" strategy="afterInteractive" />
             <Script src="/wallet-source.js?v=3" strategy="afterInteractive" />
         </>
     );

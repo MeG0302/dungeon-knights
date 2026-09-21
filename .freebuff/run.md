@@ -378,11 +378,14 @@ The vault shows the knights a wallet **actually owns**, read from the deployed c
 Verify it:
 
 ```bash
-node tools/check-staking.js        # 150 checks: week clock, tickets, capsule odds, actions,
+node tools/check-staking.js        # 187 checks: week clock, tickets, capsule odds, actions,
                                    #   the real-holdings wiring and the simulated-stake state
                                    #   (fetch stubbed, no network)
 node tools/check-staking-chain.js  # 19 checks: the collection's shape and a live wallet read
-node tools/check-rarity.js         # 44 checks: the economy, incl. capsule outcomes
+node tools/check-rarity.js         # 64 checks: the economy, capsule outcomes, and the two
+                                   #   hall panels' art
+node tools/check-arya.js           # 17 checks: who may open the walkthrough, and that the
+                                   #   pages only ask for it unforced (see below)
 node tools/check-identifiers.js    # 4 checks: every name a bundled module uses is defined
 ```
 
@@ -918,7 +921,47 @@ extra darkness.
 `tools/check-rarity.js` grew seven checks for this: the four files exist, each class is on the panel
 it belongs to and on no third one, `theme.css` resolves every one of them, the phone variant swaps
 at the same 860px the mobile sheets use, and no page *script* paints the art (CSS only). `theme.css`
-is versioned, so it went `?v=1` → `?v=2`.
+is versioned, so it went `?v=1` → `?v=2` → `?v=3`.
+
+**The roster's empty state needed its own rules, and the report was "the font doesn't match".**
+It was not a font being wrong — it was no rule at all. `public/menu.js` writes
+`.empty-state` / `-icon` / `-title` / `-text` into `#knightRoster`, and nothing in any sheet
+touched those four classes, so the block fell back to the browser's default sans and, worse,
+`#knightRoster` is a *grid* (`repeat(auto-fill, minmax(130px, 1fr))`) — the empty state was laid
+into one 130px cell, which is why "Your roster is empty…" wrapped after three words. The rules
+are now in `theme.css`, scoped to `#knightRoster` on purpose (`/points` loads the same sheet and
+has its own empty state in `public/css/points.css`, which must keep winning): `grid-column: 1 / -1`
+so it spans the row, the title in `--font-heading` uppercased like every other panel label, the
+body in `--font-body` at 13px capped to 420px.
+
+Those rules also give the block **its own ground** — a soft radial veil, not another scrim on the
+panel. The room art is behind that panel now and both halls are lit from above, so the empty state
+lands on the brightest part of the picture (the chandelier on `/menu`); a veil under the copy keeps
+it readable without fogging the room for everyone who *does* have knights.
+
+### Arya explains it once, and only once
+
+Both the Staking Vault and the Points Program open with Arya walking a newcomer through the page.
+The rule is: **first visit only** — after that the page leaves her alone, and the footer's
+*Ask Arya* is the one way back. The mechanism is entirely in `public/arya.js`, not in the pages:
+`startTour(id, opts)` refuses when `hasSeenTour(id)` is true and `opts.force` is not, and remembers
+the id in `localStorage` under `dk_arya_tour_<id>`. So `app/staking/client.js` (`staking-v1`) and
+`app/points/client.js` (`points-v1`) each call it exactly twice — once from a mount effect with no
+`force`, once from the button with `force: true` — and neither page needs to know what "seen" means.
+
+Every way out writes the flag, which is the part worth keeping: skipping, finishing, **the overlap
+path** (a new walkthrough ends the one in progress), and `pagehide`. That last one is the likeliest
+decline of all — a player who closes the tab mid-tour runs no other code of ours, so without it the
+walkthrough would come back on every visit until they clicked Skip. Test it for real by leaving the
+page mid-tour and returning; the flag appears during the navigation away.
+
+`tools/check-arya.js` splits the job with `tools/check-all.js`: the browser battery drives the
+module (unseen → starts, skip → remembered, second call → refused, `force` → starts), which is the
+only half a page can show. `check-arya.js` is the half a browser cannot — that `stopTour` is the
+single teardown writing the flag, that nobody calls `stopTour(false)`, and that each page passes
+`force` *only* from the button handler. Two of its checks are negative on purpose (the overlap path
+and `pagehide` are asserted by pattern, not by structure); moving the flag write out of `stopTour`
+fails it by name.
 
 ### The token maths (`lib/reward-config.js`, `tools/check-token-math.js`)
 

@@ -851,6 +851,66 @@ body {
   color: var(--text-secondary);
   font-weight: 600;
 }
+/* ==========================================================
+   THE ROSTER'S EMPTY STATE
+
+   These four classes are carried by the markup `public/menu.js` writes into
+   `#knightRoster`, and until now nothing styled them: the block was inherited from
+   whatever the body font is, so a panel whose every other label is Cinzel showed a line of
+   Inter at browser defaults. That is the "this font doesn't match" report, and it was not a
+   font being wrong — it was no rule at all.
+
+   It is also why the sentence wrapped after three words. `#knightRoster` is a *grid*
+   (`repeat(auto-fill, minmax(130px, 1fr))`), so the empty state was laid into a single
+   130px cell — the same reason `.no-knights` on the Summoning Chamber spans the row.
+
+   Scoped to `#knightRoster` on purpose: `/points` loads this same sheet and has an empty
+   state of its own in `public/css/points.css`, which must keep winning there.
+   ========================================================== */
+#knightRoster .empty-state {
+  grid-column: 1 / -1;
+  justify-self: center;
+  text-align: center;
+  max-width: 484px;
+  margin: 24px auto;
+  padding: 36px 24px;
+  border-radius: var(--radius-lg);
+  /* The room art is behind this panel now, and a hall lit from above puts the empty
+     state on the brightest part of the picture — the chandelier here, the window on the
+     Summoning page. Its own ground keeps the copy readable without fogging the room for
+     everyone who does have knights. */
+  background: radial-gradient(125% 110% at 50% 38%,
+      rgba(13, 10, 8, 0.82) 0%,
+      rgba(13, 10, 8, 0.60) 60%,
+      rgba(13, 10, 8, 0.18) 100%);
+}
+
+#knightRoster .empty-state-icon {
+  font-size: 44px;
+  line-height: 1;
+  opacity: 0.75;
+  margin-bottom: 14px;
+}
+
+#knightRoster .empty-state-title {
+  font-family: var(--font-heading);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  margin-bottom: 10px;
+}
+
+#knightRoster .empty-state-text {
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-muted);
+  max-width: 420px;
+  margin: 0 auto 18px;
+}
+
 .no-knights {
   color: var(--text-muted);
   font-style: italic;
