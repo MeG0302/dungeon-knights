@@ -377,6 +377,57 @@ rec('every tier has a swatch for the odds table', missingDots.length === 0,
     missingDots.length ? `no rule for .dot-${missingDots.join(', .dot-')}` : `${tiers.length} swatches`);
 
 const staticPages = fs.readFileSync(path.join(ROOT, 'lib', 'static-pages.js'), 'utf8');
+
+// ----------------------------------------------------------------- the hall art
+//
+// The Knight's Hall and the Summoning Chamber carry the map art behind their right-hand
+// panel, and it is asserted here for the same reason the portraits are: the rule is *where*
+// the picture is allowed to appear, and that is invisible from any single file. The panel
+// class lives in `lib/static-pages.js`, the picture and its scrim in `theme.css`, and the
+// two have to agree or the panel is simply its old flat colour.
+const HALL_ART = ['knight-hall', 'summon-hall'];
+const missingArt = HALL_ART.flatMap((name) => [`${name}.webp`, `${name}-mobile.webp`])
+    .filter((file) => !fs.existsSync(path.join(PUBLIC, 'assets', 'hall', file)));
+rec('both halls have their art, at both sizes', missingArt.length === 0,
+    missingArt.length
+        ? `missing: ${missingArt.join(', ')}`
+        : 'knight-hall / summon-hall, desktop and phone variants');
+
+const countOf = (needle) => staticPages.split(needle).length - 1;
+const knightAt = staticPages.indexOf('hall-bg-knight');
+const summonAt = staticPages.indexOf('hall-bg-summon');
+rec('the Knight’s Hall panel is the one that gets the hall art',
+    knightAt > staticPages.indexOf('RIGHT: Knight Roster')
+    && knightAt - staticPages.indexOf('RIGHT: Knight Roster') < 220,
+    knightAt === -1 ? 'no panel carries it' : 'on the roster panel');
+rec('the Summoning Chamber gets the summon art',
+    summonAt > staticPages.indexOf('RIGHT: Knights Gallery')
+    && summonAt - staticPages.indexOf('RIGHT: Knights Gallery') < 220,
+    summonAt === -1 ? 'no panel carries it' : 'on the gallery panel');
+rec('and neither is worn by a third panel', countOf('hall-bg-knight') === 1 && countOf('hall-bg-summon') === 1,
+    `${countOf('hall-bg-knight')} knight / ${countOf('hall-bg-summon')} summon`);
+
+const artInCss = HALL_ART.flatMap((name) => [`${name}.webp`, `${name}-mobile.webp`])
+    .filter((file) => !theme.includes(`/assets/hall/${file}`));
+rec('theme.css resolves every one of them', artInCss.length === 0,
+    artInCss.length ? `not referenced: ${artInCss.join(', ')}` : 'four files, four references');
+
+// The phone variant swaps over at the same width the mobile sheets use, so the art and the
+// layout change together rather than the picture arriving early or late.
+const mobileBreak = /@media \(max-width: (\d+)px\)/.exec(
+    fs.readFileSync(path.join(PUBLIC, 'menu-mobile.css'), 'utf8'),
+);
+const themeMobile = theme.slice(theme.indexOf('@media (max-width: 860px)'));
+rec('the phone art swaps at the breakpoint the mobile sheets use',
+    !!mobileBreak && mobileBreak[1] === '860'
+    && themeMobile.includes('knight-hall-mobile.webp') && themeMobile.includes('summon-hall-mobile.webp'),
+    `mobile sheets: ${mobileBreak ? mobileBreak[1] : '?'}px, hall art: ${themeMobile.includes('knight-hall-mobile.webp') ? 'same block' : 'no phone variant'}`);
+
+// The art is presented by CSS and chosen by the page, never injected by a script — a background
+// set from JS is one refactor away from appearing on the map.
+const artFromScripts = pageScripts.filter((f) => /assets\/hall\//.test(fs.readFileSync(path.join(PUBLIC, f), 'utf8')));
+rec('no page script paints it', artFromScripts.length === 0,
+    artFromScripts.length ? `${artFromScripts.join(', ')} references the hall art` : 'CSS only');
 rec('the Summoning Chamber has the container its odds are drawn into',
     staticPages.includes('id=\\"rarityChances\\"') && staticPages.includes('id=\\"cost-per-knight\\"'),
     !staticPages.includes('id=\\"rarityChances\\"')

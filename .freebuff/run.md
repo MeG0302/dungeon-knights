@@ -875,8 +875,50 @@ loaded by every legacy page and carries no `?v=` history, so it was versioned `?
 left alone).**
 
 `public/config.js`, `public/menu.js` and `public/mint-page.js` are served scripts, so all three were
-version-bumped (`config.js?v=1789951300`, `menu.js?v=1` — it had no version at all, and the
-check-copies report had been naming it — and `mint-page.js?v=4`).
+version-bumped (`config.js?v=1789953300`, `menu.js?v=1` — it had no version at all, and the
+check-copies report had been naming it — and `mint-page.js?v=5`).
+
+### The hall panels: map art behind two screens
+
+The Knight's Hall and the Summoning Chamber carry the hall art behind their **right-hand panel** —
+the roster on `/menu`, the gallery on `/mint` — with the landing page's treatment: `cover`,
+centred, and a dark gradient over it so the copy stays readable.
+
+Where each half of that lives, because neither half is visible from the other file:
+
+| piece | file |
+|---|---|
+| which panel carries which picture | `lib/static-pages.js` — `class="side-panel hall-bg hall-bg-knight"` / `hall-bg-summon` on the two `<main>` elements |
+| the picture, the scrim and the phone variant | `public/theme.css` — `.hall-bg`, `--hall-art`, and the `@media (max-width: 860px)` swap |
+| the files | `public/assets/hall/knight-hall.webp`, `summon-hall.webp` (+ `-mobile`) |
+
+**The art is painted on the panel, not on `.side-panel-body`, and that is the whole trick.** The
+body is the scrolling element (`overflow-y: auto`), so a background on it would scroll away with the
+roster and rescale as the list grew — `cover` sizes to the element's box, not the window. On the
+panel it holds still, and the visible art is still only the body, because `.side-panel-header`
+paints its own opaque strip over the top. The scrim is a second *background layer* rather than an
+overlay, so it can neither fog the header nor sit on top of the knight cards.
+
+Regenerate the four files from the 2752×1536 sources in `maps/hall/` (which is not served — only
+`public/` is; the originals are left where they are):
+
+```bash
+ffmpeg -i "maps/hall/knight hall.jpg" -vf "scale=1920:-2" -c:v libwebp -quality 78 public/assets/hall/knight-hall.webp
+ffmpeg -i "maps/hall/summon hall.jpg" -vf "scale=1920:-2" -c:v libwebp -quality 78 public/assets/hall/summon-hall.webp
+ffmpeg -i "maps/hall/knight hall.jpg" -vf "scale=900:-2"  -c:v libwebp -quality 72 public/assets/hall/knight-hall-mobile.webp
+ffmpeg -i "maps/hall/summon hall.jpg" -vf "scale=900:-2"  -c:v libwebp -quality 72 public/assets/hall/summon-hall-mobile.webp
+```
+
+That lands at 219 KB / 161 KB for the pair on desktop and 65 KB / 44 KB for the phone variants. The
+scrim (`0.45 → 0.82`, against the landing page's `0.4 → 0.85`) was chosen from the pictures' own
+measurements rather than by eye: mean luma is only 51–74 of 255, and the copy on both panels sits at
+the *top* of the picture where both halls are lit from above, so that is the end that needed the
+extra darkness.
+
+`tools/check-rarity.js` grew seven checks for this: the four files exist, each class is on the panel
+it belongs to and on no third one, `theme.css` resolves every one of them, the phone variant swaps
+at the same 860px the mobile sheets use, and no page *script* paints the art (CSS only). `theme.css`
+is versioned, so it went `?v=1` → `?v=2`.
 
 ### The token maths (`lib/reward-config.js`, `tools/check-token-math.js`)
 

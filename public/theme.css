@@ -476,6 +476,59 @@ body {
 }
 
 /* ==========================================================
+   HALL PANELS — the map art behind the Knight's Hall roster and the
+   Summoning Chamber's gallery.
+
+   Same treatment as the landing page's background: `cover`, centred, with a dark
+   scrim so the roster stays readable on top of the picture.
+
+   Painted on the panel rather than on `.side-panel-body`, and that is deliberate:
+   the body is the scrolling element (`overflow-y: auto`), so a background there would
+   scroll away with the roster and rescale as it grew — `cover` sizes to the element's
+   box, not to the window. On the panel it holds still while the list moves.
+
+   The visible art is still only the body, because `.side-panel-header` paints its own
+   opaque strip over the top. The scrim is a second *background layer*, not an overlay:
+   background layers paint behind everything the panel contains, so neither the header
+   nor the knight cards are ever fogged.
+
+   The scrim is the landing page's recipe (0.4 → 0.85), nudged to 0.45 → 0.82: the copy on
+   these panels sits at the *top* of the picture — "Connect wallet to view your knights",
+   the roster's empty state — and both halls are lit from above, so that is the brightest
+   part of the art. Measured, the art's own mean luma is 51–74 of 255, so even at 0.45 the
+   hall is plainly visible; what the extra 0.05 buys is a readable line of muted text over
+   the lit ceiling rather than a marginal one.
+   ========================================================== */
+.hall-bg {
+  background-image:
+    linear-gradient(180deg, rgba(13, 10, 8, 0.45) 0%, rgba(13, 10, 8, 0.82) 100%),
+    var(--hall-art, none);
+  background-size: cover, cover;
+  background-position: center, center;
+  background-repeat: no-repeat, no-repeat;
+}
+
+.hall-bg-knight {
+  --hall-art: url('/assets/hall/knight-hall.webp');
+}
+
+.hall-bg-summon {
+  --hall-art: url('/assets/hall/summon-hall.webp');
+}
+
+/* Phones get the smaller file. The breakpoint is the one the mobile sheets use, so the
+   art and the layout change over together. */
+@media (max-width: 860px) {
+  .hall-bg-knight {
+    --hall-art: url('/assets/hall/knight-hall-mobile.webp');
+  }
+
+  .hall-bg-summon {
+    --hall-art: url('/assets/hall/summon-hall-mobile.webp');
+  }
+}
+
+/* ==========================================================
    CONTROL PANEL (mint quantity, rarity)
    ========================================================== */
 .control-panel {
