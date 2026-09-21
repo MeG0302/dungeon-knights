@@ -22,7 +22,7 @@ import { fileURLToPath, pathToFileURL } from 'url';
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const {
     parseStatusUrl, statusIdFromUrl, decodeEntities, textFromEmbed, authorFromEmbed,
-    linksTo, hrefsIn, verifyPost, describeVerdict,
+    linksTo, hrefsIn, mentionsTag, verifyPost, describeVerdict,
 } = await import(pathToFileURL(path.join(ROOT, 'lib', 'x-verify.js')).href);
 const source = (await import('fs')).readFileSync(path.join(ROOT, 'lib', 'x-verify.js'), 'utf8');
 
@@ -147,6 +147,29 @@ rec('a post without our link is not credited', !linksTo('<p>hello</p>', 'hello',
 rec('no configured host means no link match', !linksTo('<p>x</p>', HOST, ''));
 rec('hrefs are decoded, not raw HTML', hrefsIn('<a href="x&amp;y">').includes('x&y'));
 
+// ---------------------------------------------------------------------------- 5b. the tag
+// The share's entire requirement, and the check with a trap built into the data: the embed's
+// byline is an anchor to the *author's* profile, so a post written by the tagged account must not
+// pass on its own byline. That is exactly what a naive href scan would have done.
+const TAG = 'DNGrobinhood';
+rec('a post that tags the account passes', mentionsTag('<p>x</p>', `cleared it @${TAG}`, TAG));
+rec('case does not matter', mentionsTag('<p>x</p>', `cleared it @${TAG.toLowerCase()}` , TAG));
+rec('so does punctuation right after the name',
+    mentionsTag('<p>x</p>', `@${TAG}, 1800 points`, TAG));
+rec('a longer handle is not the tag  [the trailing boundary]',
+    !mentionsTag('<p>x</p>', `@${TAG}Fan cleared it`, TAG));
+rec('a bare name without the @ is not a tag',
+    !mentionsTag('<p>x</p>', `${TAG} cleared it`, TAG));
+rec('an account the post never mentions does not match',
+    !mentionsTag('<p>x</p>', 'cleared it @someoneelse', TAG));
+rec('the author\u2019s own byline is not a tag  [the loophole this closes]',
+    !mentionsTag(embedFor({ handle: TAG, text: 'cleared the vault' }).html, 'cleared the vault', TAG),
+    'a post *written by* the account is not a post *tagging* it');
+rec('a mention whose visible text is shortened still counts',
+    mentionsTag(`<a href="https://x.com/${TAG}">x.com/${TAG}</a>`, 'go', TAG));
+rec('a tag that is not a valid handle matches nothing at all  [fails closed]',
+    !mentionsTag('<p>x</p>', '@not a handle!', 'not a handle!'));
+
 // ------------------------------------------------------------------- 6. the whole verdict
 async function withStub(handler, options = {}) {
     const fetchImpl = stub(handler);
@@ -187,6 +210,40 @@ async function withStub(handler, options = {}) {
     rec('a post from the right account without our link pays nothing',
         verdict.ok === false && verdict.code === 'missing-link',
         verdict.reason);
+}
+
+{
+    // The share's verdict, end to end: one requirement, the tag, and authorship still standing
+    // behind it.
+    const shareExpect = { handle: 'knightfan', mention: TAG };
+    const posting = (text, handle = 'knightfan') => stub(() => jsonResponse(embedFor({ text, handle })));
+    const verify = (text, handle) => verifyPost(`https://x.com/knightfan/status/${ID}`, {
+        expect: shareExpect, fetchImpl: posting(text, handle),
+    });
+
+    const tagged = await verify(`I cleared the vault today @${TAG}`);
+    rec('a share that tags the account verifies',
+        tagged.ok === true && tagged.post.tagged === true, describeVerdict(tagged));
+
+    const untagged = await verify('cleared all three floors, 1800 points');
+    rec('a share from the right author without the tag pays nothing',
+        untagged.ok === false && untagged.code === 'missing-tag', untagged.reason);
+
+    const nearMiss = await verify(`cleared it @${TAG}Fan`);
+    rec('nor does a post tagging a name that merely starts with ours',
+        nearMiss.ok === false && nearMiss.code === 'missing-tag', nearMiss.code);
+
+    const wrongAuthor = await verify(`cleared it @${TAG}`, 'someoneelse');
+    rec('and a tagged post from another account is still not yours',
+        wrongAuthor.ok === false && wrongAuthor.code === 'wrong-author', wrongAuthor.reason);
+
+    // The link is not the share's business any more, and this is the pair that proves the two rules
+    // did not leak into each other: no link required, no tag accepted in its place.
+    const noLink = await verify(`cleared it @${TAG}`);
+    rec('a share needs no link of ours, only the tag', noLink.ok === true, describeVerdict(noLink));
+    const linkOnly = await verify(`cleared the vault ${HOST}`);
+    rec('and our link alone does not stand in for the tag',
+        linkOnly.ok === false && linkOnly.code === 'missing-tag', linkOnly.code);
 }
 
 {

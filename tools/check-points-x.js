@@ -90,7 +90,12 @@ function jsonResponse(status, body) {
 
 function embedFor(url, postId) {
     const author = stub.x.author;
-    const text = stub.x.text !== null ? stub.x.text : `Vault cleared, 900 points banked — https://${global.__SITE_HOST__}`;
+    // The default is a *share* as the program writes one: the site link the campaign requires, and
+    // the tag the share requires. A post that satisfies only one of the two tasks is what the
+    // individual cases set explicitly.
+    const text = stub.x.text !== null
+        ? stub.x.text
+        : `I cleared the Points Vault — 1800 points @${global.__SHARE_TAG__} https://${global.__SITE_HOST__}/points?ref=0x0`;
     return {
         url: `https://twitter.com/${author}/status/${postId}`,
         author_name: author,
@@ -133,6 +138,7 @@ globalThis.fetch = async (url, options = {}) => {
     const Program = await import('../lib/points-program.js');
     const Privy = await import('../lib/privy-verify.js');
     global.__SITE_HOST__ = Config.SITE_LINK_HOST;
+    global.__SHARE_TAG__ = Config.X_SHARE_TAG;
 
     const fresh = () => `0x${crypto.randomBytes(20).toString('hex')}`;
     const points = async (address) => (await Store.getWallet(address))?.points || 0;
@@ -200,23 +206,26 @@ globalThis.fetch = async (url, options = {}) => {
         stolen.code === 'x-taken' && stolen.owner.includes('…'), stolen.error);
     rec('and the first wallet still holds it', (await Store.getWallet(gate)).x.id === '4242', 'still bound');
 
-    // The hand-off. A *proved* binding beats a provisional one, which is the only direction it can
-    // go: two proved bindings for one account would mean two Privy users claiming one X account,
-    // and Privy does not allow that — so whoever proved it is the one who really holds it.
+    // The hand-off, and its limit. A *proved* binding beats a provisional one — the only direction
+    // it can go, since two proved bindings for one account would mean two Privy users claiming one X
+    // account and Privy does not allow that. It may not beat a claim that has already **earned**:
+    // `gate` has been paid under @alice, so the wallet proving @alice now is not the wallet those
+    // points went to, and handing the claim over would pay one X account on two wallets.
     const taker = fresh();
     const proved = await Program.bindX(taker, { id: '4242', username: 'alice' }, { verified: true });
-    rec('a proved binding takes over a provisional one', proved.ok === true, `ok=${proved.ok}`);
-    rec('and the wallet it was taken from is left unbound', (await Store.getWallet(gate)).x === null, 'x=null');
-    rec('so its earning stops', (await Program.clearLevel(gate, 0)).code === Program.X_REQUIRED, 'refused');
-    const twoProved = await Program.bindX(fresh(), { id: '4242', username: 'alice' }, { verified: true });
-    rec('but two proved bindings cannot both hold it', twoProved.code === 'x-taken', twoProved.error);
+    rec('a proved binding cannot take over a claim that has already earned',
+        proved.code === 'x-taken' && String(proved.error).includes('already earned'),
+        `${proved.code}: ${proved.error}`);
+    rec('  … and the wallet that earned keeps the account',
+        (await Store.getWallet(gate)).x.id === '4242', 'still bound');
+    rec('  … and the wallet that was refused is left completely unbound',
+        ((await Store.getWallet(taker))?.x ?? null) === null, 'x=null');
+    rec('  … and it is still not earning', (await stateOf(taker)).canEarn === false, '');
+    rec('  … and the claim never moved', (await Store.xBindingOwner('4242')) === gate, '');
 
-    // The wallet the rest of this file uses gets a *different* account id, which is what a player
-    // whose handle was taken over would have to do too. The handle is deliberately the same: the
-    // handle is not the key, the account id is.
-    const rebound = await Program.bindX(gate, { id: '4243', username: 'alice' });
-    rec('a wallet can bind a different account with the same handle', rebound.ok === true, `ok=${rebound.ok}`);
-    rec('  … and is earnable again', (await stateOf(gate)).canEarn === true, '');
+    const twoProved = await Program.bindX(fresh(), { id: '7000', username: 'carol' }, { verified: true });
+    rec('and two proved bindings cannot both hold one account',
+        twoProved.code === 'x-taken', twoProved.error);
 
     // ------------------------------------------------------------------------ the share
     console.log('');
@@ -236,10 +245,13 @@ globalThis.fetch = async (url, options = {}) => {
     rec('  … and no points moved', (await points(gate)) === beforeShare, `${await points(gate)} PTS`);
 
     stub.x.author = 'alice';
-    stub.x.text = 'a post with no link in it at all';
-    const noLink = await Program.submitTask(gate, 'share', anotherPost());
-    rec('a post without our link never pays',
-        noLink.credited === 0 && (await tasksOf(gate)).share.state === 'failed',
+    stub.x.text = 'a post with no tag in it at all';
+    const noTag = await Program.submitTask(gate, 'share', anotherPost());
+    rec('a post that does not tag us never pays',
+        noTag.credited === 0 && (await tasksOf(gate)).share.state === 'failed',
+        (await tasksOf(gate)).share.reason);
+    rec('  … and the refusal names the account it had to tag',
+        (await tasksOf(gate)).share.reason.includes(`@${Config.X_SHARE_TAG}`),
         (await tasksOf(gate)).share.reason);
 
     // The throttle is what makes "check again" honest rather than free: the same link cannot be
@@ -263,15 +275,101 @@ globalThis.fetch = async (url, options = {}) => {
         twice.credited === 0 && twice.alreadyCredited === true, `credited ${twice.credited}`);
     rec('  … and the balance is untouched', (await points(gate)) === beforeShare + 100, `${await points(gate)} PTS`);
 
+    // ------------------------------------------------------------------ what the post says
+    console.log('');
+    console.log('What the share hands the player');
+
+    const kit = (await stateOf(gate)).share;
+    rec('the tag the verifier looks for is the tag the post was written with',
+        kit.tag === Config.X_SHARE_TAG && kit.text.includes(`@${Config.X_SHARE_TAG}`), kit.tag);
+    rec('the text claims the doubled total, not the run total',
+        kit.text.includes(String((await stateOf(gate)).entryTotalToday * 2)), kit.text);
+    rec('and it carries this wallet\u2019s own invite link',
+        kit.text.includes(`/points?ref=${gate}`), kit.text);
+    rec('the composer link is prefilled with exactly that text',
+        kit.intentUrl.includes(encodeURIComponent(kit.text)), '');
+    rec('and the card picture is the one the page offers for download',
+        kit.cardImage === Config.SHARE_CARD_IMAGE && kit.ogImage === Config.SHARE_OG_IMAGE,
+        `${kit.cardImage} / ${kit.ogImage}`);
+
+    // ----------------------------------------------------------------------- the picture
+    console.log('');
+    console.log('The picture that goes out with a share');
+
+    const root = path.join(__dirname, '..');
+    for (const [label, asset] of [
+        ['the card X unfurls', Config.SHARE_OG_IMAGE],
+        ['the picture the kit saves', Config.SHARE_CARD_IMAGE],
+    ]) {
+        rec(`${label} is where the config says it is`, fs.existsSync(path.join(root, 'public', asset)), asset);
+    }
+    // The crop is ours rather than X's: `summary_large_image` renders at 1.91:1, and handing it the
+    // photo's own shape would let X decide which part of the knight to cut off.
+    const ogSize = jpegSize(path.join(root, 'public', Config.SHARE_OG_IMAGE));
+    rec('and it is already the shape X renders link cards at',
+        ogSize?.width === Config.SHARE_OG_SIZE.width && ogSize?.height === Config.SHARE_OG_SIZE.height,
+        ogSize ? `${ogSize.width}\u00d7${ogSize.height}` : 'unreadable');
+    const pointsPage = fs.readFileSync(path.join(root, 'app', 'points', 'page.js'), 'utf8');
+    rec('/points declares it as its own link card, which is what puts it in the post',
+        pointsPage.includes('SHARE_OG_IMAGE') && /card: 'summary_large_image'/.test(pointsPage), '');
+
+    // ------------------------------------------------------------------- the one-way door
+    console.log('');
+    console.log('A binding cannot be handed back');
+
+    const locked = await Program.unbindX(gate);
+    rec('unbinding is refused, with the code the page switches on',
+        locked.code === 'x-locked' && String(locked.error).includes('one wallet'),
+        `${locked.code}: ${locked.error}`);
+    rec('  … and the binding is untouched', (await Store.getWallet(gate)).x.id === '4242', 'still bound');
+    rec('  … and the account is still claimed by that wallet',
+        (await Store.xBindingOwner('4242')) === gate, '');
+    rec('  … and earning still works', (await Program.clearLevel(gate, 1)).credited === 300, 'floor 2 paid');
+
+    const switcher = fresh();
+    await Program.bindX(switcher, { id: '5001', username: 'bob' });
+    await Program.bindX(switcher, { id: '5002', username: 'bob' });
+    rec('a wallet can move to a different account id under the same handle',
+        (await Store.getWallet(switcher)).x.id === '5002', String((await Store.getWallet(switcher)).x.id));
+    rec('  … and the account it left stays claimed by it',
+        (await Store.xBindingOwner('5001')) === switcher, String(await Store.xBindingOwner('5001')));
+    const hijack = await Program.bindX(fresh(), { id: '5001', username: 'bob' });
+    rec('  … so the next wallet cannot bind it, handle in hand or not',
+        hijack.code === 'x-taken', hijack.code);
+
+    // The one hand-over that survives: claimed, never earned under, handed to the wallet that can
+    // prove it — and the wallet giving it up keeps whatever it holds now.
+    const proverBob = fresh();
+    const handed = await Program.bindX(proverBob, { id: '5001', username: 'bob' }, { verified: true });
+    rec('an account claimed but never earned under goes to the wallet that proves it',
+        handed.ok === true, handed.code || `ok=${handed.ok}`);
+    rec('  … and the wallet that gave it up keeps the account it holds now',
+        (await Store.getWallet(switcher)).x?.id === '5002', String((await Store.getWallet(switcher)).x?.id));
+
+    // The gap the two index keys left: one wallet binds by account id, another types the same
+    // handle. With only the id claimed, the typed binding found the handle free and *both* earned
+    // for one X account — no unbinding required. Every binding now claims its handle as well.
+    const byId = fresh();
+    await Program.bindX(byId, { id: '6001', username: 'dave' });
+    rec('binding by account id also claims the handle',
+        (await Store.xBindingOwner('handle:dave')) === byId, '');
+    const typedToo = await Program.bindX(fresh(), { username: 'dave' });
+    rec('so a second wallet cannot take the same account by typing the handle',
+        typedToo.code === 'x-taken', typedToo.code);
+
     // ----------------------------------------------------------------- pending, then paid
     console.log('');
     console.log('A post X has not indexed yet');
 
+    // Its own handle, and its own name in the stub: one X account earns for one wallet, so a second
+    // wallet cannot bind @alice at all any more — which is the rule working, and the reason every
+    // wallet from here on has a handle of its own.
     const patient = fresh();
-    await Program.bindX(patient, { id: '777', username: 'alice' });
+    await Program.bindX(patient, { id: '777', username: 'patient' });
     await Program.clearLevel(patient, 0);
     const patientBefore = await points(patient);
 
+    stub.x.author = 'patient';
     stub.x.kind = '404';
     const pending = await Program.submitTask(patient, 'share', 'https://x.com/alice/status/1900000000000000003');
     rec('a post X cannot see yet is remembered as pending, not paid',
@@ -322,7 +420,7 @@ globalThis.fetch = async (url, options = {}) => {
     console.log('When X never answers');
 
     const silent = fresh();
-    await Program.bindX(silent, { id: '888', username: 'alice' });
+    await Program.bindX(silent, { id: '888', username: 'silent' });
     await Store.updateWallet(silent, (w) => {
         w.tasks = {
             [campaignId]: {
@@ -372,14 +470,14 @@ globalThis.fetch = async (url, options = {}) => {
     console.log('The campaign reward');
 
     const player = fresh();
-    await Program.bindX(player, { id: '999', username: 'alice' });
+    await Program.bindX(player, { id: '999', username: 'player' });
     const campaignTask = (await tasksOf(player)).campaign;
     rec('the campaign is published with its reward',
         campaignTask.id === campaignId && campaignTask.reward === Config.X_ENGAGEMENT_REWARD,
         `${campaignTask.id} → ${campaignTask.reward} PTS`);
     rec('  … and it starts unsubmitted', campaignTask.state === 'none', campaignTask.state);
 
-    stub.x.author = 'alice';
+    stub.x.author = 'player';
     stub.x.text = null;
     const engaged = await Program.submitTask(player, 'campaign', CAMPAIGN);
     rec('an engagement post by the bound handle pays once',
@@ -391,10 +489,10 @@ globalThis.fetch = async (url, options = {}) => {
     console.log('');
     console.log('Two taps at once');
 
-    stub.x.author = 'alice';
+    stub.x.author = 'racer';
     const racer = fresh();
-    await Program.bindX(racer, { id: '1000', username: 'alice' });
-    const raceUrl = 'https://x.com/alice/status/1900000000000000006';
+    await Program.bindX(racer, { id: '1000', username: 'racer' });
+    const raceUrl = 'https://x.com/racer/status/1900000000000000006';
     const [a, b] = await Promise.all([
         Program.submitTask(racer, 'campaign', raceUrl),
         Program.submitTask(racer, 'campaign', raceUrl),
@@ -407,11 +505,12 @@ globalThis.fetch = async (url, options = {}) => {
     // Two *different* links, same task, at the same moment. The submit throttle cannot be what
     // saves us here — different posts, different guards — so this is the one-credit guard's own
     // test, and it is the shape a player with two tabs open actually produces.
+    stub.x.author = 'racer2';
     const racer2 = fresh();
-    await Program.bindX(racer2, { id: '1001', username: 'alice' });
+    await Program.bindX(racer2, { id: '1001', username: 'racer2' });
     const [c, d] = await Promise.all([
-        Program.submitTask(racer2, 'campaign', 'https://x.com/alice/status/1900000000000000008'),
-        Program.submitTask(racer2, 'campaign', 'https://x.com/alice/status/1900000000000000009'),
+        Program.submitTask(racer2, 'campaign', 'https://x.com/racer2/status/1900000000000000008'),
+        Program.submitTask(racer2, 'campaign', 'https://x.com/racer2/status/1900000000000000009'),
     ]);
     const twoAtOnce = (c.credited || 0) + (d.credited || 0);
     rec('two different links racing for one reward pay it once',
@@ -484,6 +583,8 @@ globalThis.fetch = async (url, options = {}) => {
         /export async function shareEntry\(address, url\) \{\s*return submitTask\(address, 'share', url\);\s*\}/.test(
             fs.readFileSync(path.join(__dirname, '..', 'lib', 'points-program.js'), 'utf8'),
         ), '');
+    rec('the unbind action is answered with the refusal rather than served',
+        /unbindX\(address\)/.test(Routes.x) && /x-locked/.test(Routes.x), '');
 
     // ------------------------------------------- with no campaign configured, it hides
     // A child process, because this module reads the environment once at import time — the only
@@ -515,4 +616,25 @@ globalThis.fetch = async (url, options = {}) => {
  */
 function anotherPost() {
     return 'https://x.com/alice/status/1900000000000000007';
+}
+
+/**
+ * The pixel dimensions out of a JPEG's start-of-frame marker.
+ *
+ * Read rather than assumed: the point of the share card being 1200×630 is that X does not crop the
+ * photo itself, and no amount of looking at it can tell 630 from 670.
+ */
+function jpegSize(file) {
+    const bytes = fs.readFileSync(file);
+    let i = 2;
+    while (i < bytes.length - 9) {
+        if (bytes[i] !== 0xff) { i += 1; continue; }
+        const marker = bytes[i + 1];
+        const length = bytes.readUInt16BE(i + 2);
+        if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+            return { height: bytes.readUInt16BE(i + 5), width: bytes.readUInt16BE(i + 7) };
+        }
+        i += 2 + length;
+    }
+    return null;
 }

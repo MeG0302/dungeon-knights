@@ -567,17 +567,33 @@ only thing that decides whether a post exists, who wrote it, and what it says.
 
 - **The verifier is free, and that is the point.** `lib/x-verify.js` asks X's public oEmbed
   endpoint (`publish.twitter.com/oembed`) — no key, no credits, no account — which returns the
-  post's **author handle**, its **author URL** and its **text**. From those three things it proves
-  everything the rewards need: the post exists, the *bound handle* wrote it, and it carries our
-  site's host. A 404 is "X has not indexed it yet" (retryable, held as `pending`); a **200 that is
-  not a post** is the profile-URL case and is refused by validating the response *shape*, not just
-  the status code. What oEmbed cannot prove is a *like* or a *retweet* — those need paid API credits
-  or a zkTLS proof, which is why the campaign asks for a repost **that carries our link** instead.
-- **The binding is one X account, one wallet.** The index (`dk:points:xindex:<id>`) is written
-  before the wallet record and is the arbiter, so two wallets racing for one account cannot both
-  win. A *proved* binding (the server checked a Privy access token) is keyed on the **account id**
-  and takes a provisional one over; a provisional binding is keyed `handle:<name>` and is what
-  makes the feature work **today**, with no Privy dashboard change.
+  post's **author handle**, its **author URL** and its **text**. From those it proves everything the
+  rewards need: the post exists, the *bound handle* wrote it, and it says what its task requires —
+  the campaign's repost carries our site's host, a **share tags `@DNGrobinhood`** (`X_SHARE_TAG`,
+  case-insensitive, boundary-matched so `@DNGrobinhoodFan` does not count). A 404 is "X has not
+  indexed it yet" (retryable, held as `pending`); a **200 that is not a post** is the profile-URL
+  case and is refused by validating the response *shape*, not just the status code. What oEmbed
+  cannot prove is a *like*, a *retweet* or an **attachment** — those need paid API credits or a
+  zkTLS proof. That last one is why the share's picture travels as the post's **link preview**
+  instead (see below).
+- **The binding is one X account, one wallet, and it cannot be handed back.** The index
+  (`dk:points:xindex:<key>`) is written before the wallet record and is the arbiter, so two wallets
+  racing for one account cannot both win. Three rules hold it together, and each exists because
+  removing it handed out points twice:
+  - **`unbind` is answered, never honoured** (`code: 'x-locked'`, HTTP 403). Binding an account to a
+    second wallet is the farm loop: the floors, the share and the daily caps are all counted *per
+    wallet*, so bind → earn → unbind → bind again paid both wallets. The button is gone from the
+    card and the route still answers the action with the sentence, so an older bundle is told why.
+  - **Every binding claims its handle (`handle:<name>`) as well as its account id.** The two keys
+    used to be reachable separately: a wallet bound by id while another *typed* the same handle,
+    and both earned for one X account. Switching to a different account is still allowed — the
+    account left behind **keeps** the original wallet's claim, so it can never be handed on.
+  - **A claim that has already earned cannot be taken over.** A *proved* binding (the server
+    checked a Privy access token) still takes a **provisional** one over — that is how a typed
+    handle that was never the player's ends up with the account that can prove it — but only if
+    that claim has earned nothing. `pointsAtBind` on the binding is the snapshot that tells the two
+    apart, and the refusal is computed **before any write**, so a refused bind leaves nothing behind.
+  A provisional binding is what makes the feature work **today**, with no Privy dashboard change.
 - **Proof without a secret.** `lib/privy-verify.js` verifies a Privy access token with
   `node:crypto` against the app's **public JWKS** (`auth.privy.io/api/v1/apps/<id>/jwks.json`) —
   signature, `iss`, `aud`, `exp` — and then reads the linked accounts from `GET /api/v1/users/me`
@@ -585,26 +601,57 @@ only thing that decides whether a post exists, who wrote it, and what it says.
   the page sends is only used when the proof cannot be made, and the record says which happened.
   What a *provisional* binding is worth is worth stating: **nothing can be earned with one**, because
   a post from that handle is what pays.
-- **A share needs the link to the post.** `shareEntry(address, url)` is now the same verified task
-  the campaign uses, with the day's doubled total as its reward. The vault's Share button opens the
-  intent and hands the player back to the Points page; the doubling lands when X confirms the post.
-  The amount is fixed **at submission time**, so clearing another floor afterwards cannot raise the
-  bonus on a post already published, and a share whose day rolls over before X confirms it is
-  `expired` rather than paid.
+- **A share needs the tag, and the post is written for the player.** `shareEntry(address, url)` is
+  the same verified task the campaign uses, with the day's doubled total as its reward. The text
+  — *"I just cleared all three Points Vault dungeons today and racked up 1800 points @DNGrobinhood
+  <their invite link>"* — is built **on the server** in `lib/points-config.js#sharePostText` and
+  reaches the page as `state.share`, so the words the player posts and the words X is asked about
+  are written by one function. The amount is fixed **at submission time**, so clearing another
+  floor afterwards cannot raise the bonus on a post already published, and a share whose day rolls
+  over before X confirms it is `expired` rather than paid.
+- **The picture reaches the post as the link's card, not as an attachment.** X's composer link
+  (`twitter.com/intent/tweet?text=…`) can prefill **text only** — posting an image on a player's
+  behalf needs the paid API — so `/points` declares `points-og.jpg` as its Open Graph / Twitter card
+  in `app/points/page.js`, and the invite link every share carries unfurls into that picture. The
+  share kit also offers **Save picture** (a real `<a download>`, so the gesture is not consumed) and
+  hands the file to the OS share sheet where `navigator.canShare({files})` says it can — one tap,
+  image and text together. What this cannot be is *verified*: oEmbed cannot see attachments, so X is
+  asked about the author and the tag, and the card says as much rather than implying otherwise.
 - **The states, and the words for each.** `pending` (X has not indexed it — a real answer, not an
-  error), `verified`, `failed` (X answered and the post is not yours / has no link), `expired` (no
-  good answer within the attempt ceiling, or the day ended first). The throttle is server-side and
-  handed back as `retryInSeconds`, so the button counts down instead of looking broken.
+  error), `verified`, `failed` (X answered and the post is not yours / no tag / no link), `expired`
+  (no good answer within the attempt ceiling, or the day ended first). The throttle is server-side
+  and handed back as `retryInSeconds`, so the button counts down instead of looking broken.
 - **Privy's Twitter must be enabled for the *proved* path** (see the switches table): without it a
   player can still type a handle and earn. The bridge exposes `getXAccount()`, `linkX()` and
   `getAccessToken()` for exactly this.
 
 ```bash
-node tools/check-points-x.js    # 70 checks, offline: a stubbed X and a stubbed Privy, real ES256
-node tools/check-x-verify.js    # 48 checks: the verifier alone, against a stubbed oEmbed
+node tools/check-points-x.js    # 92 checks, offline: a stubbed X and a stubbed Privy, real ES256
+node tools/check-x-verify.js    # 63 checks: the verifier alone, against a stubbed oEmbed
 node tools/check-kv-store.js    # 6 checks: the guard across two processes (and why KV matters)
 node tools/check-points-guard.js http://localhost:3000   # 21 checks: the live routes, gate included
 ```
+
+Every guard added for the share and the lock was **falsified by mutation** before it was trusted —
+and two of them had to be broken *twice*: the earned-claim rule and the handle claim are each
+enforced in two places, so weakening one left the behaviour intact and the checks still green. Only
+breaking both made them fail by name. That is the point of the exercise; an equivalent mutant looks
+exactly like a working guard.
+
+The share's two pictures are generated from one source file, which is **not** served:
+
+```bash
+# source: points/daily share/share-card.jpg (the photo the campaign uses, 1337×746)
+ffmpeg -y -i "points/daily share/share-card.jpg" -vf "scale=1200:-2,setsar=1" \\
+  -c:v mjpeg -q:v 3 public/assets/points/share-card.jpg      # 1200×670, the attachable one
+ffmpeg -y -i "points/daily share/share-card.jpg" -vf "scale=1200:-2,crop=1200:630,setsar=1" \\
+  -c:v mjpeg -q:v 3 public/assets/points/points-og.jpg       # 1200×630, the card X unfurls
+```
+
+The crop is ours rather than X's on purpose: `summary_large_image` renders at 1.91:1, so handing it
+the photo's own 1.79:1 would let X choose which part of the knight to cut off. `check-points-x.js`
+reads the JPEG's frame header and asserts **1200×630**, which is the only way to tell that from
+"it looks fine".
 
 `check-points-x.js` runs everything in **one sandboxed process** (a throwaway `cwd` for the file
 driver, `globalThis.fetch` replaced by a stub), which is what makes the awkward answers testable:

@@ -812,6 +812,10 @@ export default function PointsDungeon({
      * moved behind a verification: the bonus is paid when the player pastes the link to their post
      * and X confirms the bound handle wrote it. So the vault opens the post and steps out of the
      * way, and the card that takes the link does the claiming.
+     *
+     * It also hands the picture over on the way past: `onShare` saves it and opens the composer with
+     * the text written, so a player who taps here does not have to find the Daily Share card first
+     * to get what the post is supposed to contain.
      */
     function handleShare() {
         if (shared) return;
@@ -924,8 +928,9 @@ export default function PointsDungeon({
                         <div className="dungeon-complete dungeon-final">
                             <div className="dungeon-reward-announce">Vault conquered · {VAULT_TOTAL} PTS</div>
                             <p className="dungeon-final-note">
-                                Exit with your {VAULT_TOTAL} points, or post the run on X and paste the link on
-                                the Points page to double it to {VAULT_TOTAL * 2}.
+                                Exit with your {VAULT_TOTAL} points, or post the run on X — the picture and the
+                                text are ready on the Points page — and paste the link there to double it to{' '}
+                                {VAULT_TOTAL * 2}.
                             </p>
                             <div className="dungeon-final-btns">
                                 <button className="btn btn-secondary btn-md dungeon-btn" onClick={onExit}>
@@ -943,8 +948,9 @@ export default function PointsDungeon({
                             </div>
                             {handoff && !shared && (
                                 <p className="dungeon-final-note" role="status">
-                                    X has opened in a new tab — finish the post there, then paste its link into
-                                    the Daily Share card to claim the double.
+                                    X is open with the post written — the picture goes with it where your device
+                                    offers that, and your link card shows it either way. Finish the post, then
+                                    paste its link into the Daily Share card to claim the double.
                                 </p>
                             )}
                         </div>

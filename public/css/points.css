@@ -752,6 +752,67 @@ link, and X is asked about it before anything is paid.
     gap: 6px;
 }
 
+/* The binding is permanent, and it says so where the button used to be. A line and not a control:
+   there is nothing to press, it is a fact about the account above. */
+.x-bind-locked {
+    align-self: center;
+    font-size: 10px;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- the share kit
+   The picture and the words that go out with a shared run. The photo is the point of the card, so
+   it takes the full column width; the steps under it are a real <ol> because they are a sequence —
+   save, post, paste — and the numbers are what make that readable at eleven pixels. */
+.x-share-kit {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.x-share-photo {
+    display: block;
+    border: 1px solid var(--border-base);
+    border-radius: 4px;
+    overflow: hidden;
+    line-height: 0;
+}
+
+.x-share-photo img {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.x-share-steps {
+    margin: 0;
+    padding-left: 18px;
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--text-secondary, var(--text-muted));
+}
+
+.x-share-steps li + li {
+    margin-top: 4px;
+}
+
+/* The post as it will be sent — selectable, because the words are what a player pastes when they
+   post from X's own app rather than through the composer link. */
+.x-share-text {
+    padding: 8px 9px;
+    border: 1px solid var(--border-dim, var(--border-base));
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.35);
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+    user-select: text;
+}
+
 .x-task {
     display: flex;
     flex-direction: column;

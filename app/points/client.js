@@ -9,7 +9,7 @@ import {
     claimRef, clearSession, connectWallet, fetchLeaderboard, fetchMe, fetchXStatus, forgetWallet,
     hasInjectedWallet, isAddress, onAccountsChanged, pendingRef, readRefFromUrl,
     readSession, refLink, requestBindX, requestClear, requestShare, requestTask, requestTaskCheck,
-    requestUnbindX, savedAddress, shortAddress, signIn, stashRef,
+    savedAddress, shortAddress, signIn, stashRef,
 } from '../../lib/points-client';
 import PointsDungeon from './dungeon';
 
@@ -67,8 +67,8 @@ function pointsTourSteps(live) {
             mood: 'Your name on it',
             target: '[data-arya="bind"]',
             text: () => (now().bound
-                ? 'Your X account is bound, so everything you earn has a name on it. Posts are checked against that handle — write them from it or they will not count.'
-                : 'Points are earned against an X account, so this has to be bound before anything pays — <strong>Link X</strong>, or type your handle and bind it. Nothing here costs anything.'),
+                ? 'Your X account is bound, so everything you earn has a name on it. Posts are checked against that handle — write them from it or they will not count. Note what the page says underneath: a binding is for good, because a binding that can be handed back is one that can be handed to a second wallet.'
+                : 'Points are earned against an X account, so this has to be bound before anything pays — <strong>Link X</strong>, or type your handle and bind it. Nothing here costs anything, and it stays bound: bind the account you actually post from.'),
         },
         {
             kind: 'brace',
@@ -84,7 +84,7 @@ function pointsTourSteps(live) {
             target: '[data-arya="share"]',
             text: () => (now().shared
                 ? 'Today&rsquo;s share is already claimed — your entry was paid out at double. It resets with the vault tomorrow.'
-                : `Clear all three floors and this unlocks. Post the run on X, then paste the link to your post here: I check it with X itself before paying, and then the whole entry doubles — <strong>${VAULT_ENTRY_TOTAL} becomes ${VAULT_ENTRY_TOTAL * 2} PTS</strong>. Once a day, same as the vault.`),
+                : `Clear all three floors and this unlocks. The picture and the text are ready for you here: save the picture, post the run, and paste the link to your post. The text tags <strong>@${(now().share && now().share.tag) || 'DNGrobinhood'}</strong> and carries your invite link. I ask X one thing about that post before paying — that it tags us — and then the whole entry doubles: <strong>${VAULT_ENTRY_TOTAL} becomes ${VAULT_ENTRY_TOTAL * 2} PTS</strong>. Once a day, same as the vault.`),
         },
         {
             kind: 'think',
@@ -117,8 +117,46 @@ function pointsTourSteps(live) {
  * `failed`, `expired` — because "we could not tell yet" and "that is not your post" are different
  * sentences and the player is owed the right one.
  */
+/**
+ * The share kit: what to post, and what goes in it.
+ *
+ * X's composer link cannot attach a file — posting an image on a player's behalf needs the paid API
+ * — so the picture reaches the post two ways and this says both rather than pretending otherwise.
+ * The invite link unfurls into a card built from the same image, which puts the picture in the post
+ * for every player on every platform with nothing to attach; and the button saves the file for
+ * anyone who would rather attach it by hand.
+ *
+ * The tag and the text are the server's (`state.share`), not this component's: what the page shows
+ * and what X is asked about have to be the same words.
+ */
+function ShareKit({ share, onSave, saveDisabled }) {
+    if (!share) return null;
+    return (
+        <div className="x-share-kit">
+            {/* A link rather than an image, so a phone can long-press it to save. */}
+            <a className="x-share-photo" href={share.cardImage} target="_blank" rel="noreferrer">
+                <img src={share.cardImage} alt="The picture that goes out with your share" loading="lazy" />
+            </a>
+            <ol className="x-share-steps">
+                <li>The picture travels with the post by itself: your invite link unfurls into a card showing it.</li>
+                <li>Save it as well if you want it attached as a file — that step is yours, because X&rsquo;s composer link can only carry text. On a phone the post button hands the picture to X in one go.</li>
+                <li>Post the run, then paste the link to your post. X is asked one thing about it: that it tags <strong>@{share.tag}</strong>.</li>
+            </ol>
+            <button
+                type="button"
+                className="btn btn-secondary btn-sm w-full"
+                onClick={onSave}
+                disabled={saveDisabled}
+            >
+                Save picture
+            </button>
+            <div className="x-share-text">{share.text}</div>
+        </div>
+    );
+}
+
 function XTaskCard({
-    id, title, icon, reward, hint, cta, onCta, ctaDisabled, ctaTitle,
+    id, title, icon, reward, hint, kit, cta, onCta, ctaDisabled, ctaTitle,
     task, busy, error, draft, onDraft, onSubmit, onCheck, wait,
 }) {
     const state = task?.state || 'none';
@@ -135,6 +173,8 @@ function XTaskCard({
                 </span>
             </div>
             <p className="panel-hint">{hint}</p>
+
+            {kit}
 
             {cta && (
                 <button
@@ -224,7 +264,7 @@ export default function PointsPage() {
     // render) so the server and the first client paint also agree.
     const [walletReady, setWalletReady] = useState(false);
     // ------------------------------------------------------------------ earning on X
-    // Which X thing is mid-flight ('bind' | 'unbind' | 'campaign' | 'share'), whether this
+    // Which X thing is mid-flight ('bind' | 'campaign' | 'share'), whether this
     // deployment can *prove* a link, the handle a player typed, each task's own error line and
     // pasted link, and the server's throttle countdown.
     const [xBusy, setXBusy] = useState(null);
@@ -592,20 +632,90 @@ export default function PointsPage() {
         }
     }, [connected, flash]);
 
-    /** Hand the account back. Points already earned stay. */
-    const handleUnbindX = useCallback(async () => {
-        setXBusy('unbind');
-        setError(null);
-        try {
-            const result = await requestUnbindX();
-            if (result.state) setState(result.state);
-            flash('X account unbound — earning is paused until you bind one again.');
-        } catch (e) {
-            setXErrors((prev) => ({ ...prev, bind: e.message }));
-        } finally {
-            setXBusy(null);
+    // -------------------------------------------------------------- the daily share
+    // The picture cannot ride in X's composer link — attaching a file on someone's behalf needs the
+    // paid API — so it reaches the post two ways, and neither of them is a lie: the invite link
+    // unfurls into a card built from the same image, and the button saves the file for a player who
+    // would rather attach it by hand. The tag and the text come down from the server
+    // (`state.share`), so what this page shows and what X is asked about are the same words.
+    const shareKit = state?.share || null;
+
+    /**
+     * Save the picture on its own. A real anchor click, so it consumes no gesture the composer
+     * might need — which is why this is safe to offer next to the post button.
+     *
+     * This is the route for a player who would rather attach the file by hand: the one thing X's
+     * composer link cannot do for them, and the card says so instead of implying otherwise.
+     */
+    const saveShareImage = useCallback(() => {
+        if (!shareKit?.cardImage) return false;
+        const link = document.createElement('a');
+        link.href = shareKit.cardImage;
+        link.download = 'dungeon-knights-points-vault.jpg';
+        link.rel = 'noopener';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        return true;
+    }, [shareKit?.cardImage]);
+
+    /**
+     * Put the run in a post: the picture first, then the composer.
+     *
+     * The one-tap path is the platform's own share sheet, which can carry a file and the text
+     * together — where it exists. Everywhere else the file is saved and the composer opens
+     * prefilled inside the same click, so the popup blocker sees a window the player opened.
+     */
+    const composeShare = useCallback(async () => {
+        const text = shareKit?.text || '';
+        const intent = shareKit?.intentUrl
+            || `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
+        if (shareKit?.cardImage && typeof navigator !== 'undefined' && navigator.share) {
+            try {
+                const blob = await (await fetch(shareKit.cardImage)).blob();
+                const file = new File([blob], 'dungeon-knights-points-vault.jpg', {
+                    type: blob.type || 'image/jpeg',
+                });
+                if (navigator.canShare?.({ files: [file] })) {
+                    await navigator.share({ files: [file], text });
+                    return 'shared';
+                }
+            } catch {
+                // A cancelled sheet, an old browser, a refused permission — all the same answer:
+                // fall through to the path that works without any of them.
+            }
         }
-    }, [flash]);
+        saveShareImage();
+        window.open(intent, '_blank', 'noopener');
+        return 'saved';
+    }, [saveShareImage, shareKit?.cardImage, shareKit?.intentUrl, shareKit?.text]);
+
+    /** Sharing the finished entry doubles it — once a day, and paid by the server. */
+    const handleShareX = useCallback(async () => {
+        if (!bound) {
+            setError('Bind your X account first — the card on the left does it in one tap.');
+            return;
+        }
+        const how = await composeShare();
+        // Opening the composer is only half of it. The doubling is paid when the link to the post
+        // comes back here and X confirms the bound handle wrote it, so this hands the player to the
+        // card that takes the link rather than claiming a bonus on a tap — including out of the
+        // vault, which covers the page.
+        setSharePrompt(true);
+        setInDungeon(false);
+        flash(how === 'shared'
+            ? 'Picture and text are in your post — finish it on X, then paste the link below to claim the double.'
+            : 'Picture saved. Attach it in the composer, post, then paste the link below to claim the double.');
+    }, [bound, composeShare, flash]);
+
+    /** Save just the picture, for a player who wants it in hand first. */
+    const handleSaveShareImage = useCallback(() => {
+        if (!saveShareImage()) {
+            setError('The share picture is not available on this deployment.');
+            return;
+        }
+        flash('Picture saved — post it on X and attach the file, or let the link card carry it for you.');
+    }, [flash, saveShareImage]);
 
     /**
      * File the link to a post and let the server decide.
@@ -690,26 +800,6 @@ export default function PointsPage() {
         if (window.Arya) window.Arya.hide();
     };
 
-    /** Sharing the finished entry doubles it — once a day, and paid by the server. */
-    const handleShareX = useCallback(() => {
-        if (!bound) {
-            setError('Bind your X account first — the card on the left does it in one tap.');
-            return;
-        }
-        const earned = state?.entryTotalToday || 0;
-        const text = encodeURIComponent(
-            `I just cleared the Points Vault in Dungeon Knights — ${earned || VAULT_ENTRY_TOTAL} PTS banked!\n\n${window.location.origin}/points`
-        );
-        window.open(`https://twitter.com/intent/tweet?text=${text}`, '_blank');
-        // Opening the intent is only half of it. The doubling is paid when the link to the post
-        // comes back here and X confirms the bound handle wrote it, so this hands the player to the
-        // card that takes the link rather than claiming a bonus on a tap — including out of the
-        // vault, which covers the page.
-        setSharePrompt(true);
-        setInDungeon(false);
-        flash('Post it, then paste the link below to claim the double.');
-    }, [bound, flash, state?.entryTotalToday]);
-
     /**
      * Copy the invite link. Clipboard permission is not guaranteed (it needs a secure
      * context and often a user gesture the browser trusts), so this falls back to
@@ -768,7 +858,7 @@ export default function PointsPage() {
             {/* Versioned like every other sheet: an unversioned `/theme.css` is a CSS change
                 that never reaches a returning player. */}
             <link rel="stylesheet" href="/theme.css?v=6" />
-            <link rel="stylesheet" href="/css/points.css?v=6" />
+            <link rel="stylesheet" href="/css/points.css?v=7" />
             <link rel="stylesheet" href="/css/arya.css?v=3" />
             <Script src="/arya.js?v=4" strategy="afterInteractive" />
             {/* The header's wallet pill gets the same menu every other page's control has. It is
@@ -914,6 +1004,7 @@ export default function PointsPage() {
                                             {state.x.verified
                                                 ? 'Proved with Privy. Everything you earn pays into the wallet above.'
                                                 : 'Bound. Every post is checked against this handle before it pays.'}
+                                            {' '}A binding cannot be handed back — one X account earns for one wallet.
                                         </div>
                                         <div className="x-bind-actions">
                                             {/* Only offered when there is actually a Privy-linked X account to
@@ -923,9 +1014,11 @@ export default function PointsPage() {
                                                     {xBusy === 'bind' ? 'Waiting for X…' : `Prove @${privyX.username}`}
                                                 </button>
                                             )}
-                                            <button className="btn btn-ghost btn-sm" onClick={handleUnbindX} disabled={!!xBusy}>
-                                                {xBusy === 'unbind' ? 'Unbinding…' : 'Unbind'}
-                                            </button>
+                                            {/* No Unbind, and none is coming: a binding a wallet can hand back
+                                                is a binding it can hand to a second wallet, which is the whole
+                                                of the farming loop the account index exists to stop. Binding a
+                                                *different* X account is still possible — the button above. */}
+                                            <span className="x-bind-locked">Locked to this wallet</span>
                                         </div>
                                     </>
                                 ) : (
@@ -965,7 +1058,8 @@ export default function PointsPage() {
                                         </div>
                                         <div className="wallet-card-meta">
                                             Linking through Privy proves the account. Typing the handle binds it for
-                                            earning either way — nothing pays until a post from that handle checks out.
+                                            earning either way — nothing pays until a post from that handle checks
+                                            out. Bind the account you actually post from: it stays bound.
                                         </div>
                                     </>
                                 )}
@@ -1050,7 +1144,8 @@ export default function PointsPage() {
                                 title="Daily Share"
                                 icon={`${ASSETS}White_logo_on_black_background_2K_20260919011421-autocrop-hair.png`}
                                 reward={state?.entryTotalToday || VAULT_ENTRY_TOTAL}
-                                hint={`Finish the vault, post the run on X, then paste the link to that post. The whole entry doubles once X confirms it was written by you (${VAULT_ENTRY_TOTAL} → ${VAULT_ENTRY_TOTAL * 2} PTS). Once a day.`}
+                                hint={`Finish the vault, then post the run: the picture and the text — with @${shareKit?.tag || 'DNGrobinhood'} and your invite link on it — are both ready below. Paste the link to your post and the whole entry doubles (${VAULT_ENTRY_TOTAL} → ${VAULT_ENTRY_TOTAL * 2} PTS). Once a day.`}
+                                kit={<ShareKit share={shareKit} onSave={handleSaveShareImage} saveDisabled={!connected} />}
                                 cta={state?.sharedToday ? 'Shared today — resets with the vault' : 'Post the run on X'}
                                 onCta={handleShareX}
                                 ctaDisabled={!connected || !bound || !entryComplete || !!state?.sharedToday}

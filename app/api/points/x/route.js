@@ -15,6 +15,11 @@ export const runtime = 'nodejs';
  * is careful about — an access token, when the client sends one, is verified with Privy and its
  * linked X account is what gets bound. The client's own claim is used only when that check cannot
  * be made, and the record says which of the two happened.
+ *
+ * `unbind` is answered rather than honoured, and the route keeps the action so an older page (or a
+ * hand-rolled request) is told why in a sentence instead of a 404. The rule itself is in the
+ * program — a binding is not a thing a wallet can hand back, because the same X account bound to a
+ * second wallet is how points get farmed.
  */
 export async function POST(request) {
     const address = sessionFromRequest(request);
@@ -32,8 +37,12 @@ export async function POST(request) {
     const action = body?.action;
 
     if (action === 'unbind') {
+        // 403, not 400: the request is well formed, the *rule* says no. The code is what the page
+        // switches on, and the message is the sentence a player gets.
         const result = await unbindX(address);
-        if (result.error) return NextResponse.json(result, { status: 400 });
+        if (result.error) {
+            return NextResponse.json(result, { status: result.code === 'x-locked' ? 403 : 400 });
+        }
         return NextResponse.json({ ...result, verified: false, provisional: false });
     }
 
