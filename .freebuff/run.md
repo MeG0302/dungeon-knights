@@ -626,13 +626,82 @@ The typed code was **lowercase** and still landed, and the pill and invite link 
 can reach): on reload it showed *Invited by 0xdf74…c9f2*, the stash was cleared, and the add-code box
 was already gone. So both link forms work on arrival, and the code is not just a display string.
 
-**Not deployed and not committed.** Production still hands out address links and has no add-a-code
-box; the code form exists only in this tree.
+#### Live on production, and the bug that check found
+
+Deployed as `dungeon-knights-ndc4wq6fh-meglast320-1694`, then re-deployed as
+`dungeon-knights-7velcg0p1-meglast320-1694` with the fix below; all three hosts were re-pointed after
+each one (`dungeonknights.io`, `www.dungeonknights.io`, `dungeon-knights.vercel.app` — see
+"`vercel domains add` pins an alias", above). The live page chunk carries the feature
+(`Your invite code`, `Have a friend`, `ref-attach` — a *server-only* change like the fix below leaves
+the chunk hash alone, so verify behaviour, not hashes).
+
+The first production check **failed, and it was right to**: a wallet that signed in but had earned
+nothing was handed `refCode: null`, and its invite link came back in the old address form.
+`assignRefCode` opened with
+
+```js
+const doc = await getWallet(key);
+if (!doc) return null;          // ← the wallet does not exist yet, so no code for you
+```
+
+and a record only exists once something writes one. On the page, a newcomer's first request is
+`stateFor` (the session route calls it before any `/me` POST), so a brand-new player was handed
+**nothing to share** until some unrelated award happened to create their record — the precise opposite
+of what an invite is for. The fix is one line's worth of intent: a missing record is the *normal* case
+here, so it is built from `blankWallet` and written by the same `updateWallet` that mints the code.
+
+**Why the offline suite missed it, which is the part worth remembering:** every wallet in it is
+created by `registerVisit` first, because that is how a *test* sets a wallet up — but it is not what a
+*player* does. There is now a section for it (`The first visit, before anything has been earned`) that
+asserts the store does not know the wallet, then that `stateFor` alone hands it a code the store
+credits back, then that its invite link carries the code. A `firstvisit` mutation reverts the bail-out
+exactly and fails three checks by name:
+
+```
+FAIL    … and the read the page renders still hands it a code  — refCode null
+FAIL    … which the store now holds, and credits back to it
+FAIL    … so its invite link carries that code, not its address  — …?ref=0x3e7076ec…
+```
+
+That third line is the production symptom, reproduced offline. **Twelve mutations now, each caught by
+name** (the eleven in the table below plus this one).
+
+#### Verified against production, after the fix
+
+A temporary probe (`tools/_probe-temp.mjs`, deleted) signed in with **real throwaway keys** — the
+server's own challenge, a real `personal_sign` — rather than minting a local token, so nothing in it
+depended on this machine sharing the deployment's secret. It wrote two wallets into the **production
+KV store**, so it took them out again and then asked the store whether they were gone:
+
+```
+Production — https://dungeonknights.io            (store driver as the deployment sees it: redis)
+  ok  a throwaway wallet can sign in on production
+  ok  a wallet with no code is handed one on arrival            — refCode FF79S
+  ok    … and it starts with no referrer
+  ok  the invite link is the canonical domain, carrying the code — https://dungeonknights.io/points?ref=FF79S
+  ok  two wallets get different codes                            — V268R / FF79S
+  ok  a code added later is accepted on production               — 200
+  ok    … and it credits the code's owner
+  ok    … and the record says when it was added                  — 2026-09-21T20:40:39.885Z
+  ok  the inviter now lists the newcomer                         — 1 referral(s)
+  ok  a second code is refused by name                           — 400 already-referred
+  ok  a wallet cannot add its own code                           — 400 own-code
+  ok  junk is refused before anything is looked up               — 400 bad-code
+  purged both test wallets — 3 label(s) each, 0 survived
+  ok  nothing of the test wallets is left in the production store
+13/13 checks passed
+```
+
+A first run of that probe read `12/13` on `the inviter now lists the newcomer` — **my probe's bug, not
+the app's**: the *state*'s `referrals` is a list of records (`{ address, short, points, theirPoints }`)
+while the *store*'s is a list of addresses, and the probe used the store's shape against the state.
+Worth a line because the same confusion in the other direction would have been a real hole in
+`check-refs.js`, which reads the store's field.
 
 #### The refs harness, falsified by mutation
 
-`node tools/check-refs.js` — **45/45**, offline, in a throwaway `cwd`, against the file driver: no
-network, no key, no rate limit. Eleven mutations, each caught by name:
+`node tools/check-refs.js` — **49/49**, offline, in a throwaway `cwd`, against the file driver: no
+network, no key, no rate limit. Twelve mutations, each caught by name:
 
 | mutation | what the run reported |
 |---|---|
@@ -647,6 +716,7 @@ network, no key, no rate limit. Eleven mutations, each caught by name:
 | `REFCODE_PREFIX` dropped from `VALUE_INDEXES` | `FAIL the store can name the code index …`, `FAIL … and its code credits nobody` |
 | a confusable character added to the alphabet | `FAIL the alphabet cannot be misread …`, `FAIL and a code-shaped string that cannot be one is refused` |
 | `stateFor` building the invite link from the address | `FAIL … and so does the text the player posts` |
+| `assignRefCode` bailing on a wallet with no record (`firstvisit`) | `FAIL … and the read the page renders still hands it a code`, `FAIL … which the store now holds`, `FAIL … so its invite link carries that code` |
 
 **One of those is worth reading twice.** The first attempt at the code-claim mutation removed only the
 sequential read guard, and the suite passed **45/45** — because the atomic `SET … NX` still refused,
@@ -860,8 +930,8 @@ trusting a live harness (`for p in /points /api/points/session /api/points/vault
 that was never there.
 
 ```bash
-node tools/check-refs.js        # 45 checks, offline: the invite codes — shape, uniqueness, both link
-                                # forms, and the attach-later refusals
+node tools/check-refs.js        # 49 checks, offline: the invite codes — shape, uniqueness, both link
+                                # forms, the attach-later refusals, and the first-visit case
 node tools/check-points-x.js    # 161 checks, offline: a stubbed X and a stubbed Privy, real ES256
 node tools/check-x-verify.js    # 63 checks: the verifier alone, against a stubbed oEmbed
 node tools/check-x-webhook.js   # 51 checks: the follow webhook — real HMACs, both envelopes, no network
@@ -2166,11 +2236,11 @@ the live deployment — `/api/points/me` returns **five** one-time tasks (the fo
 posts). Note the shape of that: a `vercel --prod` uploads the **working directory**, not a commit, so
 anything uncommitted ships. That is why the run doc records what is outstanding.
 
-**Not committed as of this writing:** the quote-repost work and the domain change —
-`lib/points-config.js`, `lib/points-program.js`, `app/points/client.js`, `lib/points-client.js`,
-`lib/points-store.js`, `public/css/points.css`, `vercel.json` and the two harnesses are modified, plus
-`tools/check-follow-gate.js` and `tools/points-pending.js` as untracked files. Production is therefore
-running code that git does not have yet. Two operational details from it: `vercel env pull` writes the **sensitive** values as
+**Committed since:** the quote-repost work and the domain change (`f11d474`), then the invite-code
+feature (`6e749d4` — five characters per wallet, and a code that can be attached after joining) and the
+first-visit fix it needed that the production check found. `main` is **ahead of `origin/main`** and
+**has not been pushed**; production runs them anyway, because `vercel --prod` deploys the working
+directory rather than a commit. Two operational details about pulling production env: `vercel env pull` writes the **sensitive** values as
 `[SENSITIVE]` placeholders (8 of them — `GAME_RUN_SECRET`, `POINTS_SESSION_SECRET`, the signer key and
 the rest), while `KV_REST_API_URL` / `KV_REST_API_TOKEN` **do** come through, which is what lets
 `tools/points-pending.js` read the production queue at all; and that pull needs **`--yes`**, or it

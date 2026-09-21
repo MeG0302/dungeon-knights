@@ -97,6 +97,29 @@ for (const key of ['KV_REST_API_URL', 'KV_REST_API_TOKEN', 'UPSTASH_REDIS_REST_U
         && Config.refTokenFromInput('') === null
         && Config.refTokenFromInput('hello there') === null, '');
 
+    // ------------------------------------------------------------------------ the first visit
+    // This section exists because the live deployment found the gap it covers. Every wallet in the
+    // sections above is created by `registerVisit` first, which is *not* what a new player does: the
+    // page renders from `stateFor`, and the session route reaches it before any `/me` POST, so a
+    // wallet that has earned nothing yet may have no record at all. Minting a code only for a record
+    // that already exists means a newcomer is handed nothing to share until some unrelated award
+    // happens to create them — which is the opposite of what an invite is for.
+    console.log('');
+    console.log('The first visit, before anything has been earned');
+
+    const arrival = fresh();
+    rec('a wallet that has never been written is unknown to the store',
+        (await Store.getWallet(arrival)) === null, '');
+
+    const arrivalState = await Program.stateFor(arrival);
+    rec('  … and the read the page renders still hands it a code',
+        typeof arrivalState?.refCode === 'string' && arrivalState.refCode.length === Config.REF_CODE_LENGTH,
+        `refCode ${arrivalState?.refCode}`);
+    rec('  … which the store now holds, and credits back to it',
+        (await Store.refCodeOwner(arrivalState.refCode)) === arrival, '');
+    rec('  … so its invite link carries that code, not its address',
+        arrivalState.inviteUrl === `${SITE_URL}/points?ref=${arrivalState.refCode}`, arrivalState.inviteUrl);
+
     // -------------------------------------------------------------------- one code, one wallet
     console.log('');
     console.log('One code, one wallet');
