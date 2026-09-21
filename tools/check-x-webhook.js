@@ -202,6 +202,69 @@ function code(source) {
         /retries anything that is not a 2xx/.test(moduleSource),
         'the module reports a verdict; 200-with-a-log versus a retry storm is decided at the route');
 
+    // ---------------------------------------------------------- the other envelope
+    // X has delivered activity to webhooks two ways: the Account Activity API's list of typed events,
+    // and the X Activity API's single dotted event. The first is documented as deprecated in favour
+    // of the second, and the second's payload schema could not be read offline — so both are parsed,
+    // and every event has to resolve to "this actor started following us". An event that cannot be
+    // resolved is skipped and counted, which is the direction that refuses a claim rather than
+    // inventing one.
+    console.log('');
+    console.log('The X Activity envelope');
+
+    const xaa = (payload) => Webhook.parseFollowEvents(
+        { data: { event_type: 'follow.follow', ...payload } },
+        { targetId: OUR_ID },
+    );
+
+    const dotted = xaa({
+        filter: { user_id: OUR_ID },
+        payload: { source: { id: '99010', screen_name: 'NewFan' }, target: { id: OUR_ID, screen_name: 'DNGrobinhood' } },
+    });
+    rec('a dotted `follow.follow` is read as a follow of ours',
+        dotted.ok && dotted.events.length === 1 && dotted.events[0].id === '99010'
+        && dotted.events[0].username === 'newfan' && dotted.events[0].following === true,
+        JSON.stringify(dotted.events[0]));
+    rec('  … and it says which envelope it read, so the log can tell them apart',
+        dotted.code === 'activity-events', dotted.code);
+
+    const dottedUnfollow = xaa({
+        event_type: 'follow.unfollow',
+        payload: { source: { id: '99010', screen_name: 'NewFan' }, target: { id: OUR_ID } },
+    });
+    rec('an unfollow is the same envelope with the other verb',
+        dottedUnfollow.events[0]?.following === false, JSON.stringify(dottedUnfollow.events[0]));
+
+    rec('  … and the other party names are understood too',
+        xaa({ payload: { follower: { id: '99012', username: 'NamedDifferently' }, followed: { id: OUR_ID } } })
+            .events[0]?.username === 'nameddifferently',
+        'the ids decide it, not the key names — a rename on X\u2019s side must not silently stop the reward');
+
+    // The direction this has to get right. `follow.follow` fires for **both** directions, so an event
+    // where our own account did the following is not somebody following us — and paying it would be
+    // 500 points for the opposite of what the task asks.
+    const ourOwnFollow = xaa({
+        payload: { source: { id: OUR_ID, screen_name: 'DNGrobinhood' }, target: { id: '99013', screen_name: 'SomebodyElse' } },
+    });
+    rec('an event where OUR account did the following is not a follower',
+        ourOwnFollow.ok && ourOwnFollow.events.length === 0 && ourOwnFollow.skipped === 1,
+        `${ourOwnFollow.events.length} events, ${ourOwnFollow.skipped} skipped`);
+
+    const dottedList = Webhook.parseFollowEvents({ data: [
+        { event_type: 'follow.follow', payload: { source: { id: '99014', screen_name: 'fan2' }, target: { id: OUR_ID } } },
+        { event_type: 'post.create', payload: { id: '1919191919' } },
+        { event_type: 'follow.follow', payload: { target: { id: OUR_ID } } },
+    ] }, { targetId: OUR_ID });
+    rec('a list of dotted events is read event by event',
+        dottedList.events.length === 1 && dottedList.events[0].id === '99014' && dottedList.skipped === 2,
+        `${dottedList.events.length} events, ${dottedList.skipped} skipped`);
+    rec('  … and an event type that is not a follow is never counted as one',
+        !dottedList.events.some((e) => e.id === '1919191919'), 'post.create is not a follower');
+
+    rec('a dotted event with nobody identifiable is skipped rather than guessed at',
+        xaa({ payload: { source: { screen_name: 'no-id' }, target: { id: OUR_ID } } }).events.length === 0,
+        'an event keyed on nothing cannot be recorded, and must not be paid');
+
     // --------------------------------------------------------------------------- the mode
     // Which of the two sentences the card uses, and whether a claim is checked at all, hangs off
     // this function. It is one env var and one secret, and it must never report a check that cannot

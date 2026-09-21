@@ -658,7 +658,7 @@ only thing that decides whether a post exists, who wrote it, and what it says.
 ```bash
 node tools/check-points-x.js    # 125 checks, offline: a stubbed X and a stubbed Privy, real ES256
 node tools/check-x-verify.js    # 63 checks: the verifier alone, against a stubbed oEmbed
-node tools/check-x-webhook.js   # 40 checks: the follow webhook — real HMACs, no network
+node tools/check-x-webhook.js   # 48 checks: the follow webhook — real HMACs, both envelopes, no network
 node tools/check-kv-store.js    # 6 checks: the guard across two processes (and why KV matters)
 node tools/check-points-guard.js http://localhost:3000   # 21 checks: the live routes, gate included
 ```
@@ -669,11 +669,13 @@ enforced in two places, so weakening one left the behaviour intact and the check
 breaking both made them fail by name. That is the point of the exercise; an equivalent mutant looks
 exactly like a working guard.
 
-The follow webhook's guards were falsified the same way — seven mutations, each caught by the check
+The follow webhook's guards were falsified the same way — eight mutations, each caught by the check
 that names it: an unconfigured deployment accepting an unsigned delivery, an unknown event type
 being guessed into a follow, the mode turning on with no secret, the route parsing the body before
 checking the signature over it, a claim paid without asking what X said, a claim re-labelled as
-checked by a redeploy, and the handle fallback removed so a typed binding cannot find its fact.
+checked by a redeploy, the handle fallback removed so a typed binding cannot find its fact, and the
+direction check dropped so an event where *we* followed somebody would pay as a follower (45/48,
+failing on that check by name).
 
 #### Proving a follow: X's Activity API
 
@@ -693,21 +695,58 @@ signature is answered **200 even when unreadable**: X retries anything that is n
 delivered event is billed, and a shape we have never seen should cost one log line rather than a
 retry storm.
 
+**X has delivered activity to webhooks two ways, and the parser reads both.** The Account Activity
+API sends a **list of typed events** — `{ for_user_id, follow_events: [{ type: 'follow', source,
+ target }] }` — and is documented as deprecated; the X Activity API sends **one event with a dotted
+name** — `{ data: { event_type: 'follow.follow', filter, tag, payload } }`. The XAA *payload* schema
+is not published in a form that can be read offline, so both envelopes are accepted and every event
+has to resolve to one thing the program can act on: **this actor started following us**. Party names
+differ between the two, so a small set of keys is read on each side (`source`/`follower`/`actor`,
+`target`/`followed`) and the **ids** decide — including the direction, because `follow.follow` fires
+for both and an event where *we* did the following is not somebody following us. Anything else is
+skipped and counted, never guessed at: skipping a real follow refuses a claim and the log says why,
+while inventing one pays 500 points for something that did not happen.
+
+The route is **deployed to production** (`/api/x/events` answers `400 {"error":"no consumer secret
+configured"}` there today) and **not yet wired**: the three variables below do not exist in
+Production, so no CRCs can be answered and no deliveries can be verified. The registration sequence,
+the moment those values exist:
+
 ```bash
-# 1. Register the URL in the X developer portal, then subscribe it. X asks the CRC question
-#    itself when the subscription is created; answering it by hand is how you find out early:
-node --input-type=module -e "
-  const {answerCrcChallenge} = await import('./lib/x-webhook.js');
-  console.log(answerCrcChallenge('any-token'));"   # sha256=… — the value X expects back
-curl -s "http://localhost:3000/api/x/events?crc_token=any-token"   # {"response_token":"sha256=…"}
+# 0. Preflight FIRST. Registering makes X call our URL with a CRC challenge, and it answers only
+#    `CrcValidationFailed` — with no detail. This asks our own URL the same question and compares the
+#    answer to the HMAC it computes locally, so it can say which half is wrong.
+node tools/x-webhook-register.js
+#    → "the route is not deployed" | "the deployment has no X_CONSUMER_SECRET set"
+#    | "the deployment is answering with a different secret than the one set here"
 
-# 2. Which account's follows we care about (the delivery filter and the backfill both use it)
-#    X_FOLLOW_TARGET_ID = the numeric id of @DNGrobinhood
+# 1. Register the webhook (POST /2/webhooks, bearer). X runs the CRC right there; a failure here is
+#    refused *before* the call if the preflight did not pass.
+node tools/x-webhook-register.js --register
 
-# 3. The follows that happened BEFORE the subscription — billed per row, so it will not run
+# 2. Subscribe both verbs — POST /2/activity/subscriptions, $0.010 each. Idempotent: an existing
+#    subscription for the same event type and account is skipped rather than duplicated.
+node tools/x-webhook-register.js --subscribe
+#    a bare 403 here is the known case where the endpoint wants user context: retry --auth oauth1
+
+# 3. What X holds now, at any point
+node tools/x-webhook-register.js --status
+
+# 4. The follows that happened BEFORE the subscription — billed per row, so it will not run
 #    without --yes, and --max-pages bounds it:
 node tools/x-followers-backfill.js --yes --max-pages 1
 ```
+
+Needed for that sequence, all from the X developer portal for the app that owns @DNGrobinhood:
+`X_CONSUMER_SECRET` (the API secret key — the same value the deployment verifies deliveries with),
+`X_BEARER_TOKEN` (app-only, for `/2/webhooks`), and `X_FOLLOW_TARGET_ID` (our numeric account id:
+`GET /2/users/by/username/DNGrobinhood`). `--auth oauth1` additionally uses `X_CONSUMER_KEY`,
+`X_ACCESS_TOKEN` and `X_ACCESS_TOKEN_SECRET`, signed in the tool with `node:crypto`.
+
+Two operational facts worth knowing: **X re-runs the CRC every hour**, and a webhook that starts
+failing it is marked `valid: false` and **stops receiving events** until it passes again —
+`PUT /2/webhooks/:id` forces a re-check, and `GET /2/webhooks` reports the flag. And a follow is only
+ever delivered *after* the subscription exists, which is what the backfill is for.
 
 Environment variables (production, via `npx vercel env add …` — **never** in `.env.local`, which
 would put a live consumer secret on a dev machine):
