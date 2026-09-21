@@ -32,7 +32,9 @@ them (see `docs/DEPLOY-PHASE-2.md`, *The production switch*).
 
 | what | what is missing | where the steps are |
 |---|---|---|
-| Points Program persistence | `KV_REST_API_URL` + `KV_REST_API_TOKEN` (Upstash/Vercel KV) | *The Points Program is server-backed* |
+| Points Program persistence | `KV_REST_API_URL` + `KV_REST_API_TOKEN` (Upstash/Vercel KV) — **still unset in production**, so the `memory` driver is live and `check-kv-store.js` is the measurement of what that costs (one floor paid twice across two processes). The Vercel CLI cannot provision a store (`vercel storage` is not a subcommand); it is a dashboard step, and the env vars arrive with it | *The Points Program is server-backed* |
+| The X-account gate | nothing — it is enforced server-side and works today. A **provisional** binding (a typed handle) is enough to earn; proving it needs Privy's Twitter method enabled on the app | *Earning on X* |
+| The +500 engagement task | `X_CAMPAIGN_POST` — the campaign post's URL. Until it is set, `tasks.campaign` is `null` and the card hides itself rather than offering a reward with nothing to quote. `X_ENGAGEMENT_REWARD` (default 500) and `X_CAMPAIGN_KEYWORD` (an alternative to the site link) are optional | *Earning on X* |
 | Mobile wallets | `PRIVY_APP_ID` (+ `PRIVY_CLIENT_ID`), and the chain enabled for the app | *Wallets: injected first…* |
 | Phone gas | players fund their own embedded wallet | *Wallets: injected first…* |
 | **Staking writes** | the approve/stake/claim transaction path, then `STAKING_WRITES_READY` in `lib/staking-config.js` — the page stays a labelled simulation until then, by design | *The Staking Vault* |
@@ -386,6 +388,8 @@ node tools/check-rarity.js         # 64 checks: the economy, capsule outcomes, a
                                    #   hall panels' art
 node tools/check-arya.js           # 17 checks: who may open the walkthrough, and that the
                                    #   pages only ask for it unforced (see below)
+node tools/check-wallet-menu.js    # 10 checks: every route derived from app/ has a wallet
+                                   #   control and loads the module that opens My Portfolio
 node tools/check-identifiers.js    # 4 checks: every name a bundled module uses is defined
 ```
 
@@ -549,8 +553,65 @@ The browser asks; it never decides.
   |---|---|---|
   | `/session` | `GET ?address=` / `POST` | the message to sign / exchange a signature for a token |
   | `/me` | `GET` / `POST {ref}` | the page's state / claim a referral code |
-  | `/vault` | `POST {action}` | `clear` a floor, or `share` for the ×2 bonus — **the only way points are awarded** |
+  | `/vault` | `POST {action}` | `clear` a floor, or `share` **with `url`** for the ×2 bonus — the only way points are awarded |
+  | `/x` | `GET` / `POST {action}` | what this wallet has bound and whether this deployment can prove a link / `bind` (with an optional Privy `accessToken`) or `unbind` |
+  | `/task` | `POST {action, task, url}` | `submit` the link to a post for `campaign` or `share`, or `check` a pending one again |
   | `/leaderboard` | `GET ?limit=` | the public board (`isYou` when a token is sent) |
+
+### Earning on X — the gate, and the two verified rewards
+
+Nothing in the program pays a wallet that has not **bound an X account**, and the two things done on
+X are paid only after X itself has been asked about the post. Both rules live on the server:
+`lib/points-program.js` refuses every award with `code: 'x-required'`, and `lib/x-verify.js` is the
+only thing that decides whether a post exists, who wrote it, and what it says.
+
+- **The verifier is free, and that is the point.** `lib/x-verify.js` asks X's public oEmbed
+  endpoint (`publish.twitter.com/oembed`) — no key, no credits, no account — which returns the
+  post's **author handle**, its **author URL** and its **text**. From those three things it proves
+  everything the rewards need: the post exists, the *bound handle* wrote it, and it carries our
+  site's host. A 404 is "X has not indexed it yet" (retryable, held as `pending`); a **200 that is
+  not a post** is the profile-URL case and is refused by validating the response *shape*, not just
+  the status code. What oEmbed cannot prove is a *like* or a *retweet* — those need paid API credits
+  or a zkTLS proof, which is why the campaign asks for a repost **that carries our link** instead.
+- **The binding is one X account, one wallet.** The index (`dk:points:xindex:<id>`) is written
+  before the wallet record and is the arbiter, so two wallets racing for one account cannot both
+  win. A *proved* binding (the server checked a Privy access token) is keyed on the **account id**
+  and takes a provisional one over; a provisional binding is keyed `handle:<name>` and is what
+  makes the feature work **today**, with no Privy dashboard change.
+- **Proof without a secret.** `lib/privy-verify.js` verifies a Privy access token with
+  `node:crypto` against the app's **public JWKS** (`auth.privy.io/api/v1/apps/<id>/jwks.json`) —
+  signature, `iss`, `aud`, `exp` — and then reads the linked accounts from `GET /api/v1/users/me`
+  with the same token. No `PRIVY_APP_SECRET`, no dependency, and no trust in the browser: the claim
+  the page sends is only used when the proof cannot be made, and the record says which happened.
+  What a *provisional* binding is worth is worth stating: **nothing can be earned with one**, because
+  a post from that handle is what pays.
+- **A share needs the link to the post.** `shareEntry(address, url)` is now the same verified task
+  the campaign uses, with the day's doubled total as its reward. The vault's Share button opens the
+  intent and hands the player back to the Points page; the doubling lands when X confirms the post.
+  The amount is fixed **at submission time**, so clearing another floor afterwards cannot raise the
+  bonus on a post already published, and a share whose day rolls over before X confirms it is
+  `expired` rather than paid.
+- **The states, and the words for each.** `pending` (X has not indexed it — a real answer, not an
+  error), `verified`, `failed` (X answered and the post is not yours / has no link), `expired` (no
+  good answer within the attempt ceiling, or the day ended first). The throttle is server-side and
+  handed back as `retryInSeconds`, so the button counts down instead of looking broken.
+- **Privy's Twitter must be enabled for the *proved* path** (see the switches table): without it a
+  player can still type a handle and earn. The bridge exposes `getXAccount()`, `linkX()` and
+  `getAccessToken()` for exactly this.
+
+```bash
+node tools/check-points-x.js    # 70 checks, offline: a stubbed X and a stubbed Privy, real ES256
+node tools/check-x-verify.js    # 48 checks: the verifier alone, against a stubbed oEmbed
+node tools/check-kv-store.js    # 6 checks: the guard across two processes (and why KV matters)
+node tools/check-points-guard.js http://localhost:3000   # 21 checks: the live routes, gate included
+```
+
+`check-points-x.js` runs everything in **one sandboxed process** (a throwaway `cwd` for the file
+driver, `globalThis.fetch` replaced by a stub), which is what makes the awkward answers testable:
+`404` for a post X has not indexed, Privy answering with a token but no X link, a post that exists
+and is written by somebody else. The Privy half uses a **real P-256 keypair** generated in the
+harness and published as this app's JWKS, so the signature check is genuinely exercised — including
+an edited payload and an `alg: HS256` token (the classic confusion bug).
 
 - Wallet connection is `lib/points-client.js`, deliberately **not** `public/wallet.js`: the
   React route does not load the legacy script stack. It talks to `window.ethereum` and writes
@@ -1039,6 +1100,66 @@ reported an `eth_call` that existed only in a comment saying the page deliberate
 Every guard was falsified before it was trusted: moving `PORTFOLIO_HREF`, restoring the ethers tag,
 and reintroducing `HASH_POWER_BANDS` each fail by name.
 
+### The wallet menu is on **every** route
+
+My Portfolio is only reachable through the header's wallet menu, so "every page" is a claim about
+nine separate files — and the way it fails is by omission, which is exactly what had happened:
+`/dungeons` shipped an **empty** `header-actions` (no control at all, and therefore no way to reach
+the portfolio, or to connect a wallet, from the Quest Board), and `/tokenomics` put a
+**token-supply readout inside `.wallet-pill`** — a label wearing a control's class, so the menu hung
+off it and offered to *Connect Wallet* over a number about the supply.
+
+Both are fixed at the source rather than patched in the module:
+
+| route | control | how the menu arrives |
+|---|---|---|
+| `/`, `/menu`, `/mint`, `/game`, `/dungeons` | the legacy `.wallet-pill` in the page body | the module's own DOM scan |
+| `/points`, `/portfolio`, `/staking`, `/tokenomics` | a pill the React route renders | `WalletMenu.attach(el, { onDisconnect })` by hand |
+
+`/dungeons` also had no balance anywhere in its header, so its pill would have read `0 DNG`
+forever; `public/dungeon-select.js` now fills it from `walletManager.getDNGBalance()` on the same
+two events `landing.js` listens for, and prints `— DNG` rather than a zero it did not read.
+`/tokenomics` reads its balance from `/api/wallet/balance` like `/portfolio` does, because that page
+loads no chain library; the supply moved next to the pill as `.tk-supply`, which is a label and now
+looks like one. `dungeon-select.js` went to `?v=2`, `tokenomics.css` to `?v=2`.
+
+**A route that renders its pill conditionally must re-run the attach.** React runs
+the effect once on mount, and the vault renders its pill only *after* the reading phase — so on a
+cold load `walletPill.current` was null, the effect bailed, and `/staking` ended up with a control
+and no menu on it. The dependency is now `[pillRendered]`. `/points` has the same shape one
+interaction deeper: its pill is unmounted while a player is inside the vault dungeon, so coming back
+mounts a *new* element, and the effect re-runs on `[inDungeon]`. `/portfolio` and `/tokenomics`
+render their header in every branch and need no dependency — which is why only two of the four were
+broken.
+
+**Checking it.** Two harnesses, because the claim has a source half and a behaviour half:
+
+```bash
+node tools/check-wallet-menu.js                       # 10 checks
+cp tools/check-all.js public/_check.js                # then, in the browser, per route:
+# await import('/_check.js'); await window.__check.walletMenu();   # 9 checks each
+rm public/_check.js
+```
+
+The node half derives the route list from `app/` rather than listing it, so **a new route fails
+until it carries the control** — that is the whole point, since this bug is an omission, not a typo.
+It resolves each route to either its `STATIC_PAGES` entry or its client files, then checks that the
+control is there, that the module is loaded, and that each React route calls `attach`. It counts a
+`.wallet-pill` or one of the three legacy pill ids and **deliberately not `.wallet-chip`**: the
+module leaves the chip out of its triggers, and an earlier draft of this file accepted the chip and
+so passed a route whose pill had just been renamed away. Falsified all three ways — dropping the
+module from `/dungeons`, renaming the `/tokenomics` pill, and deleting one `attach` — each fails by
+name.
+
+The browser half (`window.__check.walletMenu()`) runs **on whichever route you are on**: the control
+is hosted, the menu is attached and closed, a **tap** opens it (there is no hover on a phone), *My
+Portfolio* is an item inside, and Escape closes it. Two of its assertions had to be loosened for
+reasons that are not defects: `is-open` is the transition class and lands on the next animation
+frame, which a backgrounded tab throttles (assert on `hidden` + `aria-expanded` instead), and
+`hide()` sets `hidden` after 180 ms, so the close is *polled* rather than slept on once — a fixed
+sleep passed on five routes and failed on the one that re-renders every second. It is what found
+the `/staking` bug above.
+
 ### The token maths (`lib/reward-config.js`, `tools/check-token-math.js`)
 
 ```bash
@@ -1428,7 +1549,8 @@ loudly with the address, day and amount) — a missed payment can be replayed by
 payment cannot be taken back.
 
 ```bash
-node tools/check-points-guard.js http://localhost:3000   # 9 checks, 8-way concurrency, one process
+node tools/check-points-guard.js http://localhost:3000   # 21 checks through the live routes: the X gate,
+                                                         #   8-way concurrency, unpriced shares, the throttle
 node tools/check-kv-store.js                             # 6 checks, two processes, no account needed
 ```
 

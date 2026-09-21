@@ -130,6 +130,10 @@ function startFakeKv() {
 const CHILD = `
 const [address, burst] = process.argv.slice(1);
 const program = await import(${JSON.stringify(PROGRAM_URL)});
+// Earning is gated on a bound X account, so each instance binds first — the same account id and
+// handle in both, which is the normal case (one wallet, one name) and not a conflict: the index
+// already holds this wallet, so the second bind is a no-op.
+await program.bindX(address, { id: 'kv-harness', username: 'kvharness' });
 const out = await Promise.all(Array.from({ length: Number(burst) }, () => program.clearLevel(address, 0)));
 const paid = out.filter((r) => (r.credited || 0) > 0).length;
 const store = await import(${JSON.stringify(STORE_URL)});

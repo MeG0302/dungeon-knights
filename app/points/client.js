@@ -6,10 +6,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Script from 'next/script';
 import { VAULT_LEVELS, VAULT_ENTRY_TOTAL } from '../../lib/points-config';
 import {
-    claimRef, clearSession, connectWallet, fetchLeaderboard, fetchMe, forgetWallet,
+    claimRef, clearSession, connectWallet, fetchLeaderboard, fetchMe, fetchXStatus, forgetWallet,
     hasInjectedWallet, isAddress, onAccountsChanged, pendingRef, readRefFromUrl,
-    readSession, refLink, requestClear, requestShare, savedAddress, shortAddress, signIn,
-    stashRef,
+    readSession, refLink, requestBindX, requestClear, requestShare, requestTask, requestTaskCheck,
+    requestUnbindX, savedAddress, shortAddress, signIn, stashRef,
 } from '../../lib/points-client';
 import PointsDungeon from './dungeon';
 
@@ -60,6 +60,17 @@ function pointsTourSteps(live) {
             },
         },
         {
+            // The gate on the whole program. It comes before the vault on purpose: the vault is
+            // the fun part, and a newcomer who clears three floors before binding an X account
+            // watches the payout get refused.
+            kind: () => (now().bound ? 'ready' : 'brace'),
+            mood: 'Your name on it',
+            target: '[data-arya="bind"]',
+            text: () => (now().bound
+                ? 'Your X account is bound, so everything you earn has a name on it. Posts are checked against that handle — write them from it or they will not count.'
+                : 'Points are earned against an X account, so this has to be bound before anything pays — <strong>Link X</strong>, or type your handle and bind it. Nothing here costs anything.'),
+        },
+        {
             kind: 'brace',
             mood: 'Three floors',
             target: '[data-arya="vault"]',
@@ -73,7 +84,7 @@ function pointsTourSteps(live) {
             target: '[data-arya="share"]',
             text: () => (now().shared
                 ? 'Today&rsquo;s share is already claimed — your entry was paid out at double. It resets with the vault tomorrow.'
-                : `Clear all three floors and this unlocks. Post the run on X and the whole entry doubles: <strong>${VAULT_ENTRY_TOTAL} becomes ${VAULT_ENTRY_TOTAL * 2} PTS</strong>. Once a day, same as the vault.`),
+                : `Clear all three floors and this unlocks. Post the run on X, then paste the link to your post here: I check it with X itself before paying, and then the whole entry doubles — <strong>${VAULT_ENTRY_TOTAL} becomes ${VAULT_ENTRY_TOTAL * 2} PTS</strong>. Once a day, same as the vault.`),
         },
         {
             kind: 'think',
@@ -97,6 +108,102 @@ function pointsTourSteps(live) {
     ];
 }
 
+/**
+ * One verified X task.
+ *
+ * The campaign reward and the daily share are the same card because they are the same rule: post
+ * it, paste the link, and it is paid once X confirms the post was written by the bound handle. The
+ * card renders whichever of the five states the server reports — `none`, `pending`, `verified`,
+ * `failed`, `expired` — because "we could not tell yet" and "that is not your post" are different
+ * sentences and the player is owed the right one.
+ */
+function XTaskCard({
+    id, title, icon, reward, hint, cta, onCta, ctaDisabled, ctaTitle,
+    task, busy, error, draft, onDraft, onSubmit, onCheck, wait,
+}) {
+    const state = task?.state || 'none';
+    const paid = state === 'verified';
+    const pending = state === 'pending';
+
+    return (
+        <div className="x-task" data-arya={id === 'share' ? 'share' : undefined}>
+            <div className="panel-section-title">
+                {icon ? <img src={icon} alt="" className="points-icon" width={16} height={16} /> : null}
+                {title}
+                <span className={`x-task-reward ${paid ? 'is-paid' : ''}`}>
+                    {paid ? `+${task.credited || reward} ✓` : `+${reward} PTS`}
+                </span>
+            </div>
+            <p className="panel-hint">{hint}</p>
+
+            {cta && (
+                <button
+                    className="btn btn-secondary btn-sm w-full"
+                    onClick={onCta}
+                    disabled={ctaDisabled}
+                    title={ctaDisabled && ctaTitle ? ctaTitle : undefined}
+                >
+                    {cta}
+                </button>
+            )}
+
+            {paid ? (
+                <div className="x-task-line is-paid">
+                    <span>Verified with X — {task.credited || reward} PTS paid</span>
+                    {task.url && (
+                        <a className="x-task-link" href={task.url} target="_blank" rel="noreferrer">
+                            view post
+                        </a>
+                    )}
+                </div>
+            ) : (
+                <div className="x-task-submit">
+                    <input
+                        id={`x-task-${id}-input`}
+                        className="x-task-input"
+                        value={draft}
+                        onChange={(e) => onDraft(e.target.value)}
+                        placeholder="Paste the link to your post"
+                        aria-label={`Link to your ${title} post`}
+                        disabled={busy === id}
+                    />
+                    <button
+                        className="btn btn-primary btn-sm"
+                        onClick={() => onSubmit(draft)}
+                        disabled={busy === id || !String(draft || '').trim()}
+                    >
+                        {busy === id ? 'Asking X…' : 'Verify'}
+                    </button>
+                </div>
+            )}
+
+            {pending && (
+                <div className="points-banner points-banner-warn x-task-note" role="status">
+                    <span>{task.reason || 'X has not indexed that post yet.'}</span>
+                    <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={onCheck}
+                        disabled={busy === id || wait > 0}
+                    >
+                        {wait > 0 ? `Check again in ${wait}s` : 'Check again'}
+                    </button>
+                </div>
+            )}
+            {state === 'failed' && (
+                <div className="points-banner points-banner-error x-task-note" role="alert">
+                    <span>{task.reason || error || 'That post did not pass the check.'}</span>
+                </div>
+            )}
+            {state === 'expired' && (
+                <div className="points-banner points-banner-warn x-task-note" role="status">
+                    <span>{task.reason || 'That submission expired. Post again and paste the new link.'}</span>
+                </div>
+            )}
+            {error && state !== 'failed' && <div className="x-task-line is-error">{error}</div>}
+        </div>
+    );
+}
+
 export default function PointsPage() {
     // boot → anon (no session) → ready (signed in). `error` is only used when the page
     // itself cannot work, never for a rejected signature the player can retry.
@@ -116,6 +223,21 @@ export default function PointsPage() {
     // leave the connect button dead until a reload. Detected in an effect (never during
     // render) so the server and the first client paint also agree.
     const [walletReady, setWalletReady] = useState(false);
+    // ------------------------------------------------------------------ earning on X
+    // Which X thing is mid-flight ('bind' | 'unbind' | 'campaign' | 'share'), whether this
+    // deployment can *prove* a link, the handle a player typed, each task's own error line and
+    // pasted link, and the server's throttle countdown.
+    const [xBusy, setXBusy] = useState(null);
+    const [xProof, setXProof] = useState(null);
+    // The X account Privy has linked in *this* browser, if any. Kept as state rather than read at
+    // render, because the bridge announces a link landing with an event and the button that offers
+    // to prove it must not appear before there is anything to prove.
+    const [privyX, setPrivyX] = useState(null);
+    const [handleDraft, setHandleDraft] = useState('');
+    const [xErrors, setXErrors] = useState({});
+    const [xDrafts, setXDrafts] = useState({ campaign: '', share: '' });
+    const [xWait, setXWait] = useState({ campaign: 0, share: 0 });
+    const [sharePrompt, setSharePrompt] = useState(false);
     const noticeTimer = useRef(null);
     // What Arya's walkthrough reads while it talks. A ref and not the state itself,
     // because her steps are written the moment they show, not when the tour is built.
@@ -133,6 +255,7 @@ export default function PointsPage() {
     const cleared = state?.clearedToday ?? [];
     const connected = phase === 'ready';
     const entryComplete = !!state?.entryComplete;
+    const bound = !!state?.x?.username;
     const live = () => liveRef.current;
 
     const flash = useCallback((message) => {
@@ -229,6 +352,7 @@ export default function PointsPage() {
             points,
             entryComplete,
             shared: !!state?.sharedToday,
+            bound: !!state?.x?.username,
             rank: state?.rank || 0,
             players: state?.players || 0,
         };
@@ -240,6 +364,10 @@ export default function PointsPage() {
     // disconnect performed by the menu alone would clear localStorage and leave the header still
     // showing an address. React hands the menu the one function that puts the page back to how it
     // looks with nobody connected.
+    // The pill lives on the page *outside* the vault dungeon, so entering a floor unmounts it and
+    // coming back mounts a new element. An effect that ran once at mount would leave that new
+    // control with no menu on it, which is My Portfolio unreachable from the Points page the
+    // moment a player has finished a floor — so this re-runs when the dungeon closes.
     useEffect(() => {
         const pill = walletPill.current;
         if (!pill) return undefined;
@@ -259,7 +387,7 @@ export default function PointsPage() {
             return () => { cancelled = true; clearInterval(timer); };
         }
         return () => { cancelled = true; };
-    }, []);
+    }, [inDungeon]);
 
     // She walks a first-time player through the page, and only a first-time player.
     // No `force` here on purpose: `/arya.js` remembers that she has been through this on
@@ -357,8 +485,180 @@ export default function PointsPage() {
     };
     handleDisconnectRef.current = handleDisconnect;
 
+    // ------------------------------------------------------- earning on X, in the page
+    /**
+     * The X account Privy has linked, if this browser has one.
+     *
+     * Read from the bridge rather than kept in this page's state: Privy owns the link, and the
+     * player may have made it in a previous session or in another tab.
+     */
+    const linkedX = () => {
+        try {
+            return window.privyBridge?.getXAccount?.() || null;
+        } catch {
+            return null;
+        }
+    };
+
+    // Watch for the link landing. Privy completes it in its own window, so the page is told rather
+    // than asked: `privyAuthChanged` fires again when the user record changes.
+    useEffect(() => {
+        const read = () => setPrivyX(linkedX());
+        read();
+        window.addEventListener('privyAuthChanged', read);
+        window.addEventListener('privyBridgeReady', read);
+        return () => {
+            window.removeEventListener('privyAuthChanged', read);
+            window.removeEventListener('privyBridgeReady', read);
+        };
+    }, []);
+
+    // Can this deployment *prove* a binding? Asked once, and only when it would change what the
+    // page offers — a provisional binding is the one case where the answer matters.
+    useEffect(() => {
+        if (!connected || !state?.x || state.x.verified) {
+            setXProof(null);
+            return undefined;
+        }
+        let cancelled = false;
+        fetchXStatus()
+            .then((status) => { if (!cancelled) setXProof(!!status?.verificationAvailable); })
+            .catch(() => { if (!cancelled) setXProof(null); });
+        return () => { cancelled = true; };
+    }, [connected, state?.x?.username, state?.x?.verified]);
+
+    // The throttle is a number of seconds the server hands back, so the page counts it down instead
+    // of leaving a button that looks broken while it is really just early.
+    useEffect(() => {
+        if (!xWait.campaign && !xWait.share) return undefined;
+        const timer = setTimeout(() => setXWait((w) => ({
+            campaign: Math.max(0, w.campaign - 1),
+            share: Math.max(0, w.share - 1),
+        })), 1000);
+        return () => clearTimeout(timer);
+    }, [xWait]);
+
+    // The vault hands the player back with X open in another tab, so the paste field is where they
+    // return to — put the cursor in it.
+    useEffect(() => {
+        if (!sharePrompt || inDungeon) return;
+        document.getElementById('x-task-share-input')?.focus();
+    }, [sharePrompt, inDungeon]);
+
+    /**
+     * Bind the X account that earns.
+     *
+     * Two paths, and the page says which one it took. With a Privy-linked X account it sends the
+     * access token as well, and the server proves the link against Privy; without one it sends the
+     * handle the player typed, and the binding is provisional. Either way the binding is what makes
+     * earning possible at all — the server refuses every award without it, so this is not decoration.
+     */
+    const handleBindX = useCallback(async (typed) => {
+        if (!connected) {
+            setError('Connect a wallet first — the X account is bound to it.');
+            return;
+        }
+        setXBusy('bind');
+        setError(null);
+        setXErrors((e) => ({ ...e, bind: null }));
+        try {
+            const account = linkedX();
+            const identity = account || (typed ? { username: String(typed).trim() } : null);
+            if (!identity) {
+                // Nothing linked yet: ask Privy for the link. The page learns it landed from
+                // `privyAuthChanged`, which is why this does not stand here waiting for it.
+                const started = window.privyBridge?.linkX?.();
+                setXErrors((e) => ({
+                    ...e,
+                    bind: started
+                        ? 'Finish linking X in the Privy window, then press Link X again — or type your handle below.'
+                        : 'Privy is not available here, so type your X handle below and bind it.',
+                }));
+                return;
+            }
+            const accessToken = window.privyBridge?.getAccessToken
+                ? await window.privyBridge.getAccessToken()
+                : null;
+            const result = await requestBindX(identity, accessToken);
+            if (result.state) setState(result.state);
+            setHandleDraft('');
+            flash(result.verified
+                ? `@${result.x.username} bound and proved with Privy — earning is open.`
+                : `@${result.x.username} bound — earning is open. Posts are checked against that handle.`);
+        } catch (e) {
+            setXErrors((prev) => ({ ...prev, bind: e.message }));
+        } finally {
+            setXBusy(null);
+        }
+    }, [connected, flash]);
+
+    /** Hand the account back. Points already earned stay. */
+    const handleUnbindX = useCallback(async () => {
+        setXBusy('unbind');
+        setError(null);
+        try {
+            const result = await requestUnbindX();
+            if (result.state) setState(result.state);
+            flash('X account unbound — earning is paused until you bind one again.');
+        } catch (e) {
+            setXErrors((prev) => ({ ...prev, bind: e.message }));
+        } finally {
+            setXBusy(null);
+        }
+    }, [flash]);
+
+    /**
+     * File the link to a post and let the server decide.
+     *
+     * Nothing is awarded in this function: the campaign reward and the doubling of a run are both
+     * paid by the server, and only after it has asked X about the post and been told the bound
+     * handle wrote it. The three answers the page has to render are paid, not-indexed-yet, and
+     * not-yours.
+     */
+    const submitXTask = useCallback(async (task, url) => {
+        setXBusy(task);
+        setError(null);
+        setXErrors((e) => ({ ...e, [task]: null }));
+        try {
+            const result = task === 'share'
+                ? await requestShare(String(url).trim())
+                : await requestTask(task, String(url).trim());
+            if (result.state) setState(result.state);
+            if (result.credited > 0) flash(`Verified by X — +${result.credited} PTS.`);
+            else if (result.pending) flash('Posted. X has not indexed that post yet — give it a moment, then check again.');
+            else if (result.alreadyCredited) flash('That one is already paid.');
+            loadBoard();
+        } catch (e) {
+            setXErrors((prev) => ({
+                ...prev,
+                [task]: e.code === 'x-required'
+                    ? 'Bind your X account first — the card on the left does it in one tap.'
+                    : e.message,
+            }));
+            if (e.retryInSeconds) setXWait((w) => ({ ...w, [task]: e.retryInSeconds }));
+        } finally {
+            setXBusy(null);
+        }
+    }, [flash, loadBoard]);
+
+    /** Ask X again about a submission it had not indexed. Rate-limited by the server. */
+    const checkXTask = useCallback(async (task) => {
+        setXBusy(task);
+        try {
+            const result = await requestTaskCheck(task);
+            if (result.state) setState(result.state);
+            if (result.credited > 0) flash(`Verified by X — +${result.credited} PTS.`);
+            loadBoard();
+        } catch (e) {
+            setXErrors((prev) => ({ ...prev, [task]: e.message }));
+            if (e.retryInSeconds) setXWait((w) => ({ ...w, [task]: e.retryInSeconds }));
+        } finally {
+            setXBusy(null);
+        }
+    }, [flash, loadBoard]);
+
     const handleEnterDungeon = () => {
-        if (!connected || entryComplete) return;
+        if (!connected || entryComplete || !bound) return;
         // The vault covers the page, so her walkthrough and its spotlight must not still
         // be standing when it mounts.
         if (window.Arya) window.Arya.endTour();
@@ -391,24 +691,24 @@ export default function PointsPage() {
     };
 
     /** Sharing the finished entry doubles it — once a day, and paid by the server. */
-    const handleShareX = useCallback(async () => {
+    const handleShareX = useCallback(() => {
+        if (!bound) {
+            setError('Bind your X account first — the card on the left does it in one tap.');
+            return;
+        }
         const earned = state?.entryTotalToday || 0;
         const text = encodeURIComponent(
-            earned > 0
-                ? `I just cleared the Points Vault in Dungeon Knights and earned ${earned} PTS!`
-                : "I'm earning points in the Dungeon Knights Points Vault!"
+            `I just cleared the Points Vault in Dungeon Knights — ${earned || VAULT_ENTRY_TOTAL} PTS banked!\n\n${window.location.origin}/points`
         );
         window.open(`https://twitter.com/intent/tweet?text=${text}`, '_blank');
-        try {
-            const result = await requestShare();
-            if (result.state) setState(result.state);
-            if (result.credited > 0) flash(`Share bonus paid: +${result.credited} PTS`);
-            else if (result.alreadyShared) flash("Today's share bonus is already claimed.");
-            loadBoard();
-        } catch (e) {
-            setError(e.message);
-        }
-    }, [flash, loadBoard, state?.entryTotalToday]);
+        // Opening the intent is only half of it. The doubling is paid when the link to the post
+        // comes back here and X confirms the bound handle wrote it, so this hands the player to the
+        // card that takes the link rather than claiming a bonus on a tap — including out of the
+        // vault, which covers the page.
+        setSharePrompt(true);
+        setInDungeon(false);
+        flash('Post it, then paste the link below to claim the double.');
+    }, [bound, flash, state?.entryTotalToday]);
 
     /**
      * Copy the invite link. Clipboard permission is not guaranteed (it needs a secure
@@ -467,8 +767,8 @@ export default function PointsPage() {
         <>
             {/* Versioned like every other sheet: an unversioned `/theme.css` is a CSS change
                 that never reaches a returning player. */}
-            <link rel="stylesheet" href="/theme.css?v=5" />
-            <link rel="stylesheet" href="/css/points.css?v=5" />
+            <link rel="stylesheet" href="/theme.css?v=6" />
+            <link rel="stylesheet" href="/css/points.css?v=6" />
             <link rel="stylesheet" href="/css/arya.css?v=3" />
             <Script src="/arya.js?v=4" strategy="afterInteractive" />
             {/* The header's wallet pill gets the same menu every other page's control has. It is
@@ -597,19 +897,97 @@ export default function PointsPage() {
                                 )}
                             </div>
 
+                            {/* ------------------------------------------------------- the X account
+                                The gate on earning. Points are awarded against a named X
+                                account and the server refuses every award without one, so this
+                                is the first thing a player has to do rather than a suggestion
+                                at the bottom of the panel. */}
+                            <div className={`x-bind-card ${bound ? 'is-bound' : ''}`} data-arya="bind">
+                                {bound ? (
+                                    <>
+                                        <div className="wallet-card-line">
+                                            <img src={`${ASSETS}White_logo_on_black_background_2K_20260919011421-autocrop-hair.png`} alt="" className="points-icon" width={16} height={16} style={{ filter: 'brightness(0) invert(1)' }} />
+                                            <strong>@{state.x.username}</strong>
+                                            {state.x.verified && <span className="x-proof-tag">proved</span>}
+                                        </div>
+                                        <div className="wallet-card-meta">
+                                            {state.x.verified
+                                                ? 'Proved with Privy. Everything you earn pays into the wallet above.'
+                                                : 'Bound. Every post is checked against this handle before it pays.'}
+                                        </div>
+                                        <div className="x-bind-actions">
+                                            {/* Only offered when there is actually a Privy-linked X account to
+                                                prove — otherwise it is a button that can only apologise. */}
+                                            {!state.x.verified && privyX && xProof !== false && (
+                                                <button className="btn btn-secondary btn-sm" onClick={() => handleBindX()} disabled={!!xBusy}>
+                                                    {xBusy === 'bind' ? 'Waiting for X…' : `Prove @${privyX.username}`}
+                                                </button>
+                                            )}
+                                            <button className="btn btn-ghost btn-sm" onClick={handleUnbindX} disabled={!!xBusy}>
+                                                {xBusy === 'unbind' ? 'Unbinding…' : 'Unbind'}
+                                            </button>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="wallet-card-line">
+                                            <img src={`${ASSETS}White_logo_on_black_background_2K_20260919011421-autocrop-hair.png`} alt="" className="points-icon" width={16} height={16} style={{ filter: 'brightness(0) invert(1)' }} />
+                                            <strong>Earn with X</strong>
+                                        </div>
+                                        <div className="wallet-card-meta">
+                                            Points are earned against a named X account, so it has to be bound before
+                                            anything pays — a run cleared without one is refused.
+                                        </div>
+                                        <button
+                                            className="btn btn-primary btn-sm w-full"
+                                            onClick={() => handleBindX()}
+                                            disabled={!connected || xBusy === 'bind'}
+                                        >
+                                            {xBusy === 'bind'
+                                                ? 'Checking X…'
+                                                : (privyX ? `Bind @${privyX.username}` : 'Link X account')}
+                                        </button>
+                                        <div className="x-bind-manual">
+                                            <input
+                                                className="x-task-input"
+                                                placeholder="@yourhandle"
+                                                value={handleDraft}
+                                                onChange={(e) => setHandleDraft(e.target.value)}
+                                                aria-label="Your X handle"
+                                            />
+                                            <button
+                                                className="btn btn-secondary btn-sm"
+                                                onClick={() => handleBindX(handleDraft)}
+                                                disabled={!connected || !handleDraft.trim() || xBusy === 'bind'}
+                                            >
+                                                Bind
+                                            </button>
+                                        </div>
+                                        <div className="wallet-card-meta">
+                                            Linking through Privy proves the account. Typing the handle binds it for
+                                            earning either way — nothing pays until a post from that handle checks out.
+                                        </div>
+                                    </>
+                                )}
+                                {xErrors.bind && <div className="x-task-line is-error">{xErrors.bind}</div>}
+                            </div>
+
                             <button
                                 className="btn btn-primary btn-md w-full"
                                 onClick={handleEnterDungeon}
-                                disabled={!connected || entryComplete}
+                                disabled={!connected || entryComplete || !bound}
                                 data-arya="vault"
                                 style={{ justifyContent: 'flex-start', gap: 10 }}
+                                title={!bound ? 'Bind your X account first — nothing pays without it' : undefined}
                             >
                                 <img src="assets/ui/sword.png" className="btn-icon-img" alt="" />
                                 <div style={{ textAlign: 'left' }}>
                                     <div>{entryComplete ? 'Vault Cleared Today' : 'Enter Vault'}</div>
                                     <div style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-secondary)', letterSpacing: 0.5 }}>
                                         {connected
-                                            ? (entryComplete ? 'Come back tomorrow for a fresh run' : `Earn ${VAULT_ENTRY_TOTAL} PTS per run`)
+                                            ? (entryComplete
+                                                ? 'Come back tomorrow for a fresh run'
+                                                : (bound ? `Earn ${VAULT_ENTRY_TOTAL} PTS per run` : 'Bind X to start earning'))
                                             : 'Connect a wallet to enter'}
                                     </div>
                                 </div>
@@ -634,23 +1012,60 @@ export default function PointsPage() {
 
                             <div style={{ borderTop: '1px solid var(--border-base)', margin: '4px 0' }} />
 
-                            {/* X Share */}
-                            <div className="panel-section-title">
-                                <img src={`${ASSETS}White_logo_on_black_background_2K_20260919011421-autocrop-hair.png`} alt="" className="points-icon" width={16} height={16} style={{ filter: 'brightness(0) invert(1)' }} />
-                                Daily Share
-                            </div>
-                            <p className="panel-hint">
-                                Finish the vault, then share on X to double the whole run ({VAULT_ENTRY_TOTAL} → {VAULT_ENTRY_TOTAL * 2} PTS)
-                            </p>
-                            <button
-                                className={`btn ${state?.sharedToday ? 'btn-primary' : 'btn-secondary'} btn-sm w-full`}
-                                onClick={handleShareX}
-                                disabled={!connected || !entryComplete || !!state?.sharedToday}
-                                data-arya="share"
-                                title={!connected ? 'Connect a wallet first' : 'Clear all three floors first'}
-                            >
-                                {state?.sharedToday ? 'Shared Today (x2)' : 'Share on X'}
-                            </button>
+                            {/* Campaign — rendered only when the server reports one, which is
+                                how a deployment with no `X_CAMPAIGN_POST` hides the whole task
+                                instead of offering a reward with nothing to quote. */}
+                            {state?.tasks?.campaign && (
+                                <>
+                                    <XTaskCard
+                                        id="campaign"
+                                        title="Community Task"
+                                        icon={`${ASSETS}Golden_trophy_pixel_art_icon_2K_20260919011419-autocrop-hair.png`}
+                                        reward={state.campaign?.reward || state.tasks.campaign.reward}
+                                        hint={<>
+                                            Like, repost and comment on our campaign post, then paste the link to
+                                            {' '}<strong>your own</strong> repost. X is asked about that link before it
+                                            pays, and it pays once per wallet per campaign.
+                                        </>}
+                                        cta="Open the campaign post"
+                                        onCta={() => window.open(state.campaign.url, '_blank', 'noopener')}
+                                        ctaDisabled={!connected || !bound}
+                                        ctaTitle={!bound ? 'Bind your X account first' : undefined}
+                                        task={state.tasks.campaign}
+                                        busy={xBusy}
+                                        error={xErrors.campaign}
+                                        draft={xDrafts.campaign}
+                                        onDraft={(value) => setXDrafts((d) => ({ ...d, campaign: value }))}
+                                        onSubmit={(url) => submitXTask('campaign', url)}
+                                        onCheck={() => checkXTask('campaign')}
+                                        wait={xWait.campaign}
+                                    />
+                                    <div style={{ borderTop: '1px solid var(--border-base)', margin: '4px 0' }} />
+                                </>
+                            )}
+
+                            {/* X Share — the same verified card, with the doubled run as its reward */}
+                            <XTaskCard
+                                id="share"
+                                title="Daily Share"
+                                icon={`${ASSETS}White_logo_on_black_background_2K_20260919011421-autocrop-hair.png`}
+                                reward={state?.entryTotalToday || VAULT_ENTRY_TOTAL}
+                                hint={`Finish the vault, post the run on X, then paste the link to that post. The whole entry doubles once X confirms it was written by you (${VAULT_ENTRY_TOTAL} → ${VAULT_ENTRY_TOTAL * 2} PTS). Once a day.`}
+                                cta={state?.sharedToday ? 'Shared today — resets with the vault' : 'Post the run on X'}
+                                onCta={handleShareX}
+                                ctaDisabled={!connected || !bound || !entryComplete || !!state?.sharedToday}
+                                ctaTitle={!connected
+                                    ? 'Connect a wallet first'
+                                    : (!bound ? 'Bind your X account first' : 'Clear all three floors first')}
+                                task={state?.tasks?.share}
+                                busy={xBusy}
+                                error={xErrors.share}
+                                draft={xDrafts.share}
+                                onDraft={(value) => setXDrafts((d) => ({ ...d, share: value }))}
+                                onSubmit={(url) => submitXTask('share', url)}
+                                onCheck={() => checkXTask('share')}
+                                wait={xWait.share}
+                            />
 
                             <div style={{ borderTop: '1px solid var(--border-base)', margin: '4px 0' }} />
 

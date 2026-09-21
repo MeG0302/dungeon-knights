@@ -701,3 +701,127 @@
     opacity: 1;
     border-color: var(--accent-gold, #d4a843);
 }
+
+/* ---------------------------------------------------------------------------
+   Earning on X — the account, and the two verified tasks
+
+The account card is the gate: points are awarded against a named X account and the server refuses
+any award without one, so it sits directly under the wallet and states that plainly. The task cards
+below it are the same shape for both rewards, because they are the same rule — post it, paste the
+link, and X is asked about it before anything is paid.
+   */
+.x-bind-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid rgba(212, 168, 67, 0.45);
+    border-radius: 4px;
+    background: rgba(212, 168, 67, 0.07);
+}
+
+.x-bind-card.is-bound {
+    border-color: var(--border-base);
+    background: rgba(0, 0, 0, 0.28);
+}
+
+.x-proof-tag {
+    margin-left: auto;
+    padding: 1px 7px;
+    border: 1px solid rgba(90, 160, 90, 0.55);
+    border-radius: 3px;
+    font-size: 9px;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: #96d096;
+}
+
+.x-bind-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.x-bind-actions > .btn {
+    flex: 1;
+}
+
+/* Typing a handle is the fallback for a browser with no Privy link to prove — one row, so it
+   reads as an alternative rather than a second step. */
+.x-bind-manual {
+    display: flex;
+    gap: 6px;
+}
+
+.x-task {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.x-task-reward {
+    margin-left: auto;
+    font-size: 10px;
+    letter-spacing: 0.8px;
+    color: var(--text-muted);
+}
+
+.x-task-reward.is-paid {
+    color: #96d096;
+}
+
+.x-task-submit {
+    display: flex;
+    gap: 6px;
+}
+
+.x-task-input {
+    flex: 1;
+    min-width: 0;
+    padding: 7px 9px;
+    border: 1px solid var(--border-base);
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.45);
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 11px;
+    color: var(--text-primary);
+}
+
+.x-task-input:focus {
+    outline: none;
+    border-color: var(--accent-gold);
+}
+
+.x-task-input:disabled {
+    opacity: 0.6;
+}
+
+.x-task-line {
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--text-secondary, var(--text-muted));
+}
+
+.x-task-line.is-paid {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #96d096;
+}
+
+.x-task-line.is-error {
+    color: #e8a49b;
+}
+
+.x-task-link {
+    color: var(--accent-gold);
+    text-decoration: underline;
+}
+
+/* The pending, failed and expired notes are banners, so they carry the same colours as the
+   rest of the page's status messages — with the "check again" button inside the pending one. */
+.x-task-note {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+}

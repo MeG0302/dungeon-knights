@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { usePrivy, useWallets } from '@privy-io/react-auth';
+import { usePrivy, useWallets, useUser, useLinkAccount } from '@privy-io/react-auth';
 import { DEFAULT_CHAIN, addChainParams } from '../lib/privy-chains';
 
 /**
@@ -14,6 +14,9 @@ import { DEFAULT_CHAIN, addChainParams } from '../lib/privy-chains';
  *   isReady() / isAuthenticated() / getAddress() / getWalletType()
  *   getProvider()   — the EIP-1193 provider, on the game's chain
  *   login() / logout()
+ *   getXAccount()   — the X account linked to this Privy user, or null
+ *   linkX()         — prompt that link
+ *   getAccessToken() — a Privy access token, so a server can prove who this is
  *
  * Events: `privyBridgeReady` once the bridge exists, `privyAuthChanged` on every sign-in or
  * sign-out, so a page can react without polling.
@@ -40,8 +43,17 @@ function targetChainId() {
 }
 
 export default function PrivyBridge() {
-    const { ready, authenticated, login, logout } = usePrivy();
+    const { ready, authenticated, login, logout, getAccessToken } = usePrivy();
     const { ready: walletsReady, wallets } = useWallets();
+    const { user } = useUser();
+    const { linkTwitter } = useLinkAccount();
+
+    // The X account this Privy user has linked. `subject` is the `sub` claim from Twitter's own
+    // JWT — the account *id* — and it is what the Points Program keys "one X account, one wallet"
+    // on. A handle can be renamed; the id cannot.
+    const twitter = user?.twitter
+        ? { id: String(user.twitter.subject || ''), username: String(user.twitter.username || '') }
+        : user?.twitter;
 
     const stateRef = useRef({});
     stateRef.current = {
@@ -49,6 +61,9 @@ export default function PrivyBridge() {
         walletsReady,
         authenticated,
         wallet: pickWallet(wallets),
+        twitter: user?.twitter ? twitter : null,
+        linkTwitter,
+        getAccessToken,
     };
 
     useEffect(() => {
@@ -95,6 +110,50 @@ export default function PrivyBridge() {
             },
             login: () => login(),
             logout: () => logout(),
+
+            // ------------------------------------------------------------ the X account
+            /** The linked X account as `{ id, username }`, or null. Never throws. */
+            getXAccount: () => {
+                try {
+                    const account = stateRef.current.twitter;
+                    return account?.id && account?.username
+                        ? { id: account.id, username: account.username }
+                        : null;
+                } catch {
+                    return null;
+                }
+            },
+            /**
+             * Ask the player to link X. Returns immediately — the link completes in Privy's own
+             * flow and the page learns about it from `privyAuthChanged`, which fires again when the
+             * user record changes.
+             */
+            linkX: () => {
+                try {
+                    stateRef.current.linkTwitter?.();
+                    return true;
+                } catch (error) {
+                    // Not configured on the Privy app, or already linking. The page falls back to
+                    // the typed-handle path, which is why this is not an error worth throwing.
+                    console.warn('[privy] could not start the X link:', error?.message || error);
+                    return false;
+                }
+            },
+            /**
+             * A Privy access token for the current user, or null.
+             *
+             * This is what lets the *server* prove the X link instead of believing the browser.
+             * Null is a normal answer (not signed in, or Privy unreachable) and the binding is then
+             * recorded as provisional.
+             */
+            getAccessToken: async () => {
+                try {
+                    return (await stateRef.current.getAccessToken?.()) || null;
+                } catch (error) {
+                    console.warn('[privy] no access token:', error?.message || error);
+                    return null;
+                }
+            },
         };
 
         window.privyBridge = bridge;
@@ -116,10 +175,13 @@ export default function PrivyBridge() {
                     authenticated,
                     address: stateRef.current.wallet?.address || null,
                     walletType: stateRef.current.wallet?.walletClientType || null,
+                    // Fires again when the user links X, which is how the Points page learns that
+                    // the account it is waiting for has arrived.
+                    x: window.privyBridge.getXAccount?.() || null,
                 },
             })
         );
-    }, [ready, walletsReady, authenticated, wallets]);
+    }, [ready, walletsReady, authenticated, wallets, user]);
 
     return null;
 }

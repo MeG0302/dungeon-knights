@@ -102,6 +102,9 @@ export default function PointsDungeon({
     // Mirrors the main game's control bar: nothing happens until the player deploys.
     const [status, setStatus] = useState('loading');
     const [shared, setShared] = useState(alreadyShared);
+    // Set when the player has been sent to X from here, so the vault does not pretend the bonus
+    // is already theirs.
+    const [handoff, setHandoff] = useState(false);
     const [ready, setReady] = useState(false);
 
     const statusRef = useRef('loading');
@@ -802,9 +805,17 @@ export default function PointsDungeon({
         deploy();   // straight into the next floor
     }
 
+    /**
+     * Hand the share over to the Points page.
+     *
+     * This used to set `shared` and call it a doubling — which was a lie the moment the payout
+     * moved behind a verification: the bonus is paid when the player pastes the link to their post
+     * and X confirms the bound handle wrote it. So the vault opens the post and steps out of the
+     * way, and the card that takes the link does the claiming.
+     */
     function handleShare() {
         if (shared) return;
-        setShared(true);
+        setHandoff(true);
         if (onShare) onShare();
     }
 
@@ -913,7 +924,8 @@ export default function PointsDungeon({
                         <div className="dungeon-complete dungeon-final">
                             <div className="dungeon-reward-announce">Vault conquered · {VAULT_TOTAL} PTS</div>
                             <p className="dungeon-final-note">
-                                Exit with your {VAULT_TOTAL} points, or share on X to double the whole run to {VAULT_TOTAL * 2}.
+                                Exit with your {VAULT_TOTAL} points, or post the run on X and paste the link on
+                                the Points page to double it to {VAULT_TOTAL * 2}.
                             </p>
                             <div className="dungeon-final-btns">
                                 <button className="btn btn-secondary btn-md dungeon-btn" onClick={onExit}>
@@ -924,9 +936,17 @@ export default function PointsDungeon({
                                     onClick={handleShare}
                                     disabled={shared}
                                 >
-                                    {shared ? 'Shared (x2 Active)' : `Share on X for x2 (${VAULT_TOTAL * 2})`}
+                                    {shared
+                                        ? 'Already claimed today'
+                                        : `Post on X for x2 (${VAULT_TOTAL * 2})`}
                                 </button>
                             </div>
+                            {handoff && !shared && (
+                                <p className="dungeon-final-note" role="status">
+                                    X has opened in a new tab — finish the post there, then paste its link into
+                                    the Daily Share card to claim the double.
+                                </p>
+                            )}
                         </div>
                     )}
                 </div>

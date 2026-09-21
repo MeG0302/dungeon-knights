@@ -35,8 +35,14 @@ export async function POST(request) {
         return NextResponse.json(result);
     }
     if (action === 'share') {
-        const result = await shareEntry(address);
-        if (result.error) return NextResponse.json(result, { status: 400 });
+        // The share is a *verified* task now: it doubles today's run only once a post written by the
+        // bound X account is confirmed to exist. `url` is the link to that post, and the doubling is
+        // the same code path the campaign reward uses — one verifier, two rewards.
+        const result = await shareEntry(address, body?.url ? String(body.url).trim() : '');
+        if (result.error) {
+            const status = result.code === 'throttled' ? 429 : 400;
+            return NextResponse.json(result, { status });
+        }
         return NextResponse.json(result);
     }
     return NextResponse.json({ error: "action must be 'clear' or 'share'" }, { status: 400 });
