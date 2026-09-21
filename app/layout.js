@@ -1,4 +1,10 @@
 import { OG_IMAGE, SITE_DESCRIPTION, SITE_KEYWORDS, SITE_NAME, SITE_URL } from '../lib/site';
+import Providers from './providers';
+import PrivyBridge from './privy-bridge';
+
+// Read here, on the server, and passed down: the provider needs the App ID in the browser,
+// and a `NEXT_PUBLIC_` copy in a client config would be a second copy of the same fact.
+const PRIVY_APP_ID = (process.env.PRIVY_APP_ID || '').trim();
 
 export const metadata = {
   metadataBase: new URL(SITE_URL),
@@ -65,7 +71,12 @@ export const viewport = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body style={{ margin: 0 }}>{children}</body>
+      <body style={{ margin: 0 }}>
+        <Providers appId={PRIVY_APP_ID}>
+          <PrivyBridge />
+          {children}
+        </Providers>
+      </body>
     </html>
   );
 }

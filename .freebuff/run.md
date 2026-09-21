@@ -711,40 +711,55 @@ chain, so the real ownership, timing and forgery paths are exercised without a w
 - **Two `next dev` servers in one project share `.next`** and clobber each other's route cache:
   one starts 404-ing routes that worked a minute earlier. Run them one at a time.
 
-### Wallets: injected first, embedded when configured
+### Wallets: Privy's login, and one seam the legacy pages read
 
-Every page reaches the chain through `window.ethereum`, which is fine on a desktop with an
-extension and impossible on a phone, where no wallet injects anything into the page.
-`public/wallet-source.js` is the single place that decides where that provider comes from, and
-installs one when the browser has none of its own. It is loaded on all six pages, immediately
-before `wallet.js`, and by the Points route itself (it is a React route, not a legacy page, so it
-appends the script tag in `app/points/client.js`).
+The login is Privy's, and it is a **React** provider — mounted for real, not imitated from the
+low-level core SDK the way the first version of this was.
 
-Resolution order: **injected** (an extension always wins — no round trip, no modal, and it is
-never overwritten while it is there) → **embedded, restored silently** (a returning phone session
-is signed back in on load with no UI) → **embedded, on demand** (the provider exists from the
-start with no account, exactly like a locked extension; the first `eth_requestAccounts` runs an
-email-code sign-in) → **nothing**, at which point `unavailableMessage()` says what to do.
+| file | what it owns |
+|---|---|
+| `app/providers.js` | `PrivyProvider` around every route: the login modal, its wallets and email, and the embedded wallet created for players who arrive without one. |
+| `app/privy-bridge.js` | Publishes the signed-in wallet as `window.privyBridge` (`isReady`, `isAuthenticated`, `getAddress`, `getWalletType`, `getProvider`, `login`, `logout`, plus `privyBridgeReady` / `privyAuthChanged`) and **settles the chain** before handing the provider over. |
+| `public/wallet-source.js` | The seam the legacy pages read (`window.DKWallet`), plus the EIP-1193 shim so `window.ethereum` follows the same wallet. Loaded on all six legacy pages immediately before `wallet.js`, and appended by the Points and Staking routes. |
+| `lib/privy-chains.js` | The chain objects (`46630` testnet, `4663` mainnet) and the `wallet_addEthereumChain` params, taken from the same numbers `/api/wallet/config` publishes. |
 
-**Dormant by default, and that is the whole point.** `/api/wallet/config` reads
-`PRIVY_APP_ID`; with it unset the route answers `embedded: null`, and the facade then loads no
-third-party script, mounts no iframe, and never touches `window.ethereum`. Verified live with the
-App ID unset: `window.DKWallet` present, `window.ethereum` still `undefined`, no modal, no iframe,
-and `walletManager.connect()` still shows the desktop message and opens the MetaMask download page
-— unchanged behaviour on every page.
+Every page is a React route — the game, the Hall and the mint render their legacy bodies through
+`app/legacy-page.js` — so one provider at the root covers all of them, which is what makes this
+workable at all.
+
+Resolution order in the seam: **a signed-in Privy session** (asked for its provider, and while it
+lives it wins everywhere, `window.ethereum` included, so no two pages can disagree about who is
+playing) → **an injected extension** (left exactly as it was, never shadowed, including when it
+arrives late) → **nothing**, at which point `unavailableMessage()` says what to do. A bridge that
+is mounted but logged out deliberately does *not* win: a logged-out Privy user must still get
+their own MetaMask.
+
+**Dormant by default, and that is the whole point.** `app/layout.js` reads `PRIVY_APP_ID` on the
+server and passes it down; with it unset `Providers` renders its children unwrapped, no bridge is
+ever published, and the seam behaves exactly as it did before any of this existed. Verified with
+the App ID absent: `window.DKWallet` present, `window.ethereum` still `undefined`, nothing added
+to the page, `connect()` returns null, and the desktop message still offers the MetaMask download.
 
 ```bash
-node tools/check-wallet-source.js    # 47 checks: dormant, injected-wins, restore, sign-in, cancel,
-                                    # chain mismatch, sign-out — against a fake SDK and stub DOM
+node tools/check-wallet-source.js    # 45 checks: dormant, injected-wins, a session that owns the
+                                    # wallet, a logged-out bridge, a late bridge, a closed login,
+                                    # sign-out, chain mismatch — against a fake bridge and stub DOM
 ```
 
-To switch it on, set these on the Vercel project and redeploy (no code change):
+**Two things the first version did that this one does not**, and both were deliberate: it opened
+its own email-code modal, and it loaded Privy's `js-sdk-core` from a CDN. Privy document that
+library as low-level and not for general use, and two Privy clients on one page is how a site ends
+up with two ideas of who the player is. `@privy-io/react-auth` replaced both.
+
+`next.config.js` now carries one line of webpack config for it: an `IgnorePlugin` for
+`@farcaster/mini-app-solana`, which Privy imports dynamically and which this EVM-only project will
+never call. Without it the build fails resolving a package that is not installed.
+
+To switch it on, set this on the Vercel project and redeploy:
 
 | variable | why |
 |---|---|
-| `PRIVY_APP_ID` | Turns the embedded path on. Public by design — it identifies the app to Privy's hosted UI, not a credential. |
-| `PRIVY_CLIENT_ID` | Optional, from the dashboard under Settings → Clients. |
-| `PRIVY_SDK_URL` | Optional. Defaults to the pinned `@privy-io/js-sdk-core@0.76.1` in the route; override only to move the pin or self-host the bundle. |
+| `PRIVY_APP_ID` | **Needed at build time**, not only at runtime: the layout bakes it into the prerendered payload. Public by design — it identifies the app to Privy's hosted UI, not a credential. |
 
 **Switched on in this thread.** The App ID is `cmu9rk7lo034q0cl24jlo2mr7`. It lives in
 `.env.local` locally and in **Vercel production** (added as type `config`, not `secret` — it is
@@ -760,25 +775,30 @@ Piping the value is what makes this non-interactive. Two notes: the CLI still pr
 **not set** and needs a human on a terminal; and `--type config` matters because the default is
 `secret`, which hides a value nobody needs hidden.
 
-**The real handshake now runs.** Verified against the live SDK, not a fake: the secure-context
-iframe mounts for *this* app id
-(`auth.privy.io/apps/cmu9rk7lo034q0cl24jlo2mr7/embedded-wallets`), and signing in with a
-non-routable `.invalid` address returns **`POST auth.privy.io/api/v1/passwordless/init → 200`**
-and advances to the code step. Nothing real was mailed.
+**The modal really opens, and it is Privy's.** Driven in the browser on `/menu`: the bridge mounts
+and reports ready, *Connect Wallet* opens Privy's own dialog — *"Log in or sign up"* with email and
+*"Continue with a wallet"* — and that leads to *"Select your wallet"*, searchable across 599
+wallets, MetaMask and Coinbase Wallet first. Every chunk it needs loads from the app's own origin
+(`…/privy-io_react-auth_dist_esm_LandingScreen-*.js`, `AuthenticateWithWalletScreen-*.js`) and the
+WalletConnect logo API answers, so the connector set is live too.
 
-One bug came out of that first real run and is fixed: **`privy.user.get()` throws
-`No tokens found in storage`** when nobody is signed in — it is not a null-returning getter — so
-on 0.76.1 the first *Connect Wallet* on a phone died before any sign-in UI appeared.
-`public/wallet-source.js` now catches that specific case; the fake in `check-wallet-source.js`
-throws the same way so the regression cannot come back (**47/47**, was 41).
+One rough edge came out of that run and is fixed: closing the modal without signing in logged
+*"Privy reported no wallet after login — the session may still be settling"*, which reports a
+player changing their mind as a fault. The seam now only says that when Privy **did** report a
+session and handed over no provider, and logs `the login was closed without signing in`
+otherwise. Both paths are in the harness (**45/45**).
 
 Still unproven, and only a human can close these:
 
-- **The embedded wallet has to be on Robinhood Chain Testnet (46630 / `0xb626`).** Our chain is an
-  app choice, not a wallet one, so the facade asks the wallet what chain it is on and **warns with
-the exact decimal id** when they disagree rather than letting the first transaction fail
-  anonymously (`capabilities().chainMismatch` carries the same value). Enable the network for the
-  app in the Privy dashboard.
+- **Completing a sign-in.** The modal was opened and its wallet list rendered; entering an email
+  and receiving a code needs a mailbox, and connecting MetaMask needs the extension. Neither was
+  driven from here.
+- **The chain has to be settled by the wallet, not only reported.** `app/privy-bridge.js` now
+  *switches* the wallet to Robinhood Chain Testnet (46630 / `0xb626`) and, for a wallet that has
+  never heard of it, tries `wallet_addEthereumChain` with the params in `lib/privy-chains.js`. If
+  the wallet still refuses, the seam reports the mismatch with the exact decimal id
+  (`capabilities().chainMismatch`) instead of letting the first transaction fail anonymously —
+  which is the signal to enable the network for the app in the Privy dashboard.
 - **It needs gas** — an embedded wallet is the player's own, non-custodial wallet, and it starts
   empty. Fund it from a faucet before minting or claiming.
 

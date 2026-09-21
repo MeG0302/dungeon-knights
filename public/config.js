@@ -7,16 +7,24 @@ const CONFIG = {
   
   // Wallet Connection Method
   WALLET: {
-    method: 'rainbowkit', // Options: 'metamask', 'privy', 'rainbowkit'
-    // RainbowKit: Works immediately, shows all wallets (MetaMask, Coinbase, WalletConnect, etc.)
-    // Privy: Needs App ID, supports email/social login too
-    // MetaMask: Simple, MetaMask only
+    method: 'privy', // The login is Privy's modal: MetaMask, Coinbase, WalletConnect, Rainbow, email
+    // Privy: the only one wired up. `app/providers.js` mounts it, `app/privy-bridge.js`
+    //   hands the session to the legacy pages, `public/wallet-source.js` is the seam they
+    //   read it through.
+    // RainbowKit / MetaMask: not integrated. The extension still works — an injected wallet
+    //   is used as-is — but nothing here switches on a different connector library.
   },
-  
-  // Privy Configuration (supports all wallets + email + social)
+
+  // Privy Configuration
+  //
+  // A statement of what this deployment is set up for, **not a switch**: the provider is
+  // configured from `PRIVY_APP_ID` in the server layout (`app/layout.js`), so the client
+  // never reads this block to decide anything. It said `enabled: false` with a placeholder
+  // App ID for weeks after Privy went live, which is exactly the kind of comment that costs
+  // someone an afternoon.
   PRIVY: {
-    enabled: false, // Set to true after getting App ID from https://dashboard.privy.io/
-    appId: 'YOUR_PRIVY_APP_ID_HERE', // Get from https://dashboard.privy.io/
+    enabled: true, // live in production; dormant when PRIVY_APP_ID is unset on the server
+    appId: 'cmu9rk7lo034q0cl24jlo2mr7',
   },
   
   // Token Information

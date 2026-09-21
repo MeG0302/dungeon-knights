@@ -681,7 +681,7 @@ export default function StakingClient() {
                 the global before it sends anything and says so plainly when it is not there yet. */}
             <Script src="/ethers-5.7.2.umd.min.js" strategy="afterInteractive" />
             <Script src="/arya.js?v=3" strategy="afterInteractive" />
-            <Script src="/wallet-source.js?v=2" strategy="afterInteractive" />
+            <Script src="/wallet-source.js?v=3" strategy="afterInteractive" />
         </>
     );
 

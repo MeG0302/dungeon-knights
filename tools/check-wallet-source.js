@@ -1,22 +1,27 @@
 #!/usr/bin/env node
 /**
- * Does the wallet facade behave — without an App ID, and with one?
+ * Does the wallet seam behave — logged out, signed in through Privy, or with an extension?
  *
  *     node tools/check-wallet-source.js
  *
- * `public/wallet-source.js` decides where every page's Web3 provider comes from. Two
- * things about it have to be true and neither is visible from reading it:
+ * `public/wallet-source.js` decides where every page's Web3 provider comes from, and it has
+ * three jobs that no page can see happen:
  *
- *   - **Dormant means dormant.** With no embedded App ID on the server, nothing may be
- *     loaded, nothing may be replaced, and `window.ethereum` must be exactly what it was.
- *   - **The embedded path has to be right on the day it is switched on**, and it cannot
- *     be tried out until there is a real App ID. So the Privy SDK is faked here — to the
- *     shape Privy documents — and the facade is driven through the whole lifecycle:
- *     restore, sign-in, signing, cancel, chain mismatch, sign-out.
+ *   - **Prefer a signed-in Privy session.** When the bridge in `app/privy-bridge.js` reports
+ *     an authenticated wallet, that wallet must win everywhere — including `window.ethereum`
+ *     — so the roster, the dungeon and the vault cannot disagree about who is playing.
+ *   - **Never shadow an extension.** A logged-out bridge, or no bridge at all (a deployment
+ *     with no App ID), must leave an injected wallet exactly as it was.
+ *   - **Be honest when there is nothing.** No provider means no provider, and the message has
+ *     to fit the device rather than pointing a phone at an extension it cannot install.
  *
- * The file is loaded from disk into a stub DOM, so this tests the shipped artefact and
- * not a copy of it. What it cannot prove is Privy's own behaviour against the real
- * service; that needs a live App ID in a real browser.
+ * The bridge is faked to the contract `app/privy-bridge.js` publishes, and the seam is driven
+ * through the whole lifecycle: dormant, extension, embedded session, external session,
+ * logged-out bridge, a bridge that mounts late, sign-out and a chain mismatch.
+ *
+ * The file is loaded from disk into a stub DOM, so this drives the shipped artefact and not a
+ * copy of it. What it cannot prove is Privy's own behaviour against the real service; that
+ * needs the live App ID in a real browser.
  */
 
 const fs = require('fs');
@@ -72,23 +77,44 @@ function makeDom(userAgent = 'Mozilla/5.0 (Macintosh)') {
     const body = element('body');
     const head = element('head');
     const dispatched = [];
+    const listeners = new Map();
     const document = {
         body,
         head,
         readyState: 'complete',
         createElement: element,
-        addEventListener() {},
-        removeEventListener() {},
+        addEventListener(type, fn) {
+            const list = listeners.get(type) || [];
+            list.push(fn);
+            listeners.set(type, list);
+        },
+        removeEventListener(type, fn) {
+            listeners.set(type, (listeners.get(type) || []).filter((entry) => entry !== fn));
+        },
     };
     const window = {
         document,
         navigator: { userAgent },
         dispatchEvent(event) {
             dispatched.push(event.type);
+            // The seam waits on `privyBridgeReady`, so these have to actually fire.
+            for (const fn of listeners.get(event.type) || []) {
+                try {
+                    fn(event);
+                } catch {
+                    // a listener throwing is not this helper's problem
+                }
+            }
             return true;
         },
-        addEventListener() {},
-        removeEventListener() {},
+        addEventListener(type, fn) {
+            const list = listeners.get(type) || [];
+            list.push(fn);
+            listeners.set(type, list);
+        },
+        removeEventListener(type, fn) {
+            listeners.set(type, (listeners.get(type) || []).filter((entry) => entry !== fn));
+        },
     };
     class CustomEvent {
         constructor(type, init) {
@@ -99,97 +125,14 @@ function makeDom(userAgent = 'Mozilla/5.0 (Macintosh)') {
     return { window, document, body, head, dispatched, CustomEvent };
 }
 
-/** Whole-token class match — `dkw-go` is one class among several on those buttons. */
-function findByClass(root, className) {
-    if (String(root.className || '').split(/\s+/).includes(className)) return root;
-    for (const child of root.children || []) {
-        const found = findByClass(child, className);
-        if (found) return found;
-    }
-    return null;
-}
-
-/** Let pending microtasks and timers in the sandbox run. */
-const settle = async (times = 6) => {
-    for (let i = 0; i < times; i++) await new Promise((resolve) => setTimeout(resolve, 0));
-};
-
-// ------------------------------------------------------- a fake Privy, per docs
-function fakeSdk({ config, user = null }) {
-    const calls = [];
-    const state = { allowCreate: true };
-
-    class FakePrivy {
-        constructor(options) {
-            calls.push(['construct', options]);
-            this.options = options;
-            // 0.76.x does **not** resolve to `{ user: null }` when storage is empty — it
-            // throws `No tokens found in storage`. `config.sessionThrows` opts into that,
-            // because the real behaviour is what the facade has to survive.
-            this.user = {
-                get: async () => {
-                    if (config.sessionThrows && !user) throw new Error('No tokens found in storage');
-                    return { user };
-                },
-            };
-            this.embeddedWallet = {
-                getURL: () => 'https://auth.privy.io/embed/secure-context',
-                onMessage: () => {},
-                create: async () => {
-                    calls.push(['create']);
-                    const created = { id: 'did:privy:1', wallet: { address: '0xAbC0000000000000000000000000000000000001' } };
-                    user = created;
-                    return { user: created };
-                },
-                getEthereumProvider: async (args) => {
-                    calls.push(['getEthereumProvider', args]);
-                    return {
-                        async request({ method }) {
-                            calls.push(['embedded.request', method]);
-                            if (method === 'eth_chainId') return config.embeddedChain || '0xb626';
-                            if (method === 'personal_sign') return '0xsigned';
-                            return null;
-                        },
-                    };
-                },
-            };
-            this.auth = {
-                email: {
-                    sendCode: async (email) => calls.push(['sendCode', email]),
-                    loginWithCode: async (email, code) => {
-                        calls.push(['loginWithCode', email, code]);
-                        // The session now exists; the next user.get() must show it.
-                        user = sessionUser;
-                        return { user: sessionUser };
-                    },
-                },
-                logout: async (args) => calls.push(['logout', args]),
-            };
-        }
-        async initialize() {
-            calls.push(['initialize']);
-        }
-        setMessagePoster() {}
-    }
-
-    const wallet = { address: '0xAbC0000000000000000000000000000000000001' };
-    const sessionUser = { id: 'did:privy:1', wallet };
-    user = user === null && config.hasSession === false ? null : user || sessionUser;
-
-    const sdk = {
-        default: FakePrivy,
-        LocalStorage: class LocalStorage {},
-        getUserEmbeddedEthereumWallet: (u) => u?.wallet || null,
-        getEntropyDetailsFromUser: () => ({ entropyId: 'entropy', entropyIdVerifier: 'verifier' }),
-    };
-    return { sdk, calls, state };
-}
-
 /** An extension: the shape wallet.js and everything else already expects. */
 function fakeExtension() {
+    const calls = [];
     return {
         isMetaMask: true,
+        calls,
         async request({ method }) {
+            calls.push(method);
             if (method === 'eth_accounts') return ['0xEXT0000000000000000000000000000000000001'];
             if (method === 'eth_requestAccounts') return ['0xEXT0000000000000000000000000000000000001'];
             if (method === 'eth_chainId') return '0xb626';
@@ -199,13 +142,63 @@ function fakeExtension() {
     };
 }
 
-/** Load the shipped facade into a fresh sandbox. */
-function load({ userAgent, embedded, injected = null, sdk = null, captureWarnings = false }) {
+const EMBEDDED_ADDRESS = '0xAbC0000000000000000000000000000000000001';
+const EXTERNAL_ADDRESS = '0xDDd0000000000000000000000000000000000002';
+
+/**
+ * A bridge, to the contract `app/privy-bridge.js` publishes — including the fact that
+ * `login()` is asynchronous and the session arrives through React afterwards, which is why
+ * the seam polls for the provider rather than assuming it is there on the next line.
+ */
+function fakeBridge({ authenticated = true, walletType = 'privy', address = EMBEDDED_ADDRESS, chainId = '0xb626' } = {}) {
+    const calls = [];
+    let session = authenticated;
+    const provider = {
+        async request({ method }) {
+            calls.push(['provider.request', method]);
+            switch (method) {
+                case 'eth_accounts':
+                    return session ? [address] : [];
+                case 'eth_chainId':
+                    return chainId;
+                case 'personal_sign':
+                    return '0xsigned';
+                default:
+                    return null;
+            }
+        },
+    };
+    return {
+        calls,
+        provider,
+        isReady: () => true,
+        isAuthenticated: () => session,
+        getAddress: () => (session ? address : null),
+        getWalletType: () => (session ? walletType : null),
+        getProvider: async () => {
+            calls.push(['getProvider']);
+            return session ? provider : null;
+        },
+        login: async () => {
+            calls.push(['login']);
+            session = true;
+        },
+        logout: async () => {
+            calls.push(['logout']);
+            session = false;
+        },
+        /** For the harness: pretend the React session changed under us. */
+        setSession: (next) => { session = next; },
+    };
+}
+
+/** Load the shipped seam into a fresh sandbox. */
+function load({ userAgent, injected = null, bridge = null, captureWarnings = false } = {}) {
     const warnings = [];
     const dom = makeDom(userAgent);
     const win = dom.window;
     if (injected) win.ethereum = injected;
-    if (sdk) win.DKWalletSdk = sdk.sdk;
+    if (bridge) win.privyBridge = bridge;
     win.DUNGEON_CONFIG = {
         getNetworkConfig: () => ({
             chainId: '0xb626',
@@ -217,7 +210,6 @@ function load({ userAgent, embedded, injected = null, sdk = null, captureWarning
         }),
     };
 
-    let configRequested = 0;
     const sandbox = {
         window: win,
         document: dom.document,
@@ -228,238 +220,207 @@ function load({ userAgent, embedded, injected = null, sdk = null, captureWarning
         setTimeout,
         clearTimeout,
         CustomEvent: dom.CustomEvent,
-        fetch: async () => {
-            configRequested += 1;
-            return { ok: true, json: async () => ({ chain: null, embedded: embedded || null }) };
-        },
+        fetch: async () => ({ ok: true, json: async () => ({ chain: null, embedded: null }) }),
     };
     sandbox.globalThis = sandbox;
     vm.runInNewContext(SOURCE, sandbox, { filename: 'public/wallet-source.js' });
-    return { ...dom, sandbox, warnings, configCount: () => configRequested };
+    return { ...dom, sandbox, warnings, window: win };
 }
+
+/** Let pending microtasks and timers in the sandbox run. */
+const settle = async (times = 6) => {
+    for (let i = 0; i < times; i++) await new Promise((resolve) => setTimeout(resolve, 0));
+};
 
 (async () => {
     console.log('');
-    console.log('Wallet source — dormant, and ready for the day it is switched on');
+    console.log('Wallet source — a signed-in Privy session wins, an extension is never shadowed');
 
     // ------------------------------------------------------------------ dormant
     console.log('');
-    console.log('No embedded App ID configured (today)');
+    console.log('No Privy app configured, no extension (a fresh checkout)');
 
-    const off = load({ embedded: null });
+    const off = load({ captureWarnings: true });
     const offProvider = await off.window.DKWallet.provider({ waitMs: 0 });
     const offCaps = await off.window.DKWallet.capabilities();
     rec('no provider is offered', offProvider === null, String(offProvider));
     rec('window.ethereum is left alone', off.window.ethereum === undefined,
-        off.window.ethereum ? 'was replaced' : 'untouched');
+        String(off.window.ethereum));
     rec('nothing is connectable', offCaps.connectable === false, JSON.stringify(offCaps));
-    rec('no secure-context iframe is mounted', findByClass(off.body, 'dkw-backdrop') === null
-        && off.body.children.every((c) => c.tagName !== 'IFRAME'), `${off.body.children.length} body children`);
+    rec('no Privy bridge is claimed', offCaps.privy === false, JSON.stringify(offCaps.privy));
+    rec('connecting returns nothing rather than inventing a wallet',
+        (await off.window.DKWallet.connect()) === null);
+    rec('nothing is added to the page', off.body.children.length === 0,
+        `${off.body.children.length} node(s)`);
 
-    const phone = load({ embedded: null, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)' });
-    rec('a phone is told to use a wallet browser',
-        /built-in browser/.test(phone.window.DKWallet.unavailableMessage()),
+    const phone = load({ userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)' });
+    rec('a phone is told about the wallet browser, and can sign in',
+        /built-in browser/.test(phone.window.DKWallet.unavailableMessage())
+        && /email/.test(phone.window.DKWallet.unavailableMessage()),
         phone.window.DKWallet.unavailableMessage());
     rec('a phone is recognised as one, so no download link is offered',
         phone.window.DKWallet.isMobile() === true, String(phone.window.DKWallet.isMobile()));
-    rec('a desktop is not',
-        off.window.DKWallet.isMobile() === false, String(off.window.DKWallet.isMobile()));
+    rec('a desktop is not', off.window.DKWallet.isMobile() === false,
+        String(off.window.DKWallet.isMobile()));
     rec('a desktop is told to install one',
-        /Install MetaMask/.test(off.window.DKWallet.unavailableMessage()),
+        /install MetaMask/i.test(off.window.DKWallet.unavailableMessage()),
         off.window.DKWallet.unavailableMessage());
 
-    // ------------------------------------------- a page that never asks us anything
+    // -------------------------------------------------------------- extension only
     console.log('');
-    console.log('A configured deployment where the page never calls in (the Points route)');
+    console.log('An extension, and no Privy session');
 
-    const sdkIdle = fakeSdk({ config: {} });
-    const idle = load({ embedded: { appId: 'app-id' }, sdk: sdkIdle });
-    await settle(10);
-    const idleCaps = await idle.window.DKWallet.capabilities();
-    rec('the provider appears on its own', !!idle.window.ethereum && idle.window.ethereum.isDKEmbedded === true,
-        idle.window.ethereum ? 'shim installed' : 'nothing installed');
-    rec('a returning session is restored before the first click', idleCaps.connected === true,
-        String(idleCaps.address));
-
-    const sdkIdleAnon = fakeSdk({ config: { hasSession: false } });
-    const idleAnon = load({ embedded: { appId: 'app-id' }, sdk: sdkIdleAnon });
-    await settle(10);
-    const idleAnonCaps = await idleAnon.window.DKWallet.capabilities();
-    rec('an anonymous visitor gets no account, only the provider',
-        idleAnonCaps.connected === false && !!idleAnon.window.ethereum, JSON.stringify(idleAnonCaps.connected));
-    rec('and is not asked to sign in until they choose to',
-        findByClass(idleAnon.body, 'dkw-backdrop') === null, 'no modal');
-
-    // ------------------------------------------------------ injected wallet wins
-    console.log('');
-    console.log('An extension is present, and an App ID is configured too');
-
-    const sdkInjected = fakeSdk({ config: {} });
-    const ext = load({ embedded: { appId: 'app-id', clientId: 'client-id' }, injected: fakeExtension(), sdk: sdkInjected });
+    const extension = fakeExtension();
+    const ext = load({ injected: extension });
     const extProvider = await ext.window.DKWallet.provider({ waitMs: 0 });
-    rec('the extension is used', extProvider === ext.window.ethereum, 'provider is the injected one');
-    rec('it is reported as injected', ext.window.DKWallet.kind() === 'injected', String(ext.window.DKWallet.kind()));
-    rec('the wallet SDK is never loaded', sdkInjected.calls.length === 0, `${sdkInjected.calls.length} SDK calls`);
+    rec('the extension is the provider', extProvider === extension, String(extProvider));
+    rec('it is reported as injected', ext.window.DKWallet.kind() === 'injected',
+        String(ext.window.DKWallet.kind()));
+    rec('the extension is not replaced on window.ethereum', ext.window.ethereum === extension,
+        String(ext.window.ethereum));
+    const extConnect = await ext.window.DKWallet.connect();
+    rec('connecting hands back the extension', extConnect === extension, String(extConnect));
+    rec('it never asks Privy to log anyone in', !extension.calls.includes('login'));
 
-    // --------------------------------------------------------- silent restore
+    // ------------------------------------------- a signed-in session owns the wallet
     console.log('');
-    console.log('A phone with a previous session');
+    console.log('Signed in through Privy — an embedded wallet');
 
-    const sdkSession = fakeSdk({ config: {} });
-    const restored = load({ embedded: { appId: 'app-id' }, sdk: sdkSession, userAgent: 'Mozilla/5.0 (iPhone)' });
-    const restoredProvider = await restored.window.DKWallet.provider({ waitMs: 0 });
-    const restoredCaps = await restored.window.DKWallet.capabilities();
-    rec('a provider is offered', !!restoredProvider, restoredProvider ? 'shim' : 'null');
-    rec('it is reported as embedded', restoredCaps.kind === 'embedded', String(restoredCaps.kind));
-    rec('the account is known without any UI', restoredCaps.address === '0xAbC0000000000000000000000000000000000001',
-        String(restoredCaps.address));
-    rec('a prompt was not shown', findByClass(restored.body, 'dkw-backdrop') === null, 'no modal');
-    rec('the secure context is mounted',
-        restored.body.children.some((c) => c.tagName === 'IFRAME'), 'iframe in body');
-    rec('late listeners are told a wallet appeared',
-        restored.dispatched.includes('ethereum#initialized'), restored.dispatched.join(', ') || 'none');
+    const embeddedBridge = fakeBridge({ walletType: 'privy' });
+    const session = load({ bridge: embeddedBridge, injected: fakeExtension() });
+    const sessionProvider = await session.window.DKWallet.provider({ waitMs: 0 });
+    const sessionCaps = await session.window.DKWallet.capabilities();
+    rec('the seam (not the extension) is the provider', sessionProvider === session.window.ethereum,
+        sessionProvider === session.window.ethereum ? 'window.ethereum is the seam' : 'mismatch');
+    rec('window.ethereum now follows the Privy session',
+        session.window.ethereum !== undefined && session.window.ethereum.isDKEmbedded === true,
+        'seam installed');
+    rec('an embedded wallet is reported as embedded', sessionCaps.kind === 'embedded',
+        String(sessionCaps.kind));
+    rec('the address comes from the bridge', sessionCaps.address === EMBEDDED_ADDRESS,
+        String(sessionCaps.address));
+    rec('the wallet type is reported', sessionCaps.walletType === 'privy',
+        String(sessionCaps.walletType));
+    rec('it is connectable and connected', sessionCaps.connectable === true && sessionCaps.connected === true,
+        JSON.stringify(sessionCaps));
+    const forwardedAccounts = await session.window.ethereum.request({ method: 'eth_accounts' });
+    rec('accounts are forwarded to the bridge provider',
+        Array.isArray(forwardedAccounts) && forwardedAccounts[0] === EMBEDDED_ADDRESS,
+        JSON.stringify(forwardedAccounts));
+    const signed = await session.window.ethereum.request({ method: 'personal_sign', params: ['0x0', EMBEDDED_ADDRESS] });
+    rec('signing goes through the bridge provider', signed === '0xsigned', String(signed));
 
-    const accounts = await restored.window.ethereum.request({ method: 'eth_accounts' });
-    rec('eth_accounts reports the embedded account', accounts[0] === restoredCaps.address, JSON.stringify(accounts));
+    const externalBridge = fakeBridge({ walletType: 'wallet_connect', address: EXTERNAL_ADDRESS });
+    const external = load({ bridge: externalBridge });
+    const externalProvider = await external.window.DKWallet.provider({ waitMs: 0 });
+    const externalCaps = await external.window.DKWallet.capabilities();
+    rec('a wallet the player already owns is reported as injected', externalCaps.kind === 'injected',
+        String(externalCaps.kind));
+    rec('its address is the bridge address', externalCaps.address === EXTERNAL_ADDRESS,
+        String(externalCaps.address));
+    rec('a WalletConnect session still gets the seam',
+        externalProvider === external.window.ethereum, 'seam installed');
 
-    const signature = await restored.window.ethereum.request({
-        method: 'personal_sign', params: ['0xdeadbeef', '0xIgnoredSentByCaller'],
-    });
-    const signCall = sdkSession.calls.find((c) => c[0] === 'embedded.request' && c[1] === 'personal_sign');
-    rec('personal_sign reaches the wallet', signature === '0xsigned', String(signature));
-    rec('and only once', sdkSession.calls.filter((c) => c[0] === 'embedded.request' && c[1] === 'personal_sign').length === 1,
-        `sign call recorded: ${!!signCall}`);
-
-    // --------------------------------------------------- sign-in on demand
+    // ------------------------------------- a logged-out bridge must not shadow anything
     console.log('');
-    console.log('A phone with no session — the email sign-in');
+    console.log('A bridge that is mounted but logged out');
 
-    const sdkFresh = fakeSdk({ config: { hasSession: false } });
-    const fresh = load({ embedded: { appId: 'app-id' }, sdk: sdkFresh, userAgent: 'Mozilla/5.0 (iPhone)' });
-    const freshProvider = await fresh.window.DKWallet.provider({ waitMs: 0 });
-    rec('no provider until someone signs in', freshProvider === null, String(freshProvider));
-    rec('but the provider exists, like a locked extension', !!fresh.window.ethereum && fresh.window.ethereum.isDKEmbedded,
-        'shim installed');
+    const signedOutBridge = fakeBridge({ authenticated: false });
+    const extension2 = fakeExtension();
+    const signedOut = load({ bridge: signedOutBridge, injected: extension2 });
+    const signedOutProvider = await signedOut.window.DKWallet.provider({ waitMs: 0 });
+    const signedOutCaps = await signedOut.window.DKWallet.capabilities();
+    rec('the extension is used, not the logged-out session', signedOutProvider === extension2,
+        String(signedOutProvider));
+    rec('window.ethereum is still the extension', signedOut.window.ethereum === extension2,
+        String(signedOut.window.ethereum));
+    rec('nothing is reported as connected', signedOutCaps.connected === false,
+        JSON.stringify(signedOutCaps));
+    rec('but the login is offered', signedOutCaps.connectable === true, JSON.stringify(signedOutCaps));
+    rec('the bridge is reported as present', signedOutCaps.privy === true, String(signedOutCaps.privy));
 
-    const locked = await fresh.window.ethereum.request({ method: 'eth_accounts' });
-    rec('eth_accounts is empty', locked.length === 0, JSON.stringify(locked));
+    const loginOnly = fakeBridge({ authenticated: false });
+    const anon = load({ bridge: loginOnly });
+    rec('with no extension and no session there is no provider',
+        (await anon.window.DKWallet.provider({ waitMs: 0 })) === null);
+    const connected = await anon.window.DKWallet.connect();
+    rec('connecting opens Privy\'s login', loginOnly.calls.some((c) => c[0] === 'login'),
+        JSON.stringify(loginOnly.calls.filter((c) => c[0] === 'login')));
+    rec('and then hands back a usable provider', connected === anon.window.ethereum,
+        connected === anon.window.ethereum ? 'seam installed after login' : String(connected));
+    const afterLogin = await anon.window.DKWallet.capabilities();
+    rec('the session is what the page now plays with', afterLogin.connected === true
+        && afterLogin.address === EMBEDDED_ADDRESS, JSON.stringify(afterLogin));
 
-    const pending = fresh.window.ethereum.request({ method: 'eth_requestAccounts' });
-    await settle();
-    const emailModal = findByClass(fresh.body, 'dkw-backdrop');
-    rec('sign-in asks for an email', !!emailModal, emailModal ? 'modal shown' : 'no modal');
-    const emailInput = emailModal && findByClass(emailModal, 'dkw-input');
-    if (emailInput) emailInput.value = 'knight@example.com';
-    const emailGo = emailModal && findByClass(emailModal, 'dkw-go');
-    if (emailGo) emailGo.onclick();
-    await settle();
+    // A login that is opened and then closed is not a failure, and must not be reported as
+    // one: the player changed their mind, and the seam has nothing to complain about.
+    const abandoned = fakeBridge({ authenticated: false });
+    const closed = load({ bridge: abandoned, captureWarnings: true });
+    abandoned.login = async () => { abandoned.calls.push(['login']); };
+    const nothing = await closed.window.DKWallet.connect();
+    rec('closing the login returns nothing', nothing === null, String(nothing));
+    rec('and is not reported as a failure',
+        !closed.warnings.some((w) => /settling/.test(w)),
+        JSON.stringify(closed.warnings.slice(-2)));
 
-    const codeModal = findByClass(fresh.body, 'dkw-backdrop');
-    const codeInput = codeModal && findByClass(codeModal, 'dkw-input');
-    rec('then for the code it sent', !!codeInput, codeInput ? 'code step shown' : 'no second step');
-    if (codeInput) codeInput.value = '123456';
-    const codeGo = codeModal && findByClass(codeModal, 'dkw-go');
-    if (codeGo) codeGo.onclick();
-
-    const granted = await pending;
-    const freshCaps = await fresh.window.DKWallet.capabilities();
-    rec('the code signs the player in', granted?.[0] === '0xAbC0000000000000000000000000000000000001', JSON.stringify(granted));
-    rec('the address is remembered', freshCaps.address === granted?.[0] && freshCaps.connected === true,
-        String(freshCaps.address));
-    rec('a session was created, not just read',
-        sdkFresh.calls.some((c) => c[0] === 'loginWithCode'), sdkFresh.calls.map((c) => c[0]).join(', '));
-
-    // ------------------------------------------------------------------ cancel
+    // ------------------------------------------------- a bridge that arrives late
     console.log('');
-    console.log('Dismissing the sign-in');
+    console.log('A bridge that mounts after the page scripts (the React effect lands late)');
 
-    const sdkCancel = fakeSdk({ config: { hasSession: false } });
-    const cancelled = load({ embedded: { appId: 'app-id' }, sdk: sdkCancel });
-    await cancelled.window.DKWallet.provider({ waitMs: 0 });   // installs the provider
-    const cancelledPending = cancelled.window.ethereum.request({ method: 'eth_requestAccounts' })
-        .then(() => 'resolved')
-        .catch((error) => error.message);
-    await settle();
-    const cancelModal = findByClass(cancelled.body, 'dkw-backdrop');
-    const cancelBtn = cancelModal && findByClass(cancelModal, 'dkw-ghost');
-    if (cancelBtn) cancelBtn.onclick();
-    const cancelledOutcome = await cancelledPending;
-    const cancelledCaps = await cancelled.window.DKWallet.capabilities();
-    rec('cancelling does not connect anyone', cancelledCaps.connected === false, `outcome: ${cancelledOutcome}`);
-    rec('cancelling does not remove the wallet', !!cancelled.window.ethereum, 'shim still installed');
+    const late = load({ injected: null });
+    const lateBridge = fakeBridge();
+    setTimeout(() => {
+        late.window.privyBridge = lateBridge;
+        late.window.dispatchEvent(new late.CustomEvent('privyBridgeReady'));
+    }, 120);
+    const lateProvider = await late.window.DKWallet.provider({ waitMs: 900 });
+    rec('a late bridge is still found', lateProvider === late.window.ethereum,
+        lateProvider === late.window.ethereum ? 'seam installed' : String(lateProvider));
+    rec('and it is the session that is adopted',
+        (await late.window.DKWallet.capabilities()).address === EMBEDDED_ADDRESS);
 
-    // ------------------------------------------------ a session that cannot be read
+    // ----------------------------------------------------------- sign-out, chain
     console.log('');
-    console.log('An empty session in storage — what 0.76.x actually does');
+    console.log('Signing out, and a wallet on the wrong chain');
 
-    const sdkEmpty = fakeSdk({ config: { hasSession: false, sessionThrows: true } });
-    const empty = load({ embedded: { appId: 'app-id' }, sdk: sdkEmpty });
-    const emptyProvider = await empty.window.DKWallet.provider({ waitMs: 0 });
-    const emptyCaps = await empty.window.DKWallet.capabilities();
-    rec('an unreadable session does not break the facade', !!empty.window.DKWallet, 'facade is up');
-    rec('it is reported as no account',
-        emptyCaps.connected === false && emptyProvider === null,
-        `connected: ${emptyCaps.connected}, provider: ${emptyProvider}`);
-    rec('and no prompt is shown for it', findByClass(empty.body, 'dkw-backdrop') === null, 'no modal');
-    rec('the wallet is still offered, like a locked extension',
-        !!empty.window.ethereum && empty.window.ethereum.isDKEmbedded === true, 'shim installed');
+    const goodbye = fakeBridge();
+    const leaving = load({ bridge: goodbye });
+    await leaving.window.DKWallet.provider({ waitMs: 0 });
+    await leaving.window.DKWallet.disconnect();
+    rec('sign-out goes through Privy', goodbye.calls.some((c) => c[0] === 'logout'),
+        JSON.stringify(goodbye.calls.filter((c) => c[0] === 'logout')));
+    const afterSignOut = await leaving.window.DKWallet.capabilities();
+    rec('nothing is connected afterwards', afterSignOut.connected === false
+        && afterSignOut.address === null, JSON.stringify(afterSignOut));
+    rec('listeners are told the account went away',
+        leaving.dispatched.includes('ethereum#initialized'));
 
-    // The regression this pins: awaiting `user.get()` directly meant the first click on a
-    // phone threw before the sign-in UI existed, so "Connect Wallet" did nothing at all.
-    // Caught rather than awaited bare: a throw here is the regression, and it must be
-    // reported as one failing check instead of aborting the rest of the run.
-    let emptyThrew = null;
-    const emptyPending = empty.window.DKWallet.connect()
-        .catch((error) => { emptyThrew = error.message || String(error); return null; });
-    await settle();
-    const emptyModal = findByClass(empty.body, 'dkw-backdrop');
-    rec('the first click still reaches the sign-in UI', !!emptyModal,
-        emptyModal ? 'modal shown' : `no modal${emptyThrew ? ` (threw: ${emptyThrew})` : ''}`);
-    const emptyCancel = emptyModal && findByClass(emptyModal, 'dkw-ghost');
-    if (emptyCancel) emptyCancel.onclick();
-    await emptyPending;
-    rec('and dismissing it connects nobody',
-        (await empty.window.DKWallet.capabilities()).connected === false, 'still signed out');
+    const wrongChain = fakeBridge({ chainId: '0x1' });
+    const mismatched = load({ bridge: wrongChain, captureWarnings: true });
+    await mismatched.window.DKWallet.provider({ waitMs: 0 });
+    const mismatchedCaps = await mismatched.window.DKWallet.capabilities();
+    rec('a wallet on another chain is reported, not hidden',
+        mismatchedCaps.chainMismatch === '0x1', String(mismatchedCaps.chainMismatch));
+    rec('and the warning names the chain to enable',
+        mismatched.warnings.some((w) => /Robinhood Chain Testnet \(46630/.test(w)),
+        mismatched.warnings.slice(-1)[0] || '(no warning)');
 
-    // ----------------------------------------------------------- chain mismatch
-    console.log('');
-    console.log('An embedded wallet on the wrong chain');
+    const rightChain = fakeBridge();
+    const settledOk = load({ bridge: rightChain, captureWarnings: true });
+    await settledOk.window.DKWallet.provider({ waitMs: 0 });
+    rec('the right chain is not reported as a mismatch',
+        (await settledOk.window.DKWallet.capabilities()).chainMismatch === null,
+        JSON.stringify((await settledOk.window.DKWallet.capabilities()).chainMismatch));
 
-    const sdkChain = fakeSdk({ config: { embeddedChain: '0x1' } });
-    const wrongChain = load({ embedded: { appId: 'app-id' }, sdk: sdkChain, captureWarnings: true });
-    await wrongChain.window.DKWallet.provider({ waitMs: 0 });
-    const chainCaps = await wrongChain.window.DKWallet.capabilities();
-    rec('the mismatch is detected, not hidden', chainCaps.chainMismatch === '0x1', String(chainCaps.chainMismatch));
-    const warned = wrongChain.warnings.join(' ');
-    rec('and reported, naming the chain to enable',
-        /0x1/.test(warned) && /46630/.test(warned), warned.slice(0, 120) || 'nothing warned');
-    rec('switching networks never breaks the connection',
-        (await wrongChain.window.ethereum.request({ method: 'wallet_switchEthereumChain' })) === null, 'returned null');
-
-    // --------------------------------------------------------------- sign-out
-    console.log('');
-    console.log('Signing out');
-
-    const sdkOut = fakeSdk({ config: {} });
-    const out = load({ embedded: { appId: 'app-id' }, sdk: sdkOut });
-    await out.window.DKWallet.provider({ waitMs: 0 });
-    await out.window.DKWallet.disconnect();
-    const outCaps = await out.window.DKWallet.capabilities();
-    rec('the session is ended at the provider',
-        sdkOut.calls.some((c) => c[0] === 'logout'), sdkOut.calls.map((c) => c[0]).join(', '));
-    rec('the account is cleared', outCaps.address === null && outCaps.connected === false, JSON.stringify(outCaps));
-    rec('the wallet stays available to reconnect', !!out.window.ethereum && out.window.ethereum.isDKEmbedded,
-        'shim still installed');
-    rec('sign-out is one request, not two',
-        (await out.window.ethereum.request({ method: 'eth_accounts' })).length === 0, 'eth_accounts is empty');
-
+    // --------------------------------------------------------------------- report
     console.log('');
     const failed = results.filter((r) => !r.pass);
     console.log(`${results.length - failed.length}/${results.length} checks passed`);
-    for (const f of failed) console.log(`  FAILED: ${f.label}`);
-    console.log('');
-    process.exit(failed.length ? 1 : 0);
-})().catch((error) => {
-    console.error('Harness failed:', error);
-    process.exit(1);
-});
+    if (failed.length) {
+        console.log('');
+        for (const f of failed) console.log(`  FAILED: ${f.label}`);
+        process.exitCode = 1;
+    }
+
+    await settle(2);
+})();

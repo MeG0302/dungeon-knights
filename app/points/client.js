@@ -435,7 +435,7 @@ export default function PointsPage() {
                 pull the wallet source in itself. It is what makes `window.ethereum`
                 exist on a phone, where nothing injects one — and what drops it in the
                 moment the rest of the game already has. */}
-            <Script src="/wallet-source.js?v=2" strategy="afterInteractive" />
+            <Script src="/wallet-source.js?v=3" strategy="afterInteractive" />
         </>
     );
 
