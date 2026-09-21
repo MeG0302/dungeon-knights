@@ -542,6 +542,14 @@ class WalletManager {
       // transaction per knight. Sent **sequentially on purpose**: each one needs the nonce the
       // previous one consumed, and firing them concurrently is how a wallet ends up with a
       // replaced transaction and a player wondering which knight they paid for.
+      //
+      // `provider` has to be built here. It was **used without being declared**, so every batch
+      // summon threw `ReferenceError: provider is not defined` at the line below before a single
+      // transaction was built — `summonKnight()` has always declared it, which is why the bug only
+      // ever appeared in batches. Worth stating plainly because of what it costs a player: the
+      // page had already taken the DNG approval, then failed, then reported it as *"Batch mint
+      // failed: provider is not defined"*.
+      const provider = new ethers.providers.Web3Provider(this.provider);
       const contract = new ethers.Contract(this.nftContractAddress, [
         'function summon() returns (uint256)',
         'function SUMMON_PRICE() view returns (uint256)'

@@ -12,6 +12,8 @@
  *                                  keyboard, the live tick, actions, honest states
  *   window.__check.stakingWrites() what the vault *sends*: drives approve/stake/unstake/claim
  *                                  through a wallet double and decodes every transaction
+ *   window.__check.mint()          the Summoning Chamber (run it on /mint): approve-then-summon
+ *                                  through a wallet double, one transaction per knight
  *   window.__check.report()        { total, failed, failures[], results[] }
  *
  * It lives in tools/, which is not served, so to use it from the browser copy it to
@@ -1663,10 +1665,175 @@
         return results;
     }
 
+    /**
+     * The Summoning Chamber's own path: one approval, then `summon()` once per knight.
+     *
+     * Two bugs lived in this flow and neither was readable from the source. `batchMintKnights`
+     * **used** `provider` without ever declaring it, so every batch summon threw
+     * `ReferenceError: provider is not defined` before building a transaction — and only after the
+     * page had already taken the DNG approval, so a player paid an approval for nothing. Then
+     * `MintPage.handleMint` declared `portal` inside its `try` while the `catch` read it, so the
+     * error handler replaced the real failure with its own `ReferenceError: portal is not defined`.
+     * A player saw the second message, which named the reporter instead of the cause.
+     *
+     * So this drives the page's own function through a wallet double and reads what it *sends*: one
+     * transaction per knight, to the collection, carrying `summon()`, each with a gas limit above
+     * the node's estimate — a Common roll makes the tier write cheap, so the estimate alone is not
+     * a safe limit — and it must never report a ReferenceError.
+     */
+    async function mint() {
+        await injectScript('/ethers-5.7.2.umd.min.js');
+        const page = window.mintPage;
+        const manager = window.walletManager;
+        rec('the Summoning Chamber and its wallet manager are on the page', !!page && !!manager,
+            page ? 'page present' : 'no window.mintPage');
+        if (!page || !manager) return results;
+
+        const ACCOUNT = localStorage.getItem('walletAddress') || '0x038d75aDb74d8e5Db82E6c6797f90dCdF82ef4C9';
+        const COLLECTION = window.CONTRACT_ADDRESSES?.KNIGHT_NFT || window.DUNGEON_CONFIG?.getNFTContract?.();
+        rec('the page knows which collection it is summoning from', !!COLLECTION, COLLECTION || '(none)');
+
+        const state = { sends: [] };
+        const SEL = {
+            summon: window.ethers.utils.id('summon()').slice(0, 10),
+            price: window.ethers.utils.id('SUMMON_PRICE()').slice(0, 10),
+            allowance: window.ethers.utils.id('allowance(address,address)').slice(0, 10),
+            approve: window.ethers.utils.id('approve(address,uint256)').slice(0, 10),
+        };
+        const ESTIMATE = 100000;
+        // `hexlify` refuses a number it cannot represent exactly — `hexlify(500e18)` is a
+        // NUMERIC_FAULT (`out-of-safe-range`), which the mock would then throw *inside* an
+        // `eth_call` and the page would surface as a reverted call. So the value goes through a
+        // BigNumber, and the first run of this check failed on exactly that mistake.
+        const word = (value) => window.ethers.utils.hexZeroPad(
+            window.ethers.utils.hexlify(window.ethers.BigNumber.from(String(value))), 32
+        );
+        const realEthereum = window.ethereum;
+
+        const txOf = (s) => ({
+            hash: s.hash, blockHash: '0x' + 'ab'.repeat(32), blockNumber: '0x64',
+            transactionIndex: '0x0', from: s.from || ACCOUNT, to: s.to, value: '0x0',
+            gas: s.gas, gasPrice: '0x3b9aca00', nonce: '0x0', input: s.data, data: s.data,
+            v: '0x1b', r: '0x' + '11'.repeat(32), s: '0x' + '22'.repeat(32),
+            type: '0x0', chainId: '0xb626', accessList: [], confirmations: 1,
+        });
+        const receiptOf = (s) => ({
+            transactionHash: s.hash, transactionIndex: '0x0', blockHash: '0x' + 'ab'.repeat(32),
+            blockNumber: '0x64', from: s.from || ACCOUNT, to: s.to,
+            cumulativeGasUsed: '0x5208', gasUsed: '0x5208', contractAddress: null,
+            logs: [], logsBloom: '0x' + '00'.repeat(256), status: '0x1', type: '0x0',
+            effectiveGasPrice: '0x3b9aca00', confirmations: 1,
+        });
+
+        window.ethereum = {
+            isMetaMask: true,
+            on: () => {}, removeListener: () => {}, addListener: () => {},
+            request: async ({ method, params = [] }) => {
+                switch (method) {
+                    case 'eth_chainId': return '0xb626';
+                    case 'net_version': return '46630';
+                    case 'eth_accounts':
+                    case 'eth_requestAccounts': return [ACCOUNT];
+                    case 'eth_blockNumber': return '0x64';
+                    case 'eth_gasPrice': return '0x3b9aca00';
+                    // The estimate the page must *not* trust on its own: a Common roll makes
+                    // `rarityOf[tokenId] = 0` a cheap SSTORE, so the real cost can exceed this.
+                    case 'eth_estimateGas': return '0x' + ESTIMATE.toString(16);
+                    case 'eth_call': {
+                        const data = String(params[0]?.data || '');
+                        if (data.slice(0, 10) === SEL.price) return word('500000000000000000000');
+                        if (data.slice(0, 10) === SEL.allowance) return word('0');
+                        return word('0');
+                    }
+                    case 'eth_sendTransaction': {
+                        const tx = params[0];
+                        const hash = '0x' + (state.sends.length + 1).toString(16).padStart(2, '0').repeat(32).slice(0, 64);
+                        const sent = { ...tx, hash };
+                        state.sends.push(sent);
+                        return hash;
+                    }
+                    case 'eth_getTransactionByHash': {
+                        const sent = state.sends.find((s) => s.hash === params[0]);
+                        return sent ? txOf(sent) : null;
+                    }
+                    case 'eth_getTransactionReceipt': {
+                        const sent = state.sends.find((s) => s.hash === params[0]);
+                        return sent ? receiptOf(sent) : null;
+                    }
+                    default: return null;
+                }
+            },
+        };
+
+        try {
+            manager.provider = window.ethereum;
+            manager.userAddress = ACCOUNT;
+            manager.isConnected = true;
+
+            const quantity = 2;
+            const realAlert = window.alert;
+            const alerts = [];
+            window.alert = (message) => alerts.push(String(message));
+
+            let threw = null;
+            let result = null;
+            try {
+                result = await manager.batchMintKnights(quantity);
+            } catch (error) {
+                threw = error;
+            }
+            rec('a batch summon does not throw a ReferenceError',
+                !threw && result?.success === true,
+                threw ? `${threw.name}: ${threw.message}` : `sent ${result?.count} knight(s)`);
+
+            const summons = state.sends.filter((tx) => String(tx.data).slice(0, 10) === SEL.summon);
+            rec('it sends one summon() per knight, to the collection',
+                summons.length === quantity
+                && summons.every((tx) => String(tx.to).toLowerCase() === String(COLLECTION).toLowerCase()),
+                `${summons.length} of ${quantity} to ${COLLECTION || '(none)'}`);
+
+            rec('the approval is taken once, before the summons',
+                state.sends.length === quantity + 1
+                && String(state.sends[0].data).slice(0, 10) === SEL.approve,
+                state.sends.map((tx) => String(tx.data).slice(0, 10)).join(', ') || 'nothing sent');
+
+            const limits = summons.map((tx) => parseInt(tx.gas || '0x0', 16));
+            rec('each summon carries a gas limit above the estimate, never at it',
+                limits.length === quantity && limits.every((gas) => gas > ESTIMATE),
+                `${limits.join(', ')} against an estimate of ${ESTIMATE}`);
+
+            // The error path. A failure must report the failure: the bug this replaced reported a
+            // ReferenceError from the handler itself, so "does it mention the real cause" and "does
+            // it avoid naming its own scope" are two separate assertions.
+            const realBatch = manager.batchMintKnights;
+            const realApprove = manager.approveDNG;
+            manager.approveDNG = async () => true;
+            manager.batchMintKnights = async () => { throw new Error('MOCK-FAILURE'); };
+            try {
+                await page.handleMint();
+            } catch (error) {
+                alerts.push(`threw: ${error.message}`);
+            }
+            manager.batchMintKnights = realBatch;
+            manager.approveDNG = realApprove;
+            window.alert = realAlert;
+
+            rec('a failed mint reports the failure, not a bug in its own error handler',
+                alerts.some((message) => message.includes('MOCK-FAILURE'))
+                && !alerts.some((message) => /is not defined/.test(message)),
+                alerts.join(' · ') || 'nothing was reported');
+        } finally {
+            window.ethereum = realEthereum;
+        }
+
+        return results;
+    }
+
     window.__check = {
         arya,
         assets,
         engine,
+        mint,
         staking,
         stakingWrites,
         tokenomics,

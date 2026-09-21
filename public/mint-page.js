@@ -177,12 +177,17 @@ class MintPage {
     }
     if (this.isMinting) return;
 
+    // Declared **outside** the try, and that is the whole point: the catch below needs it, and a
+    // `const` declared inside the try block is not in scope there. So the handler threw its own
+    // `ReferenceError: portal is not defined` and replaced the real reason the mint failed — a
+    // second bug hiding the first, in the one place a player needs to read.
+    const portal = document.getElementById('portalAnimation');
+
     try {
       this.isMinting = true;
       this.updateMintButton();
 
       // Show portal animation
-      const portal = document.getElementById('portalAnimation');
       if (portal) portal.classList.remove('hidden');
 
       const cost = this.mintQuantity * this.mintPrice();
