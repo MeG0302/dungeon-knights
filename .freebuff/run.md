@@ -40,6 +40,7 @@ Production, and the live deployment was measured reading the shared store — th
 | Mobile wallets | `PRIVY_APP_ID` (+ `PRIVY_CLIENT_ID`), and the chain enabled for the app | *Wallets: injected first…* |
 | Phone gas | players fund their own embedded wallet | *Wallets: injected first…* |
 | **Staking writes** | the approve/stake/claim transaction path, then `STAKING_WRITES_READY` in `lib/staking-config.js` — the page stays a labelled simulation until then, by design | *The Staking Vault* |
+| **Checking a follow** | *only if you want it checked*: register `/api/x/events` with X, subscribe our own account, then set `FOLLOW_PROOF_MODE=webhook`, `X_CONSUMER_SECRET` and `X_FOLLOW_TARGET_ID` for Production. Until then the follow is taken on the player's word and the card says so | *Proving a follow: X's Activity API* |
 
 One thing on chain is **not** a switch at all, because it touches custody: the old **V3** game
 (`0xD8de…36e5`) is not paused and still holds 811 old-token DNG, so its unsigned claim path is
@@ -626,22 +627,38 @@ only thing that decides whether a post exists, who wrote it, and what it says.
   error), `verified`, `failed` (X answered and the post is not yours / no tag / no link), `expired`
   (no good answer within the attempt ceiling, or the day ended first). The throttle is server-side
   and handed back as `retryInSeconds`, so the button counts down instead of looking broken.
-- **The one-time tab, and the one reward nothing checks.** The second tab on the left panel pays
-  once per wallet, ever, under the same atomic claim the floors use (`claimGuard`) — and it requires
-  a bound X account exactly as every other award does. Its first task is a **follow**, and no free X
-  endpoint can see who a player follows (oEmbed has no view of follows, likes or reposts either), so
-  the card says "taken on your word" rather than implying a check that never runs. What is *not* on
-  their word is the account: a binding cannot be moved to a second wallet, so one X account cannot
-  claim the same task twice. The record (`one:follow`) is namespaced so it cannot collide with the X
-  tasks' ids, and its copy carries the handle as `{handle}` for the **server** to fill in —
-  `X_SHARE_TAG` is not `NEXT_PUBLIC_`, so a client that read it would render "follow @undefined".
+- **The one-time tab, and a follow that can be checked or taken on trust.** The second tab on the
+  left panel pays once per wallet, ever, under the same atomic claim the floors use (`claimGuard`) —
+  and it requires a bound X account exactly as every other award does. Its first task is a **follow**,
+  and no free X endpoint can see who a player follows (oEmbed has no view of follows, likes or
+  reposts either), so the reward has **two modes** and the card is written from whichever is live:
+  - **`claim`** — the honest default, and what production runs today: nothing about the follow is
+    checked, and the card says so in those words rather than implying a check that never runs.
+  - **`webhook`** — X pushes a `follow.follow` event to us (see below), so the reward is paid
+    against **X's own record**. A wallet X has said nothing about is refused with
+    `code: 'follow-required'` **before** the guard is taken, so a player who has not been seen
+    following us yet is not locked out of the claim for the guard's ten minutes.
+  The mode is decided by `followProofMode()` in `lib/x-webhook.js` and chosen by the **server**:
+  `state.oneTime[].blurb` / `claimedNote` and `state.followProof.mode` are built in
+  `lib/points-program.js`, because a page that answered that question from its own bundle could
+  advertise a check nothing is running. What is *not* on their word in either mode is the account: a
+  binding cannot be moved to a second wallet, so one X account cannot claim the same task twice. The
+  record (`one:follow`) is namespaced so it cannot collide with the X tasks' ids, and its copy
+  carries the handle as `{handle}` for the **server** to fill in — `X_SHARE_TAG` is not
+  `NEXT_PUBLIC_`, so a client that read it would render "follow @undefined".
+- **Proof is recorded per claim, not per task.** The record keeps `proof` as it was **on the day it
+  was paid** (`claimedProof` in state), so wiring the webhook later does not retroactively upgrade a
+  claim that was taken on trust — the card keeps saying "claimed on your word, no check ran" for
+  exactly the claims that were. The `claimedNote` sentence is composed on the server for the same
+  reason the blurbs are.
 - **Privy's Twitter must be enabled for the *proved* path** (see the switches table): without it a
   player can still type a handle and earn. The bridge exposes `getXAccount()`, `linkX()` and
   `getAccessToken()` for exactly this.
 
 ```bash
-node tools/check-points-x.js    # 110 checks, offline: a stubbed X and a stubbed Privy, real ES256
+node tools/check-points-x.js    # 125 checks, offline: a stubbed X and a stubbed Privy, real ES256
 node tools/check-x-verify.js    # 63 checks: the verifier alone, against a stubbed oEmbed
+node tools/check-x-webhook.js   # 40 checks: the follow webhook — real HMACs, no network
 node tools/check-kv-store.js    # 6 checks: the guard across two processes (and why KV matters)
 node tools/check-points-guard.js http://localhost:3000   # 21 checks: the live routes, gate included
 ```
@@ -651,6 +668,70 @@ and two of them had to be broken *twice*: the earned-claim rule and the handle c
 enforced in two places, so weakening one left the behaviour intact and the checks still green. Only
 breaking both made them fail by name. That is the point of the exercise; an equivalent mutant looks
 exactly like a working guard.
+
+The follow webhook's guards were falsified the same way — seven mutations, each caught by the check
+that names it: an unconfigured deployment accepting an unsigned delivery, an unknown event type
+being guessed into a follow, the mode turning on with no secret, the route parsing the body before
+checking the signature over it, a claim paid without asking what X said, a claim re-labelled as
+checked by a redeploy, and the handle fallback removed so a typed binding cannot find its fact.
+
+#### Proving a follow: X's Activity API
+
+X's 2026 rate card is the reason this is shaped like a webhook rather than a poll.
+`Following/Followers: Read` is **$0.010 per account row returned** and there is no "does A follow B"
+endpoint left (v1.1's `friendships/show` is gone), so *asking* means paging a player's following list
+and paying per name — a player who follows 300 accounts costs about $3 to check once. `Owned Reads`
+($0.001) apply only to the app owner's own data. The `follow.follow` event is **$0.010 per delivered
+event**, deduplicated for 24 hours, and afterwards a check costs nothing because the fact is already
+in the store.
+
+The receiver is `app/api/x/events/route.js` and the logic is `lib/x-webhook.js`. **Both signature
+checks use the app's consumer secret**, and the delivery one is computed over the **raw request
+body** — the route reads `request.text()` and never `request.json()`, because re-serialising a parsed
+body changes the bytes and would make every genuine delivery fail. A delivery that passes the
+signature is answered **200 even when unreadable**: X retries anything that is not a 2xx, every
+delivered event is billed, and a shape we have never seen should cost one log line rather than a
+retry storm.
+
+```bash
+# 1. Register the URL in the X developer portal, then subscribe it. X asks the CRC question
+#    itself when the subscription is created; answering it by hand is how you find out early:
+node --input-type=module -e "
+  const {answerCrcChallenge} = await import('./lib/x-webhook.js');
+  console.log(answerCrcChallenge('any-token'));"   # sha256=… — the value X expects back
+curl -s "http://localhost:3000/api/x/events?crc_token=any-token"   # {"response_token":"sha256=…"}
+
+# 2. Which account's follows we care about (the delivery filter and the backfill both use it)
+#    X_FOLLOW_TARGET_ID = the numeric id of @DNGrobinhood
+
+# 3. The follows that happened BEFORE the subscription — billed per row, so it will not run
+#    without --yes, and --max-pages bounds it:
+node tools/x-followers-backfill.js --yes --max-pages 1
+```
+
+Environment variables (production, via `npx vercel env add …` — **never** in `.env.local`, which
+would put a live consumer secret on a dev machine):
+
+| Variable | Used for |
+| --- | --- |
+| `FOLLOW_PROOF_MODE` | `webhook` to check follows. Anything else, or unset, is `claim` — the honest default |
+| `X_CONSUMER_SECRET` | Verifies the CRC handshake **and** every delivery. Without it the mode stays `claim`, because a deployment that cannot tell a forgery from a delivery must not say "verified" |
+| `X_FOLLOW_TARGET_ID` | Our own numeric account id — filters deliveries to our account and fills the claim's sentence |
+| `X_BEARER_TOKEN` | Only for `tools/x-followers-backfill.js`. App-only; the webhook itself needs no read token |
+
+Two things to know before switching it on. **Production runs `claim` mode today** — the variables
+above do not exist there, so `followProofMode()` returns `claim` and the card keeps its current
+wording. That is the safe direction: the mode only turns on when there is a secret to check with.
+And **deliveries can silently not arrive**: an unsubscribed, unauthorised or over-limit account gets
+no events at all, which at this end is indistinguishable from "nobody followed us". Every accepted
+delivery is logged (`[x-events] …`), so the two can be told apart from the log — subscribers on X's
+own developer forum reported webhooks that validated, subscribed, and then delivered nothing, which
+is why this is a half-hour spike before building anything on top of it.
+
+The backfill has one honest limitation: it adds follows, and cannot see an unfollow that happened
+before the subscription either (the two are the same absence). Those are corrected by the next
+unfollow event — the store treats the **latest** fact as the truth, so an account whose last event is
+an unfollow is refused again — or by hand in the store.
 
 The share's two pictures are generated from one source file, which is **not** served:
 

@@ -93,7 +93,9 @@ function pointsTourSteps(live) {
             kind: 'think',
             mood: 'Once and done',
             target: '[data-arya="onetime-tab"]',
-            text: () => `The second tab is different: those tasks pay <strong>once</strong>, ever — no daily reset. There is ${(now().openOneTime || 0) === 1 ? 'one waiting for you now' : `${(now().openOneTime || 0)} waiting for you now`}, and the tab carries the count. Read the small print on each card: where a step cannot be checked — and a follow cannot — the card says it is taken on your word rather than pretending otherwise.`,
+            text: () => `The second tab is different: those tasks pay <strong>once</strong>, ever — no daily reset. There is ${(now().openOneTime || 0) === 1 ? 'one waiting for you now' : `${(now().openOneTime || 0)} waiting for you now`}, and the tab carries the count. ${now().followProof?.mode === 'webhook'
+                ? 'Read the small print on each card: a follow is checked against X&rsquo;s own record before it pays.'
+                : 'Read the small print on each card: where a step cannot be checked — and a follow cannot — the card says it is taken on your word rather than pretending otherwise.'}`,
         },
         {
             kind: 'think',
@@ -260,11 +262,15 @@ function XTaskCard({
 /**
  * One task from the one-time tab.
  *
- * A different shape from `XTaskCard` on purpose, because it is a different bargain: nothing is
- * checked, so there is no link to paste and no pending state to render. The card states the reward,
- * opens the account in a new tab, and pays on a claim — and it says in as many words that no check
- * runs, because a card that quietly paid on trust while the rest of the page demanded proof would
- * teach a player that the rules here are decoration.
+ * A different shape from `XTaskCard` on purpose, because it is a different bargain: there is no link
+ * to paste and no pending state to render. The card states the reward, opens the account in a new
+ * tab, and pays on a claim.
+ *
+ * What it says about the checking is not decided here. `task.blurb` and `task.claimedNote` both come
+ * from the server, because whether a follow is checked depends on how the deployment is wired
+ * (`lib/x-webhook.js`), and a page that answered that question from its own bundle could advertise a
+ * check nothing is running. It also means a claim paid before that wiring existed keeps saying it was
+ * taken on trust, instead of being retroactively upgraded to "verified" by a redeploy.
  *
  * The step the task asks for is a button rather than a link in prose, so the one thing it wants is
  * the one thing under the player's thumb.
@@ -306,7 +312,7 @@ function OneTimeTaskCard({ task, busy, error, onClaim, canClaim, blockedWhy }) {
                 <div className="x-task-line is-paid">
                     <span>
                         Paid {task.claimedOn}
-                        {task.proof === 'claim' ? ' \u00b7 claimed on your word, no check ran' : ''}
+                        {task.claimedNote ? ` \u00b7 ${task.claimedNote}` : ''}
                     </span>
                 </div>
             )}
@@ -1371,8 +1377,10 @@ export default function PointsPage() {
                                         One-time Tasks
                                     </div>
                                     <p className="panel-hint">
-                                        Steps you take once. Each one pays a single time, per X account — and
-                                        where nothing can be checked, the card says so rather than pretending.
+                                        Steps you take once. Each one pays a single time, per X account —
+                                        {(state?.followProof?.mode === 'webhook')
+                                            ? ' and a follow is checked against X\u2019s own record before it pays.'
+                                            : ' and where nothing can be checked, the card says so rather than pretending.'}
                                     </p>
 
                                     {!connected ? (

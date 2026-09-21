@@ -664,6 +664,96 @@ globalThis.fetch = async (url, options = {}) => {
     rec('  … and a wallet that has not claimed one is told so',
         (await stateOf(fresh())).oneTime.every((t) => t.claimed === false), 'none claimed');
 
+    // The claim above was paid under the word, and that must stay readable on the card however the
+    // deployment is wired afterwards. "Verified" is a statement about a specific check at a specific
+    // time, not a property a task acquires retroactively — a redeploy does not go back and prove
+    // anything a player did last week.
+    rec('a claim paid under the word records that nothing checked it',
+        afterOneTime[0].claimedProof === 'claim'
+        && /no check ran/.test(afterOneTime[0].claimedNote || ''),
+        afterOneTime[0].claimedNote);
+
+    // ------------------------------------------- when X is the one doing the telling
+    // The other half of the follow task: instead of taking the player's word, the reward can be paid
+    // against X's own record of the follow, pushed to us as a `follow.follow` event. What is testable
+    // here is the gate — that a wallet X has said nothing about cannot claim the reward, and that the
+    // attempt leaves nothing behind.
+    console.log('');
+    console.log('A follow that X reports itself');
+
+    process.env.FOLLOW_PROOF_MODE = 'webhook';
+    process.env.X_CONSUMER_SECRET = 'check-points-x-consumer-secret';
+
+    rec('the deployment says which kind of proof stands behind the tab',
+        (await stateOf(fresh())).followProof.mode === 'webhook', 'state.followProof.mode');
+
+    const unheard = fresh();
+    await Program.bindX(unheard, { id: '5106', username: 'unheard' });
+    const unannounced = await Program.claimOneTime(unheard, taskIds[0]);
+    rec('a wallet X has said nothing about is refused',
+        unannounced.code === 'follow-required', `${unannounced.code}: ${unannounced.error}`);
+    rec('  … and it was paid nothing', (await points(unheard)) === 0, `${await points(unheard)} PTS`);
+    rec('  … and nothing was written down for it',
+        !(await Store.getWallet(unheard)).tasks[`one:${taskIds[0]}`], 'no record');
+    rec('  … and the card still reads as unclaimed',
+        (await stateOf(unheard)).oneTime[0].claimed === false, 'not claimed');
+
+    // The refusal came before the guard was taken, which is the reason this claim then works: a
+    // player who had not been seen following us yet must not be locked out of the reward for ten
+    // minutes for our own timing. Same request, same process, no guard released by hand.
+    const followed = await Store.recordFollowFact({
+        id: '5106', username: 'unheard', following: true, at: new Date().toISOString(),
+    });
+    rec('X reports the follow, and it is filed against both the id and the handle',
+        followed?.following === true,
+        'a wallet bound by id and one bound by typed handle must both find the same fact');
+    const nowPaid = await Program.claimOneTime(unheard, taskIds[0]);
+    rec('the same claim pays once X has said it happened',
+        nowPaid.credited === Config.ONE_TIME_TASKS[0].reward, `${nowPaid.credited} PTS`);
+    rec('  … and the refusal left no guard behind to block it',
+        nowPaid.alreadyCredited !== true, 'the guard is taken only after the check passes');
+
+    const checkedCard = (await stateOf(unheard)).oneTime[0];
+    rec('the card says this one was checked, rather than claiming it on trust',
+        checkedCard.proof === 'webhook'
+        && checkedCard.claimedProof === 'webhook'
+        && !/no check ran/i.test(checkedCard.claimedNote || '')
+        && /X/.test(checkedCard.claimedNote || ''),
+        checkedCard.claimedNote);
+    rec('  … and the reward itself is unchanged by which proof stands behind it',
+        checkedCard.credited === Config.ONE_TIME_TASKS[0].reward, `${checkedCard.credited} PTS`);
+
+    // And the earlier claim, paid under the word, is still described that way on the same page — with
+    // the same deployment, in the same request. If it flipped to "checked" the moment the webhook was
+    // configured, the card would be vouching for a check that never ran.
+    const retro = (await stateOf(claimant)).oneTime[0];
+    rec('a claim made under the word is not upgraded by the wiring',
+        retro.claimed === true && retro.claimedProof === 'claim'
+        && /no check ran/.test(retro.claimedNote || ''),
+        retro.claimedNote);
+
+    // An unfollow is a fact too, and the latest one wins: X's record is a state, not a trophy case.
+    const lapsed = fresh();
+    await Program.bindX(lapsed, { id: '5107', username: 'lapsed' });
+    await Store.recordFollowFact({ id: '5107', username: 'lapsed', following: true });
+    await Store.recordFollowFact({ id: '5107', username: 'lapsed', following: false });
+    const afterUnfollow = await Program.claimOneTime(lapsed, taskIds[0]);
+    rec('an account X reports as having unfollowed is refused again',
+        afterUnfollow.code === 'follow-required', afterUnfollow.code);
+    rec('  … and was paid nothing', (await points(lapsed)) === 0, `${await points(lapsed)} PTS`);
+
+    // Bound by typed handle rather than by an account id — the case a provisional binding creates, and
+    // the one an id-keyed-only store would silently fail to match.
+    const byName = fresh();
+    await Program.bindX(byName, { username: 'typedonly' });
+    await Store.recordFollowFact({ id: '5108', username: 'typedonly', following: true });
+    const nameClaim = await Program.claimOneTime(byName, taskIds[0]);
+    rec('a wallet bound by handle alone finds the fact filed against that handle',
+        nameClaim.credited === Config.ONE_TIME_TASKS[0].reward, `${nameClaim.credited} PTS`);
+
+    delete process.env.FOLLOW_PROOF_MODE;
+    delete process.env.X_CONSUMER_SECRET;
+
     // ------------------------------------------------------------------- the last mile
     console.log('');
     console.log('The route layer');
