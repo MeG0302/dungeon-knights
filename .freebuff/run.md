@@ -357,8 +357,13 @@ www.dungeonknights.io/            308   → https://dungeonknights.io/
 dungeon-knights.vercel.app/       200   the Kingdom Gate hub — unchanged, and it must stay that way
 dungeon-knights.vercel.app/menu   200   the game — unchanged
 dungeon-knights.vercel.app/api/x/events  400   reachable, not gated, not redirected (unsigned GET)
-app.dungeonknights.io             —     does not resolve yet
+app.dungeonknights.io             —     does not resolve yet (no CNAME; the alias also cannot be set)
 ```
+
+**The apex and the vercel host have been re-measured since the copy pass** (all still 200, and the copy
+is the new copy). Two things the table cannot show: `/genesis` carries the new headline and none of the
+old sentences, and `/points` serves a chunk whose wording is the rewritten one. Both were checked against
+the served bytes, not against the local tree.
 
 The waitlist's **Redis driver ran for the first time**, through the live API rather than a stub: a
 signup came back `{"ok":true,"position":1,...,"storage":"Upstash/Vercel KV (REST)"}`, the same address
@@ -368,7 +373,7 @@ probe entry was then removed and the store returned to `0` — verified through 
 not just the tool. (Its credentials turned out to be readable from `vercel env pull`, so cleaning up
 automatically was possible; the file was deleted afterwards.)
 
-#### The vault's `?demo=1` fixture is gone from the code, and not yet from production
+#### The vault's `?demo=1` fixture is gone, in the code and in production
 
 The Staking Vault used to render a fixture vault on request (`?demo=1`): one knight per published band,
 one per tier, staked, with the yield computed from the published pool. It was labelled on the page and
@@ -380,10 +385,12 @@ served page and 0 times in the built client chunks, and `?demo=1` now opens the 
 wallet the browser remembers. `tools/check-staking.js` lost the 14 checks that pinned the fixture
 (209 → 195) and still covers claim settlement, which is the part of that turn worth keeping.
 
-**Committed as `4eaebca` and pushed, but not deployed.** The last deployment still carries the fixture
-(`/app/staking/page-<hash>.js` contains `demo vault` and `0xd0e0a1b2c3d4e5f6`), so the removal is not live
-until the next `vercel --prod`. The owner chose to hold that deploy until `app.dungeonknights.io` resolves,
-so the DNS record and the deploy go out together.
+**Committed as `4eaebca` and, as of deploy `jsdjeqzqv`, live.** The deployment that preceded it still
+carried the fixture (`/app/staking/page-<hash>.js` contained `demo vault` and `0xd0e0a1b2c3d4e5f6`); the
+live one does not — both strings return **0** against the served chunk, with a sanity string present so
+the chunk is the real file and not a 404. The deploy was held until the owner asked for it; the
+`app.dungeonknights.io` CNAME is still outstanding, so the game remains reachable only at
+`dungeon-knights.vercel.app`.
 
 #### The copy pass — the four public surfaces stopped sounding machine-written
 
@@ -2760,11 +2767,27 @@ the live deployment — `/api/points/me` returns **five** one-time tasks (the fo
 posts). Note the shape of that: a `vercel --prod` uploads the **working directory**, not a commit, so
 anything uncommitted ships. That is why the run doc records what is outstanding.
 
-**Committed since:** the quote-repost work and the domain change (`f11d474`), then the invite-code
-feature (`6e749d4` — five characters per wallet, and a code that can be attached after joining) and the
-first-visit fix it needed that the production check found. `main` is **ahead of `origin/main`** and
-**has not been pushed**; production runs them anyway, because `vercel --prod` deploys the working
-directory rather than a commit. Two operational details about pulling production env: `vercel env pull` writes the **sensitive** values as
+**The current deploy** (September 22, after the copy pass):
+`dungeon-knights-jsdjeqzqv-meglast320-1694`, aliased to **`dungeonknights.io`**, **`www.dungeonknights.io`**
+and **`dungeon-knights.vercel.app`**. It is the first deploy built from a **committed tree** — `346e68c`,
+with `origin/main` level — so for once what is live and what is in git are the same thing. It carried the
+demo-fixture removal (verified on the live chunk: `demo vault` **0**, fixture address **0**, and a sanity
+string still present so the chunk is the real one), the plain-voice copy pass (live `/genesis` carries the
+new headline and none of the old sentences; the live Points chunk carries "Points are paid against an X
+account" and no longer "Points are earned against a named X account"), and the apex/gate/genesis work.
+
+**`app.dungeonknights.io` could not be re-aliased, and the failure is informative.**
+`vercel alias set … app.dungeonknights.io` gets as far as *"Issuing a certificate for
+app.dungeonknights.io"* and then answers `Error: Response Error` — Vercel cannot issue a certificate for a
+hostname with no DNS record pointing at it. So that hostname still points at an older deployment
+(`738cm79wl`) and still does not resolve. It will take the alias as soon as the CNAME exists; retry then.
+
+**Committed and pushed since:** the quote-repost work and the domain change (`f11d474`), the invite-code
+feature (`6e749d4` — five characters per wallet, and a code that can be attached after joining), the
+apex/gate/`/genesis` split and the vault's demo removal (`4eaebca`), the run-doc note (`3326bbd`) and the
+copy pass (`346e68c`). `main` and `origin/main` are **level**, and the tree is clean — which matters
+because `vercel --prod` uploads the **working directory** rather than a commit, so an uncommitted tree
+ships whatever happens to be on disk. Two operational details about pulling production env: `vercel env pull` writes the **sensitive** values as
 `[SENSITIVE]` placeholders (8 of them — `GAME_RUN_SECRET`, `POINTS_SESSION_SECRET`, the signer key and
 the rest), while `KV_REST_API_URL` / `KV_REST_API_TOKEN` **do** come through, which is what lets
 `tools/points-pending.js` read the production queue at all; and that pull needs **`--yes`**, or it
