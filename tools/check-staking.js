@@ -46,6 +46,7 @@ import {
     weekStart,
 } from '../lib/staking-config.js';
 import {
+    KNIGHTS_HASH_POWER,
     SOURCE_CHAIN,
     SOURCE_PREVIEW,
     DEFAULT_KNIGHTS_POOL_DNG,
@@ -387,6 +388,46 @@ section('Actions');
     const withPool = applyAction(previewSnapshot(WALLET, T0, 20_000), 'claim',
         { tokenId: one.tokenId }, T0);
     rec('claiming works once a pool is set', !withPool.error, withPool.error || withPool.notice);
+
+    // A claim has to *undo* the accrual it paid. It used to be decorative: the notice said
+    // `25.52 DNG claimed`, the same 25.52 stayed on the card, and pressing it again would pay the
+    // same DNG a second time — a number that only ever went up, on the one screen whose job is to
+    // say what the wallet is owed.
+    const stakedOne = applyAction(previewSnapshot(WALLET, T0, 20_000), 'stake',
+        { tokenId: previewSnapshot(WALLET, T0, 20_000).owned[0].tokenId }, T0).snapshot;
+    const later = T0 + 40 * HOUR;
+    const grown = refresh(stakedOne, later);
+    const beforeClaim = grown.staked.reduce((sum, k) => sum + (k.accruedShare || 0), 0) * grown.pool.dng;
+    rec('a stake accrues something worth claiming', beforeClaim > 0, `${beforeClaim.toFixed(2)} DNG`);
+
+    const claimTarget = grown.staked[0].tokenId;
+    const targetBefore = grown.staked.find((k) => k.tokenId === claimTarget).accruedDng;
+    const settled = applyAction(grown, 'claim', { tokenId: claimTarget }, later);
+    const after = refresh(settled.snapshot, later);
+    const leftOnCard = after.staked.find((k) => k.tokenId === claimTarget).accruedDng;
+    rec('claiming takes the claimed DNG off the card it was claimed from',
+        leftOnCard === 0, `${leftOnCard.toFixed(4)} DNG left of ${targetBefore.toFixed(2)}`);
+    // The wallet total is the sum over every stake, and only one of them was settled — so the drop
+    // is exactly the settled knight's own figure, and the others must be untouched. Asserting
+    // "the total is now zero" would have passed on a single-stake fixture and been wrong about
+    // the page, which is what the first version of this check did.
+    const totalAfter = after.staked.reduce((sum, k) => sum + (k.accruedShare || 0), 0) * after.pool.dng;
+    rec('the wallet drops by exactly what was claimed, and no more',
+        Math.abs((beforeClaim - totalAfter) - targetBefore) < 1e-6,
+        `${beforeClaim.toFixed(2)} -> ${totalAfter.toFixed(2)}, settled ${targetBefore.toFixed(2)}`);
+    rec('claiming one stake does not settle the others',
+        after.staked.every((k) => (k.tokenId === claimTarget ? k.claimedAt === later : !k.claimedAt)));
+    rec('the claim is stamped with the instant it was measured at',
+        settled.snapshot.staked[0].claimedAt === later);
+    rec('and it starts accruing again from that instant, not from the stake',
+        refresh(settled.snapshot, later + 12 * HOUR)
+            .staked.find((k) => k.tokenId === claimTarget).accruedDng > 0);
+    rec('the settled stake keeps everything that makes it a stake',
+        settled.snapshot.staked[0].tickets === grown.staked[0].tickets
+        && settled.snapshot.staked[0].stakedAt === grown.staked[0].stakedAt);
+    rec('a settled stake can be claimed again once something new has accrued',
+        applyAction(refresh(settled.snapshot, later + 12 * HOUR), 'claim', { tokenId: claimTarget },
+            later + 12 * HOUR).notice !== undefined);
 
     const entered = applyAction(staked.snapshot, 'enterRaffle', { tokenId: one.tokenId }, T0);
     rec('entering marks the knight as in the draw',

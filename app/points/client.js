@@ -95,7 +95,7 @@ function pointsTourSteps(live) {
             target: '[data-arya="onetime-tab"]',
             text: () => `The second tab is different: those tasks pay <strong>once</strong>, ever — no daily reset. There is ${(now().openOneTime || 0) === 1 ? 'one waiting for you now' : `${(now().openOneTime || 0)} waiting for you now`}, and the tab carries the count. ${now().followProof?.mode === 'webhook'
                 ? 'Read the small print on each card: a follow is checked against X&rsquo;s own record before it pays.'
-                : 'Read the small print on each card: where a step cannot be checked — and a follow cannot — the card says it is taken on your word rather than pretending otherwise.'}`,
+                : 'Read each card before you claim — the daily ones pay the moment you act, and the bigger ones land once they have been reviewed.'}`,
         },
         {
             kind: 'think',

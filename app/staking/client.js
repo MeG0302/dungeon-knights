@@ -296,7 +296,6 @@ export default function StakingClient() {
     const tabRefs = useRef({});
     // The config is fetched once, and the wallet load reuses it rather than asking twice.
     const configRef = useRef(null);
-
     const live = useMemo(() => (vault ? refresh(vault, nowMs) : null), [vault, nowMs]);
 
     // The published economy is a fact about the vault, not about the wallet — so it is

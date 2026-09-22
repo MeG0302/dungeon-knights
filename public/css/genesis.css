@@ -1,0 +1,707 @@
+/* ==========================================================
+   GENESIS KNIGHTS — /genesis
+   The public collection page. Built on theme.css tokens and
+   scoped under .genesis-page so nothing here can reach the
+   game's own pages, which sit on the other hostname.
+   ========================================================== */
+
+.genesis-page {
+    background: #0b0a09;
+}
+
+/* The loop is decoration: every figure on the page is text above it, so a missing, blocked or
+   still-loading video changes nothing about what the page says. The scrim is what makes the
+   header and footer legible whatever frame is playing — the two panels below it are opaque
+   enough to hold their own text without help. */
+.genesis-page .gn-video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 0;
+    pointer-events: none;
+}
+
+/* Lifted on the owner's instruction: the footage is the argument this page opens with, and at the
+ * first set of values it read as a dark texture rather than as a room. The shape is unchanged —
+ * heaviest at the top, where the wordmark sits, and at the foot — so what moved is the mid-band,
+ * which is the part a visitor actually sees moving behind the panels. Still a scrim, not a dimmer:
+ * every figure below is drawn over it and has to stay legible. */
+.genesis-page .gn-scrim {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background:
+        linear-gradient(180deg, rgba(8, 7, 6, 0.66) 0%, rgba(8, 7, 6, 0.32) 42%, rgba(8, 7, 6, 0.72) 100%),
+        radial-gradient(ellipse at 50% 40%, rgba(8, 7, 6, 0.10) 0%, rgba(8, 7, 6, 0.58) 100%);
+}
+
+.genesis-page .header,
+.genesis-page .gn-main-row,
+.genesis-page .gn-footer {
+    position: relative;
+    z-index: 2;
+}
+
+/* Panels you can see through, just — enough that a bright frame of the loop keeps the page from
+   reading as a static document, not enough to compete with the numbers. */
+.genesis-page .side-panel {
+    background: rgba(13, 11, 9, 0.9);
+}
+
+/* The row, and the two columns. Both bodies scroll independently, which is why `min-height: 0` is
+   here: without it a long column stretches the row and pushes the footer off the bottom. */
+.genesis-page .gn-main-row {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+    min-height: 0;
+}
+
+.genesis-page .gn-aside {
+    width: 380px;
+    flex-shrink: 0;
+}
+
+.genesis-page .gn-content {
+    flex: 1;
+    min-width: 0;
+    border-right: none;
+}
+
+.genesis-page .gn-aside .side-panel-body,
+.genesis-page .gn-content .side-panel-body {
+    min-height: 0;
+    overflow-y: auto;
+}
+
+/* Ticking counters must not shove their neighbours around as the digits change width. */
+.gn-num {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+}
+
+/* --------------------------------------------------------------- the left column */
+.gn-crest {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 4px 0 16px;
+    border-bottom: 1px solid var(--border-base);
+}
+
+.gn-crest-art {
+    width: 84px;
+    height: 84px;
+    flex-shrink: 0;
+    object-fit: cover;
+    border: 1px solid var(--border-gold);
+    border-radius: var(--radius-md);
+    background: var(--bg-dark);
+    box-shadow: 0 0 22px rgba(212, 175, 55, 0.12);
+}
+
+.gn-crest-facts { min-width: 0; }
+
+.gn-crest-name {
+    font-family: var(--font-display);
+    font-size: 19px;
+    color: var(--accent-gold);
+    letter-spacing: 1px;
+}
+
+.gn-crest-line {
+    margin-top: 3px;
+    font-size: 11.5px;
+    color: var(--text-secondary);
+}
+
+.gn-aside-block {
+    padding: 16px 0;
+    border-bottom: 1px solid var(--border-base);
+}
+
+.gn-aside-title {
+    font-family: var(--font-heading);
+    font-size: 10px;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+}
+
+.gn-ticks {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.gn-ticks li {
+    position: relative;
+    padding-left: 16px;
+    font-size: 11.5px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+}
+
+.gn-ticks li::before {
+    content: '◆';
+    position: absolute;
+    left: 0;
+    top: 1px;
+    font-size: 7px;
+    color: var(--accent-gold-dim);
+}
+
+.gn-ticks strong { color: var(--text-primary); font-weight: 600; }
+
+.gn-aside-cta { padding-top: 16px; }
+.gn-cta-btn { justify-content: center; }
+
+.gn-count {
+    margin-top: 10px;
+    font-size: 11.5px;
+    letter-spacing: 0.4px;
+    color: var(--text-muted);
+}
+
+.gn-aside-fine {
+    margin: 12px 0 0;
+    font-size: 10.5px;
+    line-height: 1.65;
+    color: var(--text-muted);
+}
+
+/* -------------------------------------------------------------- the right column */
+.gn-hero { padding: 2px 0 14px; }
+
+.gn-hero-title {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: clamp(1.5rem, 3vw, 2.1rem);
+    color: var(--accent-gold);
+    letter-spacing: 2px;
+    text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.8);
+}
+
+.gn-hero-copy {
+    margin: 10px 0 0;
+    max-width: 76ch;
+    font-size: 12.5px;
+    line-height: 1.75;
+    color: var(--text-secondary);
+}
+
+/* The small boxes. Three to a row, which is what the vault uses and what these figures are
+   sized for — each one is a label, a number and one line of context. */
+.gn-tiles {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.gn-tile {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    padding: 10px 12px;
+    border: 1px solid var(--border-base);
+    border-radius: var(--radius-md);
+    background: linear-gradient(180deg, var(--bg-raised), var(--bg-panel));
+}
+
+.gn-tile-label {
+    font-family: var(--font-heading);
+    font-size: 9px;
+    letter-spacing: 1.1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.gn-tile-value {
+    font-family: var(--font-display);
+    font-size: 19px;
+    line-height: 1.15;
+    color: var(--accent-gold);
+}
+
+.gn-tile-sub {
+    font-size: 10.5px;
+    line-height: 1.45;
+    color: var(--text-secondary);
+}
+
+.gn-section {
+    margin-top: 22px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border-base);
+}
+
+.gn-section-title {
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: 13px;
+    letter-spacing: 1.4px;
+    text-transform: uppercase;
+    color: var(--accent-gold);
+}
+
+.gn-section-copy {
+    margin: 8px 0 0;
+    max-width: 88ch;
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--text-secondary);
+}
+
+.gn-fine {
+    margin: 10px 0 0;
+    font-size: 10.5px;
+    line-height: 1.65;
+    color: var(--text-muted);
+}
+
+/* --------------------------------------------------------------- the power ladder
+ * The Staking Vault's ladder, drawn here the way it is drawn there: a fixed track per band with the
+ * fill measured against the **largest band**, the count above it and the band's name below. Not a
+ * copy of the vault's rules — the same rules, on purpose. A buyer who has seen one recognises the
+ * other, and a distribution is the one thing on this page that is honest as a picture: the thin top
+ * is visible at a glance, which is exactly what the fixed counts are there to say. */
+.gn-ladder {
+    margin-top: 12px;
+    border: 1px solid var(--border-base);
+    border-radius: var(--radius-md);
+    background: linear-gradient(180deg, var(--bg-raised), var(--bg-panel));
+    padding: 10px 11px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.gn-ladder-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.gn-ladder-title {
+    font-family: var(--font-heading);
+    font-size: 9.5px;
+    letter-spacing: 1.4px;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.gn-ladder-rule {
+    font-size: 9px;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.gn-ladder-bars {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 4px;
+}
+
+.gn-band {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    min-width: 0;
+    padding: 2px 0;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+}
+
+.gn-band-count {
+    font-size: 9px;
+    color: var(--text-muted);
+}
+
+.gn-band-bar {
+    position: relative;
+    width: 100%;
+    height: 46px;
+    display: flex;
+    align-items: flex-end;
+    border: 1px solid var(--border-dim);
+    border-radius: 2px;
+    background: rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+}
+
+.gn-band-fill {
+    width: 100%;
+    display: block;
+    background: var(--band-colour, var(--border-bronze));
+    opacity: 0.75;
+    transition: height 0.3s ease;
+}
+
+.gn-band-name {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-heading);
+    font-size: 7.5px;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.gn-band-range {
+    font-size: 8.5px;
+    color: var(--text-secondary);
+}
+
+/* The palette, by band. These are the vault's exact values — the two ladders are two drawings of one
+   published table, and a band that is gold on one page and grey on the other reads as two tables. */
+.genesis-page [data-band='spark'] { --band-colour: #9AA3B2; }
+.genesis-page [data-band='ember'] { --band-colour: #D08A4A; }
+.genesis-page [data-band='forge'] { --band-colour: #DFA83F; }
+.genesis-page [data-band='radiant'] { --band-colour: #EFC95E; }
+.genesis-page [data-band='ascendant'] { --band-colour: #F5DE96; }
+.genesis-page [data-band='prime'] { --band-colour: #B07CD8; }
+
+/* --------------------------------------------------------- what a knight earns */
+.gn-boxes {
+    margin-top: 12px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.gn-box {
+    padding: 12px 13px;
+    border: 1px solid var(--border-base);
+    border-left: 2px solid var(--accent-gold-dim);
+    border-radius: var(--radius-md);
+    background: rgba(0, 0, 0, 0.3);
+}
+
+.gn-box-head {
+    font-family: var(--font-heading);
+    font-size: 10px;
+    letter-spacing: 1.1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.gn-box-value {
+    margin-top: 6px;
+    font-family: var(--font-display);
+    font-size: 17px;
+    color: var(--accent-gold);
+}
+
+.gn-box-unit {
+    margin-left: 5px;
+    font-family: var(--font-heading);
+    font-size: 9.5px;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.gn-box-copy {
+    margin: 8px 0 0;
+    font-size: 11px;
+    line-height: 1.65;
+    color: var(--text-secondary);
+}
+
+/* -------------------------------------------------------------- the screenshots */
+.gn-shots {
+    margin-top: 12px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.gn-shot {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.gn-shot-art,
+.gn-shot-frame {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border: 1px solid var(--border-base);
+    border-radius: var(--radius-md);
+    background: var(--bg-dark);
+    overflow: hidden;
+}
+
+.gn-shot-art { object-fit: cover; display: block; }
+
+/* An uncaptured frame says so, in the frame. It is deliberately not a picture: a placeholder that
+   looked like a screenshot is the one thing this section must not do. */
+.gn-shot-frame {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border-style: dashed;
+    border-color: var(--border-dim);
+    color: var(--text-muted);
+}
+
+.gn-shot-mark { font-size: 18px; opacity: 0.5; }
+
+.gn-shot-pending {
+    font-family: var(--font-heading);
+    font-size: 9px;
+    letter-spacing: 1.1px;
+    text-transform: uppercase;
+}
+
+.gn-shot-caption {
+    font-family: var(--font-heading);
+    font-size: 11px;
+    letter-spacing: 0.6px;
+    color: var(--text-primary);
+}
+
+.gn-shot-detail {
+    font-size: 10.5px;
+    line-height: 1.55;
+    color: var(--text-muted);
+}
+
+.gn-shot.is-pending .gn-shot-caption { color: var(--text-secondary); }
+
+/* ------------------------------------------------------------------ the form */
+.gn-waitlist-section { scroll-margin-top: 64px; }
+
+.gn-form {
+    margin-top: 14px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    padding: 16px;
+    border: 1px solid var(--border-gold);
+    border-radius: var(--radius-md);
+    background: rgba(8, 7, 6, 0.72);
+}
+
+.gn-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.gn-field-label {
+    font-family: var(--font-heading);
+    font-size: 10px;
+    letter-spacing: 1.1px;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.gn-field-note {
+    letter-spacing: 0.4px;
+    text-transform: none;
+    color: var(--text-muted);
+}
+
+.gn-form input[type='email'],
+.gn-form input[type='text'] {
+    width: 100%;
+    min-width: 0;
+    padding: 11px 12px;
+    border: 1px solid var(--border-base);
+    border-radius: var(--radius-sm);
+    background: #0b0a09;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 13.5px;
+    outline: none;
+}
+
+.gn-form input[type='email']:focus,
+.gn-form input[type='text']:focus {
+    border-color: var(--accent-gold);
+    box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.16);
+}
+
+.gn-form input:disabled { opacity: 0.6; }
+
+.gn-follow {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    font-size: 11.5px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+}
+
+.gn-follow input { margin-top: 2px; flex-shrink: 0; }
+.gn-follow a { color: var(--accent-gold); text-decoration: none; }
+.gn-follow a:hover { text-decoration: underline; }
+
+.gn-form-row {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 14px;
+}
+
+.gn-form-row .gn-count { margin-top: 0; }
+.gn-submit { justify-content: center; }
+
+.gn-message {
+    grid-column: 1 / -1;
+    padding: 9px 11px;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    line-height: 1.55;
+}
+
+.gn-message[data-kind='ok'] {
+    border: 1px solid rgba(212, 175, 55, 0.45);
+    background: rgba(212, 175, 55, 0.09);
+    color: var(--text-primary);
+}
+
+.gn-message[data-kind='error'] {
+    border: 1px solid rgba(200, 70, 60, 0.5);
+    background: rgba(200, 70, 60, 0.12);
+    color: #e8a49b;
+}
+
+/* ------------------------------------------------------------------- footer */
+.gn-footer {
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    flex-shrink: 0;
+    background: rgba(8, 7, 6, 0.92);
+    border-top: 1px solid var(--border-base);
+}
+
+.gn-footer-note {
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+}
+
+.gn-footer-link {
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    text-decoration: none;
+}
+
+.gn-footer-link:hover { color: var(--accent-gold); }
+
+/* A phone should not spend its data on a background loop, and neither should anyone who has asked
+   their system for less movement. Both get the poster, which the element paints on its own. */
+@media (max-width: 760px), (prefers-reduced-motion: reduce) {
+    .genesis-page .gn-video { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .gn-band-fill { transition: none; }
+}
+
+@media (max-width: 900px) {
+    .genesis-page .gn-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .genesis-page .gn-boxes { grid-template-columns: 1fr; }
+    .genesis-page .gn-shots { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* ---------------------------------------------------------------------- phones
+   Same shape as staking.css and menu-mobile.css: theme.css pins html/body to `height: 100%;
+   overflow: hidden` and `.page` to a fixed `100vh`, which on a phone means the document cannot
+   scroll and 100vh is taller than what the browser actually shows. Both are undone here, so the
+   page becomes one scrolling document and the two panels stack instead of fighting over a single
+   fixed-height row — which is how the vault used to lose its numbers on a phone. */
+@media (max-width: 760px) {
+    html,
+    body {
+        height: auto;
+        min-height: 100%;
+        overflow-x: hidden;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .genesis-page {
+        width: 100%;
+        height: auto;
+        min-height: 100dvh;
+        overflow: visible;
+    }
+
+    .genesis-page .header {
+        position: sticky;
+        top: 0;
+        flex-wrap: wrap;
+        row-gap: 6px;
+        padding: calc(8px + env(safe-area-inset-top, 0px)) 12px 8px;
+    }
+
+    /* Redundant on a phone: the right panel is headed "What you are buying" a scroll below. */
+    .genesis-page .header-title { display: none; }
+
+    .genesis-page .gn-main-row {
+        display: block;
+        overflow: visible;
+    }
+
+    .genesis-page .gn-aside,
+    .genesis-page .gn-content {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid var(--border-base);
+    }
+
+    .genesis-page .gn-aside .side-panel-body,
+    .genesis-page .gn-content .side-panel-body {
+        overflow-y: visible;
+    }
+
+    .genesis-page .gn-footer {
+        height: auto;
+        flex-direction: column;
+        gap: 4px;
+        padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+    }
+}
+
+/* The tables turn into named figures two to a line. The header row is hidden because it cannot
+   stay beside its own columns at this width; every cell carries its label instead. */
+@media (max-width: 720px) {
+    .genesis-page .gn-tiles,
+    .genesis-page .gn-shots { grid-template-columns: 1fr; }
+
+    /* Six bars stay six bars. At this width each column is about 55px — enough for the count, the bar
+       and a shortened name — and a ladder that reflowed into two columns would stop being a
+       distribution you can read in one look, which is the only reason it is drawn. The hash-power
+       range goes instead: the bar is the point of this section, and the ranges are repeated in the
+       bands list beside it. */
+    .genesis-page .gn-band-range { display: none; }
+
+    .genesis-page .gn-form { grid-template-columns: 1fr; }
+}

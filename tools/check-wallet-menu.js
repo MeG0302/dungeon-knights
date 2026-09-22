@@ -20,6 +20,12 @@
  *   2. Every route loads the module that turns that control into a menu.
  *   3. Each React route attaches it by hand — hydration beats the module's own DOM scan.
  *   4. The menu stays cheap: it reads nothing from the chain, and its Portfolio link resolves.
+ *
+ * Two routes are exempt, in `tools/wallet-menu-allowlist.json`, and the exemption is printed with its
+ * reason rather than applied silently: the public coming-soon page at the apex, which deliberately has
+ * no wallet connection because it is for somebody who has never seen the game, and the password screen,
+ * which loads nothing the game loads. Everything else still fails until it carries the control — which
+ * is the point of reading the route list out of `app/` instead of typing it in.
  */
 
 import fs from 'fs';
@@ -70,17 +76,25 @@ rec('Escape and an outside click both close it',
 // ------------------------------------------------------------------------ every route
 const PAGE_KEY = /pageKey="([a-z0-9-]+)"/;
 
+/** Routes that are deliberately not the game, each with the reason it is listed. */
+const EXEMPT = JSON.parse(read('tools/wallet-menu-allowlist.json'));
+
 /** The `pageKey` a route renders, if it is a legacy page rather than a React component. */
 function legacyKeyOf(pageFile) {
     const pageSrc = read(pageFile);
     const direct = pageSrc.match(PAGE_KEY);
     if (direct) return direct[1];
     // `page.js` is usually three lines that render a client; the key lives one hop away.
-    const imported = (pageSrc.match(/from '\.\/([A-Za-z0-9._-]+)'/) || [])[1];
+    //
+    // The hop may be a sibling (`./home-client`) **or a parent** (`../landing-client`, which is how
+    // `/hub` renders the landing page). Reading only the sibling form made the hub look like a route
+    // with no wallet control, no module and no hand-attach — three failures for a page that has all
+    // three. Resolved through `path`, so neither spelling is a special case.
+    const imported = (pageSrc.match(/from '(\.[^']+)'/) || [])[1];
     if (!imported) return null;
-    const sibling = path.join(path.dirname(pageFile), `${imported}.js`);
-    if (!exists(sibling)) return null;
-    const hop = read(sibling).match(PAGE_KEY);
+    const target = path.resolve(path.dirname(path.join(ROOT, pageFile)), `${imported}.js`);
+    if (!fs.existsSync(target)) return null;
+    const hop = fs.readFileSync(target, 'utf8').match(PAGE_KEY);
     return hop ? hop[1] : null;
 }
 
@@ -103,7 +117,14 @@ const missingControl = [];
 const missingModule = [];
 const manual = [];
 
+const exempted = [];
+
 for (const { route, page } of routes) {
+    if (EXEMPT[route]) {
+        exempted.push(`${route} — ${EXEMPT[route]}`);
+        continue;
+    }
+
     const key = legacyKeyOf(page);
     const found = sourcesFor(page, key);
     if (!found) {
@@ -141,6 +162,19 @@ rec('every route loads the module that turns that control into a menu',
 rec('each React route attaches the menu by hand, because hydration beats a DOM scan',
     manual.length === 0,
     manual.length ? manual.join(' ') : 'attach(el, { onDisconnect }) in all of them');
+
+// Printed, not silent. An exemption nobody can read is indistinguishable from a check that stopped
+// looking at a route.
+if (exempted.length) {
+    console.log('');
+    console.log(`  Deliberately without the menu (${exempted.length}, from tools/wallet-menu-allowlist.json):`);
+    for (const line of exempted) console.log(`    ${line}`);
+}
+rec('only routes with a written reason are skipped',
+    exempted.length === 0 || Object.keys(EXEMPT).every((k) => k === '_' || routes.some((r) => r.route === k)),
+    Object.keys(EXEMPT).filter((k) => k !== '_').join(' '));
+rec('and an exemption without a reason would be an oversight, so there must be one',
+    Object.keys(EXEMPT).every((k) => k === '_' || (typeof EXEMPT[k] === 'string' && EXEMPT[k].length > 60)));
 
 // The six legacy routes are served by the module's own scan, so that half has to still exist.
 rec('a legacy page is still served by the module\'s own scan',

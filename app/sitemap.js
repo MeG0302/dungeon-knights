@@ -1,15 +1,18 @@
 import { SITE_URL } from '../lib/site';
 
+/**
+ * Only what the apex serves to the public.
+ *
+ * This used to list the game's routes too. It cannot any more: `/menu`, `/mint`, `/dungeons`, `/game`
+ * and `/tokenomics` now live behind the password on `app.dungeonknights.io`, so listing them here
+ * would either advertise a redirect or hand a crawler a login screen. `/points` and `/genesis` stay
+ * because they are the two things being advertised.
+ */
 export default function sitemap() {
   const routes = [
     { path: '/', priority: 1.0, changeFrequency: 'weekly' },
-    { path: '/mint', priority: 0.9, changeFrequency: 'weekly' },
-    // The economy page is reference material, and it is the one page whose numbers a
-    // reader is most likely to want to check later — hence the same priority as the mint.
-    { path: '/tokenomics', priority: 0.9, changeFrequency: 'weekly' },
-    { path: '/menu', priority: 0.8, changeFrequency: 'weekly' },
-    { path: '/dungeons', priority: 0.8, changeFrequency: 'weekly' },
-    { path: '/game', priority: 0.6, changeFrequency: 'weekly' },
+    { path: '/points', priority: 0.9, changeFrequency: 'daily' },
+    { path: '/genesis', priority: 0.9, changeFrequency: 'weekly' },
   ];
   return routes.map((r) => ({
     url: `${SITE_URL}${r.path}`,

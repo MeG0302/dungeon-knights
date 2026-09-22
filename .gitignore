@@ -8,6 +8,9 @@ yarn.lock
 .env.local
 .env.production
 *.env
+# Next loads `.env.development.local` and `.env.production.local` too, and neither was covered by
+# the lines above: a local override with a secret in it was one `git add .` away from being committed.
+.env*.local
 
 # Private keys (IMPORTANT!)
 private-key.txt

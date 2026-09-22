@@ -9,6 +9,36 @@ A fresh checkout needs these local-only pieces before it will run:
 - **`.env.local`** — git-ignored, lives in the main checkout. Copy it, never symlink:
   `cp "<main checkout>/.env.local" .`
   (Next.js reads it automatically; the dev server log line `- Environments: .env.local` confirms it was picked up.)
+- **`.env.development.local`** — git-ignored, and it is where the **local** gate password lives
+  (`APP_GATE_PASSWORD`), because without one the `?__app=1` branch behaves like the apex and the
+  whole host split is untestable. The value in a fresh checkout should be an obvious local
+  placeholder — the *real* one is in Vercel's Production environment and is never in a file here.
+  Nothing else needs to go in it: production and development read the same `APP_HOSTS` default
+  (`app.dungeonknights.io`). Since this commit `.env*.local` is git-ignored as a class, not just
+  `.env.local` — Next loads `.env.development.local` and `.env.production.local` too, and before
+  that line a local override with a secret in it was one `git add .` from being published.
+- **The footage is now served, to `/genesis` only — the apex landing page still plays `intro.mp4`.**
+  `public/assets/genesis-loop.mp4` is a byte-identical copy of `landing page/landing.MP4`
+  (4.1 MB, 1276×720 h264, 35 s, `sha1 6b914074d86a547e87d7481c3a0c8ca9`) and is what the collection
+  page plays. The name is deliberately **not** the landing page's reserved one: that page's first
+  `<source>` is `/assets/landing-loop.mp4`, so copying the footage to *that* name would silently
+  switch the landing page's background too — which the owner had just asked to revert.
+  So there are two independent switches, each one file:
+  - **`/genesis`:** already on (`public/assets/genesis-loop.mp4` present).
+  - **the apex landing page:** still `intro.mp4` (1920×1080, 29 s, 37 MB). When it should wear the
+    footage too, `cp "landing page/landing.MP4" public/assets/landing-loop.mp4` — no code change, the
+    first `<source>` already points at that name, and removing the file again is the whole revert.
+  A video is fetched by URL, so if a cached copy ever gets in the way the replacement needs a
+  different filename rather than a `?v=`. Phones and `prefers-reduced-motion` load no video on either
+  page — see the `@media` blocks in `public/css/home.css` and `public/css/genesis.css`, and
+  `poster="/assets/images/menu-background.jpg"` paints first (served, 965 KB).
+  `node tools/check-genesis.js` asserts all of it: the copy exists and matches the capture, and the
+  landing page's reserved name does **not** exist.
+- **`public/assets/genesis-loop.mp4`** — the loop the collection page plays, and the one binary this
+  work added (4.1 MB). It is a copy of `landing page/landing.MP4` (a drop folder at the repo root,
+  untracked). Without it the page falls through to `/assets/intro.mp4` and still reads correctly —
+  the video is decoration — but the intended footage is this file:
+  `cp "landing page/landing.MP4" public/assets/genesis-loop.mp4`
 - **Dependencies** — npm project (`package-lock.json` present): `npm ci` (or `npm install`).
   `node_modules/` is already present in this checkout.
 
@@ -41,6 +71,8 @@ Production, and the live deployment was measured reading the shared store — th
 | Phone gas | players fund their own embedded wallet | *Wallets: injected first…* |
 | **Staking writes** | the approve/stake/claim transaction path, then `STAKING_WRITES_READY` in `lib/staking-config.js` — the page stays a labelled simulation until then, by design | *The Staking Vault* |
 | **Checking a follow** | *only if you want it checked*: register `/api/x/events` with X, subscribe our own account, then set `FOLLOW_PROOF_MODE=webhook`, `X_CONSUMER_SECRET` and `X_FOLLOW_TARGET_ID` for Production. Until then the follow is taken on the player's word and the card says so | *Proving a follow: X's Activity API* |
+| **The private host** | `APP_GATE_PASSWORD` for Production, **and** the `app.` DNS record at the registrar. Everything else is built and verified; the host split does not exist on the live domain until that record does. Both steps, and why the record goes last, are in *Two hostnames* below | *Two hostnames: the public page at the apex…* |
+| **The Genesis waitlist** | nothing to configure — it writes through the same store the points program uses (`KV_REST_API_URL` + `KV_REST_API_TOKEN`, already set for Production). Without them production keeps it in memory and loses it on redeploy, and the store's own `storageDescription()` says exactly that | *The waitlist, and the two numbers* |
 
 One thing on chain is **not** a switch at all, because it touches custody: the old **V3** game
 (`0xD8de…36e5`) is not paused and still holds 811 old-token DNG, so its unsigned claim path is
@@ -63,6 +95,450 @@ for (const f of ['dungeon.js','wallet.js','leaderboard.js']) {\
   const local = readFileSync('public/'+f);\
   const remote = Buffer.from(await (await fetch('https://dungeon-knights.vercel.app/'+f)).arrayBuffer());\
   console.log(f, createHash('sha256').update(local).digest('hex') === createHash('sha256').update(remote).digest('hex') ? 'identical' : 'DIFFERENT'); }"
+```
+
+### Two hostnames: the public page at the apex, the game behind a password
+
+**DEPLOYED to production on September 22** (`dungeon-knights-b5cd49byb…`, all three hostnames
+re-pointed), on the owner's instruction to switch it on. `APP_GATE_PASSWORD` is set for Production
+(the owner's own value, stored hidden — never in this file).
+
+**One step is still outstanding, and until it is done the game has no address on the main domain:**
+`app.dungeonknights.io` does not resolve. The record to create at the registrar (Namecheap — the
+nameservers are `dns1/dns2.registrar-servers.com`, *not* Vercel's, so this cannot be done from the
+CLI):
+
+```
+Type    Host    Value                     TTL
+CNAME   app     cname.vercel-dns.com      Automatic
+```
+
+The hostname is already attached to the Vercel project (`vercel domains add app.dungeonknights.io`),
+so it will start serving the moment the record exists. Until then the game is reachable at
+`https://dungeon-knights.vercel.app` (unchanged by this work) and every game path on
+`dungeonknights.io` 308s to `app.dungeonknights.io`, which does not answer. Verified live, after the
+record is added: `/menu` on the app host asks for the password; the apex serves the landing;
+`dungeonknights.io/menu` redirects to it; and the vercel host still serves the game.
+
+`dungeonknights.io` is now the **public** face: a coming-soon landing page (the video loop, the
+wordmark, two calls to action) plus the **Points Program**, which has to work for somebody who has
+never seen the game, because it is the only thing being advertised. `app.dungeonknights.io` is the
+**game** — the Kingdom Gate hub, the mint, the vault, the dungeons — behind a password while the
+project is this early. The old hub moved to `/hub` and answers at the *root* of the gated host.
+
+Three rules make the split safe to reason about:
+
+1. **The gate is an allowlist, never "everything that is not the apex".** The X webhook is registered
+   against `dungeon-knights.vercel.app`; a gate written as "not the apex" would have taken it out
+   silently, and a locked-out webhook reports nothing — it just stops arriving. Only the hostnames in
+   `APP_HOSTS` are gated. `dungeon-knights.vercel.app` keeps behaving exactly as it does today.
+2. **Static files are not gated; pages and APIs are.** That is what lets the password screen wear the
+   real theme (see the stylesheet note below), and it leaks nothing — those files are already public
+   on the live site today.
+3. **Nothing gates unless `APP_GATE_PASSWORD` is set.** Unset, the app host behaves like the apex and
+   says so in the log on every request, rather than locking the team out of its own game.
+
+#### Where the rules live, and why not in `middleware.js`
+
+The decisions are in **`lib/app-routing.js`**: `classify(pathname)` says which bucket a path is in,
+`gateCovers(kind)` says whether the password guards it, and `decideRoute({…})` returns one of
+`next | redirect | rewrite | gate`. `middleware.js` is plumbing — it turns that answer into a
+`NextResponse` and stamps `X-Robots-Tag: noindex` on everything the app host serves.
+
+They were inline in the middleware until it became clear they could not be tested there: **the `next`
+package ships no `exports` map**, so `next/server` resolves under CJS but not under ESM, and any Node
+harness that imports `middleware.js` dies on `Cannot find module 'next/server'` before reaching a
+single rule. The rules are what needed testing, so they moved somewhere a harness can reach.
+
+The local switch is `?__app=1` on any URL (and `?__app=0` to switch back), which sets a cookie that is
+read **only** when `NODE_ENV !== 'production'`. `localhost:3000` cannot be two hostnames, so without
+it the whole split would be untestable before it is published.
+
+#### The outage the first deploy caused, and the third host class
+
+The first production deploy took the **game offline on every hostname at once**, for about ten
+minutes. It is the same mistake as rule 1, made in the opposite direction, and it is worth writing
+down precisely because every offline check passed while it was broken.
+
+The apex branch was written as *"everything that is not the gated host"*: public paths pass through,
+anything else redirects to `APP_HOSTS[0]`. So `dungeon-knights.vercel.app/menu` — a host that is
+neither gated nor the apex — was redirected to `app.dungeonknights.io`, which does not resolve, and
+the apex redirected there too. Measured on production: `/menu` and `/game` on the vercel hostname
+both answered `308 → https://app.dungeonknights.io/…`, and `app.dungeonknights.io/menu` answered
+nothing at all. The only reason the X webhook survived is that `/api/x/events` is in the global-open
+list.
+
+There are **three** host classes, and every host is in exactly one:
+
+| class | who | behaviour |
+|---|---|---|
+| the gated host | `APP_HOSTS` — `app.dungeonknights.io` | the password, then the game |
+| the public apex | `APEX_HOSTS` — `dungeonknights.io`, `www.dungeonknights.io` | the landing, the Points Program, a redirect for game paths |
+| **everything else** | preview URLs, `dungeon-knights.vercel.app`, `localhost` | **untouched** — whatever it served yesterday it serves now |
+
+Both lists are named and env-configurable (`APP_HOSTS`, `APEX_HOSTS`), and `check-gate` now walks
+the third class path by path (`/`, `/menu`, `/game`, `/dungeons`, `/mint`, `/hub`, `/gate`, `/points`,
+`/portfolio` — all `next`, no redirect), asserts that no hostname is in both lists, and asserts the
+middleware identifies the apex *by name* rather than by negation. The dev switch gained a matching
+`?__app=0`: `localhost` is neither hostname, so without it the answer for the third class would be the
+only thing testable locally.
+
+This is the second bug in this feature that no offline harness caught and production found within
+minutes — the first was the front-door lockout. The pattern is the same both times: a rule expressed
+as *"not the other thing"* rather than as its own list.
+
+#### The bug that shipped inside the first version
+
+The middleware asked *whether to check the cookie* by writing the question out by hand:
+
+```js
+if (isApp && kind === 'other' && passwordConfigured) { … }   // ← the middleware
+if (kind !== 'global-open' && kind !== 'app-open' && kind !== 'static') … // ← the decision
+```
+
+Those two disagreed about `apex-public`, and `/` is in the apex's public list. So on the gated host the
+**front door could never be reached**: a valid cookie on `/?__app=1` answered `307 /gate?next=%2F`, and
+typing the password—correctly—put you straight back on the password screen. The hub was unreachable and
+every offline check passed, because they all called `decideRoute` with an explicit `gateAllowed` and
+never asked whether the middleware would have computed one.
+
+The fix is that one function owns the question: `gateCovers(kind)` is now used by **both** callers. The
+check that would have caught it is a **property**, not a list — for a representative path of every kind,
+"the cookie is checked" must equal "the decision depends on it", and a valid cookie must never come back
+as `gate`. Measured after the fix: `200` on `/?__app=1` with the cookie, and the hub renders.
+
+Finding it took a temporary debug **response header**, not a log line: the edge runtime's `console.log`
+does not reach the dev server's stdout, so probing meant echoing the password length, the MAC match, the
+token's expiry and `moduleReadsCookie` back on the response. Worth remembering next time middleware
+misbehaves — and the header was removed before this was committed to the run doc.
+
+#### The gate screen
+
+`/gate` is the one React page that loads **nothing** the game loads — it has to work before any cookie
+exists — and its styles are `public/css/gate.css`, not an inline `<style>` block. They were inline
+first, on the belief that a sheet served through the gate could not style the page that opens it. That
+belief was wrong (rule 2 above), and `tools/check-styles.js` said so: nine class names in a `<style>`
+tag read to that audit as nine classes nothing styles.
+
+#### The waitlist, and the two numbers
+
+`POST /api/waitlist` takes an email, and optionally a handle, a wallet and the person's own word that
+they followed `@DNGrobinhood`. It is the only place in the project that holds **personal data**, which
+shapes all of it:
+
+- the key is `sha256(email)`, never the email, so a dump of the store is not an address book;
+- one entry per address, so a double submission returns the position somebody already had;
+- no IP is stored — the rate limit keeps a counter keyed by a **hash** of the IP for one minute, enough
+to stop a loop and not enough to profile anybody;
+- the follow is `followClaimed`, and the store keeps it labelled a **claim** — X's free API has no
+  view of who follows whom. The box no longer explains what it does not prove: on the owner's
+  instruction (*"dont write anything shady or something like we are not capable of"*) it reads *"I
+  follow @DNGrobinhood on X — where the mint date lands first"*, and `check-waitlist` now asserts the
+  opposite of what it used to — that the box claims **no** verification at all, in words a person
+  reads. The word `claim` survives where it is a fact about the data (`followClaimed`, the export's
+  *claimed, unchecked* column), not where it was an apology to the visitor;
+- `GET` answers with **one number** and nothing else. The queue is not enumerable through the endpoint,
+  and the check for that reads the route source, because that is where a leak would be written.
+
+Two counters, which are two different facts and must not be confused (they were one, and it lied):
+**`dk:waitlist:count`** is how many people are in line — the number the landing page prints, so it falls
+when somebody is removed; **`dk:waitlist:seq`** hands out positions and is never decremented, because a
+position given to a person is theirs. Measured before the split: after clearing three test entries the
+page still advertised *"5 knights already in line"* while two existed. Measured after: the page reads 1,
+the next signup is `#3`.
+
+Reading it back, and taking it out again:
+
+```bash
+node tools/waitlist.js                 # the list, oldest first, with the follow column labelled a claim
+node tools/waitlist.js --count         # the same number the page advertises
+node tools/waitlist.js --csv > list.csv
+node tools/waitlist.js --followers     # only the people who said they followed
+node tools/waitlist.js --remove you@example.com   # and it confirms it is gone
+```
+
+For production, pull the store's credentials into the shell for one command and **never** into a file:
+`npx vercel env pull /tmp/prod.env --environment=production && node --env-file=/tmp/prod.env tools/waitlist.js`
+
+#### The Google Form copy — `lib/waitlist-forms.js`
+
+Every **new** signup is also written to the owner's form (`forms.gle/GvCPEAcLzDRJhBfx5`), so the list
+lives where a human can open it on a phone and sort it in Sheets. Three things about it are worth
+knowing before touching it:
+
+- **It is the published-form route, not an API.** The POST goes to
+  `https://docs.google.com/forms/d/e/<formId>/formResponse` with `entry.<id>` fields — the same request a
+  browser makes — so there is no key and nothing to rotate, and equally nothing that reports an outage.
+- **It needs the form's own `fbzx` token, and a stale one answers `200` with the blank form.** That is
+  the failure mode this module is shaped around: the token is read from the form page and cached for
+  10 minutes, and a submission that comes back unrecorded is retried **once** against a freshly fetched
+  token. A post without the token looks exactly like a success in `curl` — measured, and the reason the
+  first attempt here recorded nothing.
+- **The form has one question, titled `email:address`.** Both values go in it: the email, a newline,
+  the wallet address (newline rather than a separator because Sheets splits a column on it in one
+  command). Its entry id is `2051617427` by default; `WAITLIST_FORM_ENTRY` overrides it and
+  `WAITLIST_FORM_DISABLED=true` switches forwarding off, so a rebuilt form is a Vercel value rather
+  than an edit.
+
+A form that fails **cannot** cost anybody their place: the entry is stored first, the copy runs after,
+and its outcome only warns in the log and rides back as `formForwarded` (`true` / `false` / `null` for a
+repeat signup, where nothing is sent — a duplicate row in the list somebody mints from is worse than no
+row). `node tools/check-waitlist.js` drives all of it against a stubbed form: a recorded answer, an
+unrecorded one, a repeat, an unreachable form, and a signup with no address.
+
+**Test rows:** verifying this wrote two clearly-labelled rows into the owner's live form —
+`codebuff-test@example.com` (a bare `curl`) and the address-bearing one from the end-to-end run. Delete
+them from the form's Responses tab; nothing on our side reads them, and the corresponding waitlist
+entries were purged.
+
+#### The harnesses, and what they refuse to believe
+
+```bash
+node tools/check-gate.js                    # 110 checks, offline
+APP_GATE_LIVE_PASSWORD=<dev password> node tools/check-gate.js --against-live   # +7 on the running server
+node tools/check-waitlist.js                # 102 checks, offline, in a temp working directory
+```
+
+`check-gate` mints tokens in **other processes** (a token from a deployment with a different secret must
+be worthless here), edits an expiry and a signature to prove each is covered, checks the cookie
+attributes, and walks the host split path by path — including that `/api/pointsomething` is *not*
+covered by `/api/points`, that the redirect target is `https://` with no dev port on it, and that
+`?next=` cannot be pointed off-site. `check-waitlist` sandboxes itself into a temp directory with the
+KV variables deleted, so it cannot touch a real store, and it asserts the page's own words — *"we cannot
+check it"*, *"on your word"* — because the dishonest version of that landing page is one that implies a
+check nobody ran.
+
+**Every guard was falsified by mutation before it was trusted** — 22 mutations, all 22 caught by name,
+including the one that re-introduces the front-door lockout. Two of them had to be written as *pairs*:
+the dedup and (before its refactor) the rate limit each existed in more than one place, so no single
+line removed the rule. That refactor is in the code: the rate limit is now applied once, after whichever
+driver counted, in a function a mutation can fail. Also fixed because a mutation could not fail it: an
+assertion that compared two `indexOf` positions passed when the call was deleted outright (its index
+became `-1`), so it now asserts presence *and* order.
+
+Two existing suites were reading this change and were updated rather than silenced:
+
+- `tools/check-wallet-menu.js` now resolves a page's hop to its legacy key through `path`, so `/hub`
+  (which renders the landing page via `../landing-client`) is recognised as a legacy page instead of
+  looking like a route with no wallet control. Two routes are exempt — the public landing page, which
+  deliberately has no wallet connection, and the password screen — and the exemptions live in
+  `tools/wallet-menu-allowlist.json` with a written reason each, printed in the output so a skip is
+  never silent.
+- `tools/check-styles.js` passes again with no allowlist entry, because the gate's styles are a real
+  sheet now, linked from the page: `/css/gate.css` answers `200 text/css` **before any cookie exists**.
+
+#### Traps this cost time on
+
+- **`PORT` must be set explicitly.** `npm run dev` without it does not use 3000 here; it picks an
+  ephemeral port (the log said `http://localhost:65228`) and every curl to 3000 then fails in a way
+  that looks like the server is down.
+- **`next build` clobbers the running dev server's `.next`** (documented further down this file, hit
+  again here). Stop the server, build, start it again — the order matters, not the timing.
+- **Node's `fetch` cannot resolve `localhost` in this environment** (`ENOTFOUND`) while curl on the same
+  machine answers fine. The live half of `check-gate` uses `127.0.0.1` for that reason; it changes
+  nothing about what is tested, because the branch is chosen by `?__app=1`, not by the Host header.
+- **Two `Set-Cookie` headers** arrive from a successful login (the gate cookie and the dev host switch).
+  `headers.get('set-cookie')` joins them and taking the first field of that string may pick the wrong
+  one — use `getSetCookie()`.
+- **`vercel env pull` writes sensitive values as the literal `[SENSITIVE]`.** A token minted locally
+  from pulled secrets gets a 401; sign in the way a wallet does instead.
+
+#### What is live now (measured on production, September 22)
+
+```
+dungeonknights.io/                200   the coming-soon landing; CTAs to /points and the waitlist
+dungeonknights.io/points          200   the Points Program, still public
+dungeonknights.io/api/waitlist    200   {"count":N} — reading the shared KV store
+dungeonknights.io/api/points/me   401   auth required, as it should be
+dungeonknights.io/menu            308   → https://app.dungeonknights.io/menu   (parked: no DNS yet)
+www.dungeonknights.io/            308   → https://dungeonknights.io/
+dungeon-knights.vercel.app/       200   the Kingdom Gate hub — unchanged, and it must stay that way
+dungeon-knights.vercel.app/menu   200   the game — unchanged
+dungeon-knights.vercel.app/api/x/events  400   reachable, not gated, not redirected (unsigned GET)
+app.dungeonknights.io             —     does not resolve yet
+```
+
+The waitlist's **Redis driver ran for the first time**, through the live API rather than a stub: a
+signup came back `{"ok":true,"position":1,...,"storage":"Upstash/Vercel KV (REST)"}`, the same address
+in different case came back `alreadyRegistered:true` at the same position with the count unchanged, a
+malformed address was `400`, and the export tool read it back with the `claimed, unchecked` label. The
+probe entry was then removed and the store returned to `0` — verified through the page's own endpoint,
+not just the tool. (Its credentials turned out to be readable from `vercel env pull`, so cleaning up
+automatically was possible; the file was deleted afterwards.)
+
+#### The landing loop — what plays today, and the one-file swap
+
+Measured with `preview_evaluate` on the live page, not read off the markup: the element's
+`currentSrc` is **`/assets/intro.mp4`**, `1920×1080`, `duration` `29`, `paused: false`, `loop: true`,
+`muted: true` — while the first `<source>` in the markup is still `/assets/landing-loop.mp4`, which
+now answers `404`. That is the fallback doing its job, and it was verified the way a visitor with no
+cache experiences it: a fresh request for the reserved name returns `404` and the element settles on
+the second source.
+
+**A note for anyone re-testing this:** the browser may keep serving the removed file from its own HTTP
+cache, so a stale `currentSrc` of `landing-loop.mp4` after a normal reload is the cache, not the server
+(measured: the file was gone from disk, `curl` said `404`, and the webview was still playing the old
+frame). Force the request, or check with `curl`, rather than trusting a reload.
+
+When the new footage is switched on, one thing is worth knowing first: **it carries its own title
+card.** The wordmark near the top of its frame is video pixels, not HTML — the page has exactly one
+`<h1>` (`.home-title`) — so the two "Dungeon Knights" on screen are the page's centred wordmark plus
+the render's own. It reads as deliberate mid-loop and a little doubled in the opening seconds; if it
+should not double, the fix is a trimmed loop (`#t=` start offset, or a re-cut file) rather than
+anything in the page.
+
+#### Switching it on — what was done, and the one step left
+
+Done on September 22, in this order (the order matters because middleware env is baked into the edge
+bundle at build time, so a password set *after* a deploy does not reach it):
+
+```bash
+printf '<the password>' | npx vercel env add APP_GATE_PASSWORD production   # before the build
+npx vercel --prod --yes --scope meglast320-1694
+npx vercel alias set <new-deployment> dungeonknights.io --scope meglast320-1694   # and www, and the
+npx vercel alias set <new-deployment> www.dungeonknights.io --scope meglast320-1694   # vercel.app
+npx vercel alias set <new-deployment> dungeon-knights.vercel.app --scope meglast320-1694
+npx vercel domains add app.dungeonknights.io dungeon-knights --scope meglast320-1694
+```
+
+Aliases pin to a *deployment*, not a project, so all three have to be re-set on every deploy — a trap
+this project has hit more than once.
+
+**Still to do, at the registrar**, because the nameservers are Namecheap's:
+
+```
+CNAME   app   cname.vercel-dns.com
+```
+
+And one thing no code can do: add `https://app.dungeonknights.io` to **Privy's allowed origins**, or
+wallet login on the app host will be refused. `dungeonknights.io` needs to be there too for the points
+page.
+
+### The Genesis collection page (`/genesis`)
+
+**Not deployed — this is the one page of this work that a fresh `vercel --prod` publishes to
+`dungeonknights.io`.** The landing page's second button is now a link to it instead of unfolding a
+card, so the apex and this page ship together.
+
+The page is `app/genesis/page.js` (server component: reads the screenshot folder and hands the slots
+to the client) plus `app/genesis/client.js` (the page itself), styled by `public/css/genesis.css`. It
+is listed in `APEX_PUBLIC` in `lib/app-routing.js` and in `app/sitemap.js`. It wears the house shell
+— `theme.css`, a header with a way back and one action, a left panel and a scrolling right panel —
+so somebody who joins the waitlist there recognises the furniture when they reach the game.
+
+**Every figure on it is imported** from `lib/staking-config.js` — supply, hash range, the six bands,
+tickets per hour, the weekly capsule count and the 168-hour cap. A marketing page is exactly where a
+number gets copied once and then quietly stops being true, so `tools/check-genesis.js` asserts both
+halves: every imported figure is used, **and none of the published values appears as a literal in the
+page's source**.
+
+**The page states no reward at all** — no per-clear, per-run or per-day $DNG figure, and
+`lib/reward-config.js` is not imported by it. What a run pays belongs to the contract, and the vault
+quotes it against the live table; a number printed on a page that cannot see that table is a second,
+staler copy of it. The capsule-odds table was removed for the same reason: the tier table is the
+vault's and the Summoning Chamber's business. `check-genesis.js` fails on a `\d… DNG` anywhere in the
+rendered copy, on the import returning, and on the odds table coming back — all three falsified by
+mutation (below).
+
+#### The power ladder is the vault's ladder
+
+The band table became the graph the Staking Vault draws: a fixed 46px track per band, filled from the
+bottom **against the largest band** (210) rather than against the supply, the count above each bar and
+the short band name below, plus the hash-power range and the `1 HP = 1 ticket / hour` rule derived
+from `ticketsPerHour`. The six colours are the vault's exact values, by `data-band`, and the check
+compares the two stylesheets value for value — a band that is gold on one page and grey on the other
+reads as two different tables. Measuring against the supply instead was falsified by mutation too:
+six bars between 6% and 20% of the height are a picture of nothing.
+
+**Fifteen mutations have been run against that harness before it was trusted.** Nine on the first
+pass — a figure typed into the headline, a frame that renders a picture whether or not one exists,
+the reader handing back a source for a file that is not there, the address rule one character shorter
+than the store's, the follow claim reworded as if it were verified, `/genesis` dropped from the public
+list, the loop pointed at the landing page's reserved name, the frames frozen at build time.
+**9/9 caught by name.** Six more after the page changed: a per-clear figure put back in the copy, the
+reward table imported again, the queue's empty-state sentence restored, a ladder measured against the
+supply, a band colour drifting from the vault's, the odds table restored. **6/6 caught by name.**
+
+The first sweep also found a real bug in the harness itself: it indexed `filled[0]` directly, so the
+mutation that stopped every slot from filling made the file throw a `TypeError` instead of failing by
+name — and a real regression would have printed a stack trace where a sentence was owed. The second
+sweep found a subtler one on the way in: a check for "enforced by the game contract" failed against a
+page that says exactly that, because JSX wraps the sentence across two lines. Prose checks now run
+against the source with its whitespace collapsed — which makes them stricter, not looser, since a
+phrase split by a newline now matches and a phrase that is absent can no longer pass by accident.
+
+#### Screenshots: real captures only, driven by the folder
+
+`lib/genesis-shots.js` reads `public/assets/genesis/` and returns one entry per slot — `dungeon-run`,
+`staking-vault`, `capsules`; `.webp` preferred, `.jpg`/`.jpeg`/`.png` accepted, matched
+case-insensitively. A slot renders its picture **only if the file is there**; otherwise the frame says
+"capture to come". Dropping a capture in is the whole change:
+
+```
+cp ~/shot.png "public/assets/genesis/dungeon-run.png"
+```
+
+The page is `force-dynamic` on purpose: a build-time list would freeze the frames at whatever existed
+when the deploy was made, and tell the next person their capture works when it does not.
+
+**All three slots are filled** (September 22) from the owner's own captures, each cropped to the frame's
+16:9 and re-encoded with `ffmpeg` (on this machine at `…/WinGet/Packages/Gyan.FFmpeg…/ffmpeg.exe`):
+
+```
+ffmpeg -y -i "<magma fight>.png" -vf "crop=1285:723:0:120,scale=1600:-2"  -c:v libwebp -quality 82 public/assets/genesis/dungeon-run.webp
+ffmpeg -y -i "<staking vault>.png" -vf "crop=1480:832:0:70,scale=1600:-2" -c:v libwebp -quality 82 public/assets/genesis/staking-vault.webp
+ffmpeg -y -i "<summoning chamber>.png" -vf "crop=2048:1152:26:0,scale=1600:-2" -c:v libwebp -quality 82 public/assets/genesis/capsules.webp
+```
+
+The third slot was called `weekly-draw` and promised a picture of a won capsule. The capture that fills
+it is the Summoning Chamber — a capsule is a thing you open, so it has no picture of its own — and the
+slot was **renamed to the picture** rather than the picture stretched to fit the name. Its caption is
+*"Capsules in the Summoning Chamber"*. The first caption is *"A knight squad mid-run"*: the owner's
+note was that the capture is the summonable collection, not Genesis, and on a page whose whole subject
+is the difference between the two a caption naming the wrong side is the one mistake nobody forgives.
+
+**The copy around them was rewritten** on the owner's instruction (*"dont write it"*, then *"check
+everything in page and dont write anything shady or something like we are not capable of"*). Gone: the
+paragraph explaining that a frame with no picture is one that has not been captured yet and that
+nothing is a render standing in for gameplay; *"Caps on chain"* as the value of the dungeon-runs box;
+*"enforced by the game contract rather than by the page you are reading"*; the footer's *"the game and
+the vault open once the collection does"*; and the follow box's *"worth doing, but we cannot check it,
+so it is taken on your word"*. `check-genesis` now asserts the **opposite** of that last one — that the
+box claims no verification at all — so the rule that protected the visitor survives the wording that
+embarrassed the page.
+
+**The footage is more visible** (owner: *"the landing video should be little more visible"*).
+`.gn-scrim`'s mid-band went `0.58 → 0.32` and its radial centre `0.25 → 0.10`, with the top and foot
+left heavy — the shape is unchanged, the dimmer is not. The sheet is versioned (`genesis.css?v=3`), so a
+returning visitor gets it.
+
+#### The waitlist form, and its two fields
+
+Email (required) and EVM address (asked for, **optional**, marked as such in the label). The address
+is validated on the page and not only on the server, because the route stores `null` for a string it
+does not recognise — so an unchecked typo would be accepted and then silently dropped. Every new
+signup is also mirrored into the owner's Google Form — see *The Google Form copy* above. The follow box
+now reads *"I follow @DNGrobinhood on X — where the mint date lands first"*. Driven in the browser
+against the **dev** store
+(`.data/waitlist.json`, file driver), then cleaned up afterwards:
+
+```
+broken address      → refused inline, nothing written, nobody in the queue
+valid + address     → joined at #5; the store kept the address exactly as typed (0xAbC…0042)
+email only          → joined at #6 with address: null — the address really is optional
+same address twice  → "already on the list — still number 5", count unchanged (case-insensitive)
+both purged         → count back to 0, positions 5 and 6 never reissued
+```
+
+`/api/waitlist`, the store and its rate limit are untouched — only the page that posts to them moved.
+The landing page keeps one thing from the old card: the queue count, still read from the same endpoint
+and still hidden at zero (`public/home.js` is now only that read).
+
+```
+node tools/check-genesis.js     # 72 checks
+node tools/check-waitlist.js    # 102 checks — the form's home, the claim rules, and the Google copy
+node tools/check-gate.js        # 129 checks — /genesis public on the apex, gated on the game host
+node tools/check-styles.js      # every class the route uses has a rule in a sheet it loads
 ```
 
 ### Arya, the dungeon gate keeper
