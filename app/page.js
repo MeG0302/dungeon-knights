@@ -10,6 +10,12 @@ import { SITE_NAME, SITE_URL } from '../lib/site';
  * descriptor in `lib/site.js` still describes the product, and this page describes the present.
  *
  * The old Kingdom Gate hub is at `/hub` now, which the middleware rewrites to on the app host only.
+ *
+ * `viewport` is exported here rather than left to the root layout because the game wants the opposite
+ * of it: every screen inside the app is a fixed canvas with its own zoom, while this page is text a
+ * stranger may want to enlarge — so the zoom block `app/layout.js` sets for the game is lifted on
+ * this route alone. Double-tap zoom, which is the one that actually interferes with tapping a
+ * button, is suppressed in `home.css` instead, with `touch-action: manipulation`.
  */
 
 export const metadata = {
@@ -25,6 +31,15 @@ export const metadata = {
         description:
             'Join the Points Program today, and the Genesis waitlist for the 1,024 Genesis Knights.',
     },
+};
+
+export const viewport = {
+    width: 'device-width',
+    initialScale: 1,
+    maximumScale: 5,
+    userScalable: true,
+    viewportFit: 'cover',
+    themeColor: '#12100E',
 };
 
 const jsonLd = {

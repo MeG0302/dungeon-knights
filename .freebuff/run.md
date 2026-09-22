@@ -17,7 +17,7 @@ A fresh checkout needs these local-only pieces before it will run:
   (`app.dungeonknights.io`). Since this commit `.env*.local` is git-ignored as a class, not just
   `.env.local` — Next loads `.env.development.local` and `.env.production.local` too, and before
   that line a local override with a secret in it was one `git add .` from being published.
-- **The footage is now served, to `/genesis` only — the apex landing page still plays `intro.mp4`.**
+- **The footage is served to `/genesis`; the apex plays its own re-encoded copy of the old one.**
   `public/assets/genesis-loop.mp4` is a byte-identical copy of `landing page/landing.MP4`
   (4.1 MB, 1276×720 h264, 35 s, `sha1 6b914074d86a547e87d7481c3a0c8ca9`) and is what the collection
   page plays. The name is deliberately **not** the landing page's reserved one: that page's first
@@ -30,10 +30,29 @@ A fresh checkout needs these local-only pieces before it will run:
     first `<source>` already points at that name, and removing the file again is the whole revert.
   A video is fetched by URL, so if a cached copy ever gets in the way the replacement needs a
   different filename rather than a `?v=`. Phones and `prefers-reduced-motion` load no video on either
-  page — see the `@media` blocks in `public/css/home.css` and `public/css/genesis.css`, and
-  `poster="/assets/images/menu-background.jpg"` paints first (served, 965 KB).
+  page — see the `@media` blocks in `public/css/home.css` and `public/css/genesis.css` — and both
+  pages paint a poster first.
   `node tools/check-genesis.js` asserts all of it: the copy exists and matches the capture, and the
   landing page's reserved name does **not** exist.
+- **The landing page's four files, and one command that rebuilds each.** The apex plays the *same
+  footage* as `intro.mp4` but deliberately not the same file: `/assets/intro-web.mp4` is that master
+  re-encoded for the web, and the 10 Mbps original stays on disk because `/hub`, behind the gate,
+  plays it large. `ffmpeg` is on this machine at `…/WinGet/Packages/Gyan.FFmpeg…/ffmpeg.exe`:
+
+  ```bash
+  # the desktop loop — 37 MB / 1920×1080 / 10.2 Mbps  →  3.2 MB / 1280×720 / 24 fps
+  ffmpeg -y -i public/assets/intro.mp4 -vf "scale=1280:-2" -c:v libx264 -preset slow -crf 30 \
+    -pix_fmt yuv420p -an -movflags +faststart public/assets/intro-web.mp4
+  # the background the page paints before any video arrives — 965 KB JPEG  →  286 KB, then 83 KB
+  ffmpeg -y -i public/assets/images/menu-background.jpg -vf "scale=1920:-2" -c:v libwebp -quality 78 public/assets/images/menu-background.webp
+  ffmpeg -y -i public/assets/images/menu-background.jpg -vf "scale=900:-2"  -c:v libwebp -quality 72 public/assets/images/menu-background-mobile.webp
+  # the crest, drawn at 46px — 167 KB of 403×439 panel icon  →  26 KB of 144×157
+  ffmpeg -y -i public/assets/ui/sword.png -vf "scale=144:-1" public/assets/ui/sword-crest.png
+  ```
+
+  The `.jpg` is kept: `/hub`, the three game screens and the social card (`OG_IMAGE`) all still ask for
+  it by name. `node tools/check-landing.js` asserts every number above, plus the rest of the platform
+  pass described under *The landing page, on the devices it actually gets opened on*.
 - **`public/assets/genesis-loop.mp4`** — the loop the collection page plays, and the one binary this
   work added (4.1 MB). It is a copy of `landing page/landing.MP4` (a drop folder at the repo root,
   untracked). Without it the page falls through to `/assets/intro.mp4` and still reads correctly —
@@ -441,6 +460,51 @@ card.** The wordmark near the top of its frame is video pixels, not HTML — the
 the render's own. It reads as deliberate mid-loop and a little doubled in the opening seconds; if it
 should not double, the fix is a trimmed loop (`#t=` start offset, or a re-cut file) rather than
 anything in the page.
+
+#### The landing page, on the devices it actually gets opened on
+
+Measured on September 22 in the preview webview, at widths 320 / 360 / 375 / 390 / 430 / 740×360 /
+1024×500 / 1440×900 — **not** read off the stylesheet. Five things came out of it, and one of them was
+a bug rather than an optimisation:
+
+| | before | after |
+|---|---|---|
+| the loop a desktop plays | `/assets/intro.mp4`, 1920×1080, **37 MB** | `/assets/intro-web.mp4`, 1280×720, **3.2 MB** |
+| the background a phone paints | `menu-background.jpg`, **965 KB** | `menu-background-mobile.webp`, **85 KB** |
+| the background a desktop paints | the same 965 KB JPEG | `menu-background.webp`, **286 KB** |
+| the crest above the wordmark | `ui/sword.png`, 167 KB for 403×439 | `ui/sword-crest.png`, **26 KB** for 144×157 |
+| the font sheet | `@import` at the top of `theme.css` | two preconnects + a `<link>` in `app/layout.js` |
+
+**The bug: the page could not scroll, and on a short viewport it clipped.** `theme.css` pins
+`html, body` to `height: 100%; overflow: hidden` because every game screen wants a fixed, app-like
+frame. A centred column does not: at a 320pt width the column needs **588px of height** against 568pt
+of screen — 460 once iOS's URL bar is showing — and the footer and the second button were simply
+off the bottom of a box nothing could scroll. `home.css` now un-pins the document under
+`(max-width: 760px), (max-height: 620px)`, the same shape the vault and the collection page use for
+phones, so the page scrolls instead of hiding its own calls to action. On the smallest phones it is
+the difference between tapping "Join the Points Program" and not being able to reach it.
+
+**Two smaller findings from the same pass.** The primary button's label broke over two lines below
+about 380pt — 284×64 where the others are 47px tall — so `@media (max-width: 380px)` tightens the
+tracking and the copy size, measured at **284×44** afterwards. And the wordmark wraps to two centred
+lines on every phone width tested (the `clamp(2.1rem, 6vw, 3.6rem)` floor is 33.6px, which needs
+~405px where a 320pt screen leaves 284) — that is the pre-existing design, not a regression, and it
+was left alone deliberately.
+
+Two notes on the change set, both about things that would otherwise look like oversights:
+
+- **`theme.css` was edited and its `?v=6` was *not* bumped.** Removing the `@import` is invisible to a
+  returning visitor whose cached copy still has it — the new `<link>` supplies the same faces — so a
+  bump would only churn twelve call sites (`lib/static-pages.js` ×7 and five React clients) for no
+  behaviour change. `home.css` *was* bumped, twice, because its rules did change.
+- **Zoom is allowed on the apex and still blocked in the game.** `app/page.js` exports its own
+  `viewport` (`maximumScale: 5`, `userScalable: true`) so the one page of prose a stranger may want to
+  enlarge is WCAG 1.4.4-clean; `app/layout.js` keeps `maximumScale: 1` for the fixed-canvas screens.
+  The double-tap zoom that actually interferes with tapping is suppressed per-control instead, with
+  `touch-action: manipulation` in `home.css`.
+
+`node tools/check-landing.js` (31 checks) pins both halves of this: the rules and the byte weights,
+so the 37 MB master cannot quietly come back to the page a stranger lands on.
 
 #### Switching it on — what was done, and the one step left
 
@@ -2756,7 +2820,19 @@ dungeon-knights-meglast320-1694.vercel.app, and leaves the project's custom doma
 is invisible at the URL people actually open. Always re-alias, then verify the *custom* domain,
 not the deployment URL.
 
-**The last deploy** (September 22): `dungeon-knights-qhfbkph32-meglast320-1694` — the domain
+**The current deploy** (September 22, the landing pass):
+`dungeon-knights-1z3ouqtj3-meglast320-1694`, aliased across **`dungeonknights.io`**,
+**`www.dungeonknights.io`** and **`dungeon-knights.vercel.app`**. It carries the platform pass on the
+landing page (a 3.2 MB loop in place of the 37 MB master, an 85 KB phone background in place of a
+965 KB JPEG, a 26 KB crest in place of a 167 KB panel icon, the font sheet hoisted out of `theme.css`
+into two preconnects and a link, safe-area insets, and the `overflow: hidden` that used to clip the
+footer on a short viewport). Verified on the live host rather than the deployment URL: `/` is `200`
+and serves `/css/home.css?v=4`, `intro-web.mp4` (3,238,624 B) and `menu-background.webp`
+(292,562 B); `/points` is `200`; `www` 308s to the apex; and `dungeonknights.io` is the canonical the
+page advertises. **Not** built from a committed tree — see the note below.
+
+**The deploy before it** (September 22, the copy pass): `dungeon-knights-jsdjeqzqv-meglast320-1694`,
+aliased the same way. **The last deploy before that** (September 22): `dungeon-knights-qhfbkph32-meglast320-1694` — the domain
 switchover, the four quote-repost tasks, and the `www` redirect. It replaced
 `dungeon-knights-9mtzahslz-meglast320-1694` (env var set, `/:path*` redirect that missed the root) and
 `dungeon-knights-lx9kknkvv-meglast320-1694` (the one-time tab's review window).

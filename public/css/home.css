@@ -4,11 +4,18 @@
  * wearing the game's own theme — Cinzel Decorative, the gold accent, the same button language as the
  * Kingdom Gate — because this page and the game are one product.
  *
- * Two deliberate constraints:
+ * Three deliberate constraints:
  *   - it never depends on a route inside the app (the app host is password-gated, so a public page
- *     linking into it would be a dead end for a stranger), and
+ *     linking into it would be a dead end for a stranger),
  *   - the video is decoration, never the layout. Everything above it is text, so the page reads
- *     correctly with the video missing, blocked, still loading, or turned off by the visitor.
+ *     correctly with the video missing, blocked, still loading, or turned off by the visitor, and
+ *   - the column has to survive a phone held sideways and a laptop window dragged short, which is
+ *     why this sheet undoes the viewport pinning `theme.css` does — see "the un-pinning" below.
+ *
+ * Everything here is measured rather than assumed, because this is the one page a stranger sees
+ * before they have any reason to trust the project: the two costs that were worth real bytes were a
+ * 37 MB 1080p loop (now `/assets/intro-web.mp4`, 3.2 MB) and a 965 KB JPEG painting a phone screen
+ * that is 390 points wide (now an 85 KB WebP — see the desktop/mobile pair in the background rule).
  */
 
 .home-page {
@@ -19,9 +26,27 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
+
+    /* The footer below is absolutely positioned, so the column has to reserve its height. One
+       variable, read by both rules, so the reservation and the thing it reserves for cannot drift
+       apart: 18px above the copyright line and 18px below it — or the home indicator, whichever is
+       taller, which is what the inset is for. Without it the text sits in the swipe-up bar on every
+       iPhone with no home button. The 0px fallback is for a browser that knows `env()` but not
+       `safe-area-inset-bottom`; both older than that would drop the declaration, hence the plain
+       value on the line before each use. */
+    --home-foot-gap: max(18px, env(safe-area-inset-bottom, 0px));
     padding: 32px 24px 72px;
+    padding: 32px 24px calc(54px + var(--home-foot-gap)) 24px;
+
     overflow: hidden;
-    background: #12100E url('/assets/images/menu-background.jpg') center / cover no-repeat;
+    background: #12100E url('/assets/images/menu-background.webp') center / cover no-repeat;
+
+    /* A tap on a gold button used to flash the system's grey highlight over the art, and iOS likes
+       to inflate text in landscape unless it is told not to. Both are one line, both are invisible
+       on a desktop. */
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
 }
 
 .home-video {
@@ -117,10 +142,31 @@
     text-decoration: none;
     cursor: pointer;
     transition: transform 0.12s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+
+    /* The single most consequential line on this page for a thumb: without it a double tap on
+       "Join the Points Program" is a zoom gesture, and the browser holds every other tap for the
+       300ms it waits to find out. Nothing here needs double-tap zoom. */
+    touch-action: manipulation;
 }
 
-.home-btn:hover { transform: translateY(-1px); }
+/* Guarded, because a touch screen fires `:hover` on the first tap and then leaves the button
+ * lifted by a pixel until something else is tapped. A desktop gets the lift; a phone does not. */
+@media (hover: hover) and (pointer: fine) {
+    .home-btn:hover { transform: translateY(-1px); }
+    .home-btn-secondary:hover { border-color: rgba(232, 224, 212, 0.6); }
+    .home-footer a:hover { color: var(--accent-gold, #D4AF37); }
+}
+
 .home-btn:active { transform: translateY(0); }
+
+/* Keyboard visitors land on a dark page: the browser's default ring is a hairline that disappears
+ * against the gold border. Named here rather than left to the theme, which styles none of this
+ * page's controls. */
+.home-btn:focus-visible,
+.home-footer a:focus-visible {
+    outline: 2px solid var(--accent-gold-light, #F4D03F);
+    outline-offset: 3px;
+}
 
 .home-btn-primary {
     border: 1px solid var(--accent-gold, #D4AF37);
@@ -134,8 +180,6 @@
     background: rgba(12, 11, 10, 0.72);
     color: var(--text-primary, #E8E0D4);
 }
-
-.home-btn-secondary:hover { border-color: rgba(232, 224, 212, 0.6); }
 
 .home-btn .home-btn-note {
     display: block;
@@ -173,7 +217,7 @@
     align-items: center;
     justify-content: center;
     gap: 14px;
-    padding: 18px 24px;
+    padding: 18px max(24px, env(safe-area-inset-right, 0px)) var(--home-foot-gap) max(24px, env(safe-area-inset-left, 0px));
     font-family: 'Inter', system-ui, sans-serif;
     font-size: 11px;
     letter-spacing: 0.6px;
@@ -185,16 +229,79 @@
     text-decoration: none;
 }
 
-.home-footer a:hover { color: var(--accent-gold, #D4AF37); }
-
 /* A phone should not spend its data on a background loop, and neither should anyone who has asked
- * their system for less movement. Both get the poster image, which is already the page's background. */
-@media (max-width: 760px), (prefers-reduced-motion: reduce) {
+ * their system for less movement. Both get the poster image, which is already the page's background.
+ * `display: none` is what actually saves the bytes: a media element that is not rendered never runs
+ * source selection, so the 3.2 MB file is not requested at all — verified by watching the resource
+ * timings on a 390-wide viewport, not by reading this rule.
+ *
+ * The art behind it is trimmed for the same reason: 85 KB at 900px wide instead of 292 KB at 1920,
+ * for a screen 390 points across that shows it under two gradients anyway. Only the image layer is
+ * replaced, so the colour, the `cover` sizing and the position all carry over from the shorthand
+ * above. The 965 KB JPEG both of these replaced is still on disk — `/hub`, the three game screens
+ * and the social card all still ask for it by name. */
+@media (max-width: 760px) {
+    .home-video { display: none; }
+    .home-page { background-image: url('/assets/images/menu-background-mobile.webp'); }
+}
+
+@media (prefers-reduced-motion: reduce) {
     .home-video { display: none; }
 }
 
+/* ------------------------------------------------------------------ the un-pinning
+ * theme.css pins html/body to `height: 100%; overflow: hidden`, and every game screen wants exactly
+ * that: a fixed, app-like frame with no page scrollbar. A landing page does not. The column below is
+ * centred in the viewport, so the moment the viewport is shorter than the column — a phone held
+ * sideways, a laptop window dragged short, a browser at 200% zoom — the footer and the second button
+ * fall outside a box that cannot be scrolled. Same shape as the vault and the collection page use
+ * for phones: let the document scroll, and let the page grow past the viewport.
+ *
+ * The two conditions are one failure. A phone in portrait is inside the first query even though it
+ * fits, because on iOS `dvh` follows the URL bar and the address bar takes about 100px off the
+ * height; the second query is what catches the window case, and it costs nothing on a desktop,
+ * where the column is 320px tall and no window is 620px tall by accident. */
+@media (max-width: 760px), (max-height: 620px) {
+    html,
+    body {
+        height: auto;
+        min-height: 100%;
+        overflow-x: hidden;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .home-page { overflow: visible; }
+}
+
+/* --------------------------------------------------------------- landscape, short
+ * A phone in landscape has 360px of height and 740px of width — the opposite of the shape this
+ * column was drawn for. Nothing is hidden here; every element stays and the rhythm tightens, so the
+ * whole page fits in the 360px instead of asking a visitor to scroll a hero. */
+@media (max-height: 620px) and (max-width: 1024px) {
+    .home-page { padding-top: 20px; }
+    .home-crest { width: 34px; height: 34px; margin-bottom: 8px; }
+    .home-title { font-size: clamp(1.6rem, 4.4vh, 2.4rem); letter-spacing: 3px; }
+    .home-sub { margin-top: 6px; font-size: 0.72rem; letter-spacing: 2px; }
+    .home-line { margin-top: 12px; max-width: 620px; font-size: 12.5px; line-height: 1.55; }
+    .home-actions { margin-top: 16px; gap: 10px; }
+    .home-btn { min-width: 200px; padding: 11px 18px; }
+    .home-count { margin-top: 8px; }
+}
+
 @media (max-width: 560px) {
-    .home-page { padding: 28px 18px 84px; }
+    .home-page {
+        padding: 28px 18px 84px;
+        padding: 28px 18px calc(66px + var(--home-foot-gap)) 18px;
+    }
     .home-title { letter-spacing: 2px; }
     .home-btn { min-width: 100%; }
+}
+
+/* Measured on the smallest phones still in use, where a 320pt screen leaves 284px for the button:
+ * "Join the Points Program" in Cinzel at 13px with 2px of tracking needs more than that, so the
+ * label broke over two lines and the button grew from 47px to 64px. Tightening the tracking and the
+ * copy size is what keeps it on one line — the target stays comfortably past 44px either way. */
+@media (max-width: 380px) {
+    .home-btn { padding: 13px 14px; font-size: 12px; letter-spacing: 1px; }
 }

@@ -4,7 +4,10 @@
    silver typography, single gold accent, no glow spam.
    ========================================================== */
 
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Cinzel+Decorative:wght@400;700;900&family=Inter:wght@400;500;600;700&display=swap');
+/* The theme's three faces (Cinzel, Cinzel Decorative, Inter) are fetched by a `<link>` in
+   `app/layout.js`, not by an `@import` here. An `@import` is only discovered after this file has
+   been downloaded and parsed, which cost every phone a extra DNS + TLS + request round trip to a
+   second origin before the first font was even requested. See the note on `FONT_CSS` there. */
 
 /* ==========================================================
    TOKENS

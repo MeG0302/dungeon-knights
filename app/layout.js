@@ -6,6 +6,18 @@ import PrivyBridge from './privy-bridge';
 // and a `NEXT_PUBLIC_` copy in a client config would be a second copy of the same fact.
 const PRIVY_APP_ID = (process.env.PRIVY_APP_ID || '').trim();
 
+// The theme's three faces, fetched from one stylesheet on Google's CDN.
+//
+// This used to be an `@import` at the top of `theme.css`, which is a different thing from a link and
+// a worse one: the browser cannot discover an `@import` until theme.css has arrived, been parsed and
+// its own rules matched, so a phone paid a second DNS + TLS + request round trip to a second origin
+// before a single woff2 was even asked for. The wordmark is Cinzel Decorative — the hero on the page
+// a stranger lands on — so that gap was the difference between reading the headline and watching it
+// re-flow. A link is discovered while the HTML is still being parsed, and the two preconnects below
+// open both connections before either request is made. `display=swap` is Google's parameter and is
+// deliberate: text renders in the fallback face immediately and swaps, rather than staying invisible.
+const FONT_CSS = 'https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Cinzel+Decorative:wght@400;700;900&family=Inter:wght@400;500;600;700&display=swap';
+
 export const metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
@@ -72,6 +84,9 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body style={{ margin: 0 }}>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link rel="stylesheet" href={FONT_CSS} />
         <Providers appId={PRIVY_APP_ID}>
           <PrivyBridge />
           {children}
