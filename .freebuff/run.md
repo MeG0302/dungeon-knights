@@ -366,6 +366,23 @@ probe entry was then removed and the store returned to `0` — verified through 
 not just the tool. (Its credentials turned out to be readable from `vercel env pull`, so cleaning up
 automatically was possible; the file was deleted afterwards.)
 
+#### The vault's `?demo=1` fixture is gone from the code, and not yet from production
+
+The Staking Vault used to render a fixture vault on request (`?demo=1`): one knight per published band,
+one per tier, staked, with the yield computed from the published pool. It was labelled on the page and
+signed nothing, but it invented a wallet on a live site, so it is **removed outright** — `SOURCE_DEMO`,
+`DEMO_WALLET`, `demoSnapshot` and its four builders are gone from `lib/staking-source.js`, the `demo`
+option is gone from `loadVault`, and the page's `?demo=1` branch, demo badge and `DEMO VAULT` chip are gone
+from `app/staking/client.js`. Measured after the removal: the string `demo` appears **0** times in the
+served page and 0 times in the built client chunks, and `?demo=1` now opens the ordinary vault for whatever
+wallet the browser remembers. `tools/check-staking.js` lost the 14 checks that pinned the fixture
+(209 → 195) and still covers claim settlement, which is the part of that turn worth keeping.
+
+**Committed as `4eaebca` and pushed, but not deployed.** The last deployment still carries the fixture
+(`/app/staking/page-<hash>.js` contains `demo vault` and `0xd0e0a1b2c3d4e5f6`), so the removal is not live
+until the next `vercel --prod`. The owner chose to hold that deploy until `app.dungeonknights.io` resolves,
+so the DNS record and the deploy go out together.
+
 #### The landing loop — what plays today, and the one-file swap
 
 Measured with `preview_evaluate` on the live page, not read off the markup: the element's
