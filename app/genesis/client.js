@@ -87,7 +87,7 @@ export default function GenesisClient({ shots = [] }) {
 
         const cleanEmail = email.trim();
         if (!cleanEmail) {
-            setMessage({ kind: 'error', text: 'An email address is what the waitlist is for — without one there is nowhere to send the mint date.' });
+            setMessage({ kind: 'error', text: 'Enter an email address so we can send you the mint date.' });
             return;
         }
 
@@ -97,7 +97,7 @@ export default function GenesisClient({ shots = [] }) {
         // is the only version of this where the visitor can fix it.
         const cleanAddress = address.trim();
         if (cleanAddress && !ADDRESS_RE.test(cleanAddress)) {
-            setMessage({ kind: 'error', text: 'That does not look like an EVM address — it should be 0x followed by 40 characters. Leave it empty if you would rather add it later.' });
+            setMessage({ kind: 'error', text: 'That is not a valid EVM address. It should be 0x followed by 40 characters. Leave it empty if you would rather add it later.' });
             return;
         }
 
@@ -126,8 +126,8 @@ export default function GenesisClient({ shots = [] }) {
             setMessage({
                 kind: 'ok',
                 text: body?.alreadyRegistered === true
-                    ? `You are already on the list — still number ${position}. We will write to this address when Genesis opens.`
-                    : `You are number ${position} in line. We will write to this address when Genesis opens.`,
+                    ? `You are already on the list, still number ${position}. We will email you when Genesis opens.`
+                    : `You are number ${position} in line. We will email you when Genesis opens.`,
             });
             setDone(true);
             if (Number(body?.count) >= 0) setCount(Number(body.count));
@@ -195,10 +195,10 @@ export default function GenesisClient({ shots = [] }) {
                             <div className="gn-aside-block">
                                 <div className="gn-aside-title">Why own one</div>
                                 <ul className="gn-ticks">
-                                    <li><strong>Runs and rewards</strong> settled on chain, per knight, every day</li>
+                                    <li><strong>Runs and rewards</strong> settled on chain, per knight, each day</li>
                                     <li><strong>{TICKET_CAP_HOURS / 24}-day</strong> ticket clock, so playing beats parking</li>
-                                    <li><strong>Raffle entry</strong> — Genesis is the only collection that draws</li>
-                                    <li><strong>Genesis-only</strong> yield on the weekly pool, beside the Knights line</li>
+                                    <li><strong>Raffle entry</strong>. Genesis is the only collection that draws</li>
+                                    <li><strong>Yield</strong> on the weekly pool, alongside the Knights line</li>
                                 </ul>
                             </div>
 
@@ -209,8 +209,8 @@ export default function GenesisClient({ shots = [] }) {
                                 </a>
                                 {countLine && <div className="gn-count" id="genesisCount">{countLine}</div>}
                                 <p className="gn-aside-fine">
-                                    No wallet needed to join. Nothing else is ever sent to your address, and
-                                    the mint happens on OpenSea.
+                                    No wallet needed. The mint happens on OpenSea, and we only email you
+                                    about the mint.
                                 </p>
                             </div>
                         </div>
@@ -225,12 +225,11 @@ export default function GenesisClient({ shots = [] }) {
                         <div className="side-panel-body">
 
                             <div className="gn-hero">
-                                <h1 className="gn-hero-title">{fmtInt(GENESIS_SUPPLY)} knights, and no more</h1>
+                                <h1 className="gn-hero-title">Only {fmtInt(GENESIS_SUPPLY)} will ever exist</h1>
                                 <p className="gn-hero-copy">
-                                    Genesis Knights are the fixed half of the kingdom: {fmtInt(GENESIS_SUPPLY)} of them,
-                                    ever, on Robinhood Chain — and no more can be created. What separates one from
-                                    another is not the tier it rolled but the hash power it was born with: how much of
-                                    the vault it carries, and how long a shift it can hold.
+                                    Genesis Knights are the fixed side of the collection: {fmtInt(GENESIS_SUPPLY)} of them
+                                    on Robinhood Chain, and no more can be created. What sets one apart is the hash
+                                    power it was born with, and that number decides how much of the vault it carries.
                                 </p>
                             </div>
 
@@ -239,17 +238,17 @@ export default function GenesisClient({ shots = [] }) {
                                 <div className="gn-tile">
                                     <span className="gn-tile-label">Supply</span>
                                     <span className="gn-tile-value gn-num">{fmtInt(GENESIS_SUPPLY)}</span>
-                                    <span className="gn-tile-sub">Fixed at mint, and the number the bands below add up to.</span>
+                                    <span className="gn-tile-sub">Fixed at mint. The bands below add up to it.</span>
                                 </div>
                                 <div className="gn-tile">
                                     <span className="gn-tile-label">Hash power</span>
                                     <span className="gn-tile-value gn-num">{fmtInt(HASH_POWER_MIN)}–{fmtInt(HASH_POWER_MAX)}</span>
-                                    <span className="gn-tile-sub">Rolled per knight, in the six published bands.</span>
+                                    <span className="gn-tile-sub">Rolled per knight, in the six bands below.</span>
                                 </div>
                                 <div className="gn-tile">
                                     <span className="gn-tile-label">Capsules a week</span>
                                     <span className="gn-tile-value gn-num">{fmtInt(CAPSULES_PER_WEEK)}</span>
-                                    <span className="gn-tile-sub">Awarded to staked Genesis knights, by ticket share.</span>
+                                    <span className="gn-tile-sub">Awarded to staked Genesis knights, split by tickets.</span>
                                 </div>
                             </div>
 
@@ -257,9 +256,10 @@ export default function GenesisClient({ shots = [] }) {
                             <section className="gn-section">
                                 <h2 className="gn-section-title">The six hash-power bands</h2>
                                 <p className="gn-section-copy">
-                                    Every knight is rolled into one of these bands, uniformly inside it. The counts are
-                                    fixed: {fmtInt(GENESIS_SUPPLY)} knights, split {HASH_POWER_BANDS.map((band) => band.count).join(' / ')}.
-                                    Staking banks one ticket per hour per point of hash power, up to {TICKET_CAP_HOURS} hours.
+                                    Every knight is rolled into one of these bands, and inside a band every roll is
+                                    equally likely. The counts are fixed: {fmtInt(GENESIS_SUPPLY)} knights, split{' '}
+                                    {HASH_POWER_BANDS.map((band) => band.count).join(' / ')}.
+                                    Staking banks one ticket per hour for each point of hash power, up to {TICKET_CAP_HOURS} hours.
                                 </p>
                                 {/* The published distribution, drawn — the same ladder, the same palette and
                                     the same proportions as the Staking Vault's, because it is the same table.
@@ -300,9 +300,8 @@ export default function GenesisClient({ shots = [] }) {
                                     </div>
                                 </div>
                                 <p className="gn-fine">
-                                    Each bar is filled against the largest band, so the shape of the distribution is
-                                    visible at a glance. The count above each one is the promise: rolls inside a band
-                                    are uniform, so {fmtInt(HASH_POWER_BANDS[0].lo)} and{' '}
+                                    Each bar is filled against the largest band. The number above each one is the
+                                    count of knights in that band, so {fmtInt(HASH_POWER_BANDS[0].lo)} and{' '}
                                     {fmtInt(HASH_POWER_BANDS[0].hi)} are equally likely for a Spark.
                                 </p>
                             </section>
@@ -317,7 +316,7 @@ export default function GenesisClient({ shots = [] }) {
                                         <div className="gn-box-head">Dungeon runs</div>
                                         <div className="gn-box-value">On chain<span className="gn-box-unit">per knight, per day</span></div>
                                         <p className="gn-box-copy">
-                                            Every run is signed per knight and settled on chain, with the daily cap
+                                            Every run is signed per knight and settled on chain. The daily cap is
                                             enforced by the game contract.
                                         </p>
                                     </div>
@@ -325,17 +324,17 @@ export default function GenesisClient({ shots = [] }) {
                                         <div className="gn-box-head">Staking yield</div>
                                         <div className="gn-box-value gn-num">Pool share<span className="gn-box-unit">/ week</span></div>
                                         <p className="gn-box-copy">
-                                            Stake a knight and it draws from the weekly $DNG pool in proportion to its tickets —
-                                            {' '}{TICKET_CAP_HOURS} hours at full weight, then it stops growing. Unstaking ends the share.
+                                            Stake a knight and it draws from the weekly $DNG pool in proportion to its
+                                            tickets. Its weight builds for {' '}{TICKET_CAP_HOURS} hours, then stops. Unstaking ends the share.
                                         </p>
                                     </div>
                                     <div className="gn-box">
                                         <div className="gn-box-head">The weekly draw</div>
                                         <div className="gn-box-value gn-num">{fmtInt(CAPSULES_PER_WEEK)}<span className="gn-box-unit">capsules / week</span></div>
                                         <p className="gn-box-copy">
-                                            A staked Genesis knight is entered automatically — even a single ticket can win. Each capsule
-                                            opens into one Knight from the summonable collection, and the tier it rolls is what that
-                                            Knight is worth.
+                                            A staked Genesis knight is entered automatically, and one ticket can win. Each
+                                            capsule opens into one Knight from the summonable collection, and its tier decides
+                                            what that Knight is worth.
                                         </p>
                                     </div>
                                 </div>
@@ -348,7 +347,7 @@ export default function GenesisClient({ shots = [] }) {
                                 <h2 className="gn-section-title">The game this belongs to</h2>
                                 <p className="gn-section-copy">
                                     A squad clearing a themed dungeon, a knight staked in the vault, and a capsule
-                                    opened in the Summoning Chamber — captured in the build you play today.
+                                    opened in the Summoning Chamber. All three are captures from the build you play today.
                                 </p>
                                 <div className="gn-shots">
                                     {shots.map((shot) => (
@@ -372,9 +371,8 @@ export default function GenesisClient({ shots = [] }) {
                             <section className="gn-section gn-waitlist-section" id="waitlist">
                                 <h2 className="gn-section-title">Join the waitlist</h2>
                                 <p className="gn-section-copy">
-                                    Leave an email address and you will hear the mint date before it is public. Add your EVM
-                                    address and it goes on the allowlist — you can leave it empty and add it later. Nothing
-                                    else is ever sent to your address.
+                                    Leave your email and we will send you the mint date before it goes public. Add your
+                                    EVM address to join the allowlist, or leave it empty and add it later.
                                 </p>
 
                                 <form className="gn-form" onSubmit={submit} noValidate>
@@ -394,7 +392,7 @@ export default function GenesisClient({ shots = [] }) {
 
                                     <label className="gn-field">
                                         <span className="gn-field-label">
-                                            EVM address <span className="gn-field-note">(for the allowlist — optional)</span>
+                                            EVM address <span className="gn-field-note">(for the allowlist, optional)</span>
                                         </span>
                                         <input
                                             type="text"
@@ -423,7 +421,7 @@ export default function GenesisClient({ shots = [] }) {
                                         />
                                         <span>
                                             I follow <a href="https://x.com/DNGrobinhood" target="_blank" rel="noopener">@DNGrobinhood</a>{' '}
-                                            on X — where the mint date lands first.
+                                            on X, where the mint date lands first.
                                         </span>
                                     </label>
 
@@ -447,8 +445,8 @@ export default function GenesisClient({ shots = [] }) {
 
                 <footer className="gn-footer">
                     <span className="gn-footer-note">
-                        Genesis Knights mint on OpenSea. The kingdom is open now — clear a dungeon, stake a
-                        knight, and climb the weekly draw.
+                        Genesis Knights mint on OpenSea. The game is live now: clear a dungeon, stake a
+                        knight, and enter the weekly draw.
                     </span>
                     <a className="gn-footer-link" href="https://x.com/DNGrobinhood" target="_blank" rel="noopener">
                         Follow @DNGrobinhood

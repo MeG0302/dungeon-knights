@@ -12,7 +12,7 @@ import GateScreen from './client';
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
-    title: 'Private — Dungeon Knights',
+    title: { absolute: 'Dungeon Knights' },
     // Belt and braces with the middleware's `X-Robots-Tag`: this page should never be indexed either.
     robots: { index: false, follow: false },
 };

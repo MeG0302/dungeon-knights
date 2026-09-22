@@ -294,7 +294,7 @@ entries were purged.
 #### The harnesses, and what they refuse to believe
 
 ```bash
-node tools/check-gate.js                    # 110 checks, offline
+node tools/check-gate.js                    # 129 checks, offline
 APP_GATE_LIVE_PASSWORD=<dev password> node tools/check-gate.js --against-live   # +7 on the running server
 node tools/check-waitlist.js                # 102 checks, offline, in a temp working directory
 ```
@@ -304,9 +304,11 @@ be worthless here), edits an expiry and a signature to prove each is covered, ch
 attributes, and walks the host split path by path — including that `/api/pointsomething` is *not*
 covered by `/api/points`, that the redirect target is `https://` with no dev port on it, and that
 `?next=` cannot be pointed off-site. `check-waitlist` sandboxes itself into a temp directory with the
-KV variables deleted, so it cannot touch a real store, and it asserts the page's own words — *"we cannot
-check it"*, *"on your word"* — because the dishonest version of that landing page is one that implies a
-check nobody ran.
+KV variables deleted, so it cannot touch a real store, and it asserts the page's own words — the follow
+box must claim **no** verification, and the words `verified`, `checked against`, `on your word` and
+`cannot check` must not appear anywhere near it. The page used to *admit* the gap ("we cannot check it,
+so it is taken on your word"); that reads as a note about our plumbing rather than anything a person
+joining a waitlist is owed, so the rule inverted and the check did too.
 
 **Every guard was falsified by mutation before it was trusted** — 22 mutations, all 22 caught by name,
 including the one that re-introduces the front-door lockout. Two of them had to be written as *pairs*:
@@ -382,6 +384,35 @@ wallet the browser remembers. `tools/check-staking.js` lost the 14 checks that p
 (`/app/staking/page-<hash>.js` contains `demo vault` and `0xd0e0a1b2c3d4e5f6`), so the removal is not live
 until the next `vercel --prod`. The owner chose to hold that deploy until `app.dungeonknights.io` resolves,
 so the DNS record and the deploy go out together.
+
+#### The copy pass — the four public surfaces stopped sounding machine-written
+
+The owner's read was that the public pages did not sound like a person wrote them, and the tell was
+structural rather than decorative. Two rules now hold across `app/page.js`, `lib/static-pages.js`
+(the landing body), `app/genesis/*`, `app/points/*`, `lib/points-config.js` (the one-time task copy the
+server sends) and `app/gate/*`:
+
+- **No em dashes in anything a visitor reads.** They were the loudest signal — 285 of them across the
+  visible copy files, 110 in `app/points/client.js` alone — and each one was a sentence that had been
+  welded together after the fact. Measured after the pass: the rendered text of `/`, `/genesis`,
+  `/points` (both tabs) and `/gate` contains **0**. The dashes that remain in those files are all inside
+  code comments, which no visitor sees.
+- **No sentences about the page itself.** Copy that explained our honesty ("nothing here is a render
+  standing in for gameplay", "enforced by the game contract rather than by the page you are reading",
+  "taken on your word rather than pretending otherwise") is gone, and what replaced it makes the same
+  claim as a plain fact or drops it. This is the same rule the follow box already followed.
+
+The voice is short sentences, no sub-clauses stacked behind a colon, and no "it is not X, it is Y".
+Note the scope: **Arya's dialogue was deliberately left alone** (her walkthrough lines still read like
+her), and so were the game pages, the vault and the portfolio.
+
+**Copy is pinned by assertions, so a reword is a two-file change.** `tools/check-genesis.js` asserts the
+optional-address note and the refusal sentence word for word; `tools/check-x-webhook.js` asserts that the
+follow card's two sentences differ, that the unchecked one mentions a review and never says
+`checked against` / `own record`, and that its checked twin does — and that the quote-repost hints name
+the tag while admitting X *cannot see which post* was quoted. Changing those sentences without moving
+their assertions turns the suite red, which is the point: the wording carries a claim, and the claim is
+what is being tested.
 
 #### The landing loop — what plays today, and the one-file swap
 

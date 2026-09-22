@@ -189,13 +189,13 @@ function ShareKit({ share, onSave, saveDisabled, picture }) {
                 had just left. */}
             {picture === 'copied' ? (
                 <p className="x-share-picture">
-                    <strong>The run card is on your clipboard.</strong> In the post, press{' '}
-                    <strong>Ctrl+V</strong> (<strong>&#8984;V</strong> on a Mac) to attach it as a file.
+                    <strong>The run card is on your clipboard.</strong> Press{' '}
+                    <strong>Ctrl+V</strong> (<strong>&#8984;V</strong> on a Mac) in the post to attach it.
                 </p>
             ) : picture === 'saved' ? (
                 <p className="x-share-picture">
-                    <strong>The run card is in your downloads.</strong> In the post, attach it with the
-                    picture button — the link alone still shows the card, but this puts the file in.
+                    <strong>The run card is in your downloads.</strong> Attach it in the post with the
+                    picture button.
                 </p>
             ) : null}
             {/* A link rather than an image, so a phone can long-press it to save. */}
@@ -203,10 +203,10 @@ function ShareKit({ share, onSave, saveDisabled, picture }) {
                 <img src={share.cardImage} alt="The picture that goes out with your share" loading="lazy" />
             </a>
             <ol className="x-share-steps">
-                <li>On a phone the post button hands the picture to X itself, so it goes up as an attachment.</li>
-                <li>On a computer X&rsquo;s composer link can only carry text, so the button opens the post and puts the picture on your clipboard — press <strong>Ctrl+V</strong> (<strong>&#8984;V</strong> on a Mac) in the post to attach it. If that is not available, the file is saved instead.</li>
-                <li>Your invite link unfurls into a card with the same picture, so the run is visible in the post even when no file is attached.</li>
-                <li>Post the run, then paste the link to your post. X is asked one thing about it: that it tags <strong>@{share.tag}</strong>.</li>
+                <li>On a phone, the post button sends the picture to X as an attachment.</li>
+                <li>On a computer, X&rsquo;s composer link carries text only. The button opens the post and copies the picture to your clipboard. Press <strong>Ctrl+V</strong> (<strong>&#8984;V</strong> on a Mac) in the post to attach it. If copying is not available, the file is saved instead.</li>
+                <li>Your invite link shows the same picture as a card, so the post looks right even with no file attached.</li>
+                <li>Post it, then paste the link to your post below. X checks one thing: that the post tags <strong>@{share.tag}</strong>.</li>
             </ol>
             <button
                 type="button"
@@ -255,7 +255,7 @@ function XTaskCard({
 
             {paid ? (
                 <div className="x-task-line is-paid">
-                    <span>Verified with X — {task.credited || reward} PTS paid</span>
+                    <span>Verified with X · {task.credited || reward} PTS paid</span>
                     {task.url && (
                         <a className="x-task-link" href={task.url} target="_blank" rel="noreferrer">
                             view post
@@ -396,7 +396,7 @@ function OneTimeTaskCard({ task, busy, error, onClaim, canClaim, blockedWhy }) {
                 <div className="x-task-line is-error">
                     <span>
                         Reviewed {task.rejectedOn} \u00b7 not approved
-                        {task.rejectedNote ? ` \u2014 ${task.rejectedNote}` : ''}
+                        {task.rejectedNote ? `: ${task.rejectedNote}` : ''}
                     </span>
                 </div>
             )}
@@ -505,7 +505,7 @@ export default function PointsPage() {
             if (fresh) {
                 setState(fresh);
                 setAddress(fresh.address);
-                if (fresh.referrer) flash('Referral credited — points now count for your inviter.');
+                if (fresh.referrer) flash('Referral credited. Your points count for your inviter from here.');
                 return fresh;
             }
         } catch {
@@ -665,7 +665,7 @@ export default function PointsPage() {
         setState(null);
         setAddress(next);
         setPhase('anon');
-        flash('Wallet changed — sign in to keep earning.');
+        flash('Wallet changed. Sign in to keep earning.');
     }), [state?.address, flash]);
 
     // ------------------------------------------------------------------- actions
@@ -688,11 +688,11 @@ export default function PointsPage() {
                         : 'Your wallet is bound to the vault. Clear three floors and the points are yours.',
                 });
             }
-            flash('Signed in — points now count on the shared leaderboard.');
+            flash('Signed in. Your points count on the leaderboard now.');
         } catch (e) {
             // A rejected signature is not an error state, it is a decision.
             if (e?.code === 4001 || /rejected/i.test(e?.message || '')) {
-                flash('Signature declined — connect again when ready.');
+                flash('Signature declined. Connect again when ready.');
                 if (window.Arya) {
                     window.Arya.say('alarm', { message: 'Signature declined — nothing was signed and nothing was lost. Ask me again whenever you are ready.' });
                 }
@@ -783,7 +783,7 @@ export default function PointsPage() {
      */
     const handleBindX = useCallback(async (typed) => {
         if (!connected) {
-            setError('Connect a wallet first — the X account is bound to it.');
+            setError('Connect a wallet first. The X account is bound to it.');
             return;
         }
         setXBusy('bind');
@@ -799,7 +799,7 @@ export default function PointsPage() {
                 setXErrors((e) => ({
                     ...e,
                     bind: started
-                        ? 'Finish linking X in the Privy window, then press Link X again — or type your handle below.'
+                        ? 'Finish linking X in the Privy window, then press Link X again, or type your handle below.'
                         : 'Privy is not available here, so type your X handle below and bind it.',
                 }));
                 return;
@@ -811,8 +811,8 @@ export default function PointsPage() {
             if (result.state) setState(result.state);
             setHandleDraft('');
             flash(result.verified
-                ? `@${result.x.username} bound and proved with Privy — earning is open.`
-                : `@${result.x.username} bound — earning is open. Posts are checked against that handle.`);
+                ? `@${result.x.username} bound and proved with Privy. Earning is open.`
+                : `@${result.x.username} bound. Earning is open, and posts are checked against that handle.`);
         } catch (e) {
             setXErrors((prev) => ({ ...prev, bind: e.message }));
         } finally {
@@ -945,7 +945,7 @@ export default function PointsPage() {
     /** Sharing the finished entry doubles it — once a day, and paid by the server. */
     const handleShareX = useCallback(async () => {
         if (!bound) {
-            setError('Bind your X account first — the card on the left does it in one tap.');
+            setError('Bind your X account first. The card on the left does it in one tap.');
             return;
         }
         setError(null);
@@ -955,12 +955,12 @@ export default function PointsPage() {
         // saying, because that is enough to finish the job by hand.
         if (post === 'blocked') {
             setError(picture === 'copied'
-                ? 'Your browser blocked the tab X would have opened, but the run card is on your clipboard — open X\u2019s composer and press Ctrl+V (\u2318V) to attach it.'
+                ? 'Your browser blocked the tab X would have opened. The run card is on your clipboard, so open X\u2019s composer and press Ctrl+V (\u2318V) to attach it.'
                 : 'Your browser blocked the tab X would have opened. Allow pop-ups for this site and press the button again.');
             return;
         }
         if (post === 'cancelled') {
-            flash('Nothing posted — the button is still here whenever you want it.');
+            flash('Nothing posted. The button is still here when you want it.');
             return;
         }
         setSharePicture(picture === 'none' ? null : picture);
@@ -971,10 +971,10 @@ export default function PointsPage() {
         setSharePrompt(true);
         setInDungeon(false);
         flash(post === 'shared'
-            ? 'Picture and text are in your post — finish it on X, then paste the link below to claim the double.'
+            ? 'Picture and text are in your post. Finish it on X, then paste the link below to claim the double.'
             : picture === 'copied'
-                ? 'The post is open in a new tab and the run card is on your clipboard — press Ctrl+V (\u2318V) in it to attach the picture, then paste the link below to claim the double.'
-                : 'The post is open in a new tab. The picture is in your downloads if you want it attached — post the run, then paste the link below to claim the double.');
+                ? 'The post is open in a new tab and the run card is on your clipboard. Press Ctrl+V (\u2318V) to attach the picture, then paste the link below to claim the double.'
+                : 'The post is open in a new tab. The picture is in your downloads if you want it attached. Post the run, then paste the link below to claim the double.');
     }, [bound, composeShare, flash]);
 
     /** Save just the picture, for a player who wants it in hand first. */
@@ -983,7 +983,7 @@ export default function PointsPage() {
             setError('The share picture is not available on this deployment.');
             return;
         }
-        flash('Picture saved — post it on X and attach the file, or let the link card carry it for you.');
+        flash('Picture saved. Attach the file in your post, or let the link card carry it for you.');
     }, [flash, saveShareImage]);
 
     /**
@@ -1003,15 +1003,15 @@ export default function PointsPage() {
                 ? await requestShare(String(url).trim())
                 : await requestTask(task, String(url).trim());
             if (result.state) setState(result.state);
-            if (result.credited > 0) flash(`Verified by X — +${result.credited} PTS.`);
-            else if (result.pending) flash('Posted. X has not indexed that post yet — give it a moment, then check again.');
+            if (result.credited > 0) flash(`Verified by X. +${result.credited} PTS.`);
+            else if (result.pending) flash('Posted. X has not indexed that post yet. Give it a moment, then check again.');
             else if (result.alreadyCredited) flash('That one is already paid.');
             loadBoard();
         } catch (e) {
             setXErrors((prev) => ({
                 ...prev,
                 [task]: e.code === 'x-required'
-                    ? 'Bind your X account first — the card on the left does it in one tap.'
+                    ? 'Bind your X account first. The card on the left does it in one tap.'
                     : e.message,
             }));
             if (e.retryInSeconds) setXWait((w) => ({ ...w, [task]: e.retryInSeconds }));
@@ -1026,7 +1026,7 @@ export default function PointsPage() {
         try {
             const result = await requestTaskCheck(task);
             if (result.state) setState(result.state);
-            if (result.credited > 0) flash(`Verified by X — +${result.credited} PTS.`);
+            if (result.credited > 0) flash(`Verified by X. +${result.credited} PTS.`);
             loadBoard();
         } catch (e) {
             setXErrors((prev) => ({ ...prev, [task]: e.message }));
@@ -1057,14 +1057,14 @@ export default function PointsPage() {
             // paid" a moment before the first one's claim is even written. The state is the
             // authority on what is true, and it always has the claim in it by the time it answers.
             const view = (result.state?.oneTime || []).find((task) => task.id === taskId);
-            if (result.credited > 0) flash(`Claimed — +${result.credited} PTS.`);
-            else if (view?.pending) flash('Claim received — points are credited after review.');
+            if (result.credited > 0) flash(`Claimed. +${result.credited} PTS.`);
+            else if (view?.pending) flash('Claim received. Points are credited after review.');
             else if (view?.claimed || result.alreadyCredited) flash('That one is already paid.');
         } catch (e) {
             setXErrors((prev) => ({
                 ...prev,
                 [taskId]: e.code === 'x-required'
-                    ? 'Bind your X account first — this task is paid against it.'
+                    ? 'Bind your X account first. This task pays against it.'
                     : e.message,
             }));
         } finally {
@@ -1136,9 +1136,9 @@ export default function PointsPage() {
         setCopied(done);
         if (done) {
             setTimeout(() => setCopied(false), 2000);
-            flash('Invite link copied — you earn 15% of what they earn.');
+            flash('Invite link copied. You earn 15% of what they earn.');
         } else {
-            flash('Link selected — press Ctrl+C (⌘C on Mac) to copy it.');
+            flash('Link selected. Press Ctrl+C (⌘C on Mac) to copy it.');
         }
     };
 
@@ -1162,7 +1162,7 @@ export default function PointsPage() {
                 setAddress(fresh.address);
                 setRefDraft('');
                 flash(fresh.referrer
-                    ? `Invite code added — ${shortAddress(fresh.referrer)} now earns 15% of your points.`
+                    ? `Invite code added. ${shortAddress(fresh.referrer)} now earns 15% of your points.`
                     : 'Invite code added.');
             }
         } catch (e) {
@@ -1313,10 +1313,10 @@ export default function PointsPage() {
                             {connected && state?.storage && !state.storage.persistent && (
                                 <div className="points-banner points-banner-warn" role="status">
                                     <span>
-                                        Points on this deployment are stored in memory
-                                        (<code>{state.storage.driver}</code>) and reset when the server
-                                        restarts. Set <code>KV_REST_API_URL</code> +{' '}
-                                        <code>KV_REST_API_TOKEN</code> to make them permanent.
+                                        This deployment keeps points in memory
+                                        (<code>{state.storage.driver}</code>), so they reset when the server
+                                        restarts. Set <code>KV_REST_API_URL</code> and{' '}
+                                        <code>KV_REST_API_TOKEN</code> to store them permanently.
                                     </span>
                                 </div>
                             )}
@@ -1349,7 +1349,7 @@ export default function PointsPage() {
                                         </button>
                                         <div className="wallet-card-meta">
                                             {walletReady
-                                                ? 'Sign once to bind this wallet to the leaderboard. Free, no gas.'
+                                                ? 'Sign once to bind this wallet. Free, no gas.'
                                                 : 'Install MetaMask (or any Web3 wallet) to earn points.'}
                                         </div>
                                     </>
@@ -1373,7 +1373,7 @@ export default function PointsPage() {
                                             {state.x.verified
                                                 ? 'Proved with Privy. Everything you earn pays into the wallet above.'
                                                 : 'Bound. Every post is checked against this handle before it pays.'}
-                                            {' '}A binding cannot be handed back — one X account earns for one wallet.
+                                            {' '}A binding cannot be handed back: one X account earns for one wallet.
                                         </div>
                                         <div className="x-bind-actions">
                                             {/* Only offered when there is actually a Privy-linked X account to
@@ -1397,8 +1397,8 @@ export default function PointsPage() {
                                             <strong>Earn with X</strong>
                                         </div>
                                         <div className="wallet-card-meta">
-                                            Points are earned against a named X account, so it has to be bound before
-                                            anything pays — a run cleared without one is refused.
+                                            Points are paid against an X account, so bind one before you start. A run
+                                            cleared without it is refused.
                                         </div>
                                         <button
                                             className="btn btn-primary btn-sm w-full"
@@ -1426,9 +1426,9 @@ export default function PointsPage() {
                                             </button>
                                         </div>
                                         <div className="wallet-card-meta">
-                                            Linking through Privy proves the account. Typing the handle binds it for
-                                            earning either way — nothing pays until a post from that handle checks
-                                            out. Bind the account you actually post from: it stays bound.
+                                            Linking through Privy proves the account. Typing a handle binds it for
+                                            earning either way. Nothing pays until a post from that handle checks
+                                            out, so bind the account you post from. It stays bound.
                                         </div>
                                     </>
                                 )}
@@ -1450,7 +1450,7 @@ export default function PointsPage() {
                                 disabled={!connected || entryComplete || !bound}
                                 data-arya="vault"
                                 style={{ justifyContent: 'flex-start', gap: 10 }}
-                                title={!bound ? 'Bind your X account first — nothing pays without it' : undefined}
+                                title={!bound ? 'Bind your X account first. Nothing pays without it' : undefined}
                             >
                                 <img src="assets/ui/sword.png" className="btn-icon-img" alt="" />
                                 <div style={{ textAlign: 'left' }}>
@@ -1496,8 +1496,8 @@ export default function PointsPage() {
                                         reward={state.campaign?.reward || state.tasks.campaign.reward}
                                         hint={<>
                                             Like, repost and comment on our campaign post, then paste the link to
-                                            {' '}<strong>your own</strong> repost. X is asked about that link before it
-                                            pays, and it pays once per wallet per campaign.
+                                            {' '}<strong>your own</strong> repost. X checks that link before it pays.
+                                            Once per wallet, per campaign.
                                         </>}
                                         cta="Open the campaign post"
                                         onCta={() => window.open(state.campaign.url, '_blank', 'noopener')}
@@ -1522,10 +1522,10 @@ export default function PointsPage() {
                                 title="Daily Share"
                                 icon={`${ASSETS}White_logo_on_black_background_2K_20260919011421-autocrop-hair.png`}
                                 reward={state?.entryTotalToday || VAULT_ENTRY_TOTAL}
-                                hint={`Finish the vault, then post the run: the picture and the text — with @${shareKit?.tag || 'DNGrobinhood'} and your invite link on it — are both ready below. Paste the link to your post and the whole entry doubles (${VAULT_ENTRY_TOTAL} → ${VAULT_ENTRY_TOTAL * 2} PTS). Once a day.`}
+                                hint={`Finish the vault, then post the run. The picture and the text, with @${shareKit?.tag || 'DNGrobinhood'} and your invite link in it, are ready below. Paste the link to your post and the run doubles (${VAULT_ENTRY_TOTAL} → ${VAULT_ENTRY_TOTAL * 2} PTS). Once a day.`}
                                 kit={<ShareKit share={shareKit} onSave={handleSaveShareImage} saveDisabled={!connected} picture={sharePicture} />}
                                 cta={state?.sharedToday
-                                    ? 'Shared today — resets with the vault'
+                                    ? 'Shared today · resets with the vault'
                                     // The label says what the press will do: on a computer the picture cannot be
                                     // attached for the player, so the button is honest about the extra keystroke
                                     // instead of promising something X's composer link cannot carry.
@@ -1560,8 +1560,8 @@ export default function PointsPage() {
                                 Refer &amp; Earn
                             </div>
                             <p className="panel-hint">
-                                15% of what your referrals earn, 5% of what theirs do — paid the moment they do.
-                                Your code is the whole invitation: read it out, or send the link below.
+                                15% of what your referrals earn, and 5% of what theirs earn, paid as they earn it.
+                                Your code is the invitation, and the link below works too.
                             </p>
                             {connected && state?.refCode && (
                                 <div className="ref-code">
@@ -1592,7 +1592,7 @@ export default function PointsPage() {
                             {connected && (
                                 <div className="referral-meta">
                                     {state.referrals.length === 0
-                                        ? 'No referrals yet — your link is above.'
+                                        ? 'No referrals yet. Your link is above.'
                                         : `${state.referrals.length} referral${state.referrals.length === 1 ? '' : 's'}`}
                                 </div>
                             )}
@@ -1612,9 +1612,9 @@ export default function PointsPage() {
                                 <div className="ref-attach" data-arya="ref-attach">
                                     <div className="ref-attach-title">Have a friend’s code?</div>
                                     <p className="panel-hint">
-                                        Started playing first and met an inviter afterwards? Add their code
-                                        here — their 15% starts from that moment, and points already earned
-                                        are not backdated.
+                                        Started playing before you met an inviter? Add their code here.
+                                        Their 15% starts from that moment, and points you already earned are
+                                        not backdated.
                                     </p>
                                     <div className="referral-row">
                                         <input
@@ -1646,7 +1646,7 @@ export default function PointsPage() {
                             {state?.referrer && (
                                 <div className="referral-meta">
                                     Invited by {shortAddress(state.referrer)}
-                                    {state.referredAt ? ' — code added later, so their share counts from then.' : ''}
+                                    {state.referredAt ? ' · code added later, so their share counts from then.' : ''}
                                 </div>
                             )}
                                 </>
@@ -1664,10 +1664,10 @@ export default function PointsPage() {
                                         One-time Tasks
                                     </div>
                                     <p className="panel-hint">
-                                        Steps you take once. Each one pays a single time, per X account —
+                                        Steps you take once. Each one pays a single time per X account.
                                         {(state?.followProof?.mode === 'webhook')
-                                            ? ' and a follow is checked against X\u2019s own record before it pays.'
-                                            : ' and a follow claim is reviewed before it is credited, usually within 30\u201345 minutes.'}
+                                            ? ' A follow is checked against X\u2019s own record before it pays.'
+                                            : ' A follow claim is reviewed before it is credited, usually within 30\u201345 minutes.'}
                                     </p>
 
                                     {!connected ? (
@@ -1677,7 +1677,7 @@ export default function PointsPage() {
                                         </div>
                                     ) : (state?.oneTime || []).length === 0 ? (
                                         <div className="lb-state">
-                                            <p style={{ fontStyle: 'italic' }}>No one-time tasks are open right now — check back soon.</p>
+                                            <p style={{ fontStyle: 'italic' }}>No one-time tasks are open right now. Check back soon.</p>
                                         </div>
                                     ) : (
                                         state.oneTime.map((task) => (
@@ -1712,7 +1712,7 @@ export default function PointsPage() {
                                                 onClaim={() => handleOneTimeClaim(task.id)}
                                                 canClaim={connected && bound}
                                                 blockedWhy={!bound
-                                                    ? 'Bind your X account first — this task is paid against it'
+                                                    ? 'Bind your X account first. This task pays against it'
                                                     : undefined}
                                             />
                                             )
@@ -1720,8 +1720,8 @@ export default function PointsPage() {
                                     )}
 
                                     <div className="one-task-footer">
-                                        New tasks are added here as the campaign runs. The tab carries a count
-                                        whenever one is waiting for you.
+                                        New tasks appear here as the campaign runs. The tab shows a count when
+                                        one is waiting.
                                     </div>
                                 </>
                             )}

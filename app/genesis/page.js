@@ -18,20 +18,20 @@ import { CAPSULES_PER_WEEK, GENESIS_SUPPLY, HASH_POWER_MAX, HASH_POWER_MIN } fro
 
 export const dynamic = 'force-dynamic';
 
-const DESCRIPTION = `The ${GENESIS_SUPPLY.toLocaleString('en-US')} Genesis Knights: fixed supply, ${HASH_POWER_MIN}–${HASH_POWER_MAX} hash power, ${CAPSULES_PER_WEEK} capsule raffle every week, and a share of the weekly $DNG pool.`;
+const DESCRIPTION = `The ${GENESIS_SUPPLY.toLocaleString('en-US')} Genesis Knights. Fixed supply, ${HASH_POWER_MIN}–${HASH_POWER_MAX} hash power, a ${CAPSULES_PER_WEEK}-capsule raffle every week, and a share of the weekly $DNG pool.`;
 
 export const metadata = {
-    title: { absolute: `Genesis Knights — ${SITE_NAME}` },
+    title: { absolute: `Genesis Knights · ${SITE_NAME}` },
     description: DESCRIPTION,
     alternates: { canonical: '/genesis' },
     openGraph: {
         url: '/genesis',
-        title: `${SITE_NAME} — Genesis Knights`,
+        title: `${SITE_NAME} · Genesis Knights`,
         description: DESCRIPTION,
     },
     twitter: {
         card: 'summary_large_image',
-        title: `${SITE_NAME} — Genesis Knights`,
+        title: `${SITE_NAME} · Genesis Knights`,
         description: DESCRIPTION,
     },
 };

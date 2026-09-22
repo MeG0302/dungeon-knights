@@ -31,7 +31,7 @@ export default function GateScreen({ next }) {
             });
             const body = await res.json().catch(() => null);
             if (!res.ok) {
-                setError(body?.error || 'That did not work — try again.');
+                setError(body?.error || 'That password did not work. Try again.');
                 setPassword('');
                 return;
             }
@@ -56,8 +56,8 @@ export default function GateScreen({ next }) {
                     <h1 className="gate-title">Dungeon Knights</h1>
                     <p className="gate-sub">Private build</p>
                     <p className="gate-note">
-                        This side of the kingdom is still under construction, so it is open to the
-                        team only. The public page is at dungeonknights.io.
+                        The game is still being built, so this side is open to the team only. The
+                        public site is dungeonknights.io.
                     </p>
                     <input
                         className="gate-input"

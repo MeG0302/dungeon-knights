@@ -14,15 +14,14 @@ import { SITE_NAME, SITE_URL } from '../lib/site';
 
 export const metadata = {
     title: {
-        absolute: 'Dungeon Knights — Coming soon to Robinhood Chain',
-    },
-    description:
-        'Dungeon Knights is a play-to-earn NFT idle RPG on Robinhood Chain. The game is in private build; '
-        + 'the Points Program is open now, and the 1,024 Genesis Knights are next.',
+        absolute: 'Dungeon Knights · Coming soon to Robinhood Chain',
+    },        description:
+            'Dungeon Knights is an idle RPG on Robinhood Chain. The game is in private build. '
+            + 'The Points Program is open now, and the 1,024 Genesis Knights are next.',
     alternates: { canonical: '/' },
     openGraph: {
         url: '/',
-        title: `${SITE_NAME} — Coming soon to Robinhood Chain`,
+        title: `${SITE_NAME} · Coming soon to Robinhood Chain`,
         description:
             'Join the Points Program today, and the Genesis waitlist for the 1,024 Genesis Knights.',
     },
@@ -34,7 +33,7 @@ const jsonLd = {
     name: SITE_NAME,
     url: SITE_URL,
     description:
-        'Play-to-earn NFT idle RPG on Robinhood Chain: recruit knights, clear five themed dungeons and earn $DNG.',
+        'Idle RPG on Robinhood Chain. Recruit knights, clear five themed dungeons, and earn $DNG.',
     genre: ['Role-Playing', 'Idle', 'Strategy'],
     gamePlatform: 'Web browser',
     applicationCategory: 'Game',

@@ -269,9 +269,9 @@ section('The form asks for the two things, and nothing else');
 rec('the form is in the markup, so it survives a script failure', /<form/.test(clientSource) && /id="waitlist"/.test(clientSource));
 rec('an email address is required and labelled', /id="waitlistEmail"/.test(clientSource) && /type="email"/.test(clientSource));
 rec('an EVM address is asked for beside it', /id="waitlistAddress"/.test(clientSource));
-rec('  … and is marked optional in words a person reads', /\(for the allowlist — optional\)/.test(clientSource));
+rec('  … and is marked optional in words a person reads', /\(for the allowlist, optional\)/.test(clientSource));
 rec('  … and a malformed one is refused rather than silently dropped',
-    /\^0x\[0-9a-fA-F\]\{40\}\$/.test(clientSource) && /does not look like an EVM address/.test(clientSource),
+    /\^0x\[0-9a-fA-F\]\{40\}\$/.test(clientSource) && /is not a valid EVM address/.test(clientSource),
     'the server stores null for an address it does not recognise, so an unchecked typo would vanish');
 rec('  … against the same rule the store enforces',
     (read('lib/waitlist-store.js').match(/\^0x\[0-9a-fA-F\]\{40\}\$/g) || []).length === 1);

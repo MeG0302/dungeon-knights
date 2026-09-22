@@ -2,15 +2,15 @@ import PointsClient from './client';
 import { SHARE_OG_IMAGE, SHARE_OG_SIZE } from '../../lib/points-config';
 import { SITE_NAME } from '../../lib/site';
 
-const DESCRIPTION = 'Clear three Points Vault dungeons every day, double the run by sharing it on X, and climb the referral leaderboard.';
+const DESCRIPTION = 'Clear three Points Vault dungeons every day, double the run by sharing it on X, and climb the referral board.';
 
 export const metadata = {
-  title: { absolute: 'Points Program — Dungeon Knights' },
+  title: { absolute: 'Points Program · Dungeon Knights' },
   description: DESCRIPTION,
   alternates: { canonical: '/points' },
   openGraph: {
     url: '/points',
-    title: `${SITE_NAME} — Points Program`,
+    title: `${SITE_NAME} · Points Program`,
     description: DESCRIPTION,
     // The card a shared post unfurls into, and the reason the picture gets into that post at all:
     // X's composer link cannot attach a file (only the paid API can post one on a player's behalf),
@@ -27,7 +27,7 @@ export const metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: `${SITE_NAME} — Points Program`,
+    title: `${SITE_NAME} · Points Program`,
     description: DESCRIPTION,
     images: [SHARE_OG_IMAGE],
   },
