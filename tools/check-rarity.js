@@ -119,15 +119,17 @@ const EXPECTED_HASH = ON_CHAIN.map((t) => RARITY[t].hashPower);
 /**
  * The contracts whose tables are *not* the published one, and why.
  *
- * All four are history: V2 and the two V3s were superseded, and `V3-Simple` is what is
- * deployed on testnet today. Their sources are deliberately left describing what they were
- * written with rather than being edited to match the plan, because a repo whose contract
- * source disagrees with the bytecode it produced is worse than one that admits the gap — and
+ * All four are history: V2 and the two V3s were superseded, and `V3-Simple` is the
+ * superseded deployment that is still callable (unpaused, holding a little of the retired
+ * first token). Their sources are deliberately left describing what they were written with
+ * rather than being edited to match the plan, because a repo whose contract source
+ * disagrees with the bytecode it produced is worse than one that admits the gap — and
  * rewriting a drained contract's reward table would be rewriting history.
  *
  * The published table (12 / 20 / 36 / 60 / 100, and the third-revision economy around it)
- * takes effect with `DungeonKnightsGameV4`, which is why V4 alone is asserted against it and
- * why this file also checks that the divergence is written down in the whitepaper.
+ * is what `DungeonKnightsGameV4` pays, and V4 is the contract the site reads and writes. V4
+ * alone is asserted against the published table, and this file also checks that the older
+ * table stays recorded in the whitepaper so the lineage is not quietly rewritten.
  */
 const LEGACY_TABLE = { rewards: [10, 17, 30, 75, 150], caps: [5, 5, 4, 3, 4] };
 const LEGACY = [
@@ -229,16 +231,16 @@ for (const contract of CONTRACTS) {
         `${candidate.rewards.join('/')} DNG, ${candidate.caps.join('/')} runs`);
 }
 
-// And the gap between the plan and the chain has to be written down, because on testnet the
-// live contract still pays the older table until V4 is deployed.
+// And the lineage stays written down: V3-Simple paid the older table and is still callable,
+// so the whitepaper has to say so even though the site has moved to V4.
 {
     const white = fs.readFileSync(path.join(ROOT, 'WHITEPAPER.md'), 'utf8');
-    rec('the deployed-vs-published divergence is recorded in the whitepaper',
+    rec('the superseded table stays recorded in the whitepaper',
         white.includes(DEPLOYED_LEGACY.rewards.join(' / '))
         || white.includes(DEPLOYED_LEGACY.rewards.join('/')),
         white.includes('10/17/30/75/150') || white.includes('10 / 17 / 30 / 75 / 150')
-            ? 'the live table is named'
-            : 'WHITEPAPER.md must name the table the deployed contract still pays');
+            ? 'the superseded table is named'
+            : 'WHITEPAPER.md must name the table V3-Simple paid and still exposes');
 }
 
 rec('config.js reports the rewards in the contract\'s index order',
