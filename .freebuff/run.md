@@ -2829,7 +2829,8 @@ into two preconnects and a link, safe-area insets, and the `overflow: hidden` th
 footer on a short viewport). Verified on the live host rather than the deployment URL: `/` is `200`
 and serves `/css/home.css?v=4`, `intro-web.mp4` (3,238,624 B) and `menu-background.webp`
 (292,562 B); `/points` is `200`; `www` 308s to the apex; and `dungeonknights.io` is the canonical the
-page advertises. **Not** built from a committed tree — see the note below.
+page advertises. Uploaded from the working directory, as `vercel --prod` always does, and that tree is
+now committed as `2e5ae7c` — so what is live and what is in git are the same thing.
 
 **The deploy before it** (September 22, the copy pass): `dungeon-knights-jsdjeqzqv-meglast320-1694`,
 aliased the same way. **The last deploy before that** (September 22): `dungeon-knights-qhfbkph32-meglast320-1694` — the domain
@@ -2860,8 +2861,9 @@ hostname with no DNS record pointing at it. So that hostname still points at an 
 
 **Committed and pushed since:** the quote-repost work and the domain change (`f11d474`), the invite-code
 feature (`6e749d4` — five characters per wallet, and a code that can be attached after joining), the
-apex/gate/`/genesis` split and the vault's demo removal (`4eaebca`), the run-doc note (`3326bbd`) and the
-copy pass (`346e68c`). `main` and `origin/main` are **level**, and the tree is clean — which matters
+apex/gate/`/genesis` split and the vault's demo removal (`4eaebca`), the run-doc note (`3326bbd`), the
+copy pass (`346e68c`), the whitepaper rewrite (`d4a3e65`) and the landing pass (`2e5ae7c`). `main` and
+`origin/main` are **level**, and the tree is clean — which matters
 because `vercel --prod` uploads the **working directory** rather than a commit, so an uncommitted tree
 ships whatever happens to be on disk. Two operational details about pulling production env: `vercel env pull` writes the **sensitive** values as
 `[SENSITIVE]` placeholders (8 of them — `GAME_RUN_SECRET`, `POINTS_SESSION_SECRET`, the signer key and
