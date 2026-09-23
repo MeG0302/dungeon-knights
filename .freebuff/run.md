@@ -314,7 +314,7 @@ entries were purged.
 #### The harnesses, and what they refuse to believe
 
 ```bash
-node tools/check-gate.js                    # 129 checks, offline
+node tools/check-gate.js                    # 133 checks, offline
 APP_GATE_LIVE_PASSWORD=<dev password> node tools/check-gate.js --against-live   # +7 on the running server
 node tools/check-waitlist.js                # 102 checks, offline, in a temp working directory
 ```
@@ -684,7 +684,8 @@ and still hidden at zero (`public/home.js` is now only that read).
 ```
 node tools/check-genesis.js     # 72 checks
 node tools/check-waitlist.js    # 102 checks — the form's home, the claim rules, and the Google copy
-node tools/check-gate.js        # 129 checks — /genesis public on the apex, gated on the game host
+node tools/check-gate.js        # 133 checks — /genesis and /portfolio public on the apex, gated on
+                                # the game host
 node tools/check-styles.js      # every class the route uses has a rule in a sheet it loads
 ```
 
@@ -2998,7 +2999,24 @@ and the `.wallet-menu-*` family. `theme.css` therefore moved to `?v=5` (and `sta
 that none of that route's sheets defines, which is also how the vault's missing chip rules were
 found the first time.
 
-**Checking it.** `node tools/check-portfolio.js` — 30 checks. The ones worth knowing: every
+**It is public, and two of its panels are not live yet.** The Points Program gives a player a points
+balance and a rank with nowhere to look at them, so the portfolio is served on the apex — it is in
+`APEX_PUBLIC` beside `/genesis`, and for the same reason: it is a page the campaign sends people to.
+That made three of its reads public too, by exact path (`/api/staking/holdings`, `/api/game/history`,
+with `/api/wallet` already there): all three are GETs keyed by a wallet address over public chain
+data, and the staking and game *writes* stay behind the gate because the list is paths, not prefixes.
+Measured with the dev host switch: `/portfolio?__app=0` answers 200 where it used to 308 to
+`app.dungeonknights.io`, while `/menu?__app=0` still redirects.
+
+The **$DNG** and **Genesis** panels are blurred behind a `Coming soon` chip, because what they read
+is real but not open to players yet. Blurred rather than emptied, so a visitor sees the shape of what
+is coming, and each one carries a line saying what will read there. Two details make the blur honest
+rather than decorative: the body is `aria-hidden`, so a screen reader is told the same thing the eye
+is instead of reading figures nobody is meant to use yet, and the body is `pointer-events: none`, so
+the buttons inside it are genuinely inert — a live-looking link to a gated page is worse than an
+obviously unfinished panel.
+
+**Checking it.** `node tools/check-portfolio.js` — 39 checks. The ones worth knowing: every
 `/api/…` path the page reads is checked against the filesystem (a one-word typo there is a section
 that says "the chain could not be read" forever, which looks like a node problem and is a bug); the
 page must not contain a chain call, a signer or a provider; the Genesis bands must come from the
@@ -3006,7 +3024,11 @@ collection's own table rather than a second copy of it; and the whole file is ch
 comments stripped, because a guard that reads prose fails on its own explanation — the first draft
 reported an `eth_call` that existed only in a comment saying the page deliberately avoids one.
 Every guard was falsified before it was trusted: moving `PORTFOLIO_HREF`, restoring the ethers tag,
-and reintroducing `HASH_POWER_BANDS` each fail by name.
+and reintroducing `HASH_POWER_BANDS` each fail by name. The coming-soon treatment is checked too —
+both panels marked, the same number of chips as notes, `aria-hidden` on each blurred body, the
+stylesheet really blurring and disabling, and **the panels that do work not marked** — so the
+assertion cannot pass by blurring the whole page. Unmarking Genesis and dropping
+`pointer-events: none` each fail three checks by name.
 
 ### The Hall of Fame, and the card that could not reach it
 

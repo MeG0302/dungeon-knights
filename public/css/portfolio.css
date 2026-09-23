@@ -442,6 +442,46 @@
     text-align: right;
 }
 
+/* -------------------------------------------------- panels that are not live yet
+   The $DNG and Genesis panels read real things that are not open to players yet. Blurring the
+   body keeps the shape of what is coming — a panel with figures in it — while making it plain
+   that nothing there is meant to be read or acted on. The title stays crisp so the panel is
+   still identifiable, and `pointer-events: none` means the buttons inside it do nothing: a
+   dead link to a gated page is worse than an obviously disabled panel. */
+.pf-soon {
+    position: relative;
+    border-style: dashed;
+}
+
+.pf-soon-body {
+    filter: blur(5px);
+    opacity: 0.5;
+    pointer-events: none;
+    user-select: none;
+}
+
+.pf-soon-chip {
+    margin-left: auto;
+    font-family: var(--font-body);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--accent-gold);
+    background: rgba(212, 175, 55, 0.12);
+    border: 1px solid var(--border-gold, var(--border-base));
+    border-radius: 999px;
+    padding: 2px 8px;
+    white-space: nowrap;
+}
+
+.pf-soon-note {
+    font-family: var(--font-body);
+    font-size: 11px;
+    line-height: 1.6;
+    color: var(--text-muted);
+}
+
 /* --------------------------------------------------------- notes, warnings and links */
 .pf-note {
     font-family: var(--font-body);

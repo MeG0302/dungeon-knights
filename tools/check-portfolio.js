@@ -182,6 +182,38 @@ rec('and a phone still gets the room, from the small file',
     /url\('\/assets\/hall\/portfolio-mobile\.webp'\)/.test(cssCode)
     && exists('public/assets/hall/portfolio-mobile.webp'));
 
+// ------------------------------------- 8. the two panels that are not live yet
+// The campaign sends Points players here, so the page is public — but two of its panels read
+// things that are not open to players yet. They are blurred with a label rather than emptied,
+// which means each of these has to hold or the blur becomes decoration: the body hidden from
+// assistive tech, the buttons inside genuinely inert, and the label saying what is coming.
+const SOON = ['$DNG', 'Genesis'];
+for (const name of SOON) {
+    rec(`the ${name} panel is marked as not live yet`,
+        new RegExp(`pf-card pf-soon[\\s\\S]{0,400}?${name.replace('$', '\\$')}`).test(client)
+        || new RegExp(`${name.replace('$', '\\$')}[\\s\\S]{0,400}?pf-card pf-soon`).test(client),
+        'pf-soon on the card');
+}
+rec('both panels carry the same chip',
+    (client.match(/pf-soon-chip/g) || []).length === SOON.length,
+    `${(client.match(/pf-soon-chip/g) || []).length} chips`);
+rec('each says what will read there, rather than only "coming soon"',
+    (client.match(/pf-soon-note/g) || []).length === SOON.length,
+    `${(client.match(/pf-soon-note/g) || []).length} notes`);
+rec('the blurred body is hidden from a screen reader, which would read it as figures',
+    (client.match(/pf-soon-body" aria-hidden="true"/g) || []).length === SOON.length,
+    `${(client.match(/pf-soon-body" aria-hidden="true"/g) || []).length} aria-hidden bodies`);
+rec('the stylesheet blurs it and makes its controls inert',
+    /\.pf-soon-body\s*\{[^}]*filter:\s*blur\(/.test(css)
+        && /\.pf-soon-body\s*\{[^}]*pointer-events:\s*none/.test(css),
+    'blur + pointer-events: none');
+rec('and the chip is styled, so it does not render as loose text',
+    /\.pf-soon-chip\s*\{/.test(css) && /\.pf-soon-note\s*\{/.test(css));
+// The panels are marked, the other three are not — otherwise this could pass by blurring the page.
+rec('the panels that do work are not blurred',
+    (client.match(/pf-card pf-soon/g) || []).length === SOON.length,
+    `${(client.match(/pf-card pf-soon/g) || []).length} marked cards`);
+
 console.log('');
 const failed = results.filter((r) => !r.pass);
 console.log(`${results.length - failed.length}/${results.length} checks passed`);

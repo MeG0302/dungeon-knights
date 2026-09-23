@@ -217,9 +217,21 @@ function freshProcess(snippet, env = {}) {
         gateAllowed: false,
     });
 
-    for (const publicPath of ['/', '/points', '/genesis', '/api/points/me', '/api/waitlist', '/theme.css', '/assets/ui/sword.png']) {
+    for (const publicPath of [
+        '/', '/points', '/genesis', '/portfolio',
+        '/api/points/me', '/api/waitlist', '/api/wallet/balance',
+        '/api/staking/holdings', '/api/game/history',
+        '/theme.css', '/assets/ui/sword.png',
+    ]) {
         rec(`${publicPath} is served on the apex`, apex(publicPath).action === 'next');
     }
+    // The portfolio is where a Points player checks what a season of points produced, so the one
+    // outcome that must never happen to it is the redirect that puts it behind the password. Named
+    // on its own for the same reason `/genesis` is: it is a page the campaign sends strangers to,
+    // and the failure would be invisible until somebody clicked the link in a post.
+    rec('/portfolio is not redirected to the gated host — the Points campaign links to it',
+        apex('/portfolio').action === 'next' && apex('/portfolio').to === undefined,
+        JSON.stringify(apex('/portfolio')));
     // The collection page is advertised on the landing page, so the one thing that must never
     // happen to it on the apex is the redirect that would put it behind the password. Named
     // separately from the loop above because this is the failure the feature would ship with, and a
@@ -230,7 +242,7 @@ function freshProcess(snippet, env = {}) {
     rec('/api/x/events is served on the apex too — it is signed, and it is what X calls',
         apex('/api/x/events').action === 'next');
 
-    for (const gamePath of ['/menu', '/mint', '/dungeons', '/game', '/portfolio', '/gate']) {
+    for (const gamePath of ['/menu', '/mint', '/dungeons', '/game', '/gate']) {
         const decision = apex(gamePath);
         rec(`${gamePath} redirects to the gated host`,
             decision.action === 'redirect' && decision.to === `https://app.dungeonknights.io${gamePath}`,

@@ -333,10 +333,17 @@ export default function PortfolioClient() {
 
                     <div className="pf-grid">
                         {/* -------------------------------------------------- $DNG */}
-                        <section className="pf-card">
+                        {/* Blurred with a label, rather than hidden: the panel is real and its numbers
+                            are real, they are just not live yet, and a player should be able to see
+                            what is coming rather than an empty box. `aria-hidden` on the body means a
+                            screen reader is told the same thing the eye is — the notice, not figures
+                            nobody is meant to read yet. */}
+                        <section className="pf-card pf-soon">
                             <h2 className="pf-card-title">
                                 <img src="/assets/ui/shield.png" alt="" className="pf-card-icon" /> $DNG
+                                <span className="pf-soon-chip">Coming soon</span>
                             </h2>
+                            <div className="pf-soon-body" aria-hidden="true">
                             <div className="pf-hero">
                                 <span className="pf-hero-value">
                                     {dng.phase === 'ready' ? fmtDng(dng.value) : '—'}
@@ -366,6 +373,11 @@ export default function PortfolioClient() {
                                 <a className="pf-link" href="/staking">Open the Staking Vault</a>
                                 <a className="pf-link" href="/game">Enter a dungeon</a>
                             </div>
+                            </div>
+                            <p className="pf-soon-note">
+                                Your $DNG balance, what is staked and what is claimable will read here when
+                                this panel opens.
+                            </p>
                         </section>
 
                         {/* ---------------------------------------------- Knights */}
@@ -414,11 +426,13 @@ export default function PortfolioClient() {
                         </section>
 
                         {/* ---------------------------------------------- Genesis */}
-                        <section className="pf-card">
+                        <section className="pf-card pf-soon">
                             <h2 className="pf-card-title">
                                 <img src={GENESIS_PFP} alt="" className="pf-card-icon pf-card-icon-round" /> Genesis
                                 <span className="pf-card-count">{genesis.phase === 'ready' ? fmtInt(genesis.data?.balance) : '—'}</span>
+                                <span className="pf-soon-chip">Coming soon</span>
                             </h2>
+                            <div className="pf-soon-body" aria-hidden="true">
                             {genesis.phase === 'error' ? (
                                 <p className="pf-warn">{genesis.error}</p>
                             ) : (
@@ -471,6 +485,11 @@ export default function PortfolioClient() {
                             <div className="pf-actions">
                                 <a className="pf-link" href="/staking">Genesis in the vault</a>
                             </div>
+                            </div>
+                            <p className="pf-soon-note">
+                                Genesis hash power, this week&rsquo;s raffle tickets and the pool will read here
+                                when this panel opens.
+                            </p>
                         </section>
 
                         {/* ----------------------------------------------- Points */}
