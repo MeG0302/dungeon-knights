@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Script from 'next/script';
 import {
     connectWallet, fetchMe, forgetWallet, onAccountsChanged, readSession, savedAddress, shortAddress,
+    walletCapabilities,
 } from '../../lib/points-client';
 import { GENESIS_PFP, RARITY, knightPfp } from '../../lib/knights';
 import { DEFAULT_CHAIN } from '../../lib/privy-chains';
@@ -90,9 +91,43 @@ export default function PortfolioClient() {
     const handleDisconnectRef = useRef(() => {});
 
     // ------------------------------------------------------------------ the wallet
+    //
+    // The saved address is instant, but it is not the whole answer — and for the players this page
+    // was opened up for it is not the answer at all. Someone who signs in with an email address on
+    // the Points page has a wallet in the *seam* and nothing in localStorage, so reading the saved
+    // key alone showed them "Connect a wallet" on a page about the wallet they were already using.
+    //
+    // So: the seam first (it is the authority everywhere else, and its own rule refuses to hand back
+    // a wallet that would move the player off one they already use), the saved key second, and both
+    // `privyAuthChanged` and `privyBridgeReady` re-ask — a sign-in that lands while this page is
+    // open arrives through one of them.
     useEffect(() => {
+        let alive = true;
+
+        const read = async () => {
+            try {
+                const caps = await walletCapabilities();
+                if (!alive) return;
+                const who = caps?.address || savedAddress() || null;
+                if (who) setAddress(who);
+            } catch {
+                // A wallet source that cannot answer is the saved key's problem to cover.
+                if (alive) setAddress(savedAddress());
+            }
+        };
+
         setAddress(savedAddress());
-        return onAccountsChanged((next) => setAddress(next));
+        read();
+        window.addEventListener('privyAuthChanged', read);
+        window.addEventListener('privyBridgeReady', read);
+        const offAccounts = onAccountsChanged((next) => setAddress(next));
+
+        return () => {
+            alive = false;
+            window.removeEventListener('privyAuthChanged', read);
+            window.removeEventListener('privyBridgeReady', read);
+            offAccounts();
+        };
     }, []);
 
     const load = useCallback(async (who) => {

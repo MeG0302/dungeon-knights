@@ -200,6 +200,21 @@ rec('both panels carry the same chip',
 rec('each says what will read there, rather than only "coming soon"',
     (client.match(/pf-soon-note/g) || []).length === SOON.length,
     `${(client.match(/pf-soon-note/g) || []).length} notes`);
+// ------------------------------------------------- 9. the wallet it boots from
+// A Points player who signed in with an email address has a wallet in the seam and nothing in
+// localStorage. Reading the saved key alone put "Connect a wallet" in front of a page about the
+// wallet they were already using — measured on the live apex, with a session, at 390×844. So the
+// seam is asked first, and a sign-in that lands while the page is open re-asks.
+rec('the wallet is read from the seam, not only from the saved key',
+    /walletCapabilities\(\)/.test(client) && /caps\?\.address \|\| savedAddress\(\)/.test(client),
+    'seam first, saved key as the fallback');
+rec('and a sign-in that lands while the page is open is picked up',
+    /addEventListener\('privyAuthChanged', read\)/.test(client)
+        && /addEventListener\('privyBridgeReady', read\)/.test(client),
+    'both events');
+rec('the listeners are removed, and the read cannot land after unmount',
+    /removeEventListener\('privyAuthChanged', read\)/.test(client) && /if \(!alive\) return;/.test(client),
+    'cleanup + aliveness guard');
 rec('the blurred body is hidden from a screen reader, which would read it as figures',
     (client.match(/pf-soon-body" aria-hidden="true"/g) || []).length === SOON.length,
     `${(client.match(/pf-soon-body" aria-hidden="true"/g) || []).length} aria-hidden bodies`);
