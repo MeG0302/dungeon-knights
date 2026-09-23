@@ -3674,7 +3674,37 @@ dungeon-knights-meglast320-1694.vercel.app, and leaves the project's custom doma
 is invisible at the URL people actually open. Always re-alias, then verify the *custom* domain,
 not the deployment URL.
 
-**The current deploy** (September 24, the board naming and the Discord card):
+**The current deploy** (September 24, the top-ten board and the waitlist task):
+`dungeon-knights-g5zsvoi2m-meglast320-1694`, aliased across **`dungeonknights.io`**,
+**`www.dungeonknights.io`** and **`dungeon-knights.vercel.app`**, built from the committed tree
+`afb8489`. Verified on the live host rather than the deployment URL: `/`, `/points`, `/portfolio`
+and `/genesis` are `200`; the alias still 307s to `/gate` and the apex still parks `/menu` on
+`app.dungeonknights.io`, so the security pass holds. **`GET /api/points/leaderboard` with no
+`limit` now returns ten rows** (it returned **one**, and the cause is worth remembering: `Number(null)`
+is `0`, which is finite, so the "no parameter" default was unreachable and `0` was clamped up to one;
+the page always sends its own limit, so nothing on screen ever showed it). Read from the live DOM:
+the board renders ranks 1–10 and then the viewer's own row with its **real rank** below them
+(`#21 of 21` for the test wallet), every row named by its handle, and the task copy is **not** in the
+client chunk by design — `Join the Genesis waitlist`, `Quote-post the Points Program launch`, the
+blurb and the CTA all come from the server with `state.oneTime`, so a bundle grep can only prove the
+*Arya* part of the change (`top ten wallets` present, `every wallet on the program` gone). The
+One-time tab, read live: the waitlist card's button points at **`https://dungeonknights.io/genesis`**
+(the production `NEXT_PUBLIC_SITE_URL`, not the gated `.vercel.app` host) with `+500 PTS`, and six
+quote cards sit under it including the new one. At 390px the document is **390** wide with nothing
+past the edge and the card 347 across.
+
+**Published to the store, not deployed:** task `2102816503024529905` (`Quote-post the Points Program
+launch`, +500) was added with `tools/x-task.js add … --kind quote --title …` against the production
+KV. It is a store write, so it appeared for every player the moment it was written — no build was
+involved. The tool's auto-title takes the post's own first 90 characters, which read like a sentence
+rather than a heading, so the title was set explicitly to match the four that shipped.
+
+**A preview-panel note, so it is not mistaken for a page bug later:** on the live tab, `preview_click`
+reported success at the right coordinates (the tab was the element under the point) but the panel
+never switched, and the same tab switched fine from a DOM `.click()`. That panel also refuses to
+composite screenshots in this session, so it is the same input/compositing problem, not the page.
+
+**The deploy before it** (September 24, the board naming and the Discord card):
 `dungeon-knights-bzi8oo7sd-meglast320-1694`, aliased across **`dungeonknights.io`**,
 **`www.dungeonknights.io`** and **`dungeon-knights.vercel.app`**, built from the committed tree
 `710ee5a`. Verified on the live host rather than the deployment URL: `/`, `/points`, `/portfolio`
