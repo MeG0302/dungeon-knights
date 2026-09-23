@@ -126,21 +126,27 @@ function makeDom(userAgent = 'Mozilla/5.0 (Macintosh)') {
 }
 
 /** An extension: the shape wallet.js and everything else already expects. */
-function fakeExtension() {
+function fakeExtension(address = EXTENSION_ADDRESS) {
     const calls = [];
     return {
         isMetaMask: true,
         calls,
         async request({ method }) {
             calls.push(method);
-            if (method === 'eth_accounts') return ['0xEXT0000000000000000000000000000000000001'];
-            if (method === 'eth_requestAccounts') return ['0xEXT0000000000000000000000000000000000001'];
+            if (method === 'eth_accounts') return [address];
+            if (method === 'eth_requestAccounts') return [address];
             if (method === 'eth_chainId') return '0xb626';
             return null;
         },
         on() {},
     };
 }
+
+/**
+ * A plausible extension address. Real hex on purpose: the seam only believes an address that
+ * parses as one, so a fixture like `0xEXT…` would make it look as though nothing was saved.
+ */
+const EXTENSION_ADDRESS = '0xEEE0000000000000000000000000000000000001';
 
 const EMBEDDED_ADDRESS = '0xAbC0000000000000000000000000000000000001';
 const EXTERNAL_ADDRESS = '0xDDd0000000000000000000000000000000000002';
@@ -197,11 +203,22 @@ function fakeBridge({ authenticated = true, walletType = 'privy', address = EMBE
 }
 
 /** Load the shipped seam into a fresh sandbox. */
-function load({ userAgent, injected = null, bridge = null, captureWarnings = false } = {}) {
+function load({ userAgent, injected = null, bridge = null, captureWarnings = false, storage = null } = {}) {
     const warnings = [];
     const dom = makeDom(userAgent);
     const win = dom.window;
     if (injected) win.ethereum = injected;
+    // The keys every page on this site writes — `walletAddress` above all, which is what the
+    // seam now reads to find out whether this browser is already playing with a wallet.
+    if (storage) {
+        const store = new Map(Object.entries(storage));
+        win.localStorage = {
+            getItem: (k) => (store.has(k) ? store.get(k) : null),
+            setItem: (k, v) => store.set(k, String(v)),
+            removeItem: (k) => store.delete(k),
+        };
+        win.__storage = store;
+    }
     if (bridge) win.privyBridge = bridge;
     win.DUNGEON_CONFIG = {
         getNetworkConfig: () => ({
@@ -479,6 +496,104 @@ const settle = async (times = 6) => {
     rec('the right chain is not reported as a mismatch',
         (await settledOk.window.DKWallet.capabilities()).chainMismatch === null,
         JSON.stringify((await settledOk.window.DKWallet.capabilities()).chainMismatch));
+
+    // ------------------------------------------- a login must not move the wallet
+    console.log('');
+    console.log('An email or X login must not move a player off the wallet they have been using');
+
+    // The case that matters: MetaMask is installed, this browser has been playing on the
+    // MetaMask address, and the player signs in with an email — which makes Privy hand out a
+    // wallet of its own. That wallet must not become the identity, or their points look lost.
+    const EXT = EXTENSION_ADDRESS;
+    const shadowExtension = fakeExtension();
+    const shadowBridge = fakeBridge({ walletType: 'privy' });
+    const shadowed = load({
+        injected: shadowExtension,
+        bridge: shadowBridge,
+        captureWarnings: true,
+        storage: { walletAddress: EXT, walletConnected: 'true' },
+    });
+    const shadowedProvider = await shadowed.window.DKWallet.provider({ waitMs: 0 });
+    rec('the extension stays the wallet', shadowedProvider === shadowExtension,
+        shadowedProvider === shadowExtension ? 'extension kept' : 'the session took over');
+    rec('window.ethereum is not overwritten by the login',
+        shadowed.window.ethereum === shadowExtension && shadowed.window.ethereum.isDKEmbedded !== true,
+        shadowed.window.ethereum === shadowExtension ? 'extension left in place' : 'seam installed');
+    rec('the address the site keeps using is the one it already had',
+        (await shadowed.window.DKWallet.capabilities()).address === EXT,
+        String((await shadowed.window.DKWallet.capabilities()).address));
+    rec('the wallet that was refused is named, so a page can say so',
+        shadowed.window.DKWallet.shadowed() === EMBEDDED_ADDRESS,
+        String(shadowed.window.DKWallet.shadowed()));
+    rec('and the warning names both addresses',
+        shadowed.warnings.some((w) => w.includes(EXT) && w.includes(EMBEDDED_ADDRESS)),
+        shadowed.warnings.slice(-1)[0] || '(no warning)');
+    rec('the session is not adopted, so nothing else moves either',
+        shadowed.window.DKWallet.signedInWithPrivy() === false,
+        String(shadowed.window.DKWallet.signedInWithPrivy()));
+
+    // Signing in with the *same* wallet is what a desktop player does when they use MetaMask
+    // through Privy: same address, so the session is adopted as it always was.
+    const sameBridge = fakeBridge({ address: EXT, walletType: 'metamask' });
+    const same = load({
+        injected: fakeExtension(),
+        bridge: sameBridge,
+        storage: { walletAddress: EXT },
+    });
+    const sameProvider = await same.window.DKWallet.provider({ waitMs: 0 });
+    rec('a session on the same address is adopted as before',
+        sameProvider === same.window.ethereum && same.window.DKWallet.shadowed() === null,
+        sameProvider === same.window.ethereum ? 'seam installed' : String(sameProvider));
+
+    // A first-time visitor with an extension and no history: there is no wallet to protect, so
+    // this stays exactly as it was — Privy's session wins.
+    const firstTime = fakeBridge();
+    const noHistory = load({ injected: fakeExtension(), bridge: firstTime, storage: {} });
+    const noHistoryProvider = await noHistory.window.DKWallet.provider({ waitMs: 0 });
+    rec('with no wallet here yet, the session still wins',
+        noHistoryProvider === noHistory.window.ethereum,
+        noHistoryProvider === noHistory.window.ethereum ? 'seam installed' : String(noHistoryProvider));
+
+    // A phone: no extension, so Privy's wallet is the only one this device can reach. The old
+    // address is kept out of the way rather than locking the player out of their own sign-in.
+    const phoneLogin = fakeBridge();
+    const phoneSession = load({
+        userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)',
+        bridge: phoneLogin,
+        captureWarnings: true,
+        storage: { walletAddress: '0x0D00000000000000000000000000000000000001' },
+    });
+    const phoneProvider = await phoneSession.window.DKWallet.provider({ waitMs: 0 });
+    rec('a phone adopts the Privy wallet even with an old address saved',
+        phoneProvider === phoneSession.window.ethereum,
+        phoneProvider === phoneSession.window.ethereum ? 'seam installed' : String(phoneProvider));
+    rec('and says plainly that the old address is out of reach',
+        phoneSession.warnings.some((w) => /not reachable on this device/.test(w)),
+        phoneSession.warnings.slice(-1)[0] || '(no warning)');
+
+    // The rule itself, asked directly, so every branch is pinned rather than only the paths a
+    // page happens to take.
+    const rule = phoneSession.window.DKWallet.__identity;
+    rec('the rule prefers the session when there is nothing to shadow',
+        rule({ privyAddress: EMBEDDED_ADDRESS }).usePrivy === true, JSON.stringify(rule({ privyAddress: EMBEDDED_ADDRESS })));
+    rec('refuses to shadow a saved address an extension still holds',
+        (() => {
+            const withExt = load({ injected: fakeExtension(), storage: { walletAddress: EXT } });
+            return withExt.window.DKWallet.__identity({ privyAddress: EMBEDDED_ADDRESS }).usePrivy === false;
+        })(),
+        'extension present');
+    rec('and takes a saved address it cannot reach',
+        (() => {
+            const without = load({ storage: { walletAddress: EXT } });
+            return without.window.DKWallet.__identity({ privyAddress: EMBEDDED_ADDRESS }).usePrivy === true;
+        })(),
+        'no extension');
+    rec('a bridge that names no wallet is not a session to adopt',
+        (() => {
+            const bare = load({ injected: fakeExtension() });
+            return bare.window.DKWallet.__identity({ privyAddress: null }).usePrivy === false;
+        })(),
+        'no address');
 
     // --------------------------------------------------------------------- report
     console.log('');

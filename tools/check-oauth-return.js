@@ -33,6 +33,8 @@ const NOW = 1_700_000_000_000;
 const TTL = 20 * 60 * 1000;
 const COOKIE = 'dk_privy_flow';
 
+const DROPPED = 'dk_privy_dropped';
+
 const results = [];
 function rec(label, pass, detail) {
     results.push({ label, pass });
@@ -277,13 +279,91 @@ let installOauthReturnGuard = null;
     rec('and being called with no browser at all is not an error',
         guard(null).action === 'ignore' && guard(null).reason === 'no-browser', guard(null).reason);
 
-    // ------------------------------------------------------------- 6. where it is installed
+    // ---------------------------------------- 6. leftovers from the version before this one
+    console.log('');
+    console.log('What the previous guard left behind, and the note a dropped callback leaves');
+
+    // The old marker lived in sessionStorage, which the server cannot read — the reason the
+    // marker is a cookie now. Nothing may still depend on those keys.
+    const legacyStore = new Map([
+        ['dk:privy:flow-started', String(NOW - 60_000)],
+        ['dk:privy:oauth-seen', 'oldcode'],
+    ]);
+    const legacyStorage = {
+        getItem: (k) => (legacyStore.has(k) ? legacyStore.get(k) : null),
+        setItem: (k, v) => legacyStore.set(k, String(v)),
+        removeItem: (k) => legacyStore.delete(k),
+    };
+    const legacyBrowser = fakeBrowser();
+    const migration = M.migrateLegacyMarker({ storage: legacyStorage, document: legacyBrowser, now: NOW });
+    rec('a flow the old version started is carried over rather than dropped',
+        migration.promoted === true && legacyBrowser.jar.get(COOKIE) === String(NOW),
+        legacyBrowser.jar.get(COOKIE) || 'no cookie');
+    rec('and the old keys are cleared, so nothing reads them again',
+        migration.cleared === true
+        && legacyStore.get('dk:privy:flow-started') === undefined
+        && legacyStore.get('dk:privy:oauth-seen') === undefined,
+        `started=${legacyStore.get('dk:privy:flow-started')} seen=${legacyStore.get('dk:privy:oauth-seen')}`);
+
+    const alreadyMarked = fakeBrowser({ cookies: { [COOKIE]: String(NOW - 1000) } });
+    const staleStore = new Map([['dk:privy:flow-started', String(NOW - 45 * 60 * 1000)]]);
+    M.migrateLegacyMarker({
+        storage: {
+            getItem: (k) => (staleStore.has(k) ? staleStore.get(k) : null),
+            setItem: (k, v) => staleStore.set(k, String(v)),
+            removeItem: (k) => staleStore.delete(k),
+        },
+        document: alreadyMarked,
+        now: NOW,
+    });
+    rec('a stale legacy marker is not promoted over a live one',
+        alreadyMarked.jar.get(COOKIE) === String(NOW - 1000), alreadyMarked.jar.get(COOKIE));
+    rec('and no storage at all is not an error',
+        M.migrateLegacyMarker({ storage: null, document: null, now: NOW }).cleared === false, 'no storage');
+
+    const noted = fakeBrowser({ cookies: { [DROPPED]: 'not-started-here' } });
+    const notice = M.consumeDroppedNotice({ document: noted });
+    rec('a dropped callback is read back with its reason',
+        notice?.dropped === true && notice.reason === 'not-started-here', JSON.stringify(notice));
+    rec('and it is taken once, not on every page afterwards',
+        !noted.jar.has(DROPPED) && M.consumeDroppedNotice({ document: noted }) === null, 'cleared');
+    rec('no note is not a note',
+        M.consumeDroppedNotice({ document: fakeBrowser() }) === null, 'null');
+
+    // A browser will not let a non-secure Set-Cookie clobber a secure one, and the middleware
+    // always sets this one Secure. Measured on the live-equivalent: without this the note came
+    // back on every page load, which is worse than never showing it.
+    const secureDelete = fakeBrowser({ cookies: { [DROPPED]: 'not-started-here' } });
+    M.consumeDroppedNotice({ document: secureDelete, location: { protocol: 'https:' }, isSecureContext: true });
+    rec('the deletion is marked Secure where the cookie was',
+        /; Secure/.test(secureDelete.writes.cookies[0] || ''), secureDelete.writes.cookies[0]);
+    const localDelete = fakeBrowser({ cookies: { [DROPPED]: 'not-started-here' } });
+    M.consumeDroppedNotice({ document: localDelete, location: { protocol: 'http:' }, isSecureContext: true });
+    rec('and on http://localhost too, which is a secure context',
+        /; Secure/.test(localDelete.writes.cookies[0] || ''), localDelete.writes.cookies[0]);
+
+    const providersSource = fs.readFileSync(path.join(ROOT, 'app', 'providers.js'), 'utf8');
+    rec('the app publishes the note where a page can find it',
+        /window\.DKPrivyNotice = dropped/.test(providersSource)
+        && /privyCallbackDropped/.test(providersSource), 'global and event');
+
+    const pointsSource = fs.readFileSync(path.join(ROOT, 'app', 'points', 'client.js'), 'utf8');
+    rec('the Points page says so, conditionally — a pasted URL leaves the same evidence',
+        /If you were linking X, that did not finish/.test(pointsSource), 'conditional sentence');
+    rec('and clears the flag rather than repeating itself',
+        /delete window\.DKPrivyNotice/.test(pointsSource), 'deleted once read');
+
+    const middlewareSource = fs.readFileSync(path.join(ROOT, 'middleware.js'), 'utf8');
+    rec('the middleware leaves the note when it strips one',
+        /stripped\.cookies\.set\(DROPPED_COOKIE/.test(middlewareSource), 'cookie set on the redirect');
+
+    // ------------------------------------------------------------- 7. where it is installed
     console.log('');
     console.log('The middleware is the first line, and it runs before anything is served');
 
     const middleware = fs.readFileSync(path.join(ROOT, 'middleware.js'), 'utf8');
     rec('the middleware asks the shared rule, rather than re-deciding for itself',
-        /import \{ callbackStripTarget \} from '\.\/lib\/privy-oauth-return'/.test(middleware),
+        /^import \{[^}]*\bcallbackStripTarget\b[^}]*\} from '\.\/lib\/privy-oauth-return';$/m.test(middleware),
         'imported from lib/privy-oauth-return');
     rec('it consults it before it decides anything else about the request',
         middleware.indexOf('callbackStripTarget(') < middleware.indexOf('decideRoute('),
@@ -307,9 +387,16 @@ let installOauthReturnGuard = null;
     const providers = fs.readFileSync(path.join(ROOT, 'app', 'providers.js'), 'utf8');
     rec('app/providers.js still installs the fallback guard',
         /installOauthReturnGuard\(\)/.test(providers), 'installOauthReturnGuard()');
+    // Module scope, because an effect runs after children mount — which is after Privy has
+    // already opened its modal. Asserted on what matters (the call sits above the component, and
+    // is not reached from an effect) rather than on the exact shape of the block.
+    const moduleScope = providers.slice(0, providers.indexOf('export default function'));
     rec('at module scope, not inside the component or an effect',
-        /^if \(typeof window !== 'undefined'\) \{\n\s+installOauthReturnGuard\(\);\n\}$/m.test(providers),
+        /^if \(typeof window !== 'undefined'\) \{/m.test(moduleScope)
+        && /installOauthReturnGuard\(\);/.test(moduleScope),
         'top-level, before render');
+    rec('and never from an effect',
+        !/useEffect\([\s\S]{0,240}?installOauthReturnGuard/.test(providers), 'no effect');
     rec('and the provider is still mounted after it',
         providers.indexOf('installOauthReturnGuard()') < providers.indexOf('<PrivyProvider'),
         'guard first, provider second');

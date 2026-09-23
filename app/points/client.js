@@ -573,6 +573,44 @@ export default function PointsPage() {
         noticeTimer.current = setTimeout(() => setNotice(null), 3400);
     }, []);
 
+    /**
+     * A sign-in callback the server dropped, which in practice means a link that was interrupted
+     * in flight — the source of this notice. Conditional on purpose: a callback URL pasted by
+     * somebody else leaves the server with the same evidence as an interrupted link (none), so the
+     * page says what to do about it and does not claim to know which one it was.
+     *
+     * Read once and deleted, so it appears on the load it happened on rather than on every page
+     * the player opens afterwards. The listener covers the case where the notice arrives after this
+     * has mounted; the read covers the case where it arrived before.
+     */
+    useEffect(() => {
+        const announce = () => {
+            const notice = window.DKPrivyNotice;
+            if (!notice?.dropped) return;
+            delete window.DKPrivyNotice;
+            flash('If you were linking X, that did not finish. Press LINK X ACCOUNT to try again.');
+        };
+        // After a tick, deliberately: announced during the boot effect's own run, the flash used to
+        // be wiped out by that effect's cleanup re-running (it cleared the hide timer) and the line
+        // stayed on screen until the next interaction. Let the page settle first.
+        const timer = setTimeout(announce, 0);
+        window.addEventListener('privyCallbackDropped', announce);
+        return () => {
+            clearTimeout(timer);
+            window.removeEventListener('privyCallbackDropped', announce);
+        };
+    }, [flash]);
+
+    /**
+     * The notice's own timer, cleared on unmount and only on unmount.
+     *
+     * It used to be cleared from the boot effect's cleanup, which runs on every re-run of that
+     * effect as well — so a notice flashed while the page was still settling lost its hide timer and
+     * never went away. Where an effect's cleanup cannot tell "unmount" from "ran again", the timer
+     * belongs to an effect that can.
+     */
+    useEffect(() => () => clearTimeout(noticeTimer.current), []);
+
     const loadBoard = useCallback(async () => {
         try {
             const { rows } = await fetchLeaderboard(BOARD_LIMIT);
@@ -635,7 +673,6 @@ export default function PointsPage() {
         })();
         return () => {
             alive = false;
-            clearTimeout(noticeTimer.current);
         };
     }, [attachPendingRef, loadBoard]);
 

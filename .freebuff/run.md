@@ -1621,6 +1621,13 @@ trusting a live harness (`for p in /points /api/points/session /api/points/vault
 /dev/null -w "$p %{http_code}\n" localhost:3000$p; done`). This cost an hour of chasing a failure
 that was never there.
 
+**And never run `next build` while the dev server is up.** They share `.next`, so the production
+build deletes the dev server's chunks underneath it: the page then renders its HTML and nothing else,
+with `/_next/static/chunks/app/points/page.js` answering 404. Diagnosed the honest way —
+`typeof window.DKWallet` came back `undefined` in a page that had been fine a minute earlier, which
+is not a state any code change of mine produces. Restart the dev server after every `next build`, and
+warm the route again before believing anything a live harness says.
+
 ```bash
 node tools/check-refs.js        # 49 checks, offline: the invite codes — shape, uniqueness, both link
                                 # forms, the attach-later refusals, and the first-visit case
@@ -1636,9 +1643,9 @@ node tools/check-signin-race.js # 12 checks, offline: `signIn()` against a stubb
                                 # refused, in bounded time), and one already here (no wait at all)
 node tools/check-one-time.js http://localhost:3000   # 26 checks: the same plus the tab and the
                                 # payout through the real API — creates a wallet, purges it after
-node tools/check-oauth-return.js # 55 checks, offline: the rule, both halves of the wiring, and that
-                                # the middleware strips a callback this browser never started — ours is
-                                # kept, `ref` and other params survive, and the cookie is read back
+node tools/check-oauth-return.js # 69 checks, offline: the rule, both halves of the wiring, the
+                                # middleware strip, the leftovers of the version it replaced, and the
+                                # note a dropped callback leaves (read once, secure delete included)
 node tools/check-x-link.js      # 25 checks, offline: starting the X link — a signed-in player goes to
                                 # the link flow, an unauthened one to sign-in-with-X, and **no path
                                 # rejects** (unhandled rejections are counted, not assumed away)
@@ -1761,6 +1768,29 @@ only Privy iframe is its own 0×0 embedded-wallet frame. With the mark set, the 
 Privy and Privy acts on it, so real returns still work — the last `Secure` attribute is omitted on
 `http://localhost` on purpose, because a Secure cookie is dropped there and development would
 otherwise strip every genuine return.
+
+**Two follow-ons, both about players who existed before this.** First, the version this replaced
+kept its mark in `sessionStorage` (`dk:privy:flow-started`, `dk:privy:oauth-seen`), which the server
+cannot read — the reason the mark is a cookie now. `migrateLegacyMarker()` clears both on the first
+load of the new build and promotes a still-fresh one into the cookie. The promotion is honestly
+marginal (it can only help where a tab's storage is shared or restored); the *cleanup* is the point,
+because a stale "a flow is in flight" flag with no reader is exactly what misleads the next person
+to touch that file.
+
+Second, a link started before a deploy and finished after it would have been dropped in silence.
+The middleware now leaves `dk_privy_dropped=<reason>` on the redirect, the app takes it once at
+module scope and publishes it as `window.DKPrivyNotice` **and** a `privyCallbackDropped` event, and
+the Points page turns it into one line:
+
+> If you were linking X, that did not finish. Press LINK X ACCOUNT to try again.
+
+Conditional on purpose. A callback URL pasted by somebody else leaves the server exactly the same
+evidence as an interrupted link — none — so the sentence says what to do and does not claim to know
+which one it was. Measured in a browser: a callback URL with no mark lands on `/points`, shows that
+line, and the note cookie is gone afterwards (so it appears on the load it happened on, not on every
+page after). One detail that had to be fixed to make that true: the delete has to carry `Secure`
+where the cookie was set `Secure`, or a browser refuses to let it clobber the secure cookie and the
+note comes back on every load — `window.isSecureContext` is what covers `http://localhost`.
 
 #### The announcements tab (`/points`)
 
@@ -2596,6 +2626,40 @@ playing) → **an injected extension** (left exactly as it was, never shadowed, 
 arrives late) → **nothing**, at which point `unavailableMessage()` says what to do. A bridge that
 is mounted but logged out deliberately does *not* win: a logged-out Privy user must still get
 their own MetaMask.
+
+#### A login must not move a player's wallet
+
+Signing in with an **email address** (or with X) makes Privy create a wallet of its own, and that
+wallet is not the MetaMask one somebody has been playing with. Adopting it silently shows them an
+empty Points balance, an empty roster and a staking position they do not have: the points did not
+move, their *identity* did. The same happens to a wallet-only player who presses **Link X** before
+ever signing in to Privy — that is a Privy login under the hood, so it used to hand them a fresh
+embedded wallet as well.
+
+So the session is adopted unless `chooseWalletIdentity` in `public/wallet-source.js` says no:
+
+| this browser's saved address | an extension here | Privy's address | what is used |
+|---|---|---|---|
+| none | either way | any | **Privy** — nothing to shadow, and a first-time visitor has only that |
+| same as Privy's | either way | same | **Privy** — the same wallet, so nothing changes |
+| different | holding it | different | **the extension** — and `DKWallet.shadowed()` names the wallet that was refused |
+| different | absent | different | **Privy**, with a warning — a phone cannot reach a saved string, so refusing would lock the player out |
+
+The Privy session is not discarded in the refusal case: the account is signed in, `getXAccount()`
+answers, and X can be linked to it. What it does not get to do is decide who is playing. The rule is
+driven directly by the harness in all four rows, and each half of it was falsified by mutation —
+letting the session always win fails 8 checks, ignoring whether an extension is present fails 4.
+
+One honest limit: the **shadowing** row is proven against a fake extension in the harness, because
+this machine has no extension to test with. The other rows are exercised through the shipped file.
+
+```bash
+node tools/check-wallet-source.js    # 65 checks: dormant, injected-wins, a session that owns the
+                                    # wallet, **a login that must not move the wallet**, what the
+                                    # seam answers when the page asks it for accounts, a
+                                    # logged-out bridge, a late bridge, a closed login, sign-out,
+                                    # chain mismatch — against a fake bridge and stub DOM
+```
 
 **Dormant by default, and that is the whole point.** `app/layout.js` reads `PRIVY_APP_ID` on the
 server and passes it down; with it unset `Providers` renders its children unwrapped, no bridge is

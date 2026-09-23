@@ -2,7 +2,7 @@
 
 import { PrivyProvider } from '@privy-io/react-auth';
 import { DEFAULT_CHAIN, SUPPORTED_CHAINS } from '../lib/privy-chains';
-import { installOauthReturnGuard } from '../lib/privy-oauth-return';
+import { consumeDroppedNotice, installOauthReturnGuard } from '../lib/privy-oauth-return';
 
 /**
  * Privy, mounted once, around every route.
@@ -35,6 +35,19 @@ import { installOauthReturnGuard } from '../lib/privy-oauth-return';
  */
 if (typeof window !== 'undefined') {
     installOauthReturnGuard();
+
+    // A callback the server dropped is worth saying out loud, because a player who pressed
+    // *Authorize* on X and came back to an unlinked page has no way to tell that from a bug — and
+    // the page's sentence is conditional, since a stranger's pasted URL and a link interrupted by
+    // this deploy arrive with exactly the same evidence: none.
+    //
+    // Published as a global **and** as an event: the global is for the page that has not mounted
+    // its listener yet (this runs before React does), the event for one that already has.
+    const dropped = consumeDroppedNotice();
+    if (dropped) {
+        window.DKPrivyNotice = dropped;
+        window.dispatchEvent(new CustomEvent('privyCallbackDropped', { detail: dropped }));
+    }
 }
 export default function Providers({ appId, children }) {
     if (!appId) return children;

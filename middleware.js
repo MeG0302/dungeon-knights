@@ -39,7 +39,7 @@ import {
     readGateToken,
 } from './lib/app-gate';
 import { classify, decideRoute, gateCovers, readDevHost } from './lib/app-routing';
-import { callbackStripTarget } from './lib/privy-oauth-return';
+import { callbackStripTarget, DROPPED_COOKIE, MARKER_TTL_MS } from './lib/privy-oauth-return';
 
 export async function middleware(request) {
     const isProduction = process.env.NODE_ENV === 'production';
@@ -60,7 +60,17 @@ export async function middleware(request) {
     });
     if (callback.strip) {
         console.warn(`[privy] stripping a sign-in callback this browser did not start (${callback.reason})`);
-        return NextResponse.redirect(new URL(callback.to, request.url), 307);
+        const stripped = NextResponse.redirect(new URL(callback.to, request.url), 307);
+        // Leave a note the page can read, so a link that really was interrupted is not dropped
+        // in silence. Conditional on the page's side, because a stranger's pasted URL looks
+        // exactly the same from here.
+        stripped.cookies.set(DROPPED_COOKIE, callback.reason, {
+            path: '/',
+            maxAge: Math.floor(MARKER_TTL_MS / 1000),
+            sameSite: 'lax',
+            secure: true,
+        });
+        return stripped;
     }
 
     const { devHost, setDevHost } = readDevHost({

@@ -19,12 +19,25 @@
  *
  *   1. **A signed-in Privy session** — the bridge is asked for its provider, and while that
  *      session is live it wins everywhere, including `window.ethereum`, so the roster, the
- *      dungeon and the vault cannot disagree about who is playing.
+ *      dungeon and the vault cannot disagree about who is playing — **unless it would move
+ *      the player to a different address than the one this browser is already playing with**
+ *      (see below).
  *   2. **An injected extension** — when nobody is signed in through Privy, an extension is
  *      left exactly as it was and is never shadowed, including when it arrives late
  *      (`ethereum#initialized`).
  *   3. **Nothing** — `unavailableMessage()` says what to do about it, instead of pointing a
  *      phone at a browser extension it cannot install.
+ *
+ * **A login must not move a player's wallet.** Signing in with an email address (or with X)
+ * makes Privy create a wallet of its own, and that wallet is not the MetaMask one somebody
+ * has been playing with. Adopting it silently would show them an empty Points balance, an
+ * empty roster and a staking position they do not have — the points they earned did not move,
+ * their identity did. So a Privy session is adopted unless **this browser has already used an
+ * address** (the one every page writes to `walletAddress`) **and an extension is here holding
+ * it** and the Privy wallet is a *different* address. In that one case the extension stays the
+ * wallet, `DKWallet.shadowed()` names the address that was refused, and the login still counts
+ * for what it is for — a Privy account that can link X. A phone has no extension, so nothing
+ * changes there, which is the case Privy exists for in the first place.
  *
  * **Dormant by default.** With no `PRIVY_APP_ID` on the server, `app/providers.js` renders
  * no provider, no bridge is ever published, and behaviour here is exactly what it was
@@ -47,6 +60,7 @@
     const state = {
         shim: null,             // the provider we installed, if any
         provider: null,         // the Privy bridge's provider, while signed in
+        shadowedAddress: null,  // a Privy wallet that was refused because another was in use
         address: null,
         kind: null,             // 'injected' | 'embedded'
         walletType: null,       // what the bridge says the wallet is
@@ -83,6 +97,65 @@
         return EMBEDDED_TYPES.includes(type);
     }
 
+    /** The address this site has been using on this browser, if it has one. */
+    function savedAddress() {
+        try {
+            const fromManager = window.walletManager?.userAddress;
+            if (typeof fromManager === 'string' && /^0x[0-9a-fA-F]{40}$/.test(fromManager)) return fromManager;
+            const stored = window.localStorage?.getItem('walletAddress');
+            return typeof stored === 'string' && /^0x[0-9a-fA-F]{40}$/.test(stored) ? stored : null;
+        } catch {
+            // Storage switched off: there is nothing to protect, so nothing is protected.
+            return null;
+        }
+    }
+
+    function sameAddress(a, b) {
+        return Boolean(a) && Boolean(b) && String(a).toLowerCase() === String(b).toLowerCase();
+    }
+
+    /**
+     * Whose wallet this page plays with, when a Privy session is signed in.
+     *
+     * A sign-in is not a wallet change. Privy hands out a wallet of its own for an email
+     * address, and that wallet is not the MetaMask one somebody has been playing with —
+     * adopting it shows them an empty Points balance and an empty roster, because their
+     * *identity* moved and their points did not.
+     *
+     * So the address this browser already uses wins, **but only when an extension is here
+     * holding it**. Those two conditions together are the whole rule, and each is doing work:
+     *
+     *   - the extension, because a saved address a device can no longer reach is not an
+     *     identity — it is a stale string in localStorage, and a phone that restored its
+     *     storage would be locked out with no way to get back;
+     *   - already used, because a first-time visitor has no wallet to protect and Privy's is
+     *     the only one there is (which is the case this whole file exists for).
+     *
+     * The Privy session is not discarded — the account is signed in, `getXAccount()` answers,
+     * and X can be linked to it. What it does not get to do is decide who is playing.
+     */
+    function chooseWalletIdentity({ privyAddress } = {}) {
+        if (!privyAddress) {
+            return { usePrivy: false, address: savedAddress(), privyAddress: null, reason: 'the bridge named no wallet' };
+        }
+        const saved = savedAddress();
+        if (!saved) {
+            return { usePrivy: true, address: privyAddress, privyAddress, reason: 'no wallet here to shadow' };
+        }
+        if (sameAddress(saved, privyAddress)) {
+            return { usePrivy: true, address: privyAddress, privyAddress, reason: 'the same wallet' };
+        }
+        if (native()) {
+            return { usePrivy: false, address: saved, privyAddress, reason: 'the Privy account is a different wallet' };
+        }
+        // No extension at all: Privy's wallet is the only one this device can reach, so it is
+        // taken — with the trade recorded rather than hidden.
+        warn(`this browser last used ${saved}, and the Privy account that just signed in has `
+            + `${privyAddress}. No extension is here, so the Privy wallet is being used; the old `
+            + 'address is not reachable on this device.');
+        return { usePrivy: true, address: privyAddress, privyAddress, reason: 'the only wallet this device has' };
+    }
+
     /**
      * The bridge's provider, but only for a session that is actually signed in. A bridge
      * that is mounted but logged out returns null, exactly like a locked extension — that
@@ -96,8 +169,28 @@
             if (!(typeof source.isAuthenticated === 'function' && source.isAuthenticated())) return null;
             const provider = await source.getProvider();
             if (!provider) return null;
+
+            // The one thing that stops a login from becoming a wallet change. Asked before any
+            // of this is committed to `state`, because by then `window.ethereum` would already
+            // be pointing at the new address.
+            const choice = chooseWalletIdentity({
+                privyAddress: (typeof source.getAddress === 'function' && source.getAddress()) || null,
+            });
+            if (!choice.usePrivy) {
+                // Report the wallet that *is* in use, because the page is about to use it and
+                // "connected: false" with a working extension would be a lie of omission.
+                state.address = choice.address;
+                state.kind = 'injected';
+                state.shadowedAddress = choice.privyAddress;
+                warn(`${choice.reason} — staying on ${choice.address}, not ${choice.privyAddress}. `
+                    + 'The wallet a browser has been playing with is not something a sign-in gets '
+                    + 'to change.');
+                return null;
+            }
+            state.shadowedAddress = null;
+
             state.provider = provider;
-            state.address = (typeof source.getAddress === 'function' && source.getAddress()) || state.address;
+            state.address = choice.address || (typeof source.getAddress === 'function' && source.getAddress()) || state.address;
             state.walletType = (typeof source.getWalletType === 'function' && source.getWalletType()) || null;
             state.kind = isEmbeddedType(state.walletType) ? 'embedded' : 'injected';
             return provider;
@@ -375,6 +468,14 @@
         kind: () => state.kind,
         /** True when a Privy session is what the page is playing with. */
         signedInWithPrivy: () => !!state.provider,
+        /**
+         * The Privy wallet that was **refused** because this browser was already playing with a
+         * different address, or null. Named as the one that was turned away, so a page can explain
+         * the sign-in instead of looking like it did nothing.
+         */
+        shadowed: () => state.shadowedAddress,
+        /** The rule above, for the harness — the same reason `__emit` is here. */
+        __identity: chooseWalletIdentity,
     };
 
     // Pages do not have to ask. A returning player who is already signed in should be
