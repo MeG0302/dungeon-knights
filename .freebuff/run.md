@@ -1607,6 +1607,9 @@ node tools/check-announce.js    # 20 checks, offline: the announcement's promise
                                 # count or date has been invented, and that Arya teaches it too
 node tools/check-one-time.js    # 17 checks, offline: the link parser, one-post-one-task, a hand-edited
                                 # document, and that hiding a paid task is presentation, not the rule
+node tools/check-signin-race.js # 12 checks, offline: `signIn()` against a stubbed window — a wallet
+                                # adopted while the sign-in is asking, one that never arrives (still
+                                # refused, in bounded time), and one already here (no wait at all)
 node tools/check-one-time.js http://localhost:3000   # 26 checks: the same plus the tab and the
                                 # payout through the real API — creates a wallet, purges it after
 node tools/check-x-verify.js    # 68 checks: the verifier alone, against a stubbed oEmbed — including
@@ -2491,6 +2494,16 @@ bridge's provider, or the extension) and only calls `connect()` when nothing hol
 yet, so a signed-in session is used rather than re-logged-in. Both halves are falsified by
 mutation: forwarding to the seam fails the re-entry and account checks, and forcing `connect()`
 every time fails the "not re-logged-in" ones.
+
+**The same seam can be published before it holds anything**, and that is the second half of the
+same failure. `privyBridgeReady` and `privyAuthChanged` come from React effects; the wallet is
+adopted a moment later. `signIn()` reads a provider synchronously, so a sign-in asked in that gap
+reported "No wallet found… install MetaMask" to a player whose Privy session was signed in and
+valid — the toast seen on the live Points page with the wallet `0x0Bbc…74D` sitting in
+`window.privyBridge` and `window.ethereum` still `undefined`. It now waits on the seam's own
+`provider({ waitMs: 1500 })` — but only when there is no provider yet, so a wallet already here
+costs nothing. Offline proof, and the mutation that reproduces the toast exactly, are
+`tools/check-signin-race.js` (12 checks).
 
 **Two things the first version did that this one does not**, and both were deliberate: it opened
 its own email-code modal, and it loaded Privy's `js-sdk-core` from a CDN. Privy document that
