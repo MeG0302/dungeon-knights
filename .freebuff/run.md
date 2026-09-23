@@ -3575,7 +3575,23 @@ dungeon-knights-meglast320-1694.vercel.app, and leaves the project's custom doma
 is invisible at the URL people actually open. Always re-alias, then verify the *custom* domain,
 not the deployment URL.
 
-**The current deploy** (September 22, the landing pass):
+**The current deploy** (September 23, the referral gate, the airdrop card and the phone layout):
+`dungeon-knights-nib9iy0s5-meglast320-1694`, aliased across **`dungeonknights.io`**,
+**`www.dungeonknights.io`** and **`dungeon-knights.vercel.app`**, built from the committed tree
+`daffe56`. Verified on the live host, not the deployment URL: `/points` and `/portfolio` are `200`,
+`www` 308s to the apex, and `/menu` still 308s to the gated host. The page links `theme.css?v=7` and
+`/css/points.css?v=11`, and the served chunk `app/points/page-c9f3beb2c52d8b09.js` carries
+`Not counting yet`, `Copy code`, `The airdrop follows the leaderboard`, `00:00 UTC` and
+`The supply and the tokenomics are announced` while carrying neither `Snapshot` nor
+`See what a capsule opens into`. In the browser, signed in: the Refer & Earn copy states the rule,
+`Copy code` sits beside the code, the share card reads *Day 1* and names 00:00 UTC, the announcements
+tab shows two cards with the coin at 320×316 drawn 132×130, and at 390px the panes stack with the
+board at the foot of a 2,215px page. **The gate itself is not proven live:** it is server-side, and
+the only way to prove it end to end is to write a claim into the production store — which is exactly
+what `tools/check-referral-gate.js` refuses to do — so it stays a 29-check offline harness, run
+against the same committed code the deployment was built from.
+
+**The deploy before it** (September 22, the landing pass):
 `dungeon-knights-1z3ouqtj3-meglast320-1694`, aliased across **`dungeonknights.io`**,
 **`www.dungeonknights.io`** and **`dungeon-knights.vercel.app`**. It carries the platform pass on the
 landing page (a 3.2 MB loop in place of the 37 MB master, an 85 KB phone background in place of a
