@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { usePrivy, useWallets, useUser, useLinkAccount } from '@privy-io/react-auth';
 import { DEFAULT_CHAIN, addChainParams } from '../lib/privy-chains';
 import { startXLink } from '../lib/x-link';
+import { markPrivyFlowStarted } from '../lib/privy-oauth-return';
 
 /**
  * The one thing the legacy pages need from React: `window.privyBridge`.
@@ -110,7 +111,13 @@ export default function PrivyBridge() {
 
                 return provider;
             },
-            login: () => login(),
+            // Every way into Privy's UI is marked, and the mark is what lets the OAuth guard tell
+            // *our* return (X sends the browser back to `?privy_oauth_code=…`) from a callback URL
+            // that arrived from somewhere else. Unmarked ones never open anything.
+            login: () => {
+                markPrivyFlowStarted();
+                return login();
+            },
             logout: () => logout(),
 
             // ------------------------------------------------------------ the X account
@@ -137,8 +144,14 @@ export default function PrivyBridge() {
              */
             linkX: () => startXLink({
                 authenticated: stateRef.current.authenticated,
-                linkTwitter: () => stateRef.current.linkTwitter?.(),
-                login: (options) => stateRef.current.login?.(options),
+                linkTwitter: () => {
+                    markPrivyFlowStarted();
+                    return stateRef.current.linkTwitter?.();
+                },
+                login: (options) => {
+                    markPrivyFlowStarted();
+                    return stateRef.current.login?.(options);
+                },
             }),
             /**
              * A Privy access token for the current user, or null.

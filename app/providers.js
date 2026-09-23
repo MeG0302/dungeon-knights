@@ -2,6 +2,7 @@
 
 import { PrivyProvider } from '@privy-io/react-auth';
 import { DEFAULT_CHAIN, SUPPORTED_CHAINS } from '../lib/privy-chains';
+import { installOauthReturnGuard } from '../lib/privy-oauth-return';
 
 /**
  * Privy, mounted once, around every route.
@@ -19,7 +20,19 @@ import { DEFAULT_CHAIN, SUPPORTED_CHAINS } from '../lib/privy-chains';
  * **Dormant by default.** With no App ID the children render without a provider, no bridge
  * is published, and `public/wallet-source.js` falls back to the extension exactly as it did
  * before any of this existed. That is what lets the app ship with Privy switched off.
+ *
+ * **The OAuth guard runs here, at module scope, on purpose.** Privy resumes an OAuth callback by
+ * reading three `privy_oauth_*` parameters out of the URL, and it opens its own modal to do it —
+ * no click. That is right for a flow the player just started and wrong for the same URL arriving
+ * any other way (a pasted link, a restored tab, a reload), where it reads as *the site asked me to
+ * sign in by itself*. The guard decides which of the two this is and strips the parameters before
+ * the SDK can read them — and an effect is too late for that, because effects run after children
+ * mount, which is after Privy has already opened. Hence module scope, and hence the guard's own
+ * tests (`tools/check-oauth-return.js`) rather than a comment claiming it works.
  */
+if (typeof window !== 'undefined') {
+    installOauthReturnGuard();
+}
 export default function Providers({ appId, children }) {
     if (!appId) return children;
 

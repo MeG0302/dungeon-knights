@@ -1636,7 +1636,10 @@ node tools/check-signin-race.js # 12 checks, offline: `signIn()` against a stubb
                                 # refused, in bounded time), and one already here (no wait at all)
 node tools/check-one-time.js http://localhost:3000   # 26 checks: the same plus the tab and the
                                 # payout through the real API — creates a wallet, purges it after
-node tools/check-x-link.js      # 24 checks, offline: starting the X link — a signed-in player goes to
+node tools/check-oauth-return.js # 29 checks, offline: a Privy OAuth callback may only resume a flow
+                                # this browser started — ours is kept, anything else is stripped before
+                                # the SDK can read it, `ref` and other params survive
+node tools/check-x-link.js      # 25 checks, offline: starting the X link — a signed-in player goes to
                                 # the link flow, an unauthened one to sign-in-with-X, and **no path
                                 # rejects** (unhandled rejections are counted, not assumed away)
 node tools/check-x-bind.js      # 28 checks, offline: which X handle a wallet binds — a proved one
@@ -1714,6 +1717,27 @@ their types claim:
 failures makes it reject**. Unhandled rejections are counted via `process.on('unhandledRejection')`
 and asserted after a microtask turn, because a harness that returns a value and then exits can
 otherwise watch this exact bug pass.
+
+#### Privy's modal may only open on a click
+
+Privy finishes an OAuth flow by reading three parameters out of the address bar —
+`privy_oauth_code`, `privy_oauth_state`, `privy_oauth_provider` — and **opening its own modal to
+complete the flow, with no click**. Measured on production: that URL shows Privy's UI by itself,
+while a clean load never does (checked at 390×844 too, so it is not a mobile layout thing). Correct
+for the return of a flow the player just started; wrong for the same URL arriving as a pasted link,
+a restored tab, or a reload — to a player those all read as *the site asked me to sign in on its
+own*, which is how it was reported.
+
+So a return is resumed only when **this browser left a mark saying it started one**
+(`dk:privy:flow-started`, written by the bridge the instant it opens Privy's UI; 20-minute window).
+Everything else has those three parameters removed with `history.replaceState` **before the SDK can
+read them** — which is why `installOauthReturnGuard()` runs at module scope in `app/providers.js`.
+An effect is too late: effects fire after children mount, and the SDK has opened its modal by then.
+`?ref=` and every other parameter survive untouched, and a code already handled is remembered, so
+reopening the same URL cannot finish the same flow twice.
+
+Tested on the dev server in both directions: a foreign callback opened nothing and left
+`/points?ref=AB12C`; a marked one let Privy run, spent the mark, and cleaned the URL itself.
 
 #### The announcements tab (`/points`)
 

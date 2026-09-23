@@ -174,8 +174,15 @@ process.on('unhandledRejection', () => { unhandled += 1; });
 
     rec('the bridge hands the decision to this module',
         /linkX: \(\) => startXLink\(\{/.test(bridge), 'startXLink({ … })');
+    // The pass-through is the point — without it the unauthenticated fallback has nothing to call.
+    // It is wrapped rather than bare (the wrapper marks the flow as ours for the OAuth guard), so
+    // the check is that the call is still there, not that nothing else is.
     rec('the bridge gives it the login function, or the fallback cannot work',
-        /login: \(options\) => stateRef\.current\.login\?\.\(options\)/.test(bridge), 'login passed through');
+        /login: \(options\) => \{[\s\S]{0,120}?stateRef\.current\.login\?\.\(options\)/.test(bridge),
+        'login passed through');
+    rec('and that wrapper marks the flow as this browser\'s own before it runs',
+        /login: \(options\) => \{\n\s+markPrivyFlowStarted\(\);/.test(bridge),
+        'marked before login');
     rec('and it publishes `login` so a sign-in is possible at all',
         /^\s+login,$/m.test(bridge), 'login in the state ref');
     rec('the old shape that returned success around a promise is gone',
