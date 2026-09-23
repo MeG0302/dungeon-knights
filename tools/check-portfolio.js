@@ -38,6 +38,7 @@ function rec(label, pass, detail) {
 }
 
 const client = read('app/portfolio/client.js');
+const program = read('lib/points-program.js');
 const page = read('app/portfolio/page.js');
 const menu = read('public/wallet-menu.js');
 const css = read('public/css/portfolio.css');
@@ -219,9 +220,55 @@ rec('the blurred body is hidden from a screen reader, which would read it as fig
     (client.match(/pf-soon-body" aria-hidden="true"/g) || []).length === SOON.length,
     `${(client.match(/pf-soon-body" aria-hidden="true"/g) || []).length} aria-hidden bodies`);
 rec('the stylesheet blurs it and makes its controls inert',
-    /\.pf-soon-body\s*\{[^}]*filter:\s*blur\(/.test(css)
-        && /\.pf-soon-body\s*\{[^}]*pointer-events:\s*none/.test(css),
+    /\.pf-soon-body[^{]*\{[^}]*filter:\s*blur\(/.test(css)
+        && /\.pf-soon-body[^{]*\{[^}]*pointer-events:\s*none/.test(css),
     'blur + pointer-events: none');
+
+// The same treatment without the chip, for things that are not "coming soon" — just not for a
+// visitor: the chain and read stamp, and the two buttons that lead into the gated game. Both are
+// on the public host, so both are furniture a stranger should not be handed.
+rec('the chain, read stamp and refresh control are blurred too',
+    /pf-identity-meta pf-blur/.test(client) && /\.pf-blur[^{]*\{/.test(css),
+    'pf-blur on the identity meta');
+rec('and the two buttons that lead into the gated game',
+    /pf-actions pf-blur/.test(client),
+    'pf-blur on the Knights actions');
+rec('the blur is inert as well as blurred, so nothing behind it can be clicked',
+    /\.pf-soon-body,\s*\n\.pf-blur\s*\{[^}]*pointer-events:\s*none/.test(css),
+    'shared rule');
+
+// ------------------------------------------------------------------ 10. what the panels print
+// The tier tiles are photos and names now: the reward line under each one was a per-run figure
+// printed on a page that cannot see the contract's table, which is the drift the vault exists to
+// avoid. The page reads the numbers it shows; it does not restate the economy.
+rec('the tier tiles carry no reward or runs-per-day line',
+    !/pf-tier-econ/.test(client) && !/[0-9]+ DNG · [0-9]+\/day/.test(client),
+    'photo, name and count only');
+rec('and the knights panel does not advertise a price either',
+    !/forges one for 500 \$DNG/.test(client) && !/\$DNG\./.test(client.replace(/\/\*[\s\S]*?\*\//g, '')),
+    'no price tag on the panel');
+
+// -------------------------------------------------------- 11. recent activity is points now
+// The dungeon-run list is gone from this panel: runs and their $DNG claims happen in the vault and
+// the game, both gated on this host, so a public page whose main panel is empty for every visitor
+// is a page nobody comes back to. What it shows instead is the server's own log of what it paid.
+rec('recent activity reads the points log, not the run history',
+    /points\.data\?\.recent/.test(client) && /describeEarn\(entry\.reason\)/.test(client),
+    'recent + describeEarn');
+rec('and the log is written where points are paid, so a row and the balance agree',
+    /return logEarn\(w, value, reason\)/.test(program),
+    'inside credit()');
+rec('every credit path is logged, commissions included',
+    (program.match(/logEarn\(/g) || []).length === 4,
+    `${(program.match(/logEarn\(/g) || []).length} call sites (definition is separate)`);
+rec('the log is capped, because it is per wallet in a shared store',
+    /ACTIVITY_LOG_LIMIT = \d+/.test(program) && /slice\(-ACTIVITY_LOG_LIMIT\)/.test(program),
+    'bounded');
+rec('a wallet that earned before the log existed is told the list starts now',
+    /not itemised/.test(client), 'rather than shown an empty list as if nothing was earned');
+rec('the panel says why it is empty when there is no session',
+    /Sign in on the Points Program, and every point you earn is listed here/.test(client),
+    'anon case');
 rec('and the chip is styled, so it does not render as loose text',
     /\.pf-soon-chip\s*\{/.test(css) && /\.pf-soon-note\s*\{/.test(css));
 // The panels are marked, the other three are not — otherwise this could pass by blurring the page.

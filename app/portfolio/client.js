@@ -6,6 +6,7 @@ import {
     connectWallet, fetchMe, forgetWallet, onAccountsChanged, readSession, savedAddress, shortAddress,
     walletCapabilities,
 } from '../../lib/points-client';
+import { describeEarn } from '../../lib/points-history';
 import { GENESIS_PFP, RARITY, knightPfp } from '../../lib/knights';
 import { DEFAULT_CHAIN } from '../../lib/privy-chains';
 
@@ -289,6 +290,13 @@ export default function PortfolioClient() {
 
     const supply = genesis.data?.supply || null;
 
+    // The points log, newest first as the server hands it over. `recentTotal` counts what is held
+    // rather than what was shown, so the header cannot claim twelve events when there are forty.
+    const recentLog = points.phase === 'ready' ? points.data?.recent || [] : [];
+    const recentTotal = points.phase === 'ready'
+        ? (points.data?.recentTotal ?? recentLog.length)
+        : 0;
+
     // ------------------------------------------------------------------------ render
     const pageStyles = (
         <>
@@ -356,7 +364,11 @@ export default function PortfolioClient() {
                                 Copy
                             </button>
                         </div>
-                        <div className="pf-identity-meta">
+                        {/* The chain, the read time and the refresh control are developer furniture:
+                            they name a testnet and a timestamp to a player who came here for their
+                            points. Blurred and inert rather than deleted, so the page does not
+                            change shape when the mainnet names replace them. */}
+                        <div className="pf-identity-meta pf-blur" aria-hidden="true">
                             <span>{chain}</span>
                             <span className="pf-dot-sep">·</span>
                             <span>{readAt ? `read ${readAt.toLocaleTimeString()}` : busy === 'loading' ? 'reading…' : 'not read yet'}</span>
@@ -438,23 +450,22 @@ export default function PortfolioClient() {
                                                     {RARITY[tier.toUpperCase()].name}
                                                 </span>
                                                 <span className="pf-tier-count">{fmtInt(byTier[tier])}</span>
-                                                <span className="pf-tier-econ">
-                                                    {RARITY[tier.toUpperCase()].dungeonReward} DNG · {RARITY[tier.toUpperCase()].dailyRuns}/day
-                                                </span>
                                             </div>
                                         ))}
                                     </div>
+                                    {/* A wallet with no knights says so in the count above it. The two
+                                        notes that used to sit here advertised a price and an
+                                        incomplete read; the price is not this page's to print. */}
                                     {knights.data && !knights.data.complete && (
                                         <p className="pf-note">{knights.data.note}</p>
                                     )}
-                                    {knights.phase === 'ready' && knightList.length === 0 && (
-                                        <p className="pf-note">
-                                            No knights in this wallet yet — the Summoning Chamber forges one for 500 $DNG.
-                                        </p>
-                                    )}
                                 </>
                             )}
-                            <div className="pf-actions">
+                            {/* Blurred with the rest of the gated half: both of these lead into the
+                                game, which on the public host is behind the password. A button that
+                                bounces a stranger to a password screen is worse than one that is
+                                visibly not for them yet. */}
+                            <div className="pf-actions pf-blur" aria-hidden="true">
                                 <a className="pf-link" href="/mint">Summoning Chamber</a>
                                 <a className="pf-link" href="/menu">Knight&rsquo;s Hall</a>
                             </div>
@@ -587,39 +598,51 @@ export default function PortfolioClient() {
                         </section>
 
                         {/* --------------------------------------------- Activity */}
+                        {/* Points, not dungeon runs. What this panel used to list — runs and their $DNG
+                            claims — happens in the vault and in the game, both of which are behind the
+                            password on this host; a public page that reads it is a page whose main
+                            panel is empty for everybody who is not signed in on the other host.
+                            Points activity is what a Points player came here for, and it comes from
+                            the server's own log of what it paid, so a row and the balance above it
+                            are the same events. */}
                         <section className="pf-card pf-card-wide">
                             <h2 className="pf-card-title">
                                 <img src="/assets/ui/castle.png" alt="" className="pf-card-icon" /> Recent activity
-                                {history.phase === 'ready' && (
-                                    <span className="pf-card-count">{fmtInt(history.data?.totals?.runs)} runs</span>
+                                {recentTotal > 0 && (
+                                    <span className="pf-card-count">{fmtInt(recentTotal)} events</span>
                                 )}
                             </h2>
-                            {history.phase === 'error' && <p className="pf-warn">{history.error}</p>}
-                            {history.phase === 'ready' && (
-                                <>
-                                    {(history.data?.runs || []).length === 0 ? (
-                                        <p className="pf-note">No dungeon runs recorded for this wallet yet.</p>
-                                    ) : (
-                                        <ul className="pf-activity">
-                                            {(history.data.runs || []).slice(0, 6).map((run) => (
-                                                <li key={`${run.txHash || run.at}-${run.knightId}`}>
-                                                    <span className="pf-act-dungeon">{run.dungeon}</span>
-                                                    <span className="pf-act-knight">{run.rarity ? `${run.rarity} ` : ''}#{run.knightId}</span>
-                                                    <span className="pf-act-reward">+{fmtDng(run.reward)} DNG</span>
-                                                    <span className="pf-act-when">{shortWhen(run.at)}</span>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    )}
-                                    {(history.data?.claims || []).length > 0 && (
-                                        <p className="pf-note">
-                                            Most recent claim: {fmtDng(history.data.claims[0].amount)} $DNG for{' '}
-                                            {fmtInt(history.data.claims[0].runsCount)} run(s), {shortWhen(history.data.claims[0].at)}.
-                                        </p>
-                                    )}
-                                </>
+                            {points.phase === 'error' && <p className="pf-warn">{points.error}</p>}
+                            {points.phase === 'other' && (
+                                <p className="pf-note">
+                                    Points activity belongs to the wallet this browser is signed in with
+                                    ({shortAddress(points.sessionAddress)}), so it is not shown under this one.
+                                </p>
                             )}
-                            {history.phase !== 'ready' && history.phase !== 'error' && <p className="pf-note">Reading the chain…</p>}
+                            {points.phase === 'anon' && (
+                                <p className="pf-note">
+                                    Sign in on the Points Program, and every point you earn is listed here.
+                                </p>
+                            )}
+                            {points.phase === 'ready' && (recentLog.length === 0 ? (
+                                <p className="pf-note">
+                                    {points.data?.points > 0
+                                        ? 'Nothing logged yet — history starts with your next points. What was earned before this panel existed is not itemised.'
+                                        : 'No points yet. Clear a vault entry on the Points Program and it appears here.'}
+                                </p>
+                            ) : (
+                                <ul className="pf-activity pf-activity-points">
+                                    {recentLog.map((entry) => (
+                                        <li key={`${entry.at}-${entry.reason}`}>
+                                            <span className="pf-act-when">{shortWhen(entry.at)}</span>
+                                            <span className="pf-act-what">{describeEarn(entry.reason)}</span>
+                                            <span className="pf-act-reward">+{fmtInt(entry.points)} PTS</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            ))}
+                            {points.phase !== 'ready' && points.phase !== 'error' && points.phase !== 'anon'
+                                && points.phase !== 'other' && <p className="pf-note">Reading your points…</p>}
                         </section>
                     </div>
 

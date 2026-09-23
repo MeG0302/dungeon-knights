@@ -3016,7 +3016,44 @@ is instead of reading figures nobody is meant to use yet, and the body is `point
 the buttons inside it are genuinely inert — a live-looking link to a gated page is worse than an
 obviously unfinished panel.
 
-**Checking it.** `node tools/check-portfolio.js` — 39 checks. The ones worth knowing: every
+**Everything else on the page that only works on the other host is fogged too**, by the same one
+class (`.pf-blur`, blur + `pointer-events: none`): the identity strip's chain read and its `REFRESH`
+(a control that re-reads chain state the page cannot act on, and which on the apex is the only
+button a stranger can press on a page with nothing to refresh), and the Knights card's action row
+(`SUMMONING CHAMBER`, `KNIGHT'S HALL`) — both of which point into the game, which the apex answers
+with the password prompt. The tier tiles are the third change and the smallest: they now show
+**photo, rarity and count only**. The per-day `$DNG` figure that used to sit under each one belongs
+to the pages that own the economy (Summoning, the vault) and reads as a promise on a page whose
+$DNG panel is still fogged. The empty-roster sentence went with it — the tiles already say `0` five
+times, and the one thing that line could add was a reason for the page to exist before it does.
+
+### The points log behind *Recent activity*
+
+`Recent activity` was dungeon runs and `$DNG` claims, which is the wrong panel for this page twice
+over: runs happen behind the gate on the other host, so on the apex it was empty for everybody, and
+the visitors the page was opened for came from the Points Program.
+
+It now lists what the server **paid**, from a log the store keeps per wallet. `credit()` in
+`lib/points-program.js` is the one place points are created, so `logEarn()` is called there and
+nowhere else — a row and the balance can never disagree, because they are written together. The log
+is capped at 40 rows per wallet (forty small objects beside what a record already holds) and the page
+is shown the newest 12; `/api/points/me` returns `recent` (newest first) and `recentTotal`, which is
+what is *held*, not everything ever earned. Labels are translated in `lib/points-history.js` by one
+pure function, outside the component for the same reason every other rule in this project moved out
+of one — a mapping inside a page can only be checked by reading it. It has two rules: an unknown
+reason is humanised rather than guessed (so a new way to earn appears the day it ships, phrased
+plainly), and a reason that is a tweet id drops the id instead of reading eight digits at a player.
+
+The honest gap, and the page says it: a wallet whose points predate the log has a balance with no
+itemised history, so the panel reads *"Nothing logged yet — history starts with your next points.
+What was earned before this panel existed is not itemised."* — which is true of the whole live
+leaderboard today, since every point on it was earned before this shipped.
+
+In development the store is the **file** driver (`.data/points.json`), so the log can be read
+directly while working on the panel; production uses KV, and a fresh deployment starts every wallet's
+log empty for the reason above.
+
+**Checking it.** `node tools/check-portfolio.js` — 53 checks. The ones worth knowing: every
 `/api/…` path the page reads is checked against the filesystem (a one-word typo there is a section
 that says "the chain could not be read" forever, which looks like a node problem and is a bug); the
 page must not contain a chain call, a signer or a provider; the Genesis bands must come from the
@@ -3028,7 +3065,12 @@ and reintroducing `HASH_POWER_BANDS` each fail by name. The coming-soon treatmen
 both panels marked, the same number of chips as notes, `aria-hidden` on each blurred body, the
 stylesheet really blurring and disabling, and **the panels that do work not marked** — so the
 assertion cannot pass by blurring the whole page. Unmarking Genesis and dropping
-`pointer-events: none` each fail three checks by name.
+`pointer-events: none` each fail three checks by name. The second round of fog is pinned the same
+way (the identity strip's chain read, the Knights action row), as are the two removals and the
+points list: **a tier tile must not carry a per-day `$DNG` figure**, the empty-roster sentence must
+be gone, and a `ready` wallet with a log renders one row per entry with its label, its `+N PTS` and
+its time — while a `ready` wallet with a balance but no log renders the *not itemised* sentence
+instead, so the panel cannot claim a history it does not have.
 
 ### The Hall of Fame, and the card that could not reach it
 
