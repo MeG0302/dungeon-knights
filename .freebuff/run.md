@@ -265,6 +265,34 @@ One harness bug was fixed on the way: the live check `a game path on the apex 30
 asked for plain `/menu`, which on `localhost` takes the *neither* branch and answers `200` — it had
 never entered the branch it names. It now asks `?__app=0`, where `/menu` really does 308.
 
+**Shipped** as `17dff46`, deployment `dungeon-knights-4fjwb65pa-…`, all three hostnames re-aliased to
+it (an alias pins to a *deployment*, not a project). Measured live after the switch:
+
+| check | measured |
+|---|---|
+| `dungeonknights.io/`, `/points`, `/genesis`, `/portfolio` | **200** — the public face is untouched |
+| `dungeonknights.io/menu` | **308 → `app.dungeonknights.io/menu`** — unchanged; still parked until the CNAME exists |
+| `dungeon-knights.vercel.app/menu` | **307 → `/gate?next=%2Fmenu`** — the alias is gated now |
+| `dungeon-knights.vercel.app/api/x/events` | **400** — exempt by path, still answers |
+| `POST …/api/discord/interactions` (unsigned) | **401** — reachable and verifying |
+| headers on `dungeonknights.io/points` | all six present; no `x-powered-by` |
+
+#### A deployment is immutable, and that is the part worth remembering
+
+The fix reached **new builds only**. Every Vercel deployment carries its own copy of the middleware,
+frozen at build time, so the 23 older deployment URLs went on serving the old, ungated game after the
+switch — measured: `dungeon-knights-nib9iy0s5-…/menu` answered **200** *on the new production*. Nothing
+can patch them, and no Vercel protection setting targets only old ones (project protection is
+all-or-nothing, and "all deployments" would put the public apex behind a login too). So they were
+**deleted** — 23 of them, owner-approved — leaving the live deployment and the rehearsal preview. A
+deleted deployment answers **404**; the code is in git, so a rollback is a redeploy of an old commit,
+which is what it would have been anyway.
+
+Two traps met doing it: the deployments API returns **`uid`**, not `id` — `id` is `undefined`, and
+`DELETE /v13/deployments/undefined` answers exactly the same 404 as a wrong endpoint, so the first
+pass looked like 23 permissions failures and was really 23 typos. The delete itself is
+`DELETE /v13/deployments/{uid}` and answers `200 {"state":"DELETED"}`.
+
 **Still to do by hand:** add the `app` CNAME at Namecheap. Vercel wants
 `app.dungeonknights.io → 03e3c9616dec48fa.vercel-dns-017.com` (or `cname.vercel-dns.com`); the domain
 is already in the project and marked verified, it is only the record that is missing (`misconfigured:
