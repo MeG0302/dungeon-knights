@@ -14,7 +14,11 @@ import {
 import PointsDungeon from './dungeon';
 
 const ASSETS = '/assets/points/';
-const BOARD_LIMIT = 25;
+// The board shows the leaders, not the whole field: ten is a board a player can read at a glance, and
+// while the program is young a longer list is mostly people with nothing on it. Anyone outside it
+// still sees their own row — the page appends it below with their real rank — so shrinking the list
+// hides other players' totals, never the player's own place in the running.
+const BOARD_LIMIT = 10;
 
 // The server invite. It sits with the X card because the two answer the same question — where the
 // campaign is run, and where a player should be — but it is a **door, not a gate**: earning needs X
@@ -136,8 +140,8 @@ function pointsTourSteps(live) {
             mood: 'The standings',
             target: '[data-arya="board"]',
             text: () => (now().connected
-                ? 'And here it is all counted: every wallet on the program, ranked by points. Your row is the one tagged <strong>you</strong>, so you never have to hunt for it. The second tab lists who you brought in and what each of them has paid you.'
-                : 'And here it is all counted: every wallet on the program, ranked by points. Connect yours and your row appears in it, tagged <strong>you</strong>. The second tab lists who you brought in.'),
+                ? 'The top ten wallets on the program, ranked by points. Your row is the one tagged <strong>you</strong> — and if you are not in the ten yet, the board still lists you underneath, so you never have to hunt for your place. The second tab lists who you brought in and what each of them has paid you.'
+                : 'The top ten wallets on the program, ranked by points. Connect yours and your row appears in it, tagged <strong>you</strong>. The second tab lists who you brought in.'),
         },
         {
             // The tab, for the same reason the one-time step targets its tab: the panel's contents

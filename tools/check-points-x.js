@@ -1103,6 +1103,25 @@ globalThis.fetch = async (url, options = {}) => {
     rec('and the caller is still marked, whatever the board calls them',
         (await Program.leaderboard(100, named)).find((r) => r.address === named)?.isYou === true, '');
 
+    // The board shows the leaders, not the whole field. The length is checked against the length the
+    // **page** asks for, read out of the page's own source, because two numbers kept in step in two
+    // files are two numbers that drift — and twelve wallets with points make "ten" a statement about
+    // the cap rather than about an empty store.
+    for (let i = 0; i < 12; i += 1) {
+        const filler = fresh();
+        await Program.bindX(filler, { id: `930${i}`, username: `filler${i}` });
+        await Store.updateWallet(filler, (w) => ({ ...w, points: 10 + i }));
+    }
+    const askLimit = Number(/const BOARD_LIMIT = (\d+)/.exec(
+        fs.readFileSync(path.join(__dirname, '..', 'app', 'points', 'client.js'), 'utf8'))?.[1]);
+    const capped = await Program.leaderboard();
+    const asked = await Program.leaderboard(askLimit);
+    rec('the board is ten deep by default, however many wallets are behind it',
+        capped.length === 10 && (await Program.leaderboard(40)).length > 10,
+        `${capped.length} rows · ${(await Program.leaderboard(40)).length} when asked for 40`);
+    rec('  … and that is the length the page itself asks for',
+        askLimit === capped.length && asked.length === capped.length, `page asks ${askLimit}`);
+
     // ------------------------------------------------------------------- the last mile
     console.log('');
     console.log('The route layer');
@@ -1111,7 +1130,16 @@ globalThis.fetch = async (url, options = {}) => {
         x: fs.readFileSync(path.join(__dirname, '..', 'app', 'api', 'points', 'x', 'route.js'), 'utf8'),
         task: fs.readFileSync(path.join(__dirname, '..', 'app', 'api', 'points', 'task', 'route.js'), 'utf8'),
         vault: fs.readFileSync(path.join(__dirname, '..', 'app', 'api', 'points', 'vault', 'route.js'), 'utf8'),
+        board: fs.readFileSync(path.join(__dirname, '..', 'app', 'api', 'points', 'leaderboard', 'route.js'), 'utf8'),
     };
+    // `searchParams.get` answers `null` for an absent parameter, and `Number(null)` is 0 — finite, so
+    // a guard that only asks `Number.isFinite` treats "no limit given" as "limit zero" and clamps it
+    // to one row. It is pinned structurally because the behaviour is invisible on the page, which has
+    // always sent its own limit, and only shows up to a caller that asks for nothing.
+    rec('the public board tells "no limit" apart from "limit zero"',
+        /raw === null/.test(Routes.board) && /Number\.NaN/.test(Routes.board)
+        && !/Number\(url\.searchParams\.get\('limit'\)\)/.test(Routes.board),
+        'Number(null) is 0, and 0 is finite');
     const AddressOf = (source) => /sessionFromRequest\(request\)/.test(source);
     rec('every earning route takes the wallet from the signed session',
         AddressOf(Routes.x) && AddressOf(Routes.task) && AddressOf(Routes.vault), '');

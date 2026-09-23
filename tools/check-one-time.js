@@ -11,6 +11,10 @@
  * And the claim path must stay blind to these tasks, or a checked task could be paid on a tap with
  * its verifier bypassed entirely.
  *
+ * The waitlist task is the other extreme and gets the same treatment: it has **nothing** behind it,
+ * so the rules pinned here are that it pays on the claim itself, prices nothing twice, and says in
+ * as many words that nothing was checked.
+ *
  * So this checks the rules three ways: the link parser and the store document directly, the *tab*
  * through the real API on a running server, and the payout through the same endpoints a page uses.
  * Without a URL argument the live half is skipped and the offline half still runs.
@@ -21,7 +25,7 @@
 
 import crypto from 'node:crypto';
 import { addExtraTask, extraOneTimeTasks, parsePostUrl, removeExtraTask } from '../lib/points-tasks.js';
-import { ONE_TIME_TASKS } from '../lib/points-config.js';
+import { ONE_TIME_TASKS, oneTimeTask } from '../lib/points-config.js';
 import {
     documentRead, documentWrite, purgeWallet, updateWallet, getWallet, STORAGE_DRIVER, storageDescription,
 } from '../lib/points-store.js';
@@ -209,6 +213,34 @@ function shippedPostId(card) {
             `id removed=${removedById.ok} · absent=${missing.code}`);
         created.length = 0;
 
+        // ------------------------------------------- a task nothing checks, and says so
+        console.log('');
+        console.log('The waitlist task: no verifier behind it, and the card admits it');
+
+        // It is the only one-time task with nothing behind it — no post for X to be asked about and
+        // no review window — so what is worth pinning is that its own copy says that, and that it is
+        // a **different kind** from the follow. Reusing `claim` would hand it the follow's proof
+        // mode, and the day this deployment is wired to X's follow webhook it would start demanding a
+        // follow event for something that has nothing to do with following.
+        const waited = ONE_TIME_TASKS.filter((task) => task.proof === 'visit');
+        rec('the waitlist is a task of its own kind, not a claim wearing the follow’s proof',
+            waited.length === 1 && waited[0].id === 'waitlist',
+            waited.map((task) => `${task.id}:${task.proof}`).join(', ') || '(none)');
+        rec('  … it sends the player to our own waitlist page, not to X',
+            Boolean(waited[0]?.url?.endsWith('/genesis')) && !/x\.com|twitter\.com/.test(waited[0]?.url || ''),
+            waited[0]?.url);
+        rec('  … it promises no review window, and keeps one sentence because there is one truth',
+            !waited[0]?.review && !waited[0]?.blurbChecked && Number.isInteger(waited[0]?.reward) && waited[0].reward > 0
+            && /no check/i.test(waited[0]?.blurb || '')
+            && !/review|30\u201345 minutes|X tells/i.test(waited[0]?.blurb || ''),
+            (waited[0]?.blurb || '').slice(0, 72) + '…');
+        // The claim endpoint reads this registry and nothing else, so a task it cannot find is a card
+        // that refuses to pay; and a `kind` on it would let the post endpoint try to settle it, which
+        // is the one door a task with no post must not have.
+        rec('  … and the claim path can find it, with no post kind to be settled by',
+            Boolean(oneTimeTask('waitlist')) && !waited[0]?.kind,
+            `lookup=${Boolean(oneTimeTask('waitlist'))} kind=${waited[0]?.kind || 'none'}`);
+
         // ------------------------------------------------------------------ the live half
         if (!BASE) {
             console.log('');
@@ -219,6 +251,16 @@ function shippedPostId(card) {
 
             const live = await addExtraTask({ url: TEST_POST, kind: 'comment', reward: 640 });
             created.push(live.task.id);
+
+            // The route's own default, which is not the library's. A bare call has to come back with
+            // the board the page asks for — the two are compared rather than counted, so this says
+            // something on a store of any size: it catches the default being *ignored* (an absent
+            // `?limit` becoming `Number(null)` = 0, which is finite) rather than a store being small.
+            const bareBoard = (await api('/api/points/leaderboard')).data?.rows?.length;
+            const askedBoard = (await api('/api/points/leaderboard?limit=10')).data?.rows?.length;
+            rec('a board call with no limit is served what the page asks for, not one row',
+                bareBoard === askedBoard && bareBoard > 0,
+                `${bareBoard} by default · ${askedBoard} when asked for 10`);
 
             const session = await import('../lib/points-session.js');
             const address = `0x${crypto.randomBytes(20).toString('hex')}`;
@@ -286,6 +328,69 @@ function shippedPostId(card) {
             const gone = await getWallet(address);
             rec('the test wallet is cleaned up', gone === null, gone ? 'still present' : 'purged');
             created.length = 0;
+
+            // ------------------------------------------------- the waitlist, paid end to end
+            // Its own wallet, so nothing here can disturb the balance the section above pinned.
+            console.log('');
+            console.log('A task that pays on the claim itself');
+
+            const waiter = `0x${crypto.randomBytes(20).toString('hex')}`;
+            const waiterToken = session.issueToken(waiter).token;
+            await api(`/api/points/session?address=${waiter}`);
+            await api('/api/points/x', {
+                method: 'POST',
+                token: waiterToken,
+                body: { action: 'bind', identity: { username: `wait${crypto.randomBytes(3).toString('hex')}` } },
+            });
+
+            const waiterCard = ((await api('/api/points/me', { token: waiterToken })).data?.state?.oneTime || [])
+                .find((task) => task.id === 'waitlist');
+            rec('a wallet sees the waitlist card, with the page it opens and no window on it',
+                Boolean(waiterCard) && waiterCard.proof === 'visit' && waiterCard.claimed === false
+                && /\/genesis$/.test(waiterCard.url || '') && waiterCard.reward > 0 && !waiterCard.settleAt,
+                `${waiterCard?.proof} · ${waiterCard?.url} · ${waiterCard?.reward} PTS`);
+
+            const paidWait = await api('/api/points/task', {
+                method: 'POST', token: waiterToken, body: { action: 'claim', task: 'waitlist' },
+            });
+            rec('  … and claiming it pays in that same call, with nothing pending',
+                paidWait.status === 200 && paidWait.data?.credited === waiterCard?.reward && !paidWait.data?.pending,
+                `${paidWait.status} · ${paidWait.data?.credited} PTS · pending=${paidWait.data?.pending}`);
+            rec('  … and the balance is exactly that, so it paid once and once only',
+                (await api('/api/points/me', { token: waiterToken })).data?.state?.points === waiterCard?.reward,
+                `${(await api('/api/points/me', { token: waiterToken })).data?.state?.points} PTS`);
+
+            const receiptView = ((await api('/api/points/me', { token: waiterToken })).data?.state?.oneTime || [])
+                .find((task) => task.id === 'waitlist');
+            rec('  … and the card stays as a receipt that says nothing was checked',
+                Boolean(receiptView) && receiptView.claimed === true
+                && /nothing was checked/i.test(receiptView.claimedNote || ''),
+                receiptView?.claimedNote);
+
+            const againWait = await api('/api/points/task', {
+                method: 'POST', token: waiterToken, body: { action: 'claim', task: 'waitlist' },
+            });
+            rec('  … and a second tap pays nothing more',
+                againWait.status === 200 && againWait.data?.alreadyCredited === true && !againWait.data?.credited,
+                `${againWait.status} · alreadyCredited=${againWait.data?.alreadyCredited}`);
+
+            // The identity behind it, which is the only thing holding a task with no check down:
+            // a binding is permanent and one-per-handle, so the cheapest way to farm this is still a
+            // real X account.
+            const unbound = `0x${crypto.randomBytes(20).toString('hex')}`;
+            const unboundToken = session.issueToken(unbound).token;
+            await api(`/api/points/session?address=${unbound}`);
+            const refusedWait = await api('/api/points/task', {
+                method: 'POST', token: unboundToken, body: { action: 'claim', task: 'waitlist' },
+            });
+            rec('  … and a wallet with no X account cannot claim it at all',
+                refusedWait.status === 403 && refusedWait.data?.code === 'x-required',
+                `${refusedWait.status} ${refusedWait.data?.code}`);
+
+            await purgeWallet(waiter);
+            await purgeWallet(unbound);
+            const waiterGone = (await getWallet(waiter)) === null && (await getWallet(unbound)) === null;
+            rec('the waitlist test wallets are cleaned up', waiterGone, waiterGone ? 'purged' : 'still present');
         }
     } finally {
         // Put the document back exactly as it was found — a checkout with real tasks published must
