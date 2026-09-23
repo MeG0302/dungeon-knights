@@ -695,6 +695,9 @@ export default function StakingClient() {
         setBusy('connect');
         try {
             const who = await connectWallet();
+            // Null is the Privy login being closed, or still open: nothing to load yet, and a
+            // sign-in that lands later brings the wallet with it.
+            if (!who) return;
             setAddress(who);
             await load(who);
         } catch (err) {

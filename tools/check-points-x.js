@@ -90,12 +90,12 @@ function jsonResponse(status, body) {
 
 function embedFor(url, postId) {
     const author = stub.x.author;
-    // The default is a *share* as the program writes one: the site link the campaign requires, and
-    // the tag the share requires. A post that satisfies only one of the two tasks is what the
-    // individual cases set explicitly.
+    // The default is a *share* as the program writes one: the day marker and the tag the share
+    // requires, plus the site link the campaign requires. A post that satisfies only one of the two
+    // tasks, or none of them, is what the individual cases set explicitly.
     const text = stub.x.text !== null
         ? stub.x.text
-        : `I cleared the Points Vault — 1800 points @${global.__SHARE_TAG__} https://${global.__SITE_HOST__}/points?ref=0x0`;
+        : `${global.__DAY_MARKER__}: I cleared the Points Vault — 1800 points @${global.__SHARE_TAG__} https://${global.__SITE_HOST__}/points?ref=0x0`;
     return {
         url: `https://twitter.com/${author}/status/${postId}`,
         author_name: author,
@@ -139,6 +139,10 @@ globalThis.fetch = async (url, options = {}) => {
     const Privy = await import('../lib/privy-verify.js');
     global.__SITE_HOST__ = Config.SITE_LINK_HOST;
     global.__SHARE_TAG__ = Config.X_SHARE_TAG;
+    // The stub's default post is a share as the program writes one, marker included — taken from the
+    // same helper the composer uses, so a fixture cannot be "today's post" in this file and an
+    // earlier day's in the code under test.
+    global.__DAY_MARKER__ = Config.dayMarker();
 
     const fresh = () => `0x${crypto.randomBytes(20).toString('hex')}`;
     const points = async (address) => (await Store.getWallet(address))?.points || 0;
@@ -257,6 +261,19 @@ globalThis.fetch = async (url, options = {}) => {
     rec('  … and the refusal names the account it had to tag',
         (await reasonOf('share')).includes(`@${Config.X_SHARE_TAG}`),
         await reasonOf('share'));
+
+    // Yesterday's post, filed again today. Its tag and its link are both in order; the piece that is
+    // missing is the day marker, which is the only thing that can tell one day's post from the last
+    // one's — and the reason a daily reward is daily rather than per post. The guard is released
+    // first, so what refuses this post is the marker and not the throttle on the link before it.
+    await Store.releaseGuard(submitGuard(gate, Config.shareTaskId(), anotherPost()));
+    stub.x.text = `${Config.dayMarker(Config.todayKey(new Date(Date.now() + 86400000)))}: I cleared the Points Vault — 1800 points @${Config.X_SHARE_TAG} https://${Config.SITE_LINK_HOST}/points?ref=0x0`;
+    const stale = await Program.submitTask(gate, 'share', anotherPost());
+    rec('a post carrying another day’s marker never pays today',
+        stale.credited === 0 && (await tasksOf(gate)).share.state === 'failed',
+        (await tasksOf(gate)).share.reason);
+    rec('  … and the refusal names the marker today’s post carries',
+        (await reasonOf('share')).includes(Config.dayMarker()), await reasonOf('share'));
 
     // The throttle is what makes "check again" honest rather than free: the same link cannot be
     // re-checked on demand. The rest of this section moves past it the way a minute would.
@@ -929,14 +946,16 @@ globalThis.fetch = async (url, options = {}) => {
     const paidQuote = await Program.submitTask(quoter, quoteTaskAt(0).kind, quotePost(1));
     rec('a quote task pays against a post that is the player’s and tags us',
         paidQuote.credited === quoteTaskAt(0).reward, `${paidQuote.credited} PTS`);
-    // Read through the view the card is rendered from rather than the raw record: the card needs the
-    // player's post back (it links to it once paid) and that is what would break silently.
-    const firstQuoteView = (await stateOf(quoter)).oneTime.find((t) => t.id === quoteTaskAt(0).id);
-    rec('  … and the card is handed that same post back',
-        firstQuoteView?.url === quotePost(1)
-        && firstQuoteView?.claimed === true
-        && firstQuoteView?.credited === quoteTaskAt(0).reward,
-        `${firstQuoteView?.url}`);
+    // A paid task is **no longer drawn** — the tab keeps what is still worth doing — so what is
+    // asserted here is that it is gone, and that nothing else went with it. The post the player
+    // filed is pinned on the pending case below, which is the state a card still exists in.
+    const paidTab = (await stateOf(quoter)).oneTime;
+    rec('  … and a paid task leaves that player’s tab',
+        !paidTab.some((t) => t.id === quoteTaskAt(0).id),
+        paidTab.map((t) => t.id).join(', '));
+    rec('  … while the tasks still open are all still drawn',
+        quoteTasks.every((task) => task.id === quoteTaskAt(0).id || paidTab.some((t) => t.id === task.id)),
+        paidTab.map((t) => t.id).join(', '));
 
     const anotherQuote = await Program.submitTask(quoter, quoteTaskAt(0).kind, quotePost(2));
     rec('a second post for a task already paid pays nothing',
@@ -973,6 +992,12 @@ globalThis.fetch = async (url, options = {}) => {
     const lateQuote = await Program.submitTask(stranger, quoteTaskAt(2).kind, quotePost(6));
     rec('a post X cannot see yet is held pending rather than refused',
         lateQuote.pending === true && lateQuote.credited === 0, `pending=${lateQuote.pending}`);
+    // Read through the view the card is rendered from rather than the raw record: a card that is
+    // still open has to hand the player's own post back, and losing that is what would break
+    // silently — the state that matters is this one, not the paid one it is no longer drawn in.
+    const lateQuoteView = (await stateOf(stranger)).oneTime.find((t) => t.id === quoteTaskAt(2).id);
+    rec('  … and that card is handed the post the player filed',
+        lateQuoteView?.url === quotePost(6) && lateQuoteView?.pending === true, `${lateQuoteView?.url}`);
     await Store.updateWallet(stranger, (w) => {
         // Back-dated so the throttle opens. A registry under mutation has no record here to move, and
         // that has to fail the check below rather than throw out of the store's own callback.

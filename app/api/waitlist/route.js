@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { addToWaitlist, countAttempt, normaliseHandle, storageDescription, waitlistSize } from '../../../lib/waitlist-store';
 import { forwardToForm } from '../../../lib/waitlist-forms';
+import { notifyWaitlistSignup } from '../../../lib/discord-notify';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -72,11 +73,30 @@ export async function POST(request) {
             }
         }
 
+        const count = await waitlistSize();
+
+        // The Discord copy, on exactly the same terms as the form copy: after the entry exists, and
+        // unable to change the answer. It is awaited here because a signup is not a latency-sensitive
+        // action (the form above already takes longer) and because waiting is what lets the response
+        // report whether the post landed. What it sends is only what the page itself publishes — a
+        // position and a count. The email is never in the payload and neither is the wallet; see
+        // `lib/discord-notify.js` for why that line is drawn there rather than left to each caller.
+        let discordPosted = null;
+        if (!result.alreadyRegistered) {
+            const posted = await notifyWaitlistSignup({
+                position: result.position,
+                count,
+                handle: normaliseHandle(body?.handle) ? body.handle : null,
+                source: body?.source,
+            });
+            discordPosted = posted.ok === true;
+        }
+
         return NextResponse.json({
             ok: true,
             position: result.position,
             alreadyRegistered: result.alreadyRegistered === true,
-            count: await waitlistSize(),
+            count,
             // So the page — and whoever is reading the response while testing — can see where the
             // signup was written without having to guess which deployment is configured.
             storage: storageDescription(),
@@ -84,6 +104,9 @@ export async function POST(request) {
             // was a repeat and nothing was sent. Stated rather than implied, because a waitlist row
             // that never reached the form is invisible from our side until somebody counts rows.
             formForwarded,
+            // The same three states for the Discord post, and `null` here means the slot is not
+            // configured rather than that something broke. Shown for the same reason.
+            discordPosted,
         });
     } catch (error) {
         // A store that is unreachable is not the visitor's problem, and saying "try again" is honest:

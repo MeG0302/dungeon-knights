@@ -4,12 +4,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 // The Points page is a React route, not a legacy page, so it has to pull Arya in
 // itself — the shared gate-keeper popup used across the rest of the game.
 import Script from 'next/script';
-import { VAULT_LEVELS, VAULT_ENTRY_TOTAL } from '../../lib/points-config';
+import { VAULT_LEVELS, VAULT_ENTRY_TOTAL, STREAK_BASE, STREAK_MAX_MULTIPLIER } from '../../lib/points-config';
 import {
     attachRef, claimRef, clearSession, connectWallet, fetchLeaderboard, fetchMe, fetchXStatus, forgetWallet,
-    hasInjectedWallet, isAddress, onAccountsChanged, pendingRef, readRefFromUrl,
+    isAddress, onAccountsChanged, pendingRef, readRefFromUrl,
     readSession, refLink, requestBindX, requestClear, requestOneTimeClaim, requestShare, requestTask,
-    requestTaskCheck, savedAddress, shortAddress, signIn, stashRef,
+    requestTaskCheck, savedAddress, shortAddress, signIn, stashRef, walletCapabilities,
 } from '../../lib/points-client';
 import PointsDungeon from './dungeon';
 
@@ -21,6 +21,10 @@ const BOARD_LIMIT = 25;
 // anyone who has already been through it — including anyone who skipped it. The footer's
 // "Ask Arya" passes `force` and replays it mid-visit without a reload.
 const TOUR_ID = 'points-v1';
+
+// Where the browser remembers that the announcements tab has been opened once, so its `New` badge
+// is a pointer rather than a decoration. Local on purpose — see the state that reads it.
+const ANNOUNCE_SEEN_KEY = 'dk_points_announce_seen';
 
 /**
  * The steps she reads out. Every line is a function so that the wallet and vault steps
@@ -57,6 +61,9 @@ function pointsTourSteps(live) {
                 if (!v.walletReady) {
                     return 'But there is no wallet in this browser, so the vault stays shut. Install MetaMask (or any Web3 wallet), reload, and the gate opens for you.';
                 }
+                if (v.walletKind === 'privy' && !v.connected) {
+                    return 'There is no wallet extension in this browser, so press <strong>Continue with Privy</strong>: it makes you a wallet from an email address — no extension, nothing to install — and then one free signature binds it to the vault.';
+                }
                 return 'One signature binds this wallet to the vault. It is free, it costs no gas, and it is the only thing I will ever ask you to sign — after that your points follow the wallet.';
             },
         },
@@ -68,7 +75,7 @@ function pointsTourSteps(live) {
             mood: 'Your name on it',
             target: '[data-arya="bind"]',
             text: () => (now().bound
-                ? 'Your X account is bound, so everything you earn has a name on it. Posts are checked against that handle — write them from it or they will not count. Note what the page says underneath: a binding is for good, because a binding that can be handed back is one that can be handed to a second wallet.'
+                ? 'Your X account is bound, so everything you earn has a name on it. Write your posts from that handle or they will not count. A binding is permanent — one X account earns for one wallet.'
                 : 'Points are earned against an X account, so this has to be bound before anything pays — <strong>Link X</strong>, or type your handle and bind it. Nothing here costs anything, and it stays bound: bind the account you actually post from.'),
         },
         {
@@ -78,6 +85,22 @@ function pointsTourSteps(live) {
             text: () => (now().entryComplete
                 ? 'You have already cleared today&rsquo;s run, so this button sleeps until tomorrow. The whole thing pays again on a fresh day, so come back to it.'
                 : `Three floors — ${VAULT_LEVELS.map((l) => l.name).join(', ')} — paying <strong>${VAULT_LEVELS.map((l) => l.points).join(', then ')}</strong>. Five epic knights ride with you, a run takes about twenty seconds, and the monsters do hit back. One entry a day.`),
+        },
+        {
+            // The streak sits between the run and the share in her telling because that is the
+            // order they pay in: three floors, then the daily bonus the third one earns, then the
+            // doubling of the rest.
+            kind: 'think',
+            mood: 'Come back tomorrow',
+            target: '[data-arya="streak"]',
+            text: () => {
+                const s = now().streak || {};
+                const max = s.max || 15;
+                return `And this is what brings you back: clearing all three floors on consecutive days raises a
+                    bonus of <strong>${s.base || 150} points</strong> times the day you are on — <strong>1×</strong>
+                    on day one, up to <strong>${max}×</strong> from day ${max} onwards. You are on day
+                    <strong>${s.days || 1}</strong>. Miss a day and it starts again at 1×.`;
+            },
         },
         {
             kind: 'ready',
@@ -110,6 +133,16 @@ function pointsTourSteps(live) {
             text: () => (now().connected
                 ? 'And here it is all counted: every wallet on the program, ranked by points. Your row is the one tagged <strong>you</strong>, so you never have to hunt for it. The second tab lists who you brought in and what each of them has paid you.'
                 : 'And here it is all counted: every wallet on the program, ranked by points. Connect yours and your row appears in it, tagged <strong>you</strong>. The second tab lists who you brought in.'),
+        },
+        {
+            // The tab, for the same reason the one-time step targets its tab: the panel's contents
+            // are only in the DOM while that tab is open, and a spotlight aimed at markup that is not
+            // on the page is aimed at nothing. She talks about the board just above this, which is
+            // what the giveaway is decided on.
+            kind: 'think',
+            mood: 'Something to win',
+            target: '[data-arya="announce-tab"]',
+            text: 'One more, and it is the good one: when the season closes, the wallets still on this board each get a <strong>free Knight capsule</strong>. Nothing to enter and nothing to claim — being on the board is the whole of it. The <strong>Announcements</strong> tab carries it, and the date lands there first.',
         },
         {
             kind: 'clear',
@@ -204,9 +237,9 @@ function ShareKit({ share, onSave, saveDisabled, picture }) {
             </a>
             <ol className="x-share-steps">
                 <li>On a phone, the post button sends the picture to X as an attachment.</li>
-                <li>On a computer, X&rsquo;s composer link carries text only. The button opens the post and copies the picture to your clipboard. Press <strong>Ctrl+V</strong> (<strong>&#8984;V</strong> on a Mac) in the post to attach it. If copying is not available, the file is saved instead.</li>
+                <li>On a computer, X&rsquo;s composer link carries text only. The button copies the picture for you — press <strong>Ctrl+V</strong> (<strong>&#8984;V</strong> on a Mac) in the post to attach it, or the file is saved instead.</li>
                 <li>Your invite link shows the same picture as a card, so the post looks right even with no file attached.</li>
-                <li>Post it, then paste the link to your post below. X checks one thing: that the post tags <strong>@{share.tag}</strong>.</li>
+                <li>Post it, then paste the link below. We check that the post tags <strong>@{share.tag}</strong>.</li>
             </ol>
             <button
                 type="button"
@@ -216,7 +249,16 @@ function ShareKit({ share, onSave, saveDisabled, picture }) {
             >
                 Save picture
             </button>
+            {/* Today's day marker is part of the text, and the check looks for it. One line under
+                it, because a player who tidies the text by hand should know before they post rather
+                than after a refusal that reads like a fault of theirs. */}
             <div className="x-share-text">{share.text}</div>
+            {share.dayMarker && (
+                <p className="x-share-keep">
+                    Post it as it is — it carries {share.dayMarker}, which is how today&rsquo;s post is
+                    told from yesterday&rsquo;s.
+                </p>
+            )}
         </div>
     );
 }
@@ -416,9 +458,14 @@ export default function PointsPage() {
     const [notice, setNotice] = useState(null);
     const [error, setError] = useState(null);
     const [tab, setTab] = useState('leaderboard');
-    // Which half of the left panel is showing: the daily run, or the tasks that pay once. The
-    // wallet card and the X binding sit above both, because they are what either half needs.
+    // Which half of the left panel is showing: the daily run, the tasks that pay once, or what is
+    // being given away. The wallet card and the X binding sit above all three, because they are what
+    // the first two need and the third reads the leaderboard it sits beside.
     const [panel, setPanel] = useState('daily');
+    // The announcements tab wears a `New` badge until it has been opened once, and the browser is
+    // what remembers — the same once-only trick `/arya.js` uses for the walkthrough, kept local
+    // because "have I read this" is not something a server should be asked about on every visit.
+    const [announceRead, setAnnounceRead] = useState(true);
     const [copied, setCopied] = useState(false);
     const [inDungeon, setInDungeon] = useState(false);
     const referralInput = useRef(null);
@@ -431,7 +478,13 @@ export default function PointsPage() {
     // a locked-then-unlocked wallet, or a browser that injects late, would otherwise
     // leave the connect button dead until a reload. Detected in an effect (never during
     // render) so the server and the first client paint also agree.
-    const [walletReady, setWalletReady] = useState(false);
+    //
+    // What is detected is *how* this browser can connect, not just whether an extension is
+    // here: with Privy published there is always a way in, because it will build an embedded
+    // wallet from an email address. `walletKind` is that answer, and it can change under the
+    // page — the bridge is a React component that mounts a moment after the page does, and
+    // it announces itself with `privyBridgeReady`.
+    const [walletKind, setWalletKind] = useState(null);
     // ------------------------------------------------------------------ earning on X
     // Which X thing is mid-flight ('bind' | 'campaign' | 'share'), whether this
     // deployment can *prove* a link, the handle a player typed, each task's own error line and
@@ -454,6 +507,15 @@ export default function PointsPage() {
     // a question about the device rather than about the click — so it is asked once, after mount.
     const [sharesToX, setSharesToX] = useState(false);
     useEffect(() => { setSharesToX(deviceSharesToX()); }, []);
+    // The `New` badge on the announcements tab. Read in an effect, never during render, so the
+    // server's paint and the first client paint agree — a storage-off browser just keeps the badge.
+    useEffect(() => {
+        try {
+            setAnnounceRead(window.localStorage.getItem(ANNOUNCE_SEEN_KEY) === '1');
+        } catch {
+            setAnnounceRead(false);
+        }
+    }, []);
     const noticeTimer = useRef(null);
     // What Arya's walkthrough reads while it talks. A ref and not the state itself,
     // because her steps are written the moment they show, not when the tour is built.
@@ -472,6 +534,19 @@ export default function PointsPage() {
     const connected = phase === 'ready';
     const entryComplete = !!state?.entryComplete;
     const bound = !!state?.x?.username;
+    // The streak is a **rule**, not a status: a visitor with no wallet should be able to read what
+    // the ladder pays, the same way the three floors above it are readable before connecting. So
+    // the server's answer is used when there is one and the published ladder when there is not —
+    // and both come from the same two constants the payout is computed from.
+    const streak = state?.streak || {
+        days: 1,
+        multiplier: 1,
+        base: STREAK_BASE,
+        max: STREAK_MAX_MULTIPLIER,
+        award: STREAK_BASE,
+        paid: false,
+        capped: false,
+    };
     // What the one-time tab's badge counts: tasks this wallet has not been paid for yet. Nothing
     // to count before there is a wallet to claim with, so an anonymous visitor sees no badge.
     // A claim inside its review window is not still *waiting for the player* — it is waiting on us,
@@ -480,6 +555,17 @@ export default function PointsPage() {
         ? (state?.oneTime || []).filter((task) => !task.claimed && !task.pending && !task.rejected).length
         : 0;
     const live = () => liveRef.current;
+
+    /** Open the announcements tab and let its badge go, for good. */
+    const openAnnouncements = () => {
+        setPanel('announce');
+        setAnnounceRead(true);
+        try {
+            window.localStorage.setItem(ANNOUNCE_SEEN_KEY, '1');
+        } catch {
+            // Storage off: the badge comes back on the next visit, which is the harmless way round.
+        }
+    };
 
     const flash = useCallback((message) => {
         setNotice(message);
@@ -554,15 +640,28 @@ export default function PointsPage() {
     }, [attachPendingRef, loadBoard]);
 
     useEffect(() => {
-        const check = () => setWalletReady(hasInjectedWallet());
+        let alive = true;
+        const check = async () => {
+            const caps = await walletCapabilities();
+            if (!alive) return;
+            setWalletKind(caps.injected ? 'injected' : caps.privy ? 'privy' : null);
+        };
         check();
         window.addEventListener('focus', check);
         window.addEventListener('ethereum#initialized', check);
+        window.addEventListener('privyBridgeReady', check);
+        window.addEventListener('privyAuthChanged', check);
         return () => {
+            alive = false;
             window.removeEventListener('focus', check);
             window.removeEventListener('ethereum#initialized', check);
+            window.removeEventListener('privyBridgeReady', check);
+            window.removeEventListener('privyAuthChanged', check);
         };
     }, []);
+
+    // "Can be connected" — an extension, or the Privy login. This is what gates the button.
+    const walletReady = !!walletKind;
 
     // Arya's live view of the page, refreshed on every render, so the lines she reads
     // describe what the visitor is actually looking at.
@@ -571,9 +670,12 @@ export default function PointsPage() {
             phase,
             connected,
             walletReady,
+            walletKind,
             address: state?.address || address,
             points,
             entryComplete,
+            // What her streak line reads: which day the run is on and what it pays.
+            streak,
             shared: !!state?.sharedToday,
             bound: !!state?.x?.username,
             rank: state?.rank || 0,
@@ -665,8 +767,49 @@ export default function PointsPage() {
         setState(null);
         setAddress(next);
         setPhase('anon');
-        flash('Wallet changed. Sign in to keep earning.');
+        // An account arriving where there was none is a sign-in, not a switch — it is what a
+        // Privy login looks like from here, since the embedded wallet it built is installed as
+        // this page's provider. Only the case with something to change *from* is a change.
+        if (state?.address) flash('Wallet changed. Sign in to keep earning.');
     }), [state?.address, flash]);
+
+    // A Privy sign-in finishes on the player's clock, not the click's: an email address, a code
+    // out of the inbox, a wallet approval — seconds or minutes after the button went down, and
+    // routinely longer than `connectWallet` will wait. So the event is what completes it here.
+    // Without this, someone who signed in with an email address would land back on a page that
+    // still thinks nobody is here, with the session already made on Privy's side.
+    useEffect(() => {
+        const onSignedIn = async (event) => {
+            const detail = event?.detail || {};
+            if (!detail.authenticated || !isAddress(detail.address)) return;
+            // The click's own path is mid-flight and will finish this itself.
+            if (busy === 'connect') return;
+            if (connected && state?.address?.toLowerCase() === detail.address.toLowerCase()) return;
+            try {
+                const started = await signIn(detail.address);
+                setAddress(started.state.address);
+                setState(started.state);
+                setPhase('ready');
+                loadBoard();
+                if (!started.state.referrer) await attachPendingRef();
+                if (window.Arya) {
+                    window.Arya.say('ready', {
+                        message: started.state.points > 0
+                            ? `Welcome back, champion. <strong>${started.state.points.toLocaleString()} PTS</strong> to your name.`
+                            : 'Your wallet is bound to the vault. Clear three floors and the points are yours.',
+                    });
+                }
+                flash('Signed in with Privy. Your points count on the leaderboard now.');
+            } catch (e) {
+                // A rejected signature is a decision, not a glitch.
+                if (e?.code === 4001 || /rejected/i.test(e?.message || '')) {
+                    flash('Signature declined. Connect again when ready.');
+                } else setError(e?.message || 'Could not finish signing in.');
+            }
+        };
+        window.addEventListener('privyAuthChanged', onSignedIn);
+        return () => window.removeEventListener('privyAuthChanged', onSignedIn);
+    }, [busy, connected, state?.address, attachPendingRef, flash, loadBoard]);
 
     // ------------------------------------------------------------------- actions
     const handleConnect = async () => {
@@ -675,6 +818,13 @@ export default function PointsPage() {
         setError(null);
         try {
             const wallet = await connectWallet();
+            if (!wallet) {
+                // Nothing came back: the Privy login is still open, or it was closed. Both are
+                // visible to the player — they are looking at the modal — so there is nothing
+                // to announce and nothing went wrong. A sign-in that lands after this returns
+                // arrives through `privyAuthChanged` and finishes there.
+                return;
+            }
             const started = await signIn(wallet);
             setAddress(started.state.address);
             setState(started.state);
@@ -1089,7 +1239,11 @@ export default function PointsPage() {
         try {
             const result = await requestClear(index);
             if (result.state) setState(result.state);
-            if (result.credited > 0) flash(`+${result.credited} PTS banked`);
+            // The third floor pays two things — the run and the day's streak bonus — and saying
+            // only the first would leave a player wondering where the rest came from.
+            if (result.streakAward > 0) {
+                flash(`Vault cleared — +${result.credited} PTS, plus a streak bonus of +${result.streakAward} PTS for day ${result.state?.streak?.days}.`);
+            } else if (result.credited > 0) flash(`+${result.credited} PTS banked`);
             else if (result.alreadyCleared) flash('That floor was already paid today.');
             loadBoard();
         } catch (e) {
@@ -1199,7 +1353,7 @@ export default function PointsPage() {
             {/* Versioned like every other sheet: an unversioned `/theme.css` is a CSS change
                 that never reaches a returning player. */}
             <link rel="stylesheet" href="/theme.css?v=6" />
-            <link rel="stylesheet" href="/css/points.css?v=9" />
+            <link rel="stylesheet" href="/css/points.css?v=10" />
             <link rel="stylesheet" href="/css/arya.css?v=3" />
             <Script src="/arya.js?v=4" strategy="afterInteractive" />
             {/* The header's wallet pill gets the same menu every other page's control has. It is
@@ -1235,10 +1389,11 @@ export default function PointsPage() {
     }
 
     const connectLabel = (() => {
-        if (busy === 'connect') return 'Waiting for your wallet…';
+        if (busy === 'connect') return walletKind === 'privy' ? 'Waiting for Privy…' : 'Waiting for your wallet…';
         if (!walletReady) return 'No Web3 wallet detected';
         if (address && !connected) return `Sign in as ${shortAddress(address)}`;
-        return connected ? 'Wallet connected' : 'Connect Wallet';
+        if (connected) return 'Wallet connected';
+        return walletKind === 'privy' ? 'Continue with Privy' : 'Connect Wallet';
     })();
 
     return (
@@ -1306,6 +1461,17 @@ export default function PointsPage() {
                                     One-time Tasks
                                     {openOneTime > 0 && <span className="points-tab-badge">{openOneTime}</span>}
                                 </button>
+                                <button
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={panel === 'announce'}
+                                    className={`points-tab ${panel === 'announce' ? 'is-active' : ''}`}
+                                    onClick={() => openAnnouncements()}
+                                    data-arya="announce-tab"
+                                >
+                                    Announcements
+                                    {!announceRead && <span className="points-tab-badge is-new">New</span>}
+                                </button>
                             </div>
 
                             {/* A deployment with no persistent store still works, but the
@@ -1348,9 +1514,11 @@ export default function PointsPage() {
                                             {connectLabel}
                                         </button>
                                         <div className="wallet-card-meta">
-                                            {walletReady
-                                                ? 'Sign once to bind this wallet. Free, no gas.'
-                                                : 'Install MetaMask (or any Web3 wallet) to earn points.'}
+                                            {walletKind === 'privy'
+                                                ? 'No extension? Privy makes you a wallet from an email address — or use any wallet it lists. Free, no gas.'
+                                                : walletReady
+                                                    ? 'Sign once to bind this wallet. Free, no gas.'
+                                                    : 'Install MetaMask (or any Web3 wallet) to earn points.'}
                                         </div>
                                     </>
                                 )}
@@ -1373,7 +1541,7 @@ export default function PointsPage() {
                                             {state.x.verified
                                                 ? 'Proved with Privy. Everything you earn pays into the wallet above.'
                                                 : 'Bound. Every post is checked against this handle before it pays.'}
-                                            {' '}A binding cannot be handed back: one X account earns for one wallet.
+                                            {' '}One X account earns for one wallet, so a binding is permanent.
                                         </div>
                                         <div className="x-bind-actions">
                                             {/* Only offered when there is actually a Privy-linked X account to
@@ -1426,9 +1594,9 @@ export default function PointsPage() {
                                             </button>
                                         </div>
                                         <div className="wallet-card-meta">
-                                            Linking through Privy proves the account. Typing a handle binds it for
-                                            earning either way. Nothing pays until a post from that handle checks
-                                            out, so bind the account you post from. It stays bound.
+                                            Linking through Privy proves the account; a typed handle works the
+                                            same, once a post from it checks out. Bind the account you post from —
+                                            it stays bound.
                                         </div>
                                     </>
                                 )}
@@ -1484,6 +1652,71 @@ export default function PointsPage() {
 
                             <div style={{ borderTop: '1px solid var(--border-base)', margin: '4px 0' }} />
 
+                            {/* Streak Bonus — the reason to come back tomorrow. It is a separate
+                                award from the run and from the share: it pays when the third floor
+                                falls, once a day, and the multiplier is the number of consecutive
+                                days that has happened. The whole ladder is drawn rather than
+                                described, because "day 4 of 15" is a picture, not a sentence. */}
+                            <div
+                                className="panel-section-title"
+                                data-arya="streak"
+                                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}
+                            >
+                                <span>Streak Bonus</span>
+                                <span style={{ color: 'var(--accent-gold)', fontSize: 11 }}>
+                                    Day {streak.days}
+                                    {' · '}
+                                    {streak.multiplier}×{streak.capped ? ' (maxed)' : ''}
+                                </span>
+                            </div>
+                            <div className="stat-row" style={{ alignItems: 'flex-start', gap: 10 }}>
+                                <span className="stat-label" style={{ lineHeight: 1.35 }}>
+                                    Clear all three floors every day. Each day in a row raises the
+                                    multiplier on a {streak.base}-point bonus — 1× today to{' '}
+                                    {streak.max}× from day {streak.max} — and a missed day starts it
+                                    again at 1×.
+                                </span>
+                                <span className="stat-value" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
+                                    {streak.paid
+                                        ? <>+{streak.award} <img src={`${ASSETS}Green_checkmark_icon_for_tasks_2K_20260919011426-autocrop-hair.png`} alt="Paid" className="points-icon" width={16} height={16} /></>
+                                        : `+${streak.award} PTS`}
+                                </span>
+                            </div>
+                            {/* The ladder, drawn rather than described: fifteen bars, the day the
+                                wallet is on marked in gold and the days already banked behind it. */}
+                            <div style={{ display: 'flex', gap: 3, alignItems: 'flex-end', height: 18 }}>
+                                {Array.from({ length: streak.max }, (_, i) => {
+                                    const step = i + 1;
+                                    const here = step === streak.multiplier;
+                                    const done = !here && step < streak.multiplier;
+                                    return (
+                                        <span
+                                            key={step}
+                                            title={`Day ${step} · ${step}× · ${streak.base * step} PTS`}
+                                            style={{
+                                                flex: 1,
+                                                height: 5 + step,
+                                                borderRadius: 2,
+                                                background: here
+                                                    ? 'var(--accent-gold)'
+                                                    : (done ? 'rgba(212, 168, 67, 0.45)' : 'var(--border-base)'),
+                                            }}
+                                        />
+                                    );
+                                })}
+                            </div>
+                            <div className="wallet-card-meta">
+                                {streak.paid
+                                    ? `Paid today. Tomorrow is day ${streak.days + 1} — ${streak.base * Math.min(streak.days + 1, streak.max)} PTS if the vault falls again.`
+                                    : (!connected
+                                        ? `Connect a wallet, clear the three floors, and this pays on top of the ${VAULT_ENTRY_TOTAL} PTS run.`
+                                        : (entryComplete
+                                            ? 'Today is counted. The bonus lands with the third floor.'
+                                            : `Pays on top of the ${VAULT_ENTRY_TOTAL} PTS run, the moment the third floor falls.`))}
+                            </div>
+
+                            <div style={{ borderTop: '1px solid var(--border-base)', margin: '4px 0' }} />
+
                             {/* Campaign — rendered only when the server reports one, which is
                                 how a deployment with no `X_CAMPAIGN_POST` hides the whole task
                                 instead of offering a reward with nothing to quote. */}
@@ -1522,7 +1755,7 @@ export default function PointsPage() {
                                 title="Daily Share"
                                 icon={`${ASSETS}White_logo_on_black_background_2K_20260919011421-autocrop-hair.png`}
                                 reward={state?.entryTotalToday || VAULT_ENTRY_TOTAL}
-                                hint={`Finish the vault, then post the run. The picture and the text, with @${shareKit?.tag || 'DNGrobinhood'} and your invite link in it, are ready below. Paste the link to your post and the run doubles (${VAULT_ENTRY_TOTAL} → ${VAULT_ENTRY_TOTAL * 2} PTS). Once a day.`}
+                                hint={`Finish the vault, then post the run. The picture and text — tagged @${shareKit?.tag || 'DNGrobinhood'}, with your invite link — are below. Paste your post's link and the run doubles (${VAULT_ENTRY_TOTAL} → ${VAULT_ENTRY_TOTAL * 2} PTS). Once a day.`}
                                 kit={<ShareKit share={shareKit} onSave={handleSaveShareImage} saveDisabled={!connected} picture={sharePicture} />}
                                 cta={state?.sharedToday
                                     ? 'Shared today · resets with the vault'
@@ -1655,8 +1888,9 @@ export default function PointsPage() {
                             {/* ---------------------------------------------------- one-time tasks
                                 Steps a player takes once, paid once. The tab exists because the
                                 bargain differs from everything above it, and the cards are written
-                                to match: where a reward cannot be checked, the card says so instead
-                                of implying a check that never runs. */}
+                                to match: an ask in one sentence, a reward, and a button that opens
+                                the post. Where the *mode* decides what a claim can honestly say
+                                (the follow), that sentence comes from the server — see `blurb`. */}
                             {panel === 'onetime' && (
                                 <>
                                     <div className="panel-section-title">
@@ -1722,6 +1956,90 @@ export default function PointsPage() {
                                     <div className="one-task-footer">
                                         New tasks appear here as the campaign runs. The tab shows a count when
                                         one is waiting.
+                                    </div>
+                                </>
+                            )}
+
+                            {/* ------------------------------------------------------ announcements
+                                What is being given away, and what it takes to be in the running.
+                                The prize is a capsule, so the art is the capsule the Staking Vault
+                                already ships — one picture for one object, at a size cut for this
+                                panel (320px, 105 KB against the 250 KB original).
+
+                                The numbers are deliberately absent: which wallets, and how many,
+                                are announced when they are settled, so the page promises the rule
+                                and not a count it would have to walk back. */}
+                            {panel === 'announce' && (
+                                <>
+                                    <div className="panel-section-title">
+                                        <img src={`${ASSETS}capsule-panel.png`} alt="" className="points-icon" width={16} height={16} />
+                                        Announcements
+                                    </div>
+                                    <p className="panel-hint">
+                                        What is coming, and what it takes to be part of it.
+                                    </p>
+
+                                    <div className="announce-card">
+                                        <div className="announce-art">
+                                            <img
+                                                src={`${ASSETS}capsule-panel.png`}
+                                                alt="A Knight capsule"
+                                                width={320}
+                                                height={320}
+                                                loading="lazy"
+                                                decoding="async"
+                                            />
+                                        </div>
+                                        <div className="announce-kicker">Season giveaway</div>
+                                        <h3 className="announce-title">Free Knight capsules for the leaderboard</h3>
+                                        <p className="announce-line">
+                                            Hold your place on the leaderboard until the season closes, and a free
+                                            Knight capsule is yours. Nothing to enter, nothing to claim — being on
+                                            the board is the whole of it.
+                                        </p>
+                                        <a className="announce-link" href="/mint">
+                                            See what a capsule opens into
+                                        </a>
+                                    </div>
+
+                                    <div className="announce-steps">
+                                        <div className="announce-step">
+                                            <span className="announce-n">1</span>
+                                            <span>Climb the leaderboard. Every point you earn carries you up it.</span>
+                                        </div>
+                                        <div className="announce-step">
+                                            <span className="announce-n">2</span>
+                                            <span>Stay there. The board is read once, when the season closes.</span>
+                                        </div>
+                                        <div className="announce-step">
+                                            <span className="announce-n">3</span>
+                                            <span>Capsules go to the wallets that are still on it.</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="stat-row">
+                                        <span className="stat-label">Your standing</span>
+                                        <span className="stat-value">
+                                            {connected
+                                                ? `${state?.rank ? `#${state.rank}` : 'Unranked'}`
+                                                    + `${state?.players ? ` of ${state.players.toLocaleString()}` : ''}`
+                                                    + ` · ${points.toLocaleString()} PTS`
+                                                : 'Connect your wallet'}
+                                        </span>
+                                    </div>
+                                    <div className="stat-row">
+                                        <span className="stat-label">Season day</span>
+                                        <span className="stat-value">
+                                            {state?.seasonDay ? `Day ${state.seasonDay}` : '—'}
+                                        </span>
+                                    </div>
+                                    <div className="stat-row">
+                                        <span className="stat-label">Snapshot</span>
+                                        <span className="stat-value">At the season&rsquo;s close</span>
+                                    </div>
+                                    <div className="one-task-footer">
+                                        The date of the snapshot is announced here first. New announcements
+                                        arrive on this tab, and the badge clears once you have read them.
                                     </div>
                                 </>
                             )}

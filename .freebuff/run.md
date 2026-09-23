@@ -89,7 +89,8 @@ Production, and the live deployment was measured reading the shared store — th
 | Mobile wallets | `PRIVY_APP_ID` (+ `PRIVY_CLIENT_ID`), and the chain enabled for the app | *Wallets: injected first…* |
 | Phone gas | players fund their own embedded wallet | *Wallets: injected first…* |
 | **Staking writes** | the approve/stake/claim transaction path, then `STAKING_WRITES_READY` in `lib/staking-config.js` — the page stays a labelled simulation until then, by design | *The Staking Vault* |
-| **Checking a follow** | *only if you want it checked*: register `/api/x/events` with X, subscribe our own account, then set `FOLLOW_PROOF_MODE=webhook`, `X_CONSUMER_SECRET` and `X_FOLLOW_TARGET_ID` for Production. Until then the follow is taken on the player's word and the card says so | *Proving a follow: X's Activity API* |
+| **Checking a follow** | *only if you want it checked*: register `/api/x/events` with X, subscribe our own account, then set `FOLLOW_PROOF_MODE=webhook`, `X_CONSUMER_SECRET` and `X_FOLLOW_TARGET_ID` for Production. Until then a claim is credited from the review queue, and the card names the review instead of a check | *Proving a follow: X's Activity API* |
+| **The day marker** | nothing required — `X_PROGRAM_DAY_ONE` defaults to `2026-09-21`, so today's post says *Day 3*. Set it for Production only to move when Day 1 was; every player has to be counting the same days, so it is one value and never a per-wallet one | *Earning on X* |
 | **The private host** | `APP_GATE_PASSWORD` for Production, **and** the `app.` DNS record at the registrar. Everything else is built and verified; the host split does not exist on the live domain until that record does. Both steps, and why the record goes last, are in *Two hostnames* below | *Two hostnames: the public page at the apex…* |
 | **The Genesis waitlist** | nothing to configure — it writes through the same store the points program uses (`KV_REST_API_URL` + `KV_REST_API_TOKEN`, already set for Production). Without them production keeps it in memory and loses it on redeploy, and the store's own `storageDescription()` says exactly that | *The waitlist, and the two numbers* |
 
@@ -426,7 +427,10 @@ server sends) and `app/gate/*`:
 - **No sentences about the page itself.** Copy that explained our honesty ("nothing here is a render
   standing in for gameplay", "enforced by the game contract rather than by the page you are reading",
   "taken on your word rather than pretending otherwise") is gone, and what replaced it makes the same
-  claim as a plain fact or drops it. This is the same rule the follow box already followed.
+  claim as a plain fact or drops it. **The last of them, `QUOTE_CHECK_NOTE`, came off every one-time
+  task on September 23** — a paragraph about what a check cannot see, longer than the task above it —
+  and the guard that now keeps it off is an assertion that a hint contains no such word at all. This
+  is the same rule the follow box already followed.
 
 The voice is short sentences, no sub-clauses stacked behind a colon, and no "it is not X, it is Y".
 Note the scope: **Arya's dialogue was deliberately left alone** (her walkthrough lines still read like
@@ -435,10 +439,10 @@ her), and so were the game pages, the vault and the portfolio.
 **Copy is pinned by assertions, so a reword is a two-file change.** `tools/check-genesis.js` asserts the
 optional-address note and the refusal sentence word for word; `tools/check-x-webhook.js` asserts that the
 follow card's two sentences differ, that the unchecked one mentions a review and never says
-`checked against` / `own record`, and that its checked twin does — and that the quote-repost hints name
-the tag while admitting X *cannot see which post* was quoted. Changing those sentences without moving
-their assertions turns the suite red, which is the point: the wording carries a claim, and the claim is
-what is being tested.
+`checked against` / `own record`, and that its checked twin does — and that a quote-repost hint names
+the tag while carrying no `cannot see` / `no check` / `verified` word at all. Changing those sentences
+without moving their assertions turns the suite red, which is the point: the wording carries a claim,
+and the claim is what is being tested.
 
 #### The landing loop — what plays today, and the one-file swap
 
@@ -1483,32 +1487,101 @@ only thing that decides whether a post exists, who wrote it, and what it says.
   post** and `submitTask` asks X about it — so the card is the same `XTaskCard`, and the claim
   endpoint is shut for them (`submit-required`), or the tap would pay a checked task with its
   verifier bypassed.
-  - **What the check can and cannot see.** X's free embed carries only the *quoting* post's own text
-    — the post it quotes is not in it — so neither the verifier nor anything else free can tell
-    **which** post was quoted. X is therefore asked two things: that the post is the player's, and
-    that it tags `@DNGrobinhood`. Quoting the post named on the card is on the player, and every
-    card says so in those words (`QUOTE_CHECK_NOTE`), which is the same rule the follow card lives
-    by: never imply a check that cannot run.
+  - **The card is an ask, not a description of our plumbing.** X is asked two things about the
+    pasted link — that the player wrote it, and that it tags `@DNGrobinhood` — and what it cannot see
+    is which post was quoted. Every card used to carry a shared `QUOTE_CHECK_NOTE` sentence saying so.
+    It is now **gone**: the sentence was longer than the task above it and read as a caveat rather
+    than an invitation, and `check-x-webhook` asserts the opposite of what it once asserted — that a
+    hint contains no `cannot see`, `no check`, `on your word` or `verified` word at all. The one
+    place a limit still has to be spoken aloud is the follow, where the **mode** decides the
+    sentence (see `blurb` and `blurbChecked`).
   - **Four asks are four chances to be paid once, so the wire refuses that.** `submitTask` records
     the post against the task that paid it and answers `post-already-used` to any other one-time
     task trying to file the same link, so a single post cannot collect all four. The worst case is
     four junk posts, not one post and 2,000 points.
   - **Different words per card, on purpose.** Four cards reading the same sentence read like one
     task repeated and give the player no way to tell which post a card is about without opening it,
-    so each carries its own `title`, `cta` and `hint`; only the `QUOTE_CHECK_NOTE` sentence about
-    what is checked is shared.
+    so each carries its own `title`, `cta` and `hint`, and no sentence is shared between them.
   - **`taskConfig` grew a `onetime:<id>` kind** (`lib/points-program.js`) that resolves through
     `oneTimeTaskByKind`, so the verified path and the claim path ask different questions of the
     registry: the claim path takes an **id**, the verified path takes a **kind**, and a task that is
     `claim` has no `kind` at all — which is what keeps the follow out of the post-paid path for good.
 - **Proof is recorded per claim, not per task.** The record keeps `proof` as it was **on the day it
   was paid** (`claimedProof` in state), so wiring the webhook later does not retroactively upgrade a
-  claim that was taken on trust — the card keeps saying "claimed on your word, no check ran" for
-  exactly the claims that were. The `claimedNote` sentence is composed on the server for the same
-  reason the blurbs are.
+  claim that was credited from the review queue — the card keeps saying `credited when claimed`, or
+  `approved in review` / `credited after review` when the queue was involved, for exactly the claims
+  that went that way. The `claimedNote` sentence is composed on the server for the same reason the
+  blurbs are, and it says what happened rather than what did not: the old `no check ran` is gone.
 - **Privy's Twitter must be enabled for the *proved* path** (see the switches table): without it a
   player can still type a handle and earn. The bridge exposes `getXAccount()`, `linkX()` and
   `getAccessToken()` for exactly this.
+- **A one-time task can be published *after* the build, with no deploy.** The four quotes above are
+  written down in `lib/points-config.js`, which is right for the tasks that launched with the
+  program and wrong for the next one: publishing should not need a deploy, and it should not need
+  anybody to remember which id the page files a link against. So later tasks live in the store as a
+  single document (`dk:points:tasks`), and `tools/x-task.js` is what writes it. A stored task is
+  `proof: 'verify'`, settled by exactly the engine the four shipped ones use — and the **claim path
+  cannot see these tasks at all** (`claimOneTime` reads the static registry, so a stored id answers
+  `400 unknown-task`). That is the defence that matters most here, because a task about a real post
+  is the most attractive thing on the page to tap twice.
+  - **A task is identified by the post it is about.** The id is the tweet's own id, so adding the
+    same post twice is an *update* rather than a second card paying the same reward, and `remove`
+    works from either the id or the link. Tracking is stripped from the link (`?s=20` and the like)
+    — the canonical URL is what the card opens and what a later removal is matched against.
+  - **The document stores only what cannot be derived.** The title has to be stored (it is taken
+    from the post itself), but the ask's own copy — what the task wants, what its button says, the
+    sentence about what X can check — is filled in from `ASKS` on every read. That is deliberate: a
+    wording fix in the module then reaches **every task already published**, not just the next one.
+    `add` returns that same view rather than the stored entry, so a caller printing or asserting on
+    it sees what a card will show.
+  - **Paying a task takes it out of *that* player's tab, individually, and nothing else.** The record
+    stays on the wallet and the leaderboard keeps the points; a second attempt is refused by the
+    once-ever guard every other reward uses. Hiding is presentation — if it were the rule, reloading
+    the page would be a way to earn again — which is why `check-one-time.js` asserts all three
+    halves at once: the card is gone, **and** the payout is still refused, **and** the points are
+    still on the wallet. The follow is the exception and stays after it pays, because a card that
+    vanishes from a list it was in yesterday reads as a bug rather than as a job done.
+  - **The card is one sentence.** A generated hint says what to post and where the link comes from,
+    and stops — the reward, the button and the post it opens are already on the card. Nothing about
+    the check is said under a task: that is the rule the four shipped cards follow too, and deducing
+    it is now the same three-word assertion in both harnesses.
+  - **Adding one, in full:** `node tools/x-task.js add <post link> [--kind comment|quote]
+    [--reward N]` — a bare `x.com/…/status/…` works, while a profile link, a `t.co` link or another
+    host is refused with a reason — then `list` to see what is published and `remove <link|id>` to
+    take one down. Locally that writes the dev file; **in production the same command writes KV**, so
+    a task is live on the next page read with no deploy. Removal only stops a task being *offered*:
+    anything already paid for it stays paid, because the record lives on the wallet.
+- **The streak bonus: 150 × the day you are on.** Clearing all three floors pays a second award — 1×
+  on day one, climbing to **15× on day fifteen**, and 15× every day after (the card reads
+  `day 22 · 15× (maxed)`), with a missed day starting again at 1×. It lands on top of the 900 run,
+  once a day, the moment the third floor falls, so a maxed day pays 900 + 2,250.
+  - The numbers are one place (`STREAK_BASE`, `STREAK_MAX_MULTIPLIER`, `streakFor`, `previousDayKey`
+    in `lib/points-config.js`) as pure functions, so the whole fifteen-day climb is testable without
+    a clock, and the day boundary is the same UTC midnight the floors use.
+  - Settlement order is the one the floors use: read the record, **claim the day, write it down, then
+    pay** — so a failed payout is a log line rather than a second chance to be claimed.
+  - **The share doubling does not include it.** The post still says 1800, which is the *run* doubled,
+    and the streak pays its own award on top. If it should double the whole day instead, that is one
+    line in the same function.
+- **The daily post says which day it is: `Day 3`.** The share pays **once a day**, so the cheapest
+  way to be paid twice for one post is to file **yesterday's link** again today — and four days of
+  identical text made that impossible to see. The prefilled text now opens with the program's day,
+  and the verifier looks for it: a post without today's marker is refused with `missing-marker` and a
+  sentence naming the marker, because the box under the text hands the player the right words.
+  - **One number, counted in UTC, set by one variable.** `X_PROGRAM_DAY_ONE` (default
+    `2026-09-21`, the program's first production deploy) is Day 1; `programDay()` and `dayMarker()`
+    in `lib/points-config.js` turn a `todayKey()` into `Day N`, and the post text and the check are
+    handed the **same** string, so the copy and the rule cannot disagree about what day it is. A
+    deployment whose clock or whose variable is set ahead of the day being asked about gets Day 1
+    rather than a negative.
+  - **Loose on how it is typed, strict about the number.** `Day 3`, `day3`, `DAY  3` and `(day 3)`
+    all pass; `Day 30` does not — both halves of that sentence are pinned in
+    `tools/check-x-verify.js`. The player's own day also reaches the page (`state.seasonDay`), which
+    is what the announcements tab shows as the season's progress.
+  - **The page says so, once, where it matters.** Under the post text: *"Post it as it is — it
+    carries Day 3, which is how today's post is told from yesterday's."* That is the whole of the
+    explanation a player gets, and it is deliberate: the refusal names the missing word, so the
+    notice belongs before they post rather than after a failure that reads as their fault.
 
 **Do not run `next build` while the dev server is up.** Both write `.next`, so the build pulls the
 plugin's state out from under the running server and `/points` starts answering **500** — which looks
@@ -1527,11 +1600,22 @@ that was never there.
 ```bash
 node tools/check-refs.js        # 49 checks, offline: the invite codes — shape, uniqueness, both link
                                 # forms, the attach-later refusals, and the first-visit case
-node tools/check-points-x.js    # 161 checks, offline: a stubbed X and a stubbed Privy, real ES256
-node tools/check-x-verify.js    # 63 checks: the verifier alone, against a stubbed oEmbed
+node tools/check-points-x.js    # 165 checks, offline: a stubbed X and a stubbed Privy, real ES256
+node tools/check-streak.js      # 19 checks, offline: the 1×–15× ladder, the cap, a gap resets it,
+                                # and one bonus per day however the third floors arrive
+node tools/check-announce.js    # 20 checks, offline: the announcement's promise word for word, that no
+                                # count or date has been invented, and that Arya teaches it too
+node tools/check-one-time.js    # 17 checks, offline: the link parser, one-post-one-task, a hand-edited
+                                # document, and that hiding a paid task is presentation, not the rule
+node tools/check-one-time.js http://localhost:3000   # 26 checks: the same plus the tab and the
+                                # payout through the real API — creates a wallet, purges it after
+node tools/check-x-verify.js    # 68 checks: the verifier alone, against a stubbed oEmbed — including
+                                # the day marker, loose on how it is typed and strict on the number
 node tools/check-x-webhook.js   # 51 checks: the follow webhook — real HMACs, both envelopes, no network
 node tools/check-kv-store.js    # 6 checks: the guard across two processes (and why KV matters)
-node tools/check-points-guard.js http://localhost:3000   # 21 checks: the live routes, gate included
+node tools/check-points-guard.js http://localhost:3000   # 30 checks: the live routes, gate included,
+                                                        # the streak, and eight simultaneous third
+                                                        # floors paying one bonus
 node tools/points-pending.js                            # the review queue: list, --approve, --reject
 node tools/check-follow-gate.js http://localhost:3100   # 17 checks: the follow gate, live — needs
                                                         # X_CONSUMER_SECRET + a server in webhook mode
@@ -1546,6 +1630,53 @@ node --env-file=<pulled.env> tools/check-follow-gate.js \   # 9 checks: the revi
 `--against-live` **needs the store's credentials in this process** (`npx vercel env pull … --yes`),
 because it has to take its own wallets back out again; without them the run refuses to write rather
 than leaving test data in production. The pull is not optional and not a formality — see below.
+
+#### The announcements tab (`/points`)
+
+A third tab on the Points page, and the only place on the site that promises something future — so it
+is the one page whose copy is asserted rather than reviewed. What a visitor reads:
+
+```
+Free Knight capsules for the leaderboard
+Hold your place on the leaderboard until the season closes, and a free Knight capsule is yours.
+Nothing to enter, nothing to claim — being on the board is the whole of it.
+
+1  Climb the leaderboard. Every point you earn carries you up it.
+2  Stay there. The board is read once, when the season closes.
+3  Capsules go to the wallets that are still on it.
+
+Your standing   #1 of 139 · 1,450 PTS     Season day   Day 3     Snapshot   At the season's close
+```
+
+- **No number, and no date — and that is checked, not trusted.** How many wallets and how many
+  capsules are ours to set later, so the panel carries neither; the snapshot is "at the season's
+  close", with the date to be announced on this tab when it is settled. `tools/check-announce.js`
+  fails on a digit that reads as a count (`top 100`, `200 capsules`) or on a date appearing in the
+  panel, which is the only way a page can be held to a promise it has not made yet.
+- **It reads without a wallet.** The rule is the point of the panel; the standing row is the only
+  part that needs one, so a visitor sees the announcement and *Connect your wallet* under it. The
+  harness asserts the panel is not gated behind `connected`.
+- **The art is the vault's capsule, cut for a sidebar.** `public/assets/points/capsule-panel.png` is
+  the same file the Staking Vault shows, at 320×320 (`ffmpeg -i public/assets/images/capsule.png
+  -vf "scale=320:320:flags=lanczos" -compression_level 100 …`, 105 KB against the 250 KB master) —
+  pixel art drawn `image-rendering: pixelated`, with a halo that `prefers-reduced-motion` switches
+  off. It loads with the tab, not with the page.
+- **`New` is a pointer, not a decoration.** The badge on the tab clears the first time it is opened,
+  and the browser remembers (`dk_points_announce_seen`). The read happens in an effect rather than
+  during render, for the same reason the wallet detection does: the server's paint and the first
+  client paint have to agree, and a storage-off browser just keeps the badge.
+- **Arya teaches it, in her own words.** Her walkthrough gained a step, *Something to win*, eighth in
+  her order and second to last: *"when the season closes, the wallets still on this board each get a
+  free Knight capsule… The Announcements tab carries it, and the date lands there first."* It targets
+  `[data-arya="announce-tab"]` — **the tab, not the panel**, for the reason the one-time step does:
+  the panel's contents are only in the DOM while it is open, and a spotlight aimed at markup that is
+  not on the page is aimed at nothing. Her greeting counts her steps (`steps.length - 1`), so adding
+  one cannot leave her telling a newcomer the wrong number — and `check-announce` asserts exactly
+  that, the target hook **on the button rather than the string in her step**, and that she promises no
+  number and no date either. Driven for real in the browser: her bubble renders with the spotlight on
+  the decorated tab, ten steps of eleven, and the `New` badge beside it.
+- **One rule about its copy, from the tab before it:** an announcement states what is true and stops.
+  The sentence that used to justify a limit on the one-time tab is not repeated here.
 
 #### The review window, verified on the deployment (September 21)
 
@@ -1698,8 +1829,8 @@ named failures, and the tag mutation from one `TypeError` to 8.
 **What the live page was actually handed and did** (`:3000`, `driver: file`, a throwaway wallet with
 a real signed session, purged afterwards with `purgeWallet`). `GET /api/points/me` returned **five**
 one-time tasks — the follow (`proof: 'claim'`, `followProof.mode: 'claim'`) and the four quotes
-(`proof: 'verify'`), each with its own `postUrl`, `title`, `cta` and `hint`, and the shared
-`QUOTE_CHECK_NOTE` sentence. In the DOM all four render as `.x-task` cards with an **Open…** button,
+(`proof: 'verify'`), each with its own `postUrl`, `title`, `cta` and `hint`, and nothing shared
+between their hints. In the DOM all four render as `.x-task` cards with an **Open…** button,
 a *Paste the link to your post* input and a **Verify** button, and the left tab carries the count
 badge `5`. The two refusals, measured through the page's own session rather than asserted:
 
@@ -1854,10 +1985,10 @@ when there is a secret to check with. The review window applies **only while the
 unverified**: once X is telling us, a claim is decided at the moment it is made (`reviewMinutes` is
 null) and there is nothing to wait for.
 **This build is deployed, and the review window is live** (September 21, `dungeon-knights-lx9kknkvv`).
-Production runs `claim` mode *with* the window, so the card says so in the present tense: *"Follows are
-verified manually, so points are granted after review — usually within 30–45 minutes — and the task
-pays once per X account, ever."* Measured on the deployment, not read off the code — the transcript is
-under *the review window, verified live* above.
+Production runs `claim` mode *with* the window, so the card says so in the present tense: *"Follow
+@{handle} on X, then claim. Points land after a short review, usually within 30–45 minutes. Pays once
+per account."* Measured on the deployment, not read off the code — the transcript is under *the review
+window, verified live* above.
 And **deliveries can silently not arrive**: an unsubscribed, unauthorised or over-limit account gets
 no events at all, which at this end is indistinguishable from "nobody followed us". Every accepted
 delivery is logged (`[x-events] …`), so the two can be told apart from the log — subscribers on X's
@@ -1988,6 +2119,265 @@ an edited payload and an `alg: HS256` token (the classic confusion bug).
   being composited** (backgrounded, occluded, or a preview surface with no visible client).
   That is intentional — no dungeon time is lost — but it means a headless soak only progresses
   while the page is actually being rendered.
+
+### Discord — the rooms, the roles, and what never leaves the server
+
+Discord has no API that creates an application on somebody's behalf, so a couple of steps are
+account-level and cannot be scripted. Everything after them is one command, and everything about the
+server is written down once, as data, in `lib/discord-structure.js` — eight roles (each with its own
+colour, and an icon for the day the server boosts), six categories, seventeen channels, twenty-four
+custom emoji, two webhooks, four pinned pages and the slash commands. Nothing about the server
+lives only in Discord, which is what makes it rebuildable, and the builder is **idempotent by
+construction**: the plan is a diff between that file and what the API reports, so a second run writes
+nothing.
+
+**The server exists: "DUNGEON KNIGHTS", id `1551945997033410580`.** The id came off the owner's own
+invite link through Discord's public invite endpoint (`/api/v10/invites/<code>?with_counts=true`,
+no token required), so nothing has to be copied out of the client by hand. The invite that found it
+also proved the server is otherwise empty — one member, one `general` channel — which is the state
+the builder is written for.
+
+**The steps only the owner can do** (deploying is not one of them; nothing here needs the site
+until the last item):
+
+1. Create the application at <https://discord.com/developers/applications>. Bot tab → Reset Token,
+   copy it. General Information has the Public Key and the Application ID.
+2. Invite the bot to the server with the URL below — it grants exactly the permissions the plan
+   needs, from one constant (`BOT_PERMISSIONS`: view, send, embed, attach, history, manage channels,
+   manage roles, manage webhooks, manage messages, mention everyone, manage guild — an integer of
+   `805563440`, which is what the URL carries, and never `ADMINISTRATOR`).
+
+```bash
+# prints the invite URL with no token, when you only have the application id
+node tools/discord-setup.js --client-id <application id>
+
+# plan only, writes nothing: the default, and the reason a first run is safe
+DISCORD_BOT_TOKEN=... DISCORD_GUILD_ID=... node tools/discord-setup.js
+
+# the same command with --apply performs it, then reads the server back and plans again,
+# exiting non-zero if anything is still outstanding — the check that the file and the
+# server are the same thing, rather than a report of what it meant to do
+DISCORD_BOT_TOKEN=... DISCORD_GUILD_ID=... node tools/discord-setup.js --apply
+
+# the rest of the tool, each of which is useful on its own
+DISCORD_BOT_TOKEN=... DISCORD_GUILD_ID=... node tools/discord-setup.js --apply --refresh-content
+DISCORD_BOT_TOKEN=... DISCORD_GUILD_ID=... node tools/discord-setup.js --sync
+node tools/discord-setup.js --test-post        # prove a pasted webhook URL still works
+node tools/discord-setup.js --list             # who has linked a wallet
+node tools/discord-setup.js --unlink <discord id>
+DISCORD_BOT_TOKEN=... node tools/discord-setup.js --wire-app [--url https://dungeonknights.io]
+```
+
+The token comes from the shell, like `X_CONSUMER_SECRET`, and **never** from a dotenv file — a
+harness check forbids `dotenv` and any read of a `.env` path inside the tool, so a token cannot
+quietly start living in the repo. The application id and the public key are not secrets and are
+printed for pasting into Vercel.
+
+To get a token into the shell without it passing through a chat transcript, `.env.discord.local`
+holds the guild id and a blank `DISCORD_BOT_TOKEN`; it is gitignored (`.gitignore:13`, `.env*.local`)
+and Next never loads it, so it is inert to the app. Source it by hand and the tool still reads the
+variable from the environment, exactly as documented:
+
+```bash
+set -a; . <(sed 's/\r$//' .env.discord.local); set +a && node tools/discord-setup.js
+```
+
+The `sed` is not decoration — a file saved with CRLF would otherwise put a carriage return inside
+the token and Discord answers `401`.
+
+#### What building the live server taught, none of which is in Discord's docs
+
+The server was built on 23 September 2026: application `Dungeon Knights`
+(`1552219073449033818`), guild `1551945997033410580`, **plan quiet on the read-back** — 8 roles in
+the order the file lists them, 6 dressed categories, 17 channels, 24 custom emoji, 2 webhooks,
+4 pinned pages, the guild commands registered. Six things cost real time, and each one is now a line of
+code or a harness check:
+
+- **A bot may not create a role holding a permission it does not itself hold.** Discord answers
+  `Missing Permissions`, and three refused role writes cascaded into five more steps. The invite had
+  been asking for only the permissions the *builder* uses, not the ones it must *grant*.
+  `BOT_PERMISSIONS` is now the union of every role permission and every access-class grant, and
+  `check-discord.js` recomputes that union and fails if the two lists ever drift again.
+- **A re-invitation is how a live bot's permissions change.** Discord keeps the managed role, and
+  re-authorising the same client id with a wider set updates it in place — verified: the role went
+  from `805563440` to `1117521440502` after one pass through the authorize screen. A bot cannot grant
+  itself anything (`PATCH` on its own role is `403`), and it *can* move its own role (`PATCH` on the
+  guild role list with its own id was accepted, position 1 → 9), so the old advice to drag the bot's
+  role up by hand is obsolete: the ordering step works once the bot is above the roles it manages.
+- **`MENTION_EVERYONE` cannot be written into an overwrite by this bot, in either direction.** It is
+  a bare `403` — on an allow, on a deny, in a channel with no overwrites at all, after the bit was
+  confirmed present on the bot's own role. Every grant and deny in `ACCESS` is now free of it, and a
+  harness check fails if one comes back. Staff still ping through their *role*, and announcements go
+  out through the webhook, which channel overwrites do not touch.
+- **Pinning needs `PIN_MESSAGES`, not `MANAGE_MESSAGES`.** With every permission in the old list the
+  bot still got `403` on every pin in every channel; `MANAGE_MESSAGES` was present and irrelevant.
+  The separate bit is `1n << 51n`, it is in `PERMISSION` and in the invite, and after one re-invite
+  `PUT /channels/{id}/pins/{messageId}` answers `204`. Without it the four pages were four posted
+  messages.
+- **A bot cannot write an overwrite for its own role — only a create can carry one.** `PUT` is
+  refused with `50013` however high the bot sits; the same overwrite in a channel *create* is
+  accepted. So `channelOverwrites` adds it for rooms the bot has to post or administer in, and the
+  plan reports an existing room that lacks it as held back rather than retrying a write that can
+  never land. Four rooms were deleted and rebuilt to pick it up, which is also how the missing
+  `channelIds` on the plan surfaced: a child created under a category that already existed failed
+  with "its category … was not created" until existing ids were carried through like `roleIds`.
+- **`guild.bot.id` is the bot user, not its role.** They are different snowflakes, and an overwrite
+  written for the wrong one is an overwrite for a role nobody has. The managed role is found by
+  `role.tags.bot_id`, and the harness fixture now carries that tag so the bug cannot come back.
+
+**One straggler needs a human click.** `🔒 STAFF` still exists under its old name, with no channels
+in it: the bot hid it from `@everyone` before the file knew a hidden room has to grant the bot sight
+of it, so the bot can neither see it, rename it, nor delete it. Right-click it → Delete Category. The
+rebuilt `⁂⁂⁂《 STAFF 》⁂⁂⁂` beside it is the real one, and nothing depends on the old one being gone.
+
+#### The dressing: 24 emoji, and the one cosmetic Discord charges for
+
+Asked to make the server look like a game server and to change only what is free, the answer splits
+cleanly, and finding the split took one call each rather than a guess:
+
+| | free? | measured |
+|---|---|---|
+| a custom emoji | **yes**, at every boost level | `POST /guilds/{id}/emojis` → `201`, and the guild read reports them back |
+| a role icon | **no** — a Level 2 boost perk | `PATCH /guilds/{id}/roles/{id}` → `403 This server needs more boosts to perform this action` |
+| a custom font | nothing to ask for | Discord has no font setting. The look in any reference is unicode dressing plus role colours |
+
+The server now wears **24 custom emoji**, all of them made from art this repo already ships: the six
+published faces of the two collections, the economy icons the Points page draws (points, vault, loot,
+tasks, invites, trophy, crossed swords), four of Arya's expressions, one monster per dungeon, and the
+house castle and shield. They are declared in `EMOJI` in `lib/discord-structure.js` and derived — not
+copied a second time — with one command per file:
+
+```bash
+# the source art is 1–2 MB a file. Fit it inside a transparent 128×128 square, centred, nothing
+# cropped and nothing stretched: 128×128 is what Discord renders, and the ceiling is 256 KB.
+ffmpeg -y -v error -i <source> -vf "scale=120:120:force_original_aspect_ratio=decrease,\
+  pad=128:128:(ow-iw)/2:(oh-ih)/2:color=black@0" -pix_fmt rgba public/assets/discord/emoji/<name>.png
+# role icons are the same command at scale=240 / pad=256, into public/assets/discord/roles/<key>.png
+```
+
+Largest emoji 36,031 B, largest role icon 113,677 B, both under the 256 KB ceiling. `tools/check-discord.js`
+reads the PNG header of every one of them and fails if a file is missing, is not 128×128, or crosses
+the ceiling — the numbers are checked rather than documented, because a wrong crop otherwise surfaces
+minutes into a live build as an API message about the picture.
+
+Three rules make it safe to run twice. A name that **already exists is kept, never replaced** (the
+same bargain the pinned pages make, for the same reason: a person may have swapped the picture), an
+emoji somebody else added is reported as extra and never deleted, and the tool still contains no
+`DELETE` anywhere — a harness check enforces that. To change one, delete it in Discord and re-run.
+
+**Role icons are made and committed but held back**, because the limit is about boosting rather than
+about permissions. `ROLE_ICON_BOOST_TIER = 2`, `premium_tier` is read in the same guild call, and on
+this server (tier 0) the plan reports one blocker naming the level instead of retrying a write
+Discord refuses:
+
+```
+BLOCK  role-icons-need-boosts   … the 8 icon(s) this file names are held back (boost tier 0,
+                               and custom role icons are a level 2 perk)
+```
+
+The pictures are in `public/assets/discord/roles/`, so they land on the next build the moment the
+server qualifies; the harness proves that path against a boosted fixture, including that the executor
+opens the file and hands Discord a data URI rather than a path.
+
+**Measured on the live server after `--apply`:** 25 writes, 0 refused, and the read-back plan empty —
+24 emoji, all 24 described by the file and none of them somebody else's; boost tier 0; 8 roles
+coloured; 0 role icons, for the reason above.
+
+The same run exposed one piece of history worth cleaning rather than reporting as fixed:
+`#points-program` held **an unpinned second copy** of its own page, posted on the build before
+`PIN_MESSAGES` existed — which is exactly why the plan still wanted to post it. The plan posted and
+pinned the real one, and the orphan (matched by its `v1 · points` footer, older than the pinned id)
+was deleted by hand. The room now holds one post, pinned.
+
+The harness went **111 → 121 checks**, and the ten new ones were falsified by mutation before they
+were trusted — five mutations, all caught by name: an emoji swapped for a 256×256 file (caught by
+the size check), the boost requirement dropped to tier 0 (caught by "no icon is planned"), two emoji
+sharing a name (caught by the name check), the executor sending the path instead of the picture
+(caught by the data-URI check), and the emoji steps never being planned (caught by the empty-server
+plan and the upload count).
+
+```bash
+node tools/check-discord.js                          # 121 checks, offline, no token
+set -a; . <(sed 's/\r$//' .env.discord.local); set +a && node tools/discord-setup.js
+# the plan prints create-emoji steps; add --apply to write them, then it re-reads and plans again
+```
+
+#### The bot is Arya
+
+The bot user is named `Arya` and wears the project's own Arya art, set through the API rather than
+clicked into the portal. Both halves are one call, and the avatar has to be a data URI:
+
+```bash
+# Square, because Discord masks an avatar into a circle. The first attempt used the whole width
+# (`crop=875:875:0:30`) and her face came out small at 32px in a chat line; the one that is live is
+# this tighter square, which puts the head on the circle's centre. Her raised fist is clipped at the
+# right edge by it, which is invisible at avatar size and worth knowing if the crop is ever retaken.
+ffmpeg -y -v error -i public/assets/arya/arya-clear.png -vf "crop=620:620:130:20,scale=512:512" avatar.png
+```
+
+```js
+// PATCH /users/@me — the bot may rename itself and replace its own avatar, and nothing else about it
+body = { username: 'Arya', avatar: 'data:image/png;base64,' + fs.readFileSync(png).toString('base64') };
+```
+
+Two details worth keeping. `global_name` is accepted by that endpoint and comes back `null` for a
+bot, so the username is the name that matters; and the **application** is still called `Dungeon
+Knights` in the portal, which is what the authorize screen prints. That is a separate field
+(`PATCH /applications/@me`) and it was left alone on purpose: the persona is Arya, the project is
+Dungeon Knights. Bot usernames are rate limited to two changes an hour, so pick the next one slowly.
+
+| variable | where | what it is for |
+|---|---|---|
+| `DISCORD_BOT_TOKEN` | the shell only | building the server, granting roles |
+| `DISCORD_GUILD_ID` | the shell only | which server to reconcile |
+| `DISCORD_PUBLIC_KEY` | Production | verifying every interaction the endpoint receives |
+| `DISCORD_APPLICATION_ID` | Production (optional) | recorded for reference; the endpoint does not need it |
+| `DISCORD_WEBHOOK_ANNOUNCE` | Production, then redeploy | announcement posts |
+| `DISCORD_WEBHOOK_ACTIVITY` | Production, then redeploy | signup and vault posts |
+| `DISCORD_ACTIVITY_SHOW_HANDLES` | Production (optional) | `true` names the X handle on signup posts |
+
+A webhook URL is a password for one channel, Discord shows it exactly once, and `--apply` prints
+both. An env change does not reach a live build, so the webhooks need a redeploy — the same rule the
+X webhook section records. Without them the site works and logs one line per slot.
+
+- **Holders-only means invisible, not locked.** `holders-lounge` and `genesis-council` deny
+  `VIEW_CHANNEL` to `@everyone` and grant it to the holder roles. A room the public can *see* is not
+  what "holders only" means, and the harness asserts the deny rather than the grant.
+- **A role is derived state, so it can always be worked out again.** `lib/discord-roles.js` computes
+  what an account has earned from real reads (Knight count, Genesis count, points tier) and
+  reconciles: it grants, removes only what it granted, and leaves anything it did not grant alone. A
+  chain read that fails is reported as **unknown**, never as zero, because a failed read that reads
+  as "no knights" would strip a holder's roles.
+- **Linking: the wallet signs, Discord signs, and neither half is worth anything alone.** The
+  signed-in wallet asks for a six-character code (`dk:discord:code:`, fifteen minutes), types
+  `/claim CODE` in Discord, and the interaction's own signature is what proves the Discord side. The
+  code burns on use, asking for a new one invalidates the old one, and the link is stored **both
+  ways** — one wallet, one account, each direction refused with its own sentence — because storing
+  only one direction leaves the farm door open. `--list` shows who has linked; `--unlink <id>` is the
+  human escape hatch for a genuinely lost account.
+- **Notifications are a copy, never a step.** `lib/discord-notify.js` never throws and never changes
+  a caller's answer: the waitlist row is already written and the points are already paid by the time
+  it runs. What a public room receives is what the page itself publishes — a position and a count,
+  never an email, never a wallet — and every string that came from a person is escaped (`@everyone`,
+  `<@123>`, `**`), with `allowed_mentions: { parse: [] }` as the actual guarantee rather than the
+  escaping.
+- **The two events with a caller** are `waitlist.signup` and `vault.complete` — the third floor,
+  cleared today, for points, where `credited > 0` is what separates finishing the run from tapping
+  the button twice. `mint.knight` is described and deliberately uncalled: a mint is a contract write
+  from the player's own wallet, so nothing on this server sees it happen, and the honest state of
+  that event is "not built".
+- **The endpoint** is `app/api/discord/interactions/route.js`: it reads the **raw** body, verifies
+  Ed25519 against `DISCORD_PUBLIC_KEY` before it parses anything, refuses unsigned input with a 401,
+  and answers a ping with a pong. `--wire-app` preflights the URL with an unsigned POST first, since
+  Discord reports its own validation failures as a bare `Response Error` — and a 401 is exactly what
+  "deployed and checking signatures" looks like. Run `/whoami` in Discord to prove the round trip.
+- **Checks:** `node tools/check-discord.js`, 103 checks, offline against a fake Discord. Idempotency
+  (apply, read back, plan again, second plan empty), the deny-not-grant rules, invite-versus-plan
+  permissions, escaping and privacy, signature verification, the link store's both-directions rules,
+  and the refusal to remove a role this project did not grant.
+- **Not built yet:** nothing on the site calls `POST /api/discord/link`, so the code a player needs
+  is not shown anywhere — `/claim` works the moment the site has a card that fetches it. The server
+  side is finished and tested; the page side is not started.
 
 ### Server-signed runs (Game V4)
 

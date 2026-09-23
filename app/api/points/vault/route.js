@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { sessionFromRequest } from '../../../../lib/points-session.js';
 import { clearLevel, shareEntry } from '../../../../lib/points-program.js';
+import { VAULT_LEVELS } from '../../../../lib/points-config.js';
+import { notifyVaultRun } from '../../../../lib/discord-notify.js';
 
 // The payout rules depend on today's date and on stored state, so nothing here may be
 // cached or prerendered.
@@ -32,6 +34,19 @@ export async function POST(request) {
     if (action === 'clear') {
         const result = await clearLevel(address, body?.level);
         if (result.error) return NextResponse.json(result, { status: 400 });
+
+        // One milestone is worth a public note: the last floor, cleared today, for points. `credited`
+        // is what separates finishing the run from tapping the button twice, because a floor already
+        // cleared today pays nothing and comes back with the same state.
+        //
+        // Not awaited. The player is watching the mini-game finish, and a post to Discord is not
+        // worth a second of their time; `notifyVaultRun` never throws and never changes the answer,
+        // so the worst case of losing the race is a missing post. The points are already paid, and
+        // the run is already recorded, before this line runs.
+        if (Number(body?.level) === VAULT_LEVELS.length - 1 && Number(result.credited) > 0) {
+            void notifyVaultRun({ points: Number(result.state?.entryTotalToday) || Number(result.credited) });
+        }
+
         return NextResponse.json(result);
     }
     if (action === 'share') {

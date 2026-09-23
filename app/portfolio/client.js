@@ -195,7 +195,11 @@ export default function PortfolioClient() {
     const handleConnect = async () => {
         setBusy('connect');
         try {
-            setAddress(await connectWallet());
+            // Null means nothing was connected — the Privy login was closed, or it is still
+            // open. A sign-in that lands later arrives through the bridge, so there is
+            // nothing to report here.
+            const who = await connectWallet();
+            if (who) setAddress(who);
         } catch {
             // The menu shows the reason for a failed connect; here the page has room to say it too.
             setBusy(null);

@@ -168,6 +168,82 @@ async function api(path, { method = 'GET', body, token } = {}) {
     rec('an overlapping burst never pays more than the floors it cleared',
         burstTotal <= 900, `${burstTotal} PTS (100+300+500 = 900 max)`);
 
+    // -------------------------------------------------------------- the streak bonus
+    // The bonus is paid when the third floor falls, once per day, and the ways it could pay twice
+    // are the ways the floors themselves could: a replay, a fresh run of a day already finished,
+    // and two clears landing at the same moment. Each is exercised on its own wallet, because a
+    // streak is a per-wallet fact and a shared one would prove nothing.
+    console.log('');
+    console.log("The day's streak bonus");
+
+    const runner = fresh();
+    const runnerHandle = freshHandle();
+    const runnerToken = session.issueToken(runner).token;
+    await api('/api/points/x', {
+        method: 'POST', token: runnerToken, body: { action: 'bind', identity: { username: runnerHandle } },
+    });
+
+    const streakBefore = (await api('/api/points/me', { token: runnerToken })).data?.state?.streak;
+    rec('a wallet that has never run is on day one, unpaid',
+        streakBefore?.days === 1 && streakBefore?.multiplier === 1 && streakBefore?.award === 150
+        && streakBefore?.paid === false && streakBefore?.max === 15,
+        `day ${streakBefore?.days} · ${streakBefore?.multiplier}× · ${streakBefore?.award} PTS`);
+
+    const floorOne = await api('/api/points/vault', { method: 'POST', token: runnerToken, body: { action: 'clear', level: 0 } });
+    const floorTwo = await api('/api/points/vault', { method: 'POST', token: runnerToken, body: { action: 'clear', level: 1 } });
+    rec('the first two floors pay the floors, and no bonus',
+        floorOne.data?.credited === 100 && floorTwo.data?.credited === 300
+        && !floorOne.data?.streakAward && !floorTwo.data?.streakAward,
+        `${floorOne.data?.credited} + ${floorTwo.data?.credited} PTS, streak ${floorOne.data?.streakAward || 0}/${floorTwo.data?.streakAward || 0}`);
+
+    const floorThree = await api('/api/points/vault', { method: 'POST', token: runnerToken, body: { action: 'clear', level: 2 } });
+    rec('the third floor pays the run and the day-one bonus',
+        floorThree.data?.credited === 500 && floorThree.data?.streakAward === 150,
+        `${floorThree.data?.credited} PTS + ${floorThree.data?.streakAward} PTS streak`);
+
+    const runDone = (await api('/api/points/me', { token: runnerToken })).data?.state;
+    rec('so the day pays 900 + 150, and the state says it is paid',
+        runDone?.points === 1050 && runDone?.streak?.paid === true && runDone?.streak?.days === 1,
+        `${runDone?.points} PTS · day ${runDone?.streak?.days} paid=${runDone?.streak?.paid}`);
+
+    const replay = await api('/api/points/vault', { method: 'POST', token: runnerToken, body: { action: 'clear', level: 2 } });
+    const encore = await api('/api/points/vault', { method: 'POST', token: runnerToken, body: { action: 'clear', level: 0 } });
+    rec('replaying a floor pays nothing, and neither does starting the day again',
+        replay.data?.alreadyCleared === true && !replay.data?.streakAward
+        && encore.data?.alreadyCleared === true && !encore.data?.streakAward,
+        `replay ${replay.data?.credited ?? 0} PTS · encore ${encore.data?.credited ?? 0} PTS`);
+    rec('  … and the balance is still one run and one bonus',
+        (await api('/api/points/me', { token: runnerToken })).data?.state?.points === 1050, '1050 PTS');
+
+    const racer = fresh();
+    const racerHandle = freshHandle();
+    const racerToken = session.issueToken(racer).token;
+    await api('/api/points/x', {
+        method: 'POST', token: racerToken, body: { action: 'bind', identity: { username: racerHandle } },
+    });
+    await api('/api/points/vault', { method: 'POST', token: racerToken, body: { action: 'clear', level: 0 } });
+    await api('/api/points/vault', { method: 'POST', token: racerToken, body: { action: 'clear', level: 1 } });
+    const race = await Promise.all(Array.from({ length: CONCURRENCY }, () => api('/api/points/vault', {
+        method: 'POST', token: racerToken, body: { action: 'clear', level: 2 },
+    })));
+    const raceFloors = race.reduce((sum, r) => sum + (r.data?.credited || 0), 0);
+    const raceStreak = race.reduce((sum, r) => sum + (r.data?.streakAward || 0), 0);
+    rec(`eight simultaneous third floors pay one bonus (${raceStreak} of 150)`,
+        raceStreak === 150 && raceFloors === 500, `${raceFloors} PTS floors + ${raceStreak} PTS streak`);
+    rec('  … and the racer ends the day on 900 + 150',
+        (await api('/api/points/me', { token: racerToken })).data?.state?.points === 1050, '1050 PTS');
+
+    // The wallets this section invented are removed rather than left on the board: it runs against
+    // whatever store the server has (a shared one, on a deployment), and a harness that leaves fake
+    // players behind is one nobody can run twice without polluting the leaderboard it just read.
+    const { purgeWallet } = await import('../lib/points-store.js');
+    await purgeWallet(runner, { handles: [runnerHandle] });
+    await purgeWallet(racer, { handles: [racerHandle] });
+    rec('the wallets this section created are cleaned up',
+        !(await (await import('../lib/points-store.js')).getWallet(runner))
+        && !(await (await import('../lib/points-store.js')).getWallet(racer)),
+        'two wallets purged');
+
     // ------------------------------------------------------------------ the throttle
     console.log('');
     console.log('A post is not re-checked on demand');

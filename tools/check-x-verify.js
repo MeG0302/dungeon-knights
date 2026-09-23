@@ -247,6 +247,40 @@ async function withStub(handler, options = {}) {
 }
 
 {
+    // The day marker, which is what makes a daily reward daily rather than per post: the same
+    // player can be paid once a day, so the cheapest repeat is yesterday's link filed today.
+    //
+    // The pair that matters is the last two: loose on how a human writes it, strict on the number,
+    // because `Day 3` is today and `Day 30` is a different day of the program.
+    const shareExpect = { handle: 'knightfan', mention: TAG };
+    const posting = (text) => stub(() => jsonResponse(embedFor({ text })));
+    const verify = (text, marker = null) => verifyPost(`https://x.com/knightfan/status/${ID}`, {
+        expect: marker ? { ...shareExpect, marker } : shareExpect,
+        fetchImpl: posting(text),
+    });
+
+    const noMarker = await verify(`cleared the vault today @${TAG}`, 'Day 3');
+    rec('a share from another day does not pay today',
+        noMarker.ok === false && noMarker.code === 'missing-marker', noMarker.reason);
+
+    const morning = await verify(`Day 3: cleared the vault today @${TAG}`, 'Day 3');
+    rec('today’s marker in the post is what lets it pay', morning.ok === true, describeVerdict(morning));
+
+    const shapes = ['DAY  3', 'day3', '(day 3)'];
+    const accepted = [];
+    for (const shape of shapes) accepted.push((await verify(`cleared it, ${shape}, @${TAG}`, 'Day 3')).ok === true);
+    rec('and how a player types it is not the check — “DAY  3”, “day3”, “(day 3)” all count',
+        accepted.every(Boolean), accepted.map((ok) => (ok ? 'ok' : 'REFUSED')).join(' · '));
+
+    const later = await verify(`Day 30: cleared the vault today @${TAG}`, 'Day 3');
+    rec('but another day is another day — “Day 30” is not “Day 3”',
+        later.ok === false && later.code === 'missing-marker', `Day 30 vs Day 3 → ${later.code || 'paid'}`);
+
+    const unchecked = await verify(`cleared the vault today @${TAG}`);
+    rec('a caller that asks for no marker gets the old behaviour, unchanged', unchecked.ok === true);
+}
+
+{
     const { verdict } = await withStub(() => jsonResponse(embedFor({ text: 'campaign #DungeonKnights' })));
     const kw = await verifyPost(`https://x.com/knightfan/status/${ID}`, {
         expect: { handle: 'knightfan', host: HOST, keyword: '#DungeonKnights' },

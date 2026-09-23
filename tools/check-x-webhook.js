@@ -360,28 +360,30 @@ function code(source) {
             const unanswered = !t.blurb || !t.blurbChecked;
             if (unanswered) return false;
             return t.blurb !== t.blurbChecked
-                && /review/i.test(t.blurb)
-                && !/own record|checked against/i.test(t.blurb)
-                && /own record|checked against/i.test(t.blurbChecked);
+                && /short review/i.test(t.blurb)
+                && !/own record|checked|X tells us/i.test(t.blurb)
+                && /X tells us|own record|checked against/i.test(t.blurbChecked)
+                && !/review|30\u201345 minutes/i.test(t.blurbChecked);
         }),
-        'one promises a review, the other says X’s own record was checked');
+        'one promises a review, the other lets X settle it — and neither borrows the other’s claim');
 
     rec('and the unverified sentence promises the window the claims are actually given',
         Config.ONE_TIME_TASKS.every((t) => !t.review
-            || (/verified manually/i.test(t.blurb) && /30\u201345 minutes/.test(t.blurb))),
+            || (/short review/i.test(t.blurb) && /30\u201345 minutes/.test(t.blurb)
+                && !/30\u201345 minutes/.test(t.blurbChecked))),
         'the card’s wait and review.minMinutes/maxMinutes are written in one file for this reason');
 
-    // The quote-reposts are the same principle from the other side: their copy names the two things X
-    // is actually asked — authorship and the tag — and says out loud the one thing it cannot see. A
-    // quote task that implied the quote itself was checked would be the identical lie in reverse, and
-    // it is the failure this tab is most exposed to, because four tasks ask nearly the same thing.
+    // The quote-reposts are the same principle from the other side: their copy is an ask — what to do,
+    // and that it is paid once — and never a paragraph about our plumbing. The blurb rule above is
+    // what keeps a claim honest, and this is what keeps a *task* readable, so a word the card would
+    // never say (a check it cannot run) must not creep back into the hint either.
     const postTasks = Config.ONE_TIME_TASKS.filter((t) => t.proof === 'verify');
-    rec('the quote-repost tasks say what is checked and what cannot be',
+    rec('the quote-repost cards ask for the post, and claim nothing about the check',
         postTasks.length === Config.ONE_TIME_POSTS.length && postTasks.every((t) =>
             !t.blurb && !t.blurbChecked
-            && /tags @\{handle\}/.test(t.hint)
-            && /cannot see which post/i.test(t.hint)),
-        `${postTasks.length} quote task(s), each naming the tag and admitting the quote is invisible`);
+            && /tag[s]? @\{handle\}/.test(t.hint)
+            && !/cannot see|no check|on your word|verified/i.test(t.hint)),
+        `${postTasks.length} quote task(s), each one sentence: what to post and the tag`);
 
     rec('and each one quotes its own post, addressed by the kind the page sends back',
         new Set(postTasks.map((t) => t.url)).size === postTasks.length

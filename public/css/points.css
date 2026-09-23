@@ -126,6 +126,14 @@ same tokens as the rankings tabs on the right, at a size that fits a 400px colum
     letter-spacing: 0;
 }
 
+/* The count is a number; this one is a word, so it needs the letter-spacing back and a little more
+   room. It clears for good the first time the tab is opened (see `ANNOUNCE_SEEN_KEY`). */
+.points-tab-badge.is-new {
+    padding: 0 6px;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+}
+
 /* ---------------------------------------------------------------------------
    A one-time task
 
@@ -1022,6 +1030,145 @@ link, and X is asked about it before anything is paid.
     color: var(--text-primary);
     overflow-wrap: anywhere;
     user-select: text;
+}
+
+/* The one line under it about the day marker. Quieter than the text above, because it is a note
+   about something the player should *not* do rather than a step they have to take. */
+.x-share-keep {
+    margin: 0;
+    font-size: 10px;
+    line-height: 1.5;
+    color: var(--text-muted);
+}
+
+/* ============================================================== the announcements tab
+ * One announcement to a card, and the card is a small poster: the capsule, a kicker, a headline,
+ * a line of explanation. The glow under the art is the only motion on the page that is decorative
+ * rather than informative, so it is the first thing to go when a visitor asks for less of it.
+ */
+.announce-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 16px 14px 14px;
+    border: 1px solid var(--border-bronze, var(--border-base));
+    border-radius: 5px;
+    background:
+        radial-gradient(120% 90% at 50% 0%, rgba(94, 168, 255, 0.10), transparent 62%),
+        rgba(0, 0, 0, 0.34);
+    text-align: center;
+}
+
+/* The art sits in its own stacking context so the halo behind it cannot bleed over the border. */
+.announce-art {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 4px 0 2px;
+}
+
+.announce-art::before {
+    content: '';
+    position: absolute;
+    width: 132px;
+    height: 132px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(94, 168, 255, 0.26), transparent 68%);
+    animation: announce-halo 5.5s ease-in-out infinite;
+    z-index: 0;
+}
+
+.announce-art img {
+    position: relative;
+    z-index: 1;
+    width: 132px;
+    height: 132px;
+    image-rendering: pixelated;
+    filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.55));
+}
+
+@keyframes announce-halo {
+    0%, 100% { transform: scale(0.94); opacity: 0.75; }
+    50%      { transform: scale(1.08); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .announce-art::before { animation: none; }
+}
+
+.announce-kicker {
+    margin-top: 4px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1.6px;
+    text-transform: uppercase;
+    color: var(--accent-gold-dim, var(--accent-gold));
+}
+
+.announce-title {
+    margin: 0;
+    font-family: var(--font-heading, inherit);
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.35;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    color: var(--accent-gold);
+}
+
+.announce-line {
+    margin: 0;
+    font-size: 11px;
+    line-height: 1.6;
+    color: var(--text-secondary, var(--text-primary));
+}
+
+.announce-link {
+    margin-top: 2px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--accent-gold);
+    text-decoration: none;
+    border-bottom: 1px solid rgba(212, 168, 67, 0.35);
+}
+
+.announce-link:hover {
+    border-bottom-color: var(--accent-gold);
+}
+
+.announce-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    margin-top: 10px;
+}
+
+.announce-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 11px;
+    line-height: 1.55;
+    color: var(--text-secondary, var(--text-primary));
+}
+
+.announce-n {
+    flex: 0 0 auto;
+    width: 17px;
+    height: 17px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border-bronze, var(--border-base));
+    border-radius: 50%;
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--accent-gold);
 }
 
 .x-task {
