@@ -3674,7 +3674,36 @@ dungeon-knights-meglast320-1694.vercel.app, and leaves the project's custom doma
 is invisible at the URL people actually open. Always re-alias, then verify the *custom* domain,
 not the deployment URL.
 
-**The current deploy** (September 24, the top-ten board and the waitlist task):
+**The current deploy** (September 24, the one-time pane and the Discord task):
+`dungeon-knights-dqlhonfe6-meglast320-1694`, aliased across **`dungeonknights.io`**,
+**`www.dungeonknights.io`** and **`dungeon-knights.vercel.app`**, built from the committed tree
+`10cfab4`. Verified on the live host: `/`, `/points`, `/portfolio` and `/genesis` are `200`; the
+`.vercel.app` alias still 307s to `/gate`; the bare board call still returns ten. The served chunk
+`app/points/page-8d59580608e46ab0.js` carries the new client strings (`One-time Tasks`, `Still on the
+table`, `Earned from tasks`, `PTS available`, `beside this one`, `below this panel`) and
+`/css/points.css?v=11` serves the new rules (`one-task-grid`, `one-task-divider`, `one-progress-seg`,
+`one-available-pill`, `one-hint-narrow`). Read from the live DOM, signed in: opening the One-time tab
+puts **nine** cards in the **wide** pane in a grid — follow, `Join the Genesis waitlist` →
+`https://dungeonknights.io/genesis`, `Join the Discord` → `https://discord.gg/zZFqA9Fqe`, and the five
+quote-posts — while the board renders **zero** rows, so the standings are genuinely not on screen; the
+narrow column keeps the summary (`Claimed 0 of 9`, nine segments, `Still on the table 4,500 PTS`,
+`Earned from tasks 0 PTS`) and swaps its own hint sentence at 860px. Switching back to Daily Run
+restores `Rankings` with both buttons and eleven rows, so the restructure did not cost the board.
+
+**Measured on the live host, four widths:** 1440 → panes 400/1040, the task grid **two columns** of
+493; 1023 → one column of 581; 768 → stacked (left above the tasks), one column of 725; 390 → stacked,
+left pane 384, first card 347 with its right edge at 366, **zero** elements past the viewport at every
+one of them.
+
+**The claimed state was checked on the dev store, not on live.** A claimed record for the preview
+wallet was seeded into `.data/points.json`, read, and then removed (the backup was written before the
+seed, and the wallet came back with `tasks: {}`). It renders as designed: the card moves under a
+`Claimed` divider, the done grid sits at `0.82` opacity, the card keeps its green border and shows
+`+500 ✓` with the receipt **`Paid … · credited on claim`**, and the narrow column counts
+`Claimed 1 of 8` / `Still on the table 3,500 PTS`. Writing a claim into the **production** store to see
+the same thing is what the harnesses refuse to do, so the live check stops at the open state.
+
+**The deploy before it** (September 24, the top-ten board and the waitlist task):
 `dungeon-knights-g5zsvoi2m-meglast320-1694`, aliased across **`dungeonknights.io`**,
 **`www.dungeonknights.io`** and **`dungeon-knights.vercel.app`**, built from the committed tree
 `afb8489`. Verified on the live host rather than the deployment URL: `/`, `/points`, `/portfolio`
