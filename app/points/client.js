@@ -946,11 +946,19 @@ export default function PointsPage() {
                 // Nothing linked yet: ask Privy for the link. The page learns it landed from
                 // `privyAuthChanged`, which is why this does not stand here waiting for it.
                 const started = window.privyBridge?.linkX?.();
+                // A player who is *already* bound and pressing for proof needs different words from one
+                // binding for the first time — the second half of the old sentence told someone to type
+                // a handle they had already typed.
+                const alreadyBound = Boolean(state?.x?.username);
                 setXErrors((e) => ({
                     ...e,
                     bind: started
-                        ? 'Finish linking X in the Privy window, then press Link X again, or type your handle below.'
-                        : 'Privy is not available here, so type your X handle below and bind it.',
+                        ? (alreadyBound
+                            ? 'Finish linking X in the Privy window, then press that button again.'
+                            : 'Finish linking X in the Privy window, then press Link X again, or type your handle below.')
+                        : (alreadyBound
+                            ? 'Privy is not available here, so this binding stays unproved. Posts are still checked against the handle.'
+                            : 'Privy is not available here, so type your X handle below and bind it.'),
                 }));
                 return;
             }
@@ -960,15 +968,20 @@ export default function PointsPage() {
             const result = await requestBindX(identity, accessToken);
             if (result.state) setState(result.state);
             setHandleDraft('');
+            // Three outcomes, said differently on purpose. `privy-no-x` is a signed-in player whose
+            // Privy user has no X linked: the binding is real and earns, and linking X is what turns
+            // "checked on every post" into "proved once" — worth a sentence, not a refusal.
             flash(result.verified
                 ? `@${result.x.username} bound and proved with Privy. Earning is open.`
-                : `@${result.x.username} bound. Earning is open, and posts are checked against that handle.`);
+                : result.proof === 'privy-no-x'
+                    ? `@${result.x.username} bound. Earning is open — link X whenever you like and this becomes provable.`
+                    : `@${result.x.username} bound. Earning is open, and posts are checked against that handle.`);
         } catch (e) {
             setXErrors((prev) => ({ ...prev, bind: e.message }));
         } finally {
             setXBusy(null);
         }
-    }, [connected, flash]);
+    }, [connected, flash, state?.x?.username]);
 
     // -------------------------------------------------------------- the daily share
     // The picture cannot ride in X's composer link — attaching a file on someone's behalf needs the
@@ -1544,11 +1557,13 @@ export default function PointsPage() {
                                             {' '}One X account earns for one wallet, so a binding is permanent.
                                         </div>
                                         <div className="x-bind-actions">
-                                            {/* Only offered when there is actually a Privy-linked X account to
-                                                prove — otherwise it is a button that can only apologise. */}
-                                            {!state.x.verified && privyX && xProof !== false && (
+                                            {/* Offered whenever the binding is unproved, which is not the same as
+                                                "only when an X account is already linked": a typed binding leaves
+                                                the player exactly here, with nothing on the page to press. Pressing
+                                                it with no link asks Privy for one. */}
+                                            {!state.x.verified && xProof !== false && (
                                                 <button className="btn btn-secondary btn-sm" onClick={() => handleBindX()} disabled={!!xBusy}>
-                                                    {xBusy === 'bind' ? 'Waiting for X…' : `Prove @${privyX.username}`}
+                                                    {xBusy === 'bind' ? 'Waiting for X…' : (privyX ? `Prove @${privyX.username}` : 'Link X to prove it')}
                                                 </button>
                                             )}
                                             {/* No Unbind, and none is coming: a binding a wallet can hand back
@@ -1594,9 +1609,10 @@ export default function PointsPage() {
                                             </button>
                                         </div>
                                         <div className="wallet-card-meta">
-                                            Linking through Privy proves the account; a typed handle works the
-                                            same, once a post from it checks out. Bind the account you post from —
-                                            it stays bound.
+                                            Linking through Privy proves the account. A typed handle binds just as
+                                            well — every post is checked against it before it pays — and linking X
+                                            later is what makes the binding provable. One account per wallet, and it
+                                            stays bound.
                                         </div>
                                     </>
                                 )}

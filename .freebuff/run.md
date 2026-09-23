@@ -1636,6 +1636,9 @@ node tools/check-signin-race.js # 12 checks, offline: `signIn()` against a stubb
                                 # refused, in bounded time), and one already here (no wait at all)
 node tools/check-one-time.js http://localhost:3000   # 26 checks: the same plus the tab and the
                                 # payout through the real API — creates a wallet, purges it after
+node tools/check-x-bind.js      # 28 checks, offline: which X handle a wallet binds — a proved one
+                                # winning over a typed one, every way a proof fails landing provisional,
+                                # and that the route and the page still do what the rule assumes
 node tools/check-x-verify.js    # 68 checks: the verifier alone, against a stubbed oEmbed — including
                                 # the day marker, loose on how it is typed and strict on the number
 node tools/check-x-webhook.js   # 51 checks: the follow webhook — real HMACs, both envelopes, no network
@@ -1657,6 +1660,32 @@ node --env-file=<pulled.env> tools/check-follow-gate.js \   # 9 checks: the revi
 `--against-live` **needs the store's credentials in this process** (`npx vercel env pull … --yes`),
 because it has to take its own wallets back out again; without them the run refuses to write rather
 than leaving test data in production. The pull is not optional and not a formality — see below.
+
+#### Which X handle a wallet binds — and the wall that was behind "or type your handle"
+
+The page offers two ways in: *Link X account*, and a field to type your handle. The typed one was
+broken for exactly the players the app's own login creates. A signed-in Privy user with **no X
+linked** had their token verified, the route saw no X account in it, and it refused with
+`no-x-link` — a 400 telling them to link X first, two lines under copy promising the opposite.
+Nothing was being protected by it: arriving with no token at all was already answered by binding
+the typed handle provisionally, and the same handle is checked against on every post.
+
+So the rule moved to `lib/x-binding.js` — `resolveXIdentity({ claimed, proof })` — and all three
+ways in now agree:
+
+| What the token says | What gets bound | `proof` |
+|---|---|---|
+| a linked X account | that account, `verified: true` | `privy` |
+| verified, but no X account linked | the typed handle, provisional | `privy-no-x` |
+| no token, expired, bad signature, outage | the typed handle, provisional | that check's code |
+| nothing typed *and* nothing linked | — the route refuses `bad-identity` | — |
+
+The rule is out of the route because the route imports `next/server`, which does not resolve outside
+Next — a decision made in the handler can only be checked by grepping its source. `check-x-bind.js`
+drives the real rule with real ES256 tokens and a stubbed Privy, and then asserts the route still
+calls it and the page still offers the upgrade path: a provisional binding shows **Link X to prove
+it**, so a typed handle is not a dead end. `privy-no-x` is the one case where linking X genuinely
+improves things, which is why the page says it in a sentence instead of a refusal.
 
 #### The announcements tab (`/points`)
 

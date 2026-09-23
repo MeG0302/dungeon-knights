@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { sessionFromRequest } from '../../../../lib/points-session.js';
 import { bindX, unbindX, stateFor } from '../../../../lib/points-program.js';
-import { privyIdentityFromToken, describeIdentity, privyAppConfigured } from '../../../../lib/privy-verify.js';
+import { privyIdentityFromToken, privyAppConfigured } from '../../../../lib/privy-verify.js';
+import { resolveXIdentity, describeBinding } from '../../../../lib/x-binding.js';
 
 // The binding depends on stored state and on a live Privy check, so nothing here may be cached.
 export const dynamic = 'force-dynamic';
@@ -15,6 +16,10 @@ export const runtime = 'nodejs';
  * is careful about — an access token, when the client sends one, is verified with Privy and its
  * linked X account is what gets bound. The client's own claim is used only when that check cannot
  * be made, and the record says which of the two happened.
+ *
+ * That decision — proved handle or typed one — is `resolveXIdentity` in `lib/x-binding.js`, kept out
+ * of here so it can be tested offline (`next/server` does not resolve outside Next). This route only
+ * turns its answer into a status code.
  *
  * `unbind` is answered rather than honoured, and the route keeps the action so an older page (or a
  * hand-rolled request) is told why in a sentence instead of a 404. The rule itself is in the
@@ -55,33 +60,18 @@ export async function POST(request) {
         username: String(body?.identity?.username || '').trim(),
     };
 
-    // Try to prove it. A missing token, an expired one, or a Privy outage all land in `verified:
-    // false` — the binding still happens, and the page says it is provisional. What never happens
-    // is a failed proof being reported as a successful one.
+    // Try to prove it. A missing token, an expired one, a Privy outage, or a token whose user has no
+    // X linked all land in `verified: false` — the binding still happens, and the page says it is
+    // provisional. What never happens is a failed proof being reported as a successful one.
     let proof = { ok: false, code: 'no-token' };
     if (body?.accessToken) {
         proof = await privyIdentityFromToken(body.accessToken);
     }
 
-    let identity = claimed;
-    let verified = false;
-    let replacedClaim = false;
+    const { identity, verified, proofCode, replacedClaim } = resolveXIdentity({ claimed, proof });
 
-    if (proof.ok && proof.twitter) {
-        identity = proof.twitter;
-        verified = true;
-        replacedClaim = claimed.id && claimed.id !== identity.id;
-        if (replacedClaim) {
-            console.warn(`[points] privy proof for ${address} named @${identity.username}, not the claimed @${claimed.username || '?'}`);
-        }
-    } else if (proof.ok && !proof.twitter) {
-        // Signed in with Privy, and that user has no X account linked. Saying so is the whole point:
-        // an unlinked account cannot be verified, and the player can fix it in one tap.
-        return NextResponse.json({
-            error: 'Your Privy account has no X account linked yet. Link X first, then bind it here.',
-            code: 'no-x-link',
-            provisional: true,
-        }, { status: 400 });
+    if (replacedClaim) {
+        console.warn(`[points] privy proof for ${address} named @${identity.username}, not the claimed @${claimed.username || '?'}`);
     }
 
     // A handle is required; the account id is not. Without a proof the id is unknown, and the
@@ -97,7 +87,7 @@ export async function POST(request) {
     if (result.error) return NextResponse.json(result, { status: 400 });
 
     if (!verified) {
-        console.warn(`[points] provisional X binding for ${address}: @${identity.username} — ${describeIdentity(proof)}`);
+        console.warn(`[points] provisional X binding for ${address}: ${describeBinding({ identity, proofCode })}`);
     }
 
     return NextResponse.json({
@@ -105,7 +95,7 @@ export async function POST(request) {
         verified,
         provisional: !verified,
         replacedClaim,
-        proof: verified ? 'privy' : proof.code,
+        proof: proofCode,
         state: result.state || await stateFor(address),
     });
 }
