@@ -945,20 +945,32 @@ export default function PointsPage() {
             if (!identity) {
                 // Nothing linked yet: ask Privy for the link. The page learns it landed from
                 // `privyAuthChanged`, which is why this does not stand here waiting for it.
-                const started = window.privyBridge?.linkX?.();
-                // A player who is *already* bound and pressing for proof needs different words from one
-                // binding for the first time — the second half of the old sentence told someone to type
-                // a handle they had already typed.
+                //
+                // Awaited, and the answer is *used*. `linkX()` used to return a bare `true` around a
+                // call whose promise rejected, so a player with no Privy sign-in was told to finish a
+                // link that had never started, while the console filled with an error they could not
+                // act on. It resolves to `{ ok, via, reason }` now: an absent bridge, a refused flow
+                // and a started one are three different sentences.
                 const alreadyBound = Boolean(state?.x?.username);
+                const attempt = window.privyBridge?.linkX
+                    ? await window.privyBridge.linkX()
+                    : {
+                        ok: false,
+                        // The bound card has no typed field to point at, so the same absence is two
+                        // different sentences depending on which card the player is looking at.
+                        reason: alreadyBound
+                            ? 'Privy is not available here, so this binding stays unproved. Posts are still checked against the handle.'
+                            : 'Privy is not available here, so type your X handle below and bind it.',
+                    };
                 setXErrors((e) => ({
                     ...e,
-                    bind: started
-                        ? (alreadyBound
-                            ? 'Finish linking X in the Privy window, then press that button again.'
-                            : 'Finish linking X in the Privy window, then press Link X again, or type your handle below.')
-                        : (alreadyBound
-                            ? 'Privy is not available here, so this binding stays unproved. Posts are still checked against the handle.'
-                            : 'Privy is not available here, so type your X handle below and bind it.'),
+                    bind: attempt.ok
+                        ? (attempt.via === 'login'
+                            ? 'Finish signing in with X in the Privy window — that links the account in the same step.'
+                            : (alreadyBound
+                                ? 'Finish linking X in the Privy window, then press that button again.'
+                                : 'Finish linking X in the Privy window, then press Link X again, or type your handle below.'))
+                        : (attempt.reason || 'Could not start the X link. Type your handle below instead.'),
                 }));
                 return;
             }

@@ -1636,6 +1636,9 @@ node tools/check-signin-race.js # 12 checks, offline: `signIn()` against a stubb
                                 # refused, in bounded time), and one already here (no wait at all)
 node tools/check-one-time.js http://localhost:3000   # 26 checks: the same plus the tab and the
                                 # payout through the real API — creates a wallet, purges it after
+node tools/check-x-link.js      # 24 checks, offline: starting the X link — a signed-in player goes to
+                                # the link flow, an unauthened one to sign-in-with-X, and **no path
+                                # rejects** (unhandled rejections are counted, not assumed away)
 node tools/check-x-bind.js      # 28 checks, offline: which X handle a wallet binds — a proved one
                                 # winning over a typed one, every way a proof fails landing provisional,
                                 # and that the route and the page still do what the rule assumes
@@ -1686,6 +1689,31 @@ drives the real rule with real ES256 tokens and a stubbed Privy, and then assert
 calls it and the page still offers the upgrade path: a provisional binding shows **Link X to prove
 it**, so a typed handle is not a dead end. `privy-no-x` is the one case where linking X genuinely
 improves things, which is why the page says it in a sentence instead of a refusal.
+
+#### Pressing *Link X* with no Privy session
+
+Privy's own declaration types the link call as `linkTwitter: () => void;`. The runtime disagrees: for
+a player who is not authenticated it returns a **rejecting promise**, so the call sat inside a
+`try { … }` that caught nothing, the rejection surfaced as `Uncaught (in promise): User must be
+authenticated before linking an account`, and the page was told the link had started while nothing
+had opened. A type that says `void` is not a promise that resolves.
+
+"Not authenticated" is also normal here rather than an error: `connected` on the Points page means a
+wallet is available, and an injected wallet needs no Privy login at all. So `lib/x-link.js` now
+decides where the decision can be tested, and both `linkTwitter()` and `login()` are awaited whatever
+their types claim:
+
+| state | what is started | the page says |
+|---|---|---|
+| signed in to Privy | the link flow | finish in the Privy window |
+| no Privy session | `login({ loginMethods: ['twitter'] })` — X alone | finish signing in; it links in that step |
+| the link rejects *because* the session lapsed | the same sign-in fallback | as above |
+| anything else (refused, outage, no bridge) | nothing | *type your handle below instead — it binds the same account* |
+
+`check-x-link.js` drives it with fakes and asserts the part that matters most: **no combination of
+failures makes it reject**. Unhandled rejections are counted via `process.on('unhandledRejection')`
+and asserted after a microtask turn, because a harness that returns a value and then exits can
+otherwise watch this exact bug pass.
 
 #### The announcements tab (`/points`)
 

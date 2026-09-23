@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { usePrivy, useWallets, useUser, useLinkAccount } from '@privy-io/react-auth';
 import { DEFAULT_CHAIN, addChainParams } from '../lib/privy-chains';
+import { startXLink } from '../lib/x-link';
 
 /**
  * The one thing the legacy pages need from React: `window.privyBridge`.
@@ -15,7 +16,7 @@ import { DEFAULT_CHAIN, addChainParams } from '../lib/privy-chains';
  *   getProvider()   — the EIP-1193 provider, on the game's chain
  *   login() / logout()
  *   getXAccount()   — the X account linked to this Privy user, or null
- *   linkX()         — prompt that link
+ *   linkX()         — prompt that link, or sign in with X when there is no Privy session yet
  *   getAccessToken() — a Privy access token, so a server can prove who this is
  *
  * Events: `privyBridgeReady` once the bridge exists, `privyAuthChanged` on every sign-in or
@@ -63,6 +64,7 @@ export default function PrivyBridge() {
         wallet: pickWallet(wallets),
         twitter: user?.twitter ? twitter : null,
         linkTwitter,
+        login,
         getAccessToken,
     };
 
@@ -124,21 +126,20 @@ export default function PrivyBridge() {
                 }
             },
             /**
-             * Ask the player to link X. Returns immediately — the link completes in Privy's own
-             * flow and the page learns about it from `privyAuthChanged`, which fires again when the
-             * user record changes.
+             * Ask the player to link X.
+             *
+             * Never throws and never rejects — an unhandled rejection here is a page that says the
+             * link started while nothing opened, which is exactly what happened when
+             * `linkTwitter()` was trusted to be the `() => void` its types advertise. Resolves to
+             * `{ ok, via?, reason? }`; `via` says which flow was started, and the page learns the
+             * link actually landed from `privyAuthChanged`, which fires when the user record
+             * changes. The rule itself is `startXLink` in `lib/x-link.js`, where it can be tested.
              */
-            linkX: () => {
-                try {
-                    stateRef.current.linkTwitter?.();
-                    return true;
-                } catch (error) {
-                    // Not configured on the Privy app, or already linking. The page falls back to
-                    // the typed-handle path, which is why this is not an error worth throwing.
-                    console.warn('[privy] could not start the X link:', error?.message || error);
-                    return false;
-                }
-            },
+            linkX: () => startXLink({
+                authenticated: stateRef.current.authenticated,
+                linkTwitter: () => stateRef.current.linkTwitter?.(),
+                login: (options) => stateRef.current.login?.(options),
+            }),
             /**
              * A Privy access token for the current user, or null.
              *
