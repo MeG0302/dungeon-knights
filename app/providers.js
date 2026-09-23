@@ -21,14 +21,17 @@ import { installOauthReturnGuard } from '../lib/privy-oauth-return';
  * is published, and `public/wallet-source.js` falls back to the extension exactly as it did
  * before any of this existed. That is what lets the app ship with Privy switched off.
  *
- * **The OAuth guard runs here, at module scope, on purpose.** Privy resumes an OAuth callback by
+ * **The OAuth guard runs here as a second line, not the first.** Privy resumes an OAuth callback by
  * reading three `privy_oauth_*` parameters out of the URL, and it opens its own modal to do it —
  * no click. That is right for a flow the player just started and wrong for the same URL arriving
  * any other way (a pasted link, a restored tab, a reload), where it reads as *the site asked me to
- * sign in by itself*. The guard decides which of the two this is and strips the parameters before
- * the SDK can read them — and an effect is too late for that, because effects run after children
- * mount, which is after Privy has already opened. Hence module scope, and hence the guard's own
- * tests (`tools/check-oauth-return.js`) rather than a comment claiming it works.
+ * sign in by itself*.
+ *
+ * The first line is `middleware.js`, which strips such a callback on the server, before any HTML
+ * exists — the only placement that cannot lose the race against the SDK. This module-scope call
+ * catches what the middleware never sees, such as a client-side navigation onto such a URL. Both
+ * call the same rule in `lib/privy-oauth-return.js`, and `tools/check-oauth-return.js` drives that
+ * rule and both halves of the wiring.
  */
 if (typeof window !== 'undefined') {
     installOauthReturnGuard();

@@ -1636,9 +1636,9 @@ node tools/check-signin-race.js # 12 checks, offline: `signIn()` against a stubb
                                 # refused, in bounded time), and one already here (no wait at all)
 node tools/check-one-time.js http://localhost:3000   # 26 checks: the same plus the tab and the
                                 # payout through the real API — creates a wallet, purges it after
-node tools/check-oauth-return.js # 29 checks, offline: a Privy OAuth callback may only resume a flow
-                                # this browser started — ours is kept, anything else is stripped before
-                                # the SDK can read it, `ref` and other params survive
+node tools/check-oauth-return.js # 55 checks, offline: the rule, both halves of the wiring, and that
+                                # the middleware strips a callback this browser never started — ours is
+                                # kept, `ref` and other params survive, and the cookie is read back
 node tools/check-x-link.js      # 25 checks, offline: starting the X link — a signed-in player goes to
                                 # the link flow, an unauthened one to sign-in-with-X, and **no path
                                 # rejects** (unhandled rejections are counted, not assumed away)
@@ -1728,16 +1728,39 @@ for the return of a flow the player just started; wrong for the same URL arrivin
 a restored tab, or a reload — to a player those all read as *the site asked me to sign in on its
 own*, which is how it was reported.
 
-So a return is resumed only when **this browser left a mark saying it started one**
-(`dk:privy:flow-started`, written by the bridge the instant it opens Privy's UI; 20-minute window).
-Everything else has those three parameters removed with `history.replaceState` **before the SDK can
-read them** — which is why `installOauthReturnGuard()` runs at module scope in `app/providers.js`.
-An effect is too late: effects fire after children mount, and the SDK has opened its modal by then.
-`?ref=` and every other parameter survive untouched, and a code already handled is remembered, so
-reopening the same URL cannot finish the same flow twice.
+So a return is resumed only when **this browser left a mark saying it started one** — the cookie
+`dk_privy_flow`, written by the bridge the instant it opens Privy's UI, good for 20 minutes.
+Everything else has those three parameters removed before the SDK can read them, and the place that
+does the removing matters: **`middleware.js`, on the server, before any HTML exists.**
 
-Tested on the dev server in both directions: a foreign callback opened nothing and left
-`/points?ref=AB12C`; a marked one let Privy run, spent the mark, and cleaned the URL itself.
+Two earlier placements were tried and both lost the same race, measured rather than argued. Module
+scope in `app/providers.js` — a side effect during evaluation, which looks early — still let the
+modal open on production. An inline `beforeInteractive` script lost too: Next places it *after* the
+app's chunk scripts in the document (byte 9758 against 1018), so an `async` chunk can still win. The
+server is the only placement with no race, which is also why the mark is a **cookie** and not
+sessionStorage: a first-party cookie is sent on the top-level navigation X redirects back with
+(`SameSite=Lax`), so the middleware can tell a real return from a stranger's link before it decides
+anything else about the request. It answers 307 to the same path with only those three parameters
+removed — `?ref=` and every other one survive.
+
+The client guard stays (`installOauthReturnGuard()` at module scope in `app/providers.js`) as a
+second line for what the middleware never sees, such as a client-side navigation onto such a URL.
+Both call the same rule, so neither half has a private opinion about when a callback is ours.
+
+Tested on the dev server, over HTTP, in both directions:
+
+```
+/points?privy_oauth_code=…&privy_oauth_state=…&privy_oauth_provider=twitter   → 307  /points
+/points?privy_oauth_code=…&ref=AB12C&…                                       → 307  /points?ref=AB12C
+/points?ref=AB12C                                                            → 200  (untouched)
+/points?privy_oauth_code=… with a fresh dk_privy_flow cookie                  → 200  (Privy finishes it)
+```
+
+and in a browser at 390×844: the first URL lands on `/points`, no dialog exists in the DOM, and the
+only Privy iframe is its own 0×0 embedded-wallet frame. With the mark set, the same URL reaches
+Privy and Privy acts on it, so real returns still work — the last `Secure` attribute is omitted on
+`http://localhost` on purpose, because a Secure cookie is dropped there and development would
+otherwise strip every genuine return.
 
 #### The announcements tab (`/points`)
 

@@ -39,12 +39,29 @@ import {
     readGateToken,
 } from './lib/app-gate';
 import { classify, decideRoute, gateCovers, readDevHost } from './lib/app-routing';
+import { callbackStripTarget } from './lib/privy-oauth-return';
 
 export async function middleware(request) {
     const isProduction = process.env.NODE_ENV === 'production';
     const { pathname, searchParams } = request.nextUrl;
     const search = request.nextUrl.search || '';
     const host = request.headers.get('host') || '';
+
+    // A Privy OAuth callback is stripped here, before any HTML, because this is the only place that
+    // cannot lose the race against the SDK. `privy_oauth_code` in the URL makes Privy open its own
+    // modal on load — correct for the flow the player just started, and the reason a shared or
+    // restored link asked people to sign in without a click. The marker cookie says which is which;
+    // see `lib/privy-oauth-return.js`. Only those three parameters are removed, so a `?ref=` invite
+    // code travelling beside them survives.
+    const callback = callbackStripTarget({
+        pathname,
+        search,
+        cookieHeader: request.headers.get('cookie') || '',
+    });
+    if (callback.strip) {
+        console.warn(`[privy] stripping a sign-in callback this browser did not start (${callback.reason})`);
+        return NextResponse.redirect(new URL(callback.to, request.url), 307);
+    }
 
     const { devHost, setDevHost } = readDevHost({
         searchParams,

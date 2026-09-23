@@ -13,9 +13,15 @@
  * own*. So a return is resumed only when this browser left a mark saying it started one, and every
  * other callback URL is stripped before the SDK can read it.
  *
- * The decision is pure (`decideOauthReturn`), the stripping is faked, and the source assertions at
- * the end are what keep the guard where it has to be: **module scope in `app/providers.js`**, not an
- * effect. Effects run after children mount, which is after Privy has already opened its modal.
+ * WHERE THE STRIPPING HAS TO HAPPEN is the part that took two measurements to get right. Module
+ * scope in `app/providers.js` ran too late on production — the modal still opened — and an inline
+ * `beforeInteractive` script was placed *after* the app's chunk scripts in the document (byte 9758
+ * against 1018), so it can lose the race too. `middleware.js` is the only placement with no race,
+ * which is what sections 4 and 7 below are about: the server-side decision, and the middleware
+ * actually calling it before it serves anything.
+ *
+ * The rule is one pure function (`decideOauthReturn`) called by both halves, so neither half has a
+ * private opinion about when a callback is ours.
  */
 
 const fs = require('fs');
@@ -25,6 +31,7 @@ const { pathToFileURL } = require('url');
 const ROOT = path.join(__dirname, '..');
 const NOW = 1_700_000_000_000;
 const TTL = 20 * 60 * 1000;
+const COOKIE = 'dk_privy_flow';
 
 const results = [];
 function rec(label, pass, detail) {
@@ -44,29 +51,69 @@ function paramsFrom(search) {
     };
 }
 
-/** The smallest browser the guard can be driven in. */
-function fakeWindow({ search = '', stored = {} } = {}) {
-    const store = new Map(Object.entries(stored));
-    const writes = { replaced: [], warnings: [] };
+/**
+ * The smallest browser either half can be driven in: a `document` whose cookie is a plain string and
+ * a `window.location` / `window.history` that record what the guard does to them.
+ */
+function fakeBrowser({ search = '', cookies = {}, protocol = 'https:' } = {}) {
+    const jar = new Map(Object.entries(cookies));
+    const writes = { replaced: [], warnings: [], cookies: [], navigated: [] };
+    let cookie = [...jar.entries()].map(([k, v]) => `${k}=${v}`).join('; ');
     return {
         writes,
-        store,
-        location: { search, pathname: '/points', hash: '' },
-        history: { replaceState: (a, b, url) => writes.replaced.push(url) },
-        storage: {
-            getItem: (k) => (store.has(k) ? store.get(k) : null),
-            setItem: (k, v) => store.set(k, String(v)),
-            removeItem: (k) => store.delete(k),
+        jar,
+        get cookie() {
+            return cookie;
         },
+        set cookie(value) {
+            // Recorded raw as well as parsed: the attributes are the point (`Path`, `SameSite`,
+            // `Secure`), and a jar that keeps only name and value would hide them.
+            writes.cookies.push(String(value));
+            const [pair] = String(value).split(';');
+            const [name, val] = pair.split('=');
+            if (val === '') jar.delete(name);
+            else jar.set(name, val);
+            cookie = [...jar.entries()].map(([k, v]) => `${k}=${v}`).join('; ');
+        },
+        location: {
+            search,
+            pathname: '/points',
+            hash: '',
+            protocol,
+            replace: (url) => writes.navigated.push(url),
+        },
+        history: { replaceState: (a, b, url) => writes.replaced.push(url) },
     };
 }
+
+/** Drive the guard the way the page does: a browser and a clock we control. */
+function guard(browser, now = NOW) {
+    return installOauthReturnGuard({
+        document: browser ? { cookie: browser.cookie } : null,
+        location: browser ? browser.location : null,
+        history: browser ? browser.history : null,
+        now,
+    });
+}
+
+let installOauthReturnGuard = null;
 
 (async () => {
     console.log('');
     console.log('Points Program — a Privy callback may only resume our own flow');
 
     const M = await import(pathToFileURL(path.join(ROOT, 'lib', 'privy-oauth-return.js')).href);
-    const { decideOauthReturn, withoutOauthParams, installOauthReturnGuard, markPrivyFlowStarted, STARTED_KEY, SEEN_KEY } = M;
+    const {
+        decideOauthReturn,
+        withoutOauthParams,
+        oauthParamsFrom,
+        readMarkerCookie,
+        callbackStripTarget,
+        markPrivyFlowStarted,
+        installOauthReturnGuard: install,
+        MARKER_COOKIE,
+    } = M;
+    installOauthReturnGuard = install;
 
     const decide = (over = {}) => decideOauthReturn({
         now: NOW, ttlMs: TTL, params: paramsFrom(CALLBACK), ...over,
@@ -82,6 +129,8 @@ function fakeWindow({ search = '', stored = {} } = {}) {
     rec('blank parameters are not parameters',
         decideOauthReturn({ params: { privy_oauth_code: '', privy_oauth_state: '   ' }, now: NOW }).action === 'ignore',
         'whitespace ignored');
+    rec('the rule does not carry a private copy of the parameter names',
+        MARKER_COOKIE === COOKIE, MARKER_COOKIE);
 
     // --------------------------------------------------------------- 2. ours, and only ours
     console.log('');
@@ -94,7 +143,7 @@ function fakeWindow({ search = '', stored = {} } = {}) {
     const foreign = decide({ startedAt: null });
     rec('a callback URL nobody here asked for is stripped',
         foreign.action === 'strip' && foreign.reason === 'not-started-here', `${foreign.action}/${foreign.reason}`);
-    rec('and the code it carried is remembered, so it cannot be replayed',
+    rec('and the code it carried is named in the decision, for the log',
         foreign.code === 'abc123', foreign.code);
 
     rec('a mark from an hour ago is not a reason to open anything',
@@ -115,9 +164,9 @@ function fakeWindow({ search = '', stored = {} } = {}) {
         decide({ params: paramsFrom('?privy_oauth_code=abc123'), startedAt: null }).action === 'strip',
         'one of three present');
 
-    // ------------------------------------------------------------------- 3. the stripping
+    // ---------------------------------------------------------------- 3. reading the query
     console.log('');
-    console.log('Stripping leaves everything else where it was');
+    console.log('Reading the query, and putting it back without the parameters');
 
     rec('the invite code survives, the OAuth parameters do not',
         withoutOauthParams('?privy_oauth_code=a&ref=AB12C&privy_oauth_state=b&utm_source=x') === '?ref=AB12C&utm_source=x',
@@ -125,70 +174,138 @@ function fakeWindow({ search = '', stored = {} } = {}) {
     rec('nothing left means no question mark',
         withoutOauthParams(CALLBACK) === '', `"${withoutOauthParams(CALLBACK)}"`);
     rec('an empty query is an empty query', withoutOauthParams('') === '', '""');
+    rec('and the three parameters are read out whole, not by prefix',
+        oauthParamsFrom(CALLBACK).privy_oauth_code === 'abc123', oauthParamsFrom(CALLBACK).privy_oauth_code);
 
-    // ------------------------------------------------------- 4. the guard, as the page runs it
+    // ------------------------------------------------------------- 4. the server-side decision
     console.log('');
-    console.log('The guard, wired the way the page runs it');
+    console.log('The server’s half — what the middleware strips');
 
-    let win = fakeWindow({ search: CALLBACK, stored: {} });
-    let decision = installOauthReturnGuard({ ...win, now: NOW });
+    const strip = (over = {}) => callbackStripTarget({ pathname: '/points', search: CALLBACK, now: NOW, ...over });
+
+    rec('a callback with no marker cookie becomes a redirect with the parameters gone',
+        strip().strip === true && strip().to === '/points', `${strip().strip} → ${strip().to}`);
+    rec('and the reason says why, so production logs are readable',
+        strip().reason === 'not-started-here', strip().reason);
+    rec('an invite code beside it survives the redirect',
+        strip({ search: '?privy_oauth_code=a&ref=AB12C' }).to === '/points?ref=AB12C',
+        strip({ search: '?privy_oauth_code=a&ref=AB12C' }).to);
+    rec('a URL with nothing OAuth-shaped is never touched',
+        strip({ search: '?ref=AB12C' }).strip === false, 'no strip');
+    rec('and neither is a clean load of the page itself',
+        strip({ search: '' }).strip === false, 'no strip');
+
+    const freshCookie = `other=1; ${COOKIE}=${NOW - 30_000}; dk_gate=x`;
+    rec('a fresh marker cookie means this return is ours to finish',
+        strip({ cookieHeader: freshCookie }).strip === false && strip({ cookieHeader: freshCookie }).reason === 'ours',
+        strip({ cookieHeader: freshCookie }).reason);
+    rec('a stale marker cookie does not count as having started anything',
+        strip({ cookieHeader: `${COOKIE}=${NOW - 45 * 60 * 1000}` }).strip === true, 'stale');
+    rec('a marker with junk in it does not count either',
+        strip({ cookieHeader: `${COOKIE}=not-a-time` }).strip === true, 'unparseable');
+    rec('an empty marker is not a marker',
+        strip({ cookieHeader: `${COOKIE}=` }).strip === true, 'empty value');
+    rec('and a cookie header with no marker at all is the ordinary foreign case',
+        strip({ cookieHeader: 'a=1; b=2' }).strip === true, 'absent');
+
+    rec('the cookie is found among others, not by position',
+        readMarkerCookie(`a=1; ${COOKIE}=123; b=2`) === '123', readMarkerCookie(`a=1; ${COOKIE}=123; b=2`));
+    rec('a cookie whose value contains an equals sign is still read',
+        readMarkerCookie(`${COOKIE}=a=b`) === 'a=b', readMarkerCookie(`${COOKIE}=a=b`));
+    rec('a missing header is null, not a crash',
+        readMarkerCookie('') === null && readMarkerCookie(undefined) === null, 'null');
+    rec('and a cookie *name* that merely starts the same way is not the marker',
+        readMarkerCookie(`${COOKIE}_x=1`) === null, 'no prefix match');
+
+    // -------------------------------------------------------- 5. the mark, and the client guard
+    console.log('');
+    console.log('The browser’s half — the mark the bridge leaves, and the fallback guard');
+
+    let browser = fakeBrowser();
+    const marked = markPrivyFlowStarted({ document: browser, location: browser.location, now: NOW });
+    const setCookie = browser.writes.cookies[0] || '';
+    rec('the bridge’s mark is written as a first-party cookie the server can read',
+        marked === true && browser.jar.get(COOKIE) === String(NOW), setCookie);
+    rec('with a path of / so it is sent on the redirect back from X',
+        /Path=\/;/.test(setCookie), setCookie);
+    rec('SameSite=Lax, which is what a top-level return navigation carries',
+        /SameSite=Lax/.test(setCookie), setCookie);
+    rec('and Secure on https, so it is not sent in the clear',
+        /; Secure/.test(setCookie), setCookie);
+
+    const local = fakeBrowser({ protocol: 'http:' });
+    markPrivyFlowStarted({ document: local, location: local.location, now: NOW });
+    rec('but not on http://localhost, where a Secure cookie is dropped — dev returns must still work',
+        !/; Secure/.test(local.writes.cookies[0] || ''), local.writes.cookies[0]);
+
+    // The mark the bridge leaves is what the server reads back.
+    const serverSees = callbackStripTarget({
+        pathname: '/points',
+        search: CALLBACK,
+        cookieHeader: browser.cookie,
+        now: NOW + 1000,
+    });
+    rec('so the return that follows a click reaches Privy',
+        serverSees.strip === false && serverSees.reason === 'ours', serverSees.reason);
+
+    browser = fakeBrowser({ search: CALLBACK });
+    let decision = guard(browser);
     rec('a foreign callback closes before Privy can see it',
-        decision.action === 'strip' && win.writes.replaced.length === 1, win.writes.replaced[0] || 'nothing replaced');
+        decision.action === 'strip' && browser.writes.replaced.length === 1, browser.writes.replaced[0] || 'nothing replaced');
     rec('the address bar is rewritten without the OAuth parameters',
-        win.writes.replaced[0] === '/points', win.writes.replaced[0]);
+        browser.writes.replaced[0] === '/points', browser.writes.replaced[0]);
 
-    win = fakeWindow({ search: '?privy_oauth_code=a&ref=AB12C', stored: {} });
-    installOauthReturnGuard({ ...win, now: NOW });
+    browser = fakeBrowser({ search: '?privy_oauth_code=a&ref=AB12C' });
+    guard(browser);
     rec('and a referral in the same URL is kept',
-        win.writes.replaced[0] === '/points?ref=AB12C', win.writes.replaced[0]);
+        browser.writes.replaced[0] === '/points?ref=AB12C', browser.writes.replaced[0]);
 
-    win = fakeWindow({ search: CALLBACK, stored: { [STARTED_KEY]: String(NOW - 5000) } });
-    decision = installOauthReturnGuard({ ...win, now: NOW });
+    browser = fakeBrowser({ search: CALLBACK, cookies: { [COOKIE]: String(NOW - 5000) } });
+    decision = guard(browser);
     rec('our own return is left for Privy to finish',
-        decision.action === 'keep' && win.writes.replaced.length === 0, decision.action);
-    rec('the mark is spent, so the same URL reopened later is not',
-        win.store.get(STARTED_KEY) === undefined && win.store.get(SEEN_KEY) === 'abc123',
-        `started ${win.store.get(STARTED_KEY)}, seen ${win.store.get(SEEN_KEY)}`);
+        decision.action === 'keep' && browser.writes.replaced.length === 0, decision.action);
 
-    // Reopening the very same callback URL, which is the behaviour that was complained about.
-    win = fakeWindow({ search: CALLBACK, stored: { [SEEN_KEY]: 'abc123' } });
-    decision = installOauthReturnGuard({ ...win, now: NOW });
-    rec('reopening the same callback URL opens nothing',
-        decision.action === 'strip' && win.writes.replaced.length === 1, decision.reason);
+    browser = fakeBrowser({ search: CALLBACK });
+    browser.history.replaceState = () => { throw new Error('history is locked'); };
+    decision = guard(browser);
+    rec('a browser that refuses history.replaceState still gets the parameters out of the URL',
+        decision.action === 'strip' && browser.writes.navigated[0] === '/points',
+        browser.writes.navigated[0] || 'nothing navigated');
+    rec('and it does not throw on the way out',
+        browser.writes.replaced.length === 0, 'replaceState failed, replace used');
 
-    // Storage that throws is a browser with storage off, which must not become a broken page.
-    const hostile = {
-        location: { search: CALLBACK, pathname: '/points', hash: '' },
-        history: { replaceState: () => {} },
-        storage: {
-            getItem: () => { throw new Error('storage disabled'); },
-            setItem: () => { throw new Error('storage disabled'); },
-            removeItem: () => { throw new Error('storage disabled'); },
-        },
-        now: NOW,
-    };
-    rec('a browser with storage switched off is still guarded, not crashed',
-        installOauthReturnGuard(hostile).action === 'strip', 'no memory means nothing is trusted');
-
-    const noBrowser = installOauthReturnGuard({ location: null, storage: null, history: null, now: NOW });
     rec('and being called with no browser at all is not an error',
-        noBrowser.action === 'ignore' && noBrowser.reason === 'no-browser', noBrowser.reason);
+        guard(null).action === 'ignore' && guard(null).reason === 'no-browser', guard(null).reason);
 
-    // The mark the bridge leaves, through the real function.
-    win = fakeWindow({ search: '', stored: {} });
-    markPrivyFlowStarted({ storage: win.storage, now: NOW });
-    rec('the bridge’s mark is what the guard reads back',
-        win.store.get(STARTED_KEY) === String(NOW), win.store.get(STARTED_KEY));
-    const afterMark = installOauthReturnGuard({ ...fakeWindow({ search: CALLBACK, stored: { [STARTED_KEY]: win.store.get(STARTED_KEY) } }), now: NOW + 1000 });
-    rec('so a flow started a second before the return is resumed',
-        afterMark.action === 'keep', afterMark.action);
-
-    // ------------------------------------------------------------------- 5. where it runs
+    // ------------------------------------------------------------- 6. where it is installed
     console.log('');
-    console.log('The guard runs before Privy can act');
+    console.log('The middleware is the first line, and it runs before anything is served');
+
+    const middleware = fs.readFileSync(path.join(ROOT, 'middleware.js'), 'utf8');
+    rec('the middleware asks the shared rule, rather than re-deciding for itself',
+        /import \{ callbackStripTarget \} from '\.\/lib\/privy-oauth-return'/.test(middleware),
+        'imported from lib/privy-oauth-return');
+    rec('it consults it before it decides anything else about the request',
+        middleware.indexOf('callbackStripTarget(') < middleware.indexOf('decideRoute('),
+        'strip asked first');
+    rec('and it redirects to the stripped URL, 307, on the same host',
+        /NextResponse\.redirect\(new URL\(callback\.to, request\.url\), 307\)/.test(middleware),
+        '307 to a relative target');
+    rec('only when the rule said to strip',
+        /if \(callback\.strip\)/.test(middleware), 'guarded by the decision');
+    rec('the marker cookie reaches the rule from the request headers',
+        /cookieHeader: request\.headers\.get\('cookie'\)/.test(middleware), 'request cookie header');
+    rec('the three parameter names live in one place, not in the middleware too',
+        !/['"]privy_oauth/.test(middleware) && !/OAUTH_PARAMS/.test(middleware),
+        'no private list of names, comments aside');
+
+    const layout = fs.readFileSync(path.join(ROOT, 'app', 'layout.js'), 'utf8');
+    rec('the root layout no longer ships an inline guard script',
+        !/beforeInteractive/.test(layout) && !/oauthGuardSource/.test(layout),
+        'removed: it was placed after the app chunks');
 
     const providers = fs.readFileSync(path.join(ROOT, 'app', 'providers.js'), 'utf8');
-    rec('app/providers.js installs it',
+    rec('app/providers.js still installs the fallback guard',
         /installOauthReturnGuard\(\)/.test(providers), 'installOauthReturnGuard()');
     rec('at module scope, not inside the component or an effect',
         /^if \(typeof window !== 'undefined'\) \{\n\s+installOauthReturnGuard\(\);\n\}$/m.test(providers),
