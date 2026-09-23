@@ -74,7 +74,7 @@ function announceBlock(source) {
         ['the leaderboard is what decides it', /leaderboard/i],
         ['the prize is a free Knight capsule', /free\s+Knight\s+capsule/i],
         ['it is decided when the season closes', /season closes/i],
-        ['and the snapshot is at that close, not before', /season&rsquo;s close|season's close/i],
+        ['and the board is read once, at that close', /read once/i],
     ];
     rec('the announcement states the rule in four parts',
         block !== null && claims.every(([, re]) => re.test(block)),
@@ -85,9 +85,12 @@ function announceBlock(source) {
         && /points\.toLocaleString\(\)/.test(block),
         'rank, players and points all read from the wallet’s own state');
 
-    rec('the capsule is named as the thing capsules open into, where they open',
-        block !== null && /href="\/mint"/.test(block),
-        'the panel links to /mint rather than explaining the tiers again');
+    // It used to send players to the Summoning Chamber to see what a capsule opens into. That page
+    // is being rebuilt around capsule summoning, so until it settles the panel explains the shape of
+    // it in words: a link to a page mid-rework is worse than no link.
+    rec('and the panel sends nobody to a page that is still being rebuilt',
+        block !== null && !/href="\/mint"/.test(block),
+        'no link out; the rule is the whole card');
 
     // ------------------------------------------------------- what it must NOT say
     console.log('');
@@ -109,6 +112,48 @@ function announceBlock(source) {
     rec('the tab does not print a count of entries, tasks or wallet addresses',
         !/\b\d[\d,]*\s*(?:PTS|wallets|players)\b/.test(block || ''),
         'the leaderboard beside it carries the numbers; this panel carries the rule');
+
+    // The snapshot row is gone. It said the read happens "at the season's close", which reads as a
+    // date once a player is looking for one — and the rule it stated is already in the card above it.
+    rec('nothing on the panel names a snapshot any more',
+        block !== null && !/Snapshot/.test(block) && !/stat-label">Snapshot/.test(block),
+        'the row and the line about its date are both gone');
+
+    // ------------------------------------------------------------------- the airdrop
+    console.log('');
+    console.log('The $DNG airdrop card');
+
+    // Everything from the card's own kicker to the end of the panel: the point of slicing is that
+    // the checks below can only see this card, so the capsule card above it cannot satisfy them.
+    const airdrop = block ? block.slice(block.indexOf('$DNG airdrop')) : '';
+    const has = airdrop.length > 0;
+
+    rec('the airdrop is announced, and the board is what decides it',
+        has && /airdrop follows the leaderboard/i.test(airdrop),
+        has ? 'kicker, title and rule are all present' : 'no $DNG airdrop card in the panel');
+
+    rec('it promises a standing rather than an amount',
+        has && /standing is your allocation/i.test(airdrop) && /nothing to claim/i.test(airdrop),
+        'standing, not a number of tokens');
+
+    rec('  … and says where the supply and the tokenomics will be published',
+        has && /supply and the tokenomics are announced on this tab/i.test(airdrop),
+        'this tab is where they land when they are settled');
+
+    // The one thing an airdrop announcement invites a reader to assume is a size. Nothing in this
+    // card may name one — no supply, no percentage, no allocation — and no date either.
+    const sized = has ? airdrop.match(/\b\d[\d,]*(?:\.\d+)?\s*(?:%|DNG|tokens?|wallets?)\b|\b20\d{2}\b/gi) : null;
+    rec('and it names no supply, no allocation and no date',
+        has && (!sized || sized.length === 0),
+        has
+            ? (sized && sized.length ? `invented: ${sized.join(', ')}` : 'the size is announced, not guessed')
+            : '—');
+
+    // Both cards are the same furniture, which is the point: one panel, one card shape.
+    rec('and it is drawn as the same card as the giveaway above it',
+        block !== null && (block.match(/className="announce-card"/g) || []).length === 2
+        && (block.match(/className="announce-art"/g) || []).length === 2,
+        `${(block?.match(/className="announce-card"/g) || []).length} cards`);
 
     // ------------------------------------------------------------------- the art
     console.log('');
@@ -133,6 +178,17 @@ function announceBlock(source) {
         bytes < 160 * 1024 ? 'under the 160 KB line' : `${Math.round(bytes / 1024)} KB is the master's weight`);
     rec('it is drawn pixelated, because the source is pixel art', /\.announce-art img\s*\{[^}]*pixelated/s.test(css),
         'image-rendering: pixelated');
+
+    // The airdrop card's coin, resolved the same way — the file it names has to be on disk, because
+    // this page reads `${ASSETS}…` at runtime and a missing name is a broken image, not a fallback.
+    const coin = (block ? (/\$\{ASSETS\}([A-Za-z0-9_\-.]+\.png)/.exec(block.slice(block.indexOf('$DNG airdrop'))) || [])[1] : null) || '';
+    const coinPath = coin ? path.join(ROOT, 'public', 'assets', 'points', coin) : '';
+    const coinBytes = coin && fs.existsSync(coinPath) ? fs.statSync(coinPath).size : 0;
+    rec('and the coin it puts beside the airdrop is a cut, not a master',
+        coinBytes > 0 && coinBytes < 160 * 1024,
+        coin
+            ? `${coin} · ${coinBytes ? `${Math.round(coinBytes / 1024)} KB` : 'missing'}${coinBytes >= 160 * 1024 ? ' — the master is 2.2 MB' : ''}`
+            : 'no image named in the card');
 
     // -------------------------------------------------------- the badge and the motion
     console.log('');

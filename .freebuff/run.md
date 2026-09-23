@@ -90,7 +90,7 @@ Production, and the live deployment was measured reading the shared store — th
 | Phone gas | players fund their own embedded wallet | *Wallets: injected first…* |
 | **Staking writes** | the approve/stake/claim transaction path, then `STAKING_WRITES_READY` in `lib/staking-config.js` — the page stays a labelled simulation until then, by design | *The Staking Vault* |
 | **Checking a follow** | *only if you want it checked*: register `/api/x/events` with X, subscribe our own account, then set `FOLLOW_PROOF_MODE=webhook`, `X_CONSUMER_SECRET` and `X_FOLLOW_TARGET_ID` for Production. Until then a claim is credited from the review queue, and the card names the review instead of a check | *Proving a follow: X's Activity API* |
-| **The day marker** | nothing required — `X_PROGRAM_DAY_ONE` defaults to `2026-09-21`, so today's post says *Day 3*. Set it for Production only to move when Day 1 was; every player has to be counting the same days, so it is one value and never a per-wallet one | *Earning on X* |
+| **The day marker** | nothing required — `X_PROGRAM_DAY_ONE` defaults to `2026-09-23`, so today's post says *Day 1*, and the marker turns over at **00:00 UTC** rather than at anybody's local midnight. Set it for Production only to move when Day 1 was; every player has to be counting the same days, so it is one value and never a per-wallet one | *Earning on X* |
 | **The private host** | `APP_GATE_PASSWORD` for Production, **and** the `app.` DNS record at the registrar. Everything else is built and verified; the host split does not exist on the live domain until that record does. Both steps, and why the record goes last, are in *Two hostnames* below | *Two hostnames: the public page at the apex…* |
 | **The Genesis waitlist** | nothing to configure — it writes through the same store the points program uses (`KV_REST_API_URL` + `KV_REST_API_TOKEN`, already set for Production). Without them production keeps it in memory and loses it on redeploy, and the store's own `storageDescription()` says exactly that | *The waitlist, and the two numbers* |
 
@@ -1224,8 +1224,28 @@ of its own**.
   A's own points. Held in two places: the chain walk in `attachRef` refuses the claim, and `credit`
   refuses a self-payment outright, so the path that moves points is safe on its own terms rather than
   on the other guard's care.
-- **What a late code does not pay for:** commissions are earned forward only. Points a wallet already
-  had are not backdated, and the page says exactly that next to the box.
+- **An invite pays only once the invited wallet is real.** `referralQualifies` in
+  `lib/points-config.js` is the whole rule: the invitee must have **bound an X account** *and* hold
+  **at least `REFERRAL_MIN_POINTS` points of its own** (default 10, `REFERRAL_MIN_POINTS` overrides
+  it). The gate sits in `credit` *above* the first commission, so there is one place it can be got
+  wrong rather than one per tier, and neither tier is downstream of a real invite. Both halves cover a
+  different cheat: a bound handle is the one identity that is not free to make (the binding is one per
+  handle, so the same person cannot arrive twice under one name), and ten points prove the wallet
+  played, since every way to earn runs through X or through the vault. The floor is deliberately
+  small — the follow task alone clears it, so the rule costs a real player one action and costs a
+  farming wallet a real identity. The page reads the *same* function, so the list a player sees cannot
+  promise a payment the store will not make: each row carries a `Counting` / `Not counting yet` chip
+  and the panel counts `N invited · M counting`. `tools/check-referral-gate.js` (29 checks) drives the
+  payout path itself — a bound-X wallet below the floor pays **zero on both tiers** — and the gate was
+  falsified by moving it below the first tier, which fails checks by name.
+- **The five characters have their own copy button.** `Copy code` copies the code **alone**, for the
+  places a link will not go — a group chat, a voice call, a phone. The invite link keeps its own
+  button beside it, and each reports its own `Copied` state, because "copy my code" and "copy my link"
+  are two different promises to a player.
+- **What a late code does not pay for:** commissions are earned forward only, and the qualifying gate
+  above is not back-applied — credits that arrived before the invitee crossed the floor are not
+  revisited. Points a wallet already had are not backdated, and the page says exactly that next to the
+  box.
 
 #### Verified on the running page (`:3000`, driver `file`, September 22)
 
@@ -1807,7 +1827,13 @@ Nothing to enter, nothing to claim — being on the board is the whole of it.
 2  Stay there. The board is read once, when the season closes.
 3  Capsules go to the wallets that are still on it.
 
-Your standing   #1 of 139 · 1,450 PTS     Season day   Day 3     Snapshot   At the season's close
+Your standing   #1 of 139 · 1,450 PTS     Season day   Day 1
+
+$DNG airdrop
+The airdrop follows the leaderboard
+When $DNG goes live, it reaches the wallets that are on the board at the close. Your standing is your
+allocation — nothing to enter, nothing to claim here, and no separate list to sign up for.
+The supply and the tokenomics are announced on this tab when they are settled.
 ```
 
 - **No number, and no date — and that is checked, not trusted.** How many wallets and how many
@@ -1815,14 +1841,35 @@ Your standing   #1 of 139 · 1,450 PTS     Season day   Day 3     Snapshot   At 
   close", with the date to be announced on this tab when it is settled. `tools/check-announce.js`
   fails on a digit that reads as a count (`top 100`, `200 capsules`) or on a date appearing in the
   panel, which is the only way a page can be held to a promise it has not made yet.
+- **Two promises, one of which is the board itself.** The season prize is the capsule; the airdrop is
+  the other reason to hold a place, and it says only what a player can act on (standing is the
+  allocation) and nothing they could hold us to later — no supply, no date, no allocation. The line
+  at the foot of that card says the supply and the tokenomics are announced on this tab when they are
+  settled, which is a statement about *when*, not a number. Two things that used to be here are gone
+  on purpose: the `Snapshot: At the season's close` row (the season's close is already in the capsule
+  card's copy, and a row with no date was a placeholder pretending to be a fact) and the *See what a
+  capsule opens into* link, which pointed at the Summoning Chamber while knights' own summoning is
+  being re-cut into capsules.
 - **It reads without a wallet.** The rule is the point of the panel; the standing row is the only
   part that needs one, so a visitor sees the announcement and *Connect your wallet* under it. The
   harness asserts the panel is not gated behind `connected`.
-- **The art is the vault's capsule, cut for a sidebar.** `public/assets/points/capsule-panel.png` is
-  the same file the Staking Vault shows, at 320×320 (`ffmpeg -i public/assets/images/capsule.png
-  -vf "scale=320:320:flags=lanczos" -compression_level 100 …`, 105 KB against the 250 KB master) —
-  pixel art drawn `image-rendering: pixelated`, with a halo that `prefers-reduced-motion` switches
-  off. It loads with the tab, not with the page.
+- **The art is the vault's art, cut for a sidebar.** Two 320-wide cuts, drawn `image-rendering:
+  pixelated` at 132px with a halo that `prefers-reduced-motion` switches off, both loaded with the
+  tab rather than with the page:
+  - `public/assets/points/capsule-panel.png` — 320×320, 107 KB, from `public/assets/images/capsule.png`
+    (500×500, 250 KB). Reproduces **byte-for-byte**:
+    `ffmpeg -i public/assets/images/capsule.png -vf "scale=320:320:flags=lanczos" -compression_level 100 …`
+  - `public/assets/points/coin-panel.png` — 320×**316**, 38 KB, paletted (colour type 3, tRNS), from
+    `points/Gold_coin_badge_with_PTS_2K_20260919011438-autocrop-hair.png` (1402×1384 RGBA, 2.3 MB),
+    the same master the menu's Points card draws its 32px icon from. **This one does not reproduce
+    byte-for-byte from a plain `scale=320:-1:flags=lanczos -compression_level 100`** (that yields
+    168 KB RGBA); it was quantised to a palette on the way out, so a re-cut lands at a similar size
+    and a slightly different file. Keep the cut, or accept the larger one — what must not change is
+    the aspect: the coin is 320×316, the sheet draws it `height: auto`, and the JSX hint says 316, so
+    nothing squashes it by the 1% a square box would.
+- **Each card's art is checked by name.** `tools/check-announce.js` (27 checks) pins both cards, the
+  airdrop's `announce-note`, and the absence of the snapshot row and the capsule link, so the panel
+  cannot quietly grow a promise back.
 - **`New` is a pointer, not a decoration.** The badge on the tab clears the first time it is opened,
   and the browser remembers (`dk_points_announce_seen`). The read happens in an effect rather than
   during render, for the same reason the wallet detection does: the server's paint and the first
@@ -2783,6 +2830,41 @@ node tools/check-copies.js   # fails on a root duplicate, or a script loaded fro
   one `next/script` tag in `app/points/client.js`). Loading a file with no version at all is the
   same hazard in slow motion; the check lists the ones that currently do, so the next person to
   edit one knows to add a version rather than assume the browser will notice.
+
+### A phone is not a squeezed desktop
+
+Every app route is a two-pane desk: a fixed-width action pane and a content pane beside it, with the
+page itself `overflow: hidden` and each pane scrolling on its own. That is right on a laptop and wrong
+at 390px, in a way that does not look broken — it looks *empty*. Measured on the Points page before
+this pass: the header came to **535px inside a 390px viewport** (so the wallet chip and the balance
+pill, the only way back to the wallet on a page whose whole subject is a wallet, sat past the right
+edge) and the leaderboard pane measured **one pixel wide**, because the left pane's `400` *was* the
+row. Two files carry the fix:
+
+- **`theme.css` — the bar wraps.** At `max-width: 520px` `.header` and `.header-actions` wrap and
+  centre, the title drops to 14px and the pill to 12px, so the bar reads as a deliberate two-line
+  stack (`45px` → `81px` on a route with a back-link, one line where it fits) instead of a desktop
+  layout that ran out of room. One rule, every route, because every route loads this sheet.
+- **`points.css` — the panes stack.** At the same `860px` breakpoint the hall art swaps over at, so
+  layout and pictures change together: `.points-main-row` (`flex-direction: column`, the inline
+  `flex: 1; display: flex; overflow: hidden` moved into the sheet — an inline style cannot be
+  overridden by a media query) puts the vault first and the board under it, each pane goes
+  `overflow: visible` because one column does not need three scrollbars, and `.points-page` stays
+  `100vh` but becomes the scroller. **`height: auto` was the first attempt and it was wrong in a way
+  only a measurement shows:** `html` and `body` are both `overflow: hidden` on this site, so a page
+  that grows past the viewport is *clipped* rather than scrolled — the board below the fold was
+  unreachable and nothing looked broken. The pane width is `var(--points-left-w, 400px)` for the same
+  reason: a media query can change a custom property where it cannot change an inline `400`.
+- **`theme.css` moved from `?v=6` to `?v=7`, in the five app pages _and_ all seven entries in
+  `lib/static-pages.js`.** The latter matters most: a returning player has `theme.css?v=6` cached, so
+  the wrapping header would never reach them however many times it was deployed. This is the
+  cache-bust rule above, applied.
+
+Measured after the pass, `390×844`: `/points` `scrollWidth 390`, row direction `column`, panes 384px
+wide, page scroll `2525` against a `844` client, the board reachable at the foot of the page; and
+`/staking`, `/genesis`, `/tokenomics`, `/mint`, `/menu`, `/dungeons` all report **zero**
+elements past the right edge. `/game` is the one route this does not cover: it is a fixed 1140×600
+canvas engine, and shrinking it is a different job from reflowing a page.
 
 ### Two pictures per tier: the map sprite and the portrait
 

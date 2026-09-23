@@ -141,7 +141,7 @@ export default function GenesisClient({ shots = [] }) {
         <>
             {/* Versioned like every other sheet: an unversioned `/theme.css` is a CSS change that
                 never reaches a returning player. */}
-            <link rel="stylesheet" href="/theme.css?v=6" />
+            <link rel="stylesheet" href="/theme.css?v=7" />
             <link rel="stylesheet" href="/css/genesis.css?v=3" />
 
             <div className="page genesis-page">

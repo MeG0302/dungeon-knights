@@ -275,6 +275,37 @@ globalThis.fetch = async (url, options = {}) => {
     rec('  … and the refusal names the marker today’s post carries',
         (await reasonOf('share')).includes(Config.dayMarker()), await reasonOf('share'));
 
+    // ------------------------------------------------------------- which day it is, and when it changes
+    // The marker is the one thing that makes a daily reward daily, so the calendar behind it matters
+    // more than it looks: it has to be a date every player computes the same way, and it has to change
+    // at a moment nobody has to be told about. Both are UTC, and both are checked against fixed dates
+    // rather than against today — a check that only passes on the day it was written is not a check.
+    const opened = Config.PROGRAM_DAY_ONE;
+    const nextKey = new Date(Date.parse(`${Config.todayKey()}T00:00:00.000Z`) + 86400000).toISOString().slice(0, 10);
+
+    rec('day one is a date, and it is day one of the program',
+        /^\d{4}-\d{2}-\d{2}$/.test(opened) && Config.programDay(opened) === 1
+        && Config.dayMarker(opened) === 'Day 1',
+        `${opened} → ${Config.dayMarker(opened)}`);
+    rec('a date before day one reads as day 1, never as a negative day',
+        Config.programDay('2000-01-01') === 1, '2000-01-01');
+    rec('the day key is UTC — 23:59:59 and 00:00:00 on the same date are the same day',
+        Config.todayKey(new Date(`${Config.todayKey()}T23:59:59.999Z`)) === Config.todayKey()
+        && Config.todayKey(new Date(`${Config.todayKey()}T00:00:00.000Z`)) === Config.todayKey(),
+        `${Config.todayKey()}T00:00:00Z and T23:59:59.999Z`);
+    rec('and it rolls once, at UTC midnight — the next date is the next day',
+        Config.todayKey(new Date(`${nextKey}T00:00:00.000Z`)) === nextKey
+        && Config.programDay(nextKey) === Config.programDay() + 1
+        && Config.dayMarker(nextKey) !== Config.dayMarker(),
+        `${Config.dayMarker()} → ${Config.dayMarker(nextKey)}`);
+
+    // And the page says so, because "which day is it" is the first thing a player asks when a daily
+    // task refuses their post at half past midnight.
+    const clientSource = fs.readFileSync(path.join(__dirname, '..', 'app', 'points', 'client.js'), 'utf8');
+    rec('the share card tells the player the marker turns over in UTC',
+        /00:00 UTC/.test(clientSource) && /the marker X is asked about/.test(clientSource),
+        'the card, not a tooltip');
+
     // The throttle is what makes "check again" honest rather than free: the same link cannot be
     // re-checked on demand. The rest of this section moves past it the way a minute would.
     const againSoon = await Program.submitTask(gate, 'share', CAMPAIGN);

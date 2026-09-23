@@ -18,6 +18,63 @@
     overflow-y: auto;
 }
 
+/* The row that holds the two panes. It was written inline on the element, which is what stopped a
+   media query from turning it into a column — see the stacked layout below. */
+.points-page .points-main-row {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+}
+
+/* ---------------------------------------------------------------- a phone is not a squeezed desktop
+   The panes sit side by side because that is what a desktop is for. At 390px the left pane's 400px
+   *is* the row: the board beside it measured **one pixel** wide, so the leaderboard — the thing the
+   giveaway and the airdrop are both decided on, and the reason the announcements tab exists — was
+   simply not on a phone. So a narrow screen stacks them: the vault first (what a player does), the
+   board underneath (what they are ranked on), and the page scrolls because there is no longer a row
+   to hide anything behind.
+
+   860px is the breakpoint the art swaps over at, so layout and pictures change together. The pane
+   width is a custom property, which is how one media query can change a width that used to be an
+   inline `400` — an inline style needs no `!important` if the thing it reads is a variable. */
+@media (max-width: 860px) {
+    /* Still the viewport tall, but it is now the thing that scrolls. `height: auto` was the first
+       attempt and it was wrong in a way only a measurement shows: `html` and `body` are both
+       `overflow: hidden` on this site, so a page that grows past the viewport is *clipped* rather
+       than scrolled — the board below the fold was unreachable and nothing looked broken. */
+    .points-page {
+        height: 100vh;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .points-page .points-main-row {
+        flex-direction: column;
+        overflow: visible;
+    }
+
+    .points-page .points-left-panel {
+        --points-left-w: 100%;
+    }
+
+    .points-page .points-main-row > main {
+        width: 100%;
+        border-right: none;
+    }
+
+    /* Each pane holds its own scrollbar in the desktop layout. One column does not need three. */
+    .points-page .side-panel,
+    .points-page .side-panel-body {
+        overflow: visible;
+    }
+
+    .points-footer {
+        height: auto;
+        padding: 10px 14px;
+        text-align: center;
+    }
+}
+
 .points-footer {
     height: 36px;
     display: flex;
@@ -587,6 +644,37 @@ it, so the tab still shows what has been done — the count of what is left is t
     user-select: all;
 }
 
+/* The code's own copy button. `.ref-code` is a `space-between` row, so a third child lands hard
+   against the right edge and the code keeps the room it needs; the button is smaller than the
+   link's because the code is five characters and nobody needs a wide target to notice it. */
+.ref-code-copy {
+    padding: 2px 10px;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+}
+
+/* Why a referral row can show points earned and nothing paid. Sized to sit inside the address
+   cell, because the table's three columns are the numbers and a fourth would squeeze them. */
+.ref-badge {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 1px 6px;
+    border: 1px solid rgba(120, 200, 130, 0.4);
+    border-radius: 3px;
+    font-size: 9px;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    color: #9fd6a6;
+    white-space: nowrap;
+}
+
+/* Not counting yet is the *muted* state, not the alarming one: it is where every new invite starts
+   and where most of them sit for a few hours. */
+.ref-badge-hold {
+    border-color: var(--border-base);
+    color: var(--text-muted);
+}
+
 /* Add-a-code box: shown only while the wallet has no referrer (see the page). Separated by a
    rule because it is the one control here that changes the wallet rather than advertising it. */
 .ref-attach {
@@ -1085,7 +1173,9 @@ link, and X is asked about it before anything is paid.
     position: relative;
     z-index: 1;
     width: 132px;
-    height: 132px;
+    /* Auto, not a second 132: the capsule is square and the coin is 320×316, and a fixed height
+       squashes the second one. The halo behind it is already 132×132 and does not move. */
+    height: auto;
     image-rendering: pixelated;
     filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.55));
 }
@@ -1124,6 +1214,19 @@ link, and X is asked about it before anything is paid.
     font-size: 11px;
     line-height: 1.6;
     color: var(--text-secondary, var(--text-primary));
+}
+
+/* Where a card has to say what it is *not* saying yet — the airdrop's supply and tokenomics. Set
+   apart by a rule rather than by a colour, so it reads as the end of the card rather than as a
+   second promise. */
+.announce-note {
+    margin: 8px 0 0;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-base);
+    font-size: 10px;
+    line-height: 1.5;
+    letter-spacing: 0.3px;
+    color: var(--text-muted);
 }
 
 .announce-link {

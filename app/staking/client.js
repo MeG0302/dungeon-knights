@@ -720,7 +720,7 @@ export default function StakingClient() {
         <>
             {/* Versioned like every other sheet: an unversioned `/theme.css` is a CSS change
                 that never reaches a returning player. */}
-            <link rel="stylesheet" href="/theme.css?v=6" />
+            <link rel="stylesheet" href="/theme.css?v=7" />
             <link rel="stylesheet" href="/css/staking.css?v=9" />
             <link rel="stylesheet" href="/css/arya.css?v=3" />
             {/* ethers v5 UMD, the same pinned copy every legacy page loads — first in the list,

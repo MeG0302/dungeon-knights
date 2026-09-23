@@ -169,6 +169,43 @@ body {
   display: flex; align-items: center; gap: 12px;
 }
 
+/* A phone cannot hold the whole bar. At 390px the crest button, the title and the two right-hand
+   controls came to 535px, so the wallet chip and the balance pill simply sat past the right edge —
+   which is worse than it sounds, because those two are the only way back to the wallet on a page
+   whose whole subject is a wallet. The bar wraps instead: the crest and the title on one line,
+   the controls on the next, both centred, so a narrow page reads as a deliberate stack rather
+   than as a desktop layout that ran out of room. Everything keeps its size except the words, and
+   the pill loses 2px of type — the numbers in it are the point and they stay legible. */
+@media (max-width: 520px) {
+  .header {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 14px;
+  }
+
+  .header-title {
+    font-size: 14px;
+    letter-spacing: 2px;
+  }
+
+  .header .btn {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
+  .header-actions {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .header-actions .wallet-pill {
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+}
+
 .wallet-pill {
   display: flex; align-items: center; gap: 8px;
   padding: 6px 14px;

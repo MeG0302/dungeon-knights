@@ -256,7 +256,8 @@ function ShareKit({ share, onSave, saveDisabled, picture }) {
             {share.dayMarker && (
                 <p className="x-share-keep">
                     Post it as it is — it carries {share.dayMarker}, which is how today&rsquo;s post is
-                    told from yesterday&rsquo;s.
+                    told from yesterday&rsquo;s. Days turn over at 00:00 UTC, so the marker X is asked about
+                    changes then, not at your own midnight.
                 </p>
             )}
         </div>
@@ -467,6 +468,9 @@ export default function PointsPage() {
     // because "have I read this" is not something a server should be asked about on every visit.
     const [announceRead, setAnnounceRead] = useState(true);
     const [copied, setCopied] = useState(false);
+    // Its own flag, because "copy my code" and "copy my link" are two different promises to a player
+    // — the button that was pressed is the one that has to say it worked.
+    const [codeCopied, setCodeCopied] = useState(false);
     const [inDungeon, setInDungeon] = useState(false);
     const referralInput = useRef(null);
     // The add-a-code box: what has been typed, whether a claim is in flight, and the server's own
@@ -1359,6 +1363,30 @@ export default function PointsPage() {
     };
 
     /**
+     * Copy the five characters on their own, for the places a link will not go: a group chat, a
+     * voice call, a friend's phone. The code is the same invitation the link carries, so this is a
+     * second door to one room rather than a second code.
+     */
+    const handleCopyCode = async () => {
+        const code = state?.refCode;
+        if (!code) return;
+        let done = false;
+        try {
+            await navigator.clipboard.writeText(code);
+            done = true;
+        } catch {
+            done = false;
+        }
+        setCodeCopied(done);
+        if (done) {
+            setTimeout(() => setCodeCopied(false), 2000);
+            flash('Invite code copied. A friend can paste it on the Points page.');
+        } else {
+            flash('Copying is blocked here — the code is short enough to read out.');
+        }
+    };
+
+    /**
      * Attach a referrer a player typed in — the path for a wallet that played first and met an
      * inviter later.
      *
@@ -1414,8 +1442,8 @@ export default function PointsPage() {
         <>
             {/* Versioned like every other sheet: an unversioned `/theme.css` is a CSS change
                 that never reaches a returning player. */}
-            <link rel="stylesheet" href="/theme.css?v=6" />
-            <link rel="stylesheet" href="/css/points.css?v=10" />
+            <link rel="stylesheet" href="/theme.css?v=7" />
+            <link rel="stylesheet" href="/css/points.css?v=11" />
             <link rel="stylesheet" href="/css/arya.css?v=3" />
             <Script src="/arya.js?v=4" strategy="afterInteractive" />
             {/* The header's wallet pill gets the same menu every other page's control has. It is
@@ -1487,10 +1515,12 @@ export default function PointsPage() {
                     panels inside the viewport — a flex child defaults to min-height:auto,
                     so a long leaderboard would otherwise stretch this row, push the footer
                     off screen, and stop the panel scrolling internally. */}
-                <div className="points-main-row" style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+                <div className="points-main-row">
 
-                    {/* LEFT: Points Actions */}
-                    <aside className="side-panel points-left-panel" style={{ width: 400 }}>
+                    {/* LEFT: Points Actions. The width is a custom property rather than a number so
+                        that the phone layout can stack the two panes — see the media block at the
+                        bottom of points.css, which is where the board stops being a 1px column. */}
+                    <aside className="side-panel points-left-panel" style={{ width: 'var(--points-left-w, 400px)' }}>
                         <div className="side-panel-header">
                             <img src={`${ASSETS}Wooden_treasure_chest_illustration_2K_20260919015044-autocrop-hair.png`} alt="" className="panel-header-icon points-icon" width={20} height={20} />
                             Points Vault
@@ -1858,13 +1888,24 @@ export default function PointsPage() {
                                 Refer &amp; Earn
                             </div>
                             <p className="panel-hint">
-                                15% of what your referrals earn, and 5% of what theirs earn, paid as they earn it.
-                                Your code is the invitation, and the link below works too.
+                                15% of what your referrals earn, and 5% of what theirs earn — paid as they
+                                earn it. An invite starts paying once that player has bound their X account
+                                and earned {state?.referralMinPoints ?? 10} points of their own, so an empty
+                                wallet is worth nothing to either of you. Your code is the invitation, and
+                                the link below works too.
                             </p>
                             {connected && state?.refCode && (
                                 <div className="ref-code">
                                     <span className="ref-code-label">Your invite code</span>
                                     <span className="ref-code-value">{state.refCode}</span>
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary btn-sm ref-code-copy"
+                                        onClick={handleCopyCode}
+                                        title="Copy the five-character code on its own"
+                                    >
+                                        {codeCopied ? 'Copied' : 'Copy code'}
+                                    </button>
                                 </div>
                             )}
                             <div className="referral-row" data-arya="refer">
@@ -1891,7 +1932,7 @@ export default function PointsPage() {
                                 <div className="referral-meta">
                                     {state.referrals.length === 0
                                         ? 'No referrals yet. Your link is above.'
-                                        : `${state.referrals.length} referral${state.referrals.length === 1 ? '' : 's'}`}
+                                        : `${state.referrals.length} invited · ${state.referralsCounting || 0} counting`}
                                 </div>
                             )}
                             {state?.referralEarned > 0 && (
@@ -2062,9 +2103,6 @@ export default function PointsPage() {
                                             Knight capsule is yours. Nothing to enter, nothing to claim — being on
                                             the board is the whole of it.
                                         </p>
-                                        <a className="announce-link" href="/mint">
-                                            See what a capsule opens into
-                                        </a>
                                     </div>
 
                                     <div className="announce-steps">
@@ -2098,13 +2136,42 @@ export default function PointsPage() {
                                             {state?.seasonDay ? `Day ${state.seasonDay}` : '—'}
                                         </span>
                                     </div>
-                                    <div className="stat-row">
-                                        <span className="stat-label">Snapshot</span>
-                                        <span className="stat-value">At the season&rsquo;s close</span>
+
+                                    {/* -------------------------------------------------- the $DNG airdrop
+                                        The second thing the board is for. It says what a player can act on
+                                        (standing is what counts) and nothing they could hold us to later:
+                                        no supply, no allocation, no date — those are announced on this
+                                        tab when they are settled, which is what the note says. */}
+                                    <div className="announce-card">
+                                        <div className="announce-art">
+                                            {/* The cut keeps the coin's own aspect (320×316), so the hint is
+                                                316 — a square hint is a 1% squash at the size the sheet
+                                                draws it, and a wrong aspect outlives whoever wrote it. */}
+                                            <img
+                                                src={`${ASSETS}coin-panel.png`}
+                                                alt=""
+                                                width={320}
+                                                height={316}
+                                                loading="lazy"
+                                                decoding="async"
+                                            />
+                                        </div>
+                                        <div className="announce-kicker">$DNG airdrop</div>
+                                        <h3 className="announce-title">The airdrop follows the leaderboard</h3>
+                                        <p className="announce-line">
+                                            When $DNG goes live, it reaches the wallets that are on the board at
+                                            the close. Your standing is your allocation — nothing to enter,
+                                            nothing to claim here, and no separate list to sign up for.
+                                        </p>
+                                        <p className="announce-note">
+                                            The supply and the tokenomics are announced on this tab when they are
+                                            settled.
+                                        </p>
                                     </div>
+
                                     <div className="one-task-footer">
-                                        The date of the snapshot is announced here first. New announcements
-                                        arrive on this tab, and the badge clears once you have read them.
+                                        New announcements arrive on this tab, and the badge clears once you have
+                                        read them.
                                     </div>
                                 </>
                             )}
@@ -2218,7 +2285,20 @@ export default function PointsPage() {
                                             </div>
                                             {state.referrals.map((ref) => (
                                                 <div key={ref.address} className="ref-row">
-                                                    <span className="ref-addr">{ref.short}</span>
+                                                    <span className="ref-addr">
+                                                        {ref.short}
+                                                        {/* Why a row can read "240 their points, +0 you earned".
+                                                            The chip is the rule, said per player rather than
+                                                            left to the paragraph above the table. */}
+                                                        <span
+                                                            className={`ref-badge${ref.counting ? '' : ' ref-badge-hold'}`}
+                                                            title={ref.counting
+                                                                ? 'Bound X and past the earning floor — this invite pays'
+                                                                : `Pays once they bind X and earn ${state?.referralMinPoints ?? 10} points`}
+                                                        >
+                                                            {ref.counting ? 'Counting' : 'Not counting yet'}
+                                                        </span>
+                                                    </span>
                                                     <span className="ref-their">{ref.theirPoints.toLocaleString()}</span>
                                                     <span className="ref-earned">+{ref.points.toLocaleString()}</span>
                                                 </div>
