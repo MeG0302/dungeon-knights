@@ -165,9 +165,21 @@
                     }
 
                     case 'eth_requestAccounts': {
-                        const connected = await connect();
-                        if (!connected) throw new Error('No wallet was connected.');
-                        return connected.request({ method, params });
+                        // A wallet that is already there is the answer. Ask only when there is
+                        // none: `connect()` opens Privy's login, and for a session that is
+                        // signed in that is a call which changes nothing and makes Privy warn
+                        // that the player is already logged in — once per click, which is
+                        // exactly the noise a page asking for accounts on mount produces.
+                        let live = await liveProvider();
+                        if (!live) {
+                            await connect();
+                            live = await liveProvider();
+                        }
+                        // Whatever `connect()` returned, never forward to *this* provider: for
+                        // an adopted Privy session it hands back the seam, so answering with it
+                        // would re-enter this same case, forever.
+                        if (!live || live === provider) throw new Error('No wallet was connected.');
+                        return live.request({ method, params });
                     }
 
                     default: {

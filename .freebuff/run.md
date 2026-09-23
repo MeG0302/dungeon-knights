@@ -2473,10 +2473,24 @@ the App ID absent: `window.DKWallet` present, `window.ethereum` still `undefined
 to the page, `connect()` returns null, and the desktop message still offers the MetaMask download.
 
 ```bash
-node tools/check-wallet-source.js    # 45 checks: dormant, injected-wins, a session that owns the
-                                    # wallet, a logged-out bridge, a late bridge, a closed login,
-                                    # sign-out, chain mismatch — against a fake bridge and stub DOM
+node tools/check-wallet-source.js    # 51 checks: dormant, injected-wins, a session that owns the
+                                    # wallet, what the seam answers when the page asks it for
+                                    # accounts, a logged-out bridge, a late bridge, a closed
+                                    # login, sign-out, chain mismatch — against a fake bridge
+                                    # and stub DOM
 ```
+
+**The seam must never answer `eth_requestAccounts` with itself.** `connect()` returns
+`state.shim` once a Privy session is adopted, so the branch that used to forward to its answer
+re-entered the same case: one request became a run of them, each opening with Privy's "already
+logged in" and a fresh provider handover, and the page that asked never got an answer. That is
+the shape of every connect on a browser with no extension — `lib/points-client.js` calls
+`DKWallet.connect()` and then `takeAccount(shim)` — and it is what a Points page looks like when
+it stops responding with the console flooding. Now the branch asks `liveProvider()` (the
+bridge's provider, or the extension) and only calls `connect()` when nothing holds the wallet
+yet, so a signed-in session is used rather than re-logged-in. Both halves are falsified by
+mutation: forwarding to the seam fails the re-entry and account checks, and forcing `connect()`
+every time fails the "not re-logged-in" ones.
 
 **Two things the first version did that this one does not**, and both were deliberate: it opened
 its own email-code modal, and it loaded Privy's `js-sdk-core` from a CDN. Privy document that

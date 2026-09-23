@@ -159,6 +159,10 @@ function fakeBridge({ authenticated = true, walletType = 'privy', address = EMBE
             switch (method) {
                 case 'eth_accounts':
                     return session ? [address] : [];
+                // A provider that cannot answer this is not a provider: the seam forwards the
+                // request to whoever holds the wallet, and every wallet announces its account.
+                case 'eth_requestAccounts':
+                    return session ? [address] : [];
                 case 'eth_chainId':
                     return chainId;
                 case 'personal_sign':
@@ -320,6 +324,70 @@ const settle = async (times = 6) => {
         String(externalCaps.address));
     rec('a WalletConnect session still gets the seam',
         externalProvider === external.window.ethereum, 'seam installed');
+
+    // --------------------- asking the installed seam for accounts must not re-enter itself
+    console.log('');
+    console.log('The page asks the seam for accounts (what every connect does)');
+
+    // How `lib/points-client.js` connects: `DKWallet.connect()` first, and then
+    // `eth_requestAccounts` on whatever it was handed back. With a Privy session that is the
+    // seam itself, so the seam has to recognise its own provider and forward past it. This is
+    // the shape that has to terminate — one handover, one account, no cycle.
+    const asked = fakeBridge({ walletType: 'privy' });
+    let logins = 0;
+    const askLogin = asked.login;
+    asked.login = async () => {
+        // A cycle here is a microtask loop, which would starve this harness rather than fail
+        // it, so the second login while already signed in is reported as the failure.
+        if (++logins > 1) throw new Error('Privy was asked to log in again while already signed in');
+        return askLogin();
+    };
+    let handovers = 0;
+    const askGetProvider = asked.getProvider;
+    asked.getProvider = async (...args) => {
+        handovers += 1;
+        return askGetProvider(...args);
+    };
+
+    const askedPage = load({ bridge: asked });
+    await askedPage.window.DKWallet.provider({ waitMs: 0 });
+
+    // A request that answers itself is a run of requests, and a microtask loop would starve
+    // this harness rather than fail it — timers never get a turn — so the runaway is caught
+    // at the door, on the count of times one call enters the seam.
+    let entries = 0;
+    const shimRequest = askedPage.window.ethereum.request.bind(askedPage.window.ethereum);
+    askedPage.window.ethereum.request = (args) => {
+        if (++entries > 20) throw new Error('the seam answered one request by re-entering itself');
+        return shimRequest(args);
+    };
+
+    let taken = null;
+    let thrown = null;
+    try {
+        taken = await askedPage.window.ethereum.request({ method: 'eth_requestAccounts' });
+    } catch (error) {
+        thrown = error?.message || String(error);
+    }
+    rec('one request enters the seam once', entries === 1, `${entries} entr(ies)`);
+    rec('the seam answers eth_requestAccounts with the signed-in account',
+        Array.isArray(taken) && taken[0] === EMBEDDED_ADDRESS,
+        thrown ? `threw: ${thrown}` : JSON.stringify(taken));
+    rec('a signed-in session is used, not re-logged-in', logins === 0, `${logins} login(s)`);
+    rec('and the bridge is asked for the provider a bounded number of times',
+        handovers > 0 && handovers <= 3, `${handovers} handover(s)`);
+
+    // The other half of the same branch: once there is no wallet — signed out with the seam
+    // still installed — asking for accounts has to be able to get one, through the login.
+    await askedPage.window.DKWallet.disconnect();
+    let reconnected = null;
+    try {
+        reconnected = await askedPage.window.ethereum.request({ method: 'eth_requestAccounts' });
+    } catch { /* reported below */ }
+    rec('with no wallet left, asking for accounts connects through the login',
+        Array.isArray(reconnected) && reconnected[0] === EMBEDDED_ADDRESS,
+        JSON.stringify(reconnected));
+    rec('and that does open Privy\'s login, exactly once', logins === 1, `${logins} login(s)`);
 
     // ------------------------------------- a logged-out bridge must not shadow anything
     console.log('');
