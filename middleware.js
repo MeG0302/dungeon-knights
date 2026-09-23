@@ -8,15 +8,23 @@
  *
  * Three rules make that safe to reason about:
  *
- *   1. **The gate is an allowlist, never "everything that is not the apex".** The X webhook is
- *      registered against `dungeon-knights.vercel.app`, and a gate expressed as "not the apex"
- *      would have quietly locked out a paid registration. Only the hostnames in `APP_HOSTS` are
- *      gated; every other host keeps behaving exactly as it does today.
+ *   1. **Fail closed on hostnames, exempt by path.** In production a host is gated unless it is the
+ *      apex **by name**: Vercel answers every deployment of this project under `*.vercel.app` — the
+ *      project alias and one URL per build — and they used to be left strictly alone, which meant
+ *      the whole game (and the Points API reading the production store) answered 200 to anybody
+ *      holding an old deployment link. What has to keep working from outside is not a hostname but
+ *      a **path** — the X webhook and Discord's endpoint — and those are exempted in `GLOBAL_OPEN`
+ *      before any host rule runs. The gate serves the password screen on the host being asked; it
+ *      never redirects to a name that may not resolve, which is the failure that once took the live
+ *      game offline in both directions at once.
  *   2. **Static files are not gated, pages and APIs are.** That is what lets the password screen
  *      wear the real theme, and it leaks nothing — the scripts and stylesheets are already served
  *      publicly on the live site today.
  *   3. **Nothing gates unless a password is configured** (`APP_GATE_PASSWORD`). Unset, the app host
  *      behaves like the apex, loudly warned about, rather than locking the team out of its own game.
+ *      That is why the password is also set for the **Preview** environment — a preview deployment
+ *      has its own environment, and without the variable the fail-closed rule above would describe
+ *      a gate that is not actually there.
  *
  * This file is plumbing only. The rules themselves — which path is in which bucket, and what that
  * means on which host — live in `lib/app-routing.js`, because they have to be testable without a

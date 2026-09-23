@@ -10,9 +10,12 @@
  *   1. **The gate is not applied.** The hub is served to a stranger, and it looks exactly like the
  *      site working. This is the one that shipped once already — the hub rewrite was ordered before
  *      the password check, so `app.dungeonknights.io/` answered 200 with the whole game.
- *   2. **The gate is applied too widely.** `dungeon-knights.vercel.app` is where the X webhook for
- *      the +500 follow task is registered, and a gate expressed as "not the apex" would have taken
- *      it out silently. A locked-out webhook reports nothing; it just stops arriving.
+ *   2. **The gate is applied too narrowly.** Vercel answers every deployment of this project under
+ *      `*.vercel.app` — the project alias and one URL per build — and a hostname nobody listed used
+ *      to be left strictly alone, so the whole game, and the Points API reading the production
+ *      store, answered 200 on every past build. The inverse mistake is just as real: the X webhook
+ *      (registered against `dungeon-knights.vercel.app`) and Discord's endpoint must stay reachable,
+ *      and they are exempted **by path**. Both halves are pinned below.
  *   3. **The gate is forgeable.** A cookie is the whole session, so an unsigned or shared-secret
  *      cookie is a password that can be typed once and then duplicated by anyone who can read
  *      theirs.
@@ -182,7 +185,7 @@ function freshProcess(snippet, env = {}) {
     rec('the apex is not', Gate.isAppHost('dungeonknights.io') === false);
     rec('a lookalike hostname is not', Gate.isAppHost('app.dungeonknights.io.evil.com') === false
         && Gate.isAppHost('notapp.dungeonknights.io') === false);
-    rec('the vercel hostname is not — the X webhook is registered against it',
+    rec('the vercel hostname is not on the named list — it is caught by the fail-closed rule instead',
         Gate.isAppHost('dungeon-knights.vercel.app') === false);
     rec('an empty Host header is not', Gate.isAppHost('') === false && Gate.isAppHost(null) === false);
     rec('the list is an allowlist, so it can be widened without touching code',
@@ -201,9 +204,55 @@ function freshProcess(snippet, env = {}) {
         'an unconfigured deployment behaves like today rather than locking the team out');
 
     rec('the dev escape hatch is read only in development',
-        Gate.isAppRequest({ host: 'dungeon-knights.vercel.app', devHostCookie: '1', isProduction: false }) === true
-        && Gate.isAppRequest({ host: 'dungeon-knights.vercel.app', devHostCookie: '1', isProduction: true }) === false,
-        'the same cookie, two environments');
+        Gate.isAppRequest({ host: 'localhost:3000', devHostCookie: '1', isProduction: false }) === true
+        && Gate.isAppRequest({ host: 'localhost:3000', devHostCookie: null, isProduction: false }) === false,
+        '?__app=1 opens the app branch on a dev port; in production the cookie is never consulted');
+
+    // ---------------------------------------------------------------------------------------------
+    // PRODUCTION CLOSES THE THIRD CLASS. The hostname below is the one that matters most: it is the
+    // project's own alias, it is where the X webhook is registered, and until this rule it served
+    // the entire game to anyone who had the link. Its pages must now ask for the password; its
+    // webhook path must not.
+    section('A host nobody listed is the game, not the public site');
+    const gatedInProduction = (hostname) => Gate.isAppRequest({ host: hostname, devHostCookie: null, isProduction: true });
+    for (const hostname of [
+        'dungeon-knights.vercel.app',
+        'dungeon-knights-nib9iy0s5-meglast320-1694.vercel.app',
+        'dungeon-knights-git-main-meglast320-1694.vercel.app',
+        'dungeonknights.io.evil.com',
+        'notapp.dungeonknights.io',
+        '',
+    ]) {
+        rec(`${JSON.stringify(hostname)} is gated in production`, gatedInProduction(hostname) === true);
+    }
+    rec('the apex is not — it is matched by name, never as "everything else"',
+        gatedInProduction('dungeonknights.io') === false && gatedInProduction('www.dungeonknights.io') === false,
+        'a lookalike that merely resembles the apex fails the name test and is gated, which is the safe way to be wrong');
+    rec('in production exactly one branch is taken, for every hostname',
+        ['dungeonknights.io', 'www.dungeonknights.io', 'app.dungeonknights.io', 'dungeon-knights.vercel.app', 'x.y.vercel.app', 'evil.example']
+            .every((hostname) => gatedInProduction(hostname) === !Gate.isApexHost(hostname)),
+        'the two facts are complementary in production; the neither-branch is development only');
+    // The two facts put together the way the middleware computes them: `isApp` from the same
+    // function, `isApex` from the same name test. A path exemption has to survive the host rule, and
+    // that pairing is the thing worth pinning — not either half alone.
+    const routeOn = (hostname, pathname) => Routing.decideRoute({
+        isApp: gatedInProduction(hostname),
+        isApex: Gate.isApexHost(hostname),
+        kind: Routing.classify(pathname),
+        pathname,
+        search: '',
+        passwordConfigured: true,
+        gateAllowed: false,
+    });
+    rec('and the one path the webhook host exists for is untouched by it',
+        routeOn('dungeon-knights.vercel.app', '/api/x/events').action === 'next'
+        && routeOn('dungeon-knights.vercel.app', '/menu').action === 'gate',
+        'registered against that hostname, exempted by path — a locked-out webhook reports nothing, it just stops arriving');
+    rec('as is Discord\'s endpoint, which was 308ing to a hostname with no DNS record',
+        Routing.classify('/api/discord/interactions') === 'global-open'
+        && routeOn('dungeon-knights.vercel.app', '/api/discord/interactions').action === 'next'
+        && routeOn('dungeonknights.io', '/api/discord/interactions').action === 'next',
+        'Ed25519 is its authenticator, the same way the webhook\'s HMAC is its own');
 
     // -------------------------------------------------------------------------------- the split
     section('What the apex serves');
@@ -333,23 +382,22 @@ function freshProcess(snippet, env = {}) {
         open.action === 'next', 'the middleware warns about this on every request');
 
     // ---------------------------------------------------------------------------------------------
-    // THE THIRD HOST CLASS — the one that took the live game offline. `dungeon-knights.vercel.app` is
-    // neither the apex nor the gated host, and it has to keep serving exactly what it served before
-    // this feature existed: the game, no gate, no redirect. Measured on production before the fix:
-    // `/menu` and `/game` both answered `308 → https://app.dungeonknights.io/…`, and because the apex
-    // redirected there too, the game was unreachable on **every** hostname at once — including the one
-    // the X webhook is registered against.
-    section('A host that is neither: untouched');
+    // THE THIRD HOST CLASS, now development-only. `localhost:3000` cannot be two hostnames, so with
+    // no switch it is neither branch and is served as it was, which is what keeps the dev loop
+    // unchanged. The route-level behavior of the production fail-closed rule is already covered by
+    // the gate sections above — a deployment hostname *is* the app branch — so what is pinned here is
+    // the switch itself plus the apex list staying names, not "everything else".
+    section('A host that is neither: development only');
     const other = (pathname) => Routing.decideRoute({
         isApp: false, isApex: false, kind: Routing.classify(pathname), pathname, search: '',
         passwordConfigured: true, gateAllowed: false,
     });
-    for (const pathname of ['/', '/menu', '/game', '/dungeons', '/mint', '/hub', '/gate', '/points', '/genesis', '/portfolio']) {
+    for (const pathname of ['/', '/menu', '/game', '/gate', '/points', '/portfolio']) {
         const decision = other(pathname);
-        rec(`${pathname} is served as it was — no gate, no redirect to a hostname that may not exist`,
+        rec(`${pathname} is served as it was on an unswitched dev port — no gate, no redirect`,
             decision.action === 'next', JSON.stringify(decision));
     }
-    rec('and it is not the apex by accident — the list is names, not "everything else"',
+    rec('and the apex is names, not "everything else"',
         Gate.isApexHost('dungeon-knights.vercel.app') === false
         && Gate.isApexHost('dungeonknights.io') === true
         && Gate.isApexHost('www.dungeonknights.io') === true
@@ -455,7 +503,12 @@ function freshProcess(snippet, env = {}) {
                 'set APP_GATE_LIVE_PASSWORD (development: the value in .env.development.local)');
         }
         try {
-            const apexMenu = await ask('/menu');
+            // `?__app=0` is not decoration. `localhost` is neither hostname, so with no switch the
+            // request takes the development "neither" branch and is served as it always was — a 200,
+            // which is the dev loop working, not the apex redirecting. Without it this check never
+            // entered the branch it names, and passed or failed for reasons of its own. Measured:
+            // `/menu` plain answers 200 here; `/menu?__app=0` answers 308.
+            const apexMenu = await ask('/menu?__app=0');
             rec('a game path on the apex 308s to the gated host',
                 (apexMenu.status === 308 || apexMenu.status === 307) && /app\.dungeonknights\.io/.test(apexMenu.location || ''),
                 `${apexMenu.status} ${apexMenu.location}`);

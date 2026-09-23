@@ -135,7 +135,8 @@ CNAME   app     cname.vercel-dns.com      Automatic
 
 The hostname is already attached to the Vercel project (`vercel domains add app.dungeonknights.io`),
 so it will start serving the moment the record exists. Until then the game is reachable at
-`https://dungeon-knights.vercel.app` (unchanged by this work) and every game path on
+`https://dungeon-knights.vercel.app` (which, as of September 23, asks for the password — see that
+section) and every game path on
 `dungeonknights.io` 308s to `app.dungeonknights.io`, which does not answer. Verified live, after the
 record is added: `/menu` on the app host asks for the password; the apex serves the landing;
 `dungeonknights.io/menu` redirects to it; and the vercel host still serves the game.
@@ -148,15 +149,20 @@ project is this early. The old hub moved to `/hub` and answers at the *root* of 
 
 Three rules make the split safe to reason about:
 
-1. **The gate is an allowlist, never "everything that is not the apex".** The X webhook is registered
-   against `dungeon-knights.vercel.app`; a gate written as "not the apex" would have taken it out
-   silently, and a locked-out webhook reports nothing — it just stops arriving. Only the hostnames in
-   `APP_HOSTS` are gated. `dungeon-knights.vercel.app` keeps behaving exactly as it does today.
+1. **Fail closed on hostnames, exempt by path.** In production a host is gated unless it is the apex
+   **by name**, and what has to stay reachable from outside — the X webhook, Discord's endpoint — is
+   exempted as a **path** (`GLOBAL_OPEN`) before any host rule runs. That direction is safe because the
+   gate answers *on the host being asked*: it never redirects anybody to a name that may not resolve.
+   Until September 23 the rule was an allowlist and `dungeon-knights.vercel.app` was left untouched —
+   *September 23 — every deployment URL was public* below is why that changed and what it cost.
 2. **Static files are not gated; pages and APIs are.** That is what lets the password screen wear the
    real theme (see the stylesheet note below), and it leaks nothing — those files are already public
    on the live site today.
 3. **Nothing gates unless `APP_GATE_PASSWORD` is set.** Unset, the app host behaves like the apex and
-   says so in the log on every request, rather than locking the team out of its own game.
+   says so in the log on every request, rather than locking the team out of its own game. Which is why
+   it is set for **Production and Preview both** (September 23). With it set for Production only, the
+   fail-closed rule above would have described a gate that was not actually there on any preview
+   deployment — the rule would look right and gate nothing.
 
 #### Where the rules live, and why not in `middleware.js`
 
@@ -188,24 +194,82 @@ both answered `308 → https://app.dungeonknights.io/…`, and `app.dungeonknigh
 nothing at all. The only reason the X webhook survived is that `/api/x/events` is in the global-open
 list.
 
-There are **three** host classes, and every host is in exactly one:
+There are **three** host classes, and in production every host is in exactly one:
 
 | class | who | behaviour |
 |---|---|---|
-| the gated host | `APP_HOSTS` — `app.dungeonknights.io` | the password, then the game |
 | the public apex | `APEX_HOSTS` — `dungeonknights.io`, `www.dungeonknights.io` | the landing, the Points Program, a redirect for game paths |
-| **everything else** | preview URLs, `dungeon-knights.vercel.app`, `localhost` | **untouched** — whatever it served yesterday it serves now |
+| the gated host | `APP_HOSTS` — `app.dungeonknights.io` | the password, then the game |
+| **anything else** | preview URLs, `dungeon-knights.vercel.app`, every deployment URL | the password, **served in place** — September 23, below |
 
-Both lists are named and env-configurable (`APP_HOSTS`, `APEX_HOSTS`), and `check-gate` now walks
-the third class path by path (`/`, `/menu`, `/game`, `/dungeons`, `/mint`, `/hub`, `/gate`, `/points`,
-`/portfolio` — all `next`, no redirect), asserts that no hostname is in both lists, and asserts the
-middleware identifies the apex *by name* rather than by negation. The dev switch gained a matching
-`?__app=0`: `localhost` is neither hostname, so without it the answer for the third class would be the
-only thing testable locally.
+Both lists are named and env-configurable (`APP_HOSTS`, `APEX_HOSTS`). `check-gate` asserts that no
+hostname is in both lists, and that the middleware identifies the apex *by name* rather than by
+negation. The dev switch has `?__app=1` / `?__app=0`: `localhost` is neither hostname, so in
+development the third branch is real and stays untouched — that is the dev loop, and the production
+rule never runs there.
 
 This is the second bug in this feature that no offline harness caught and production found within
 minutes — the first was the front-door lockout. The pattern is the same both times: a rule expressed
 as *"not the other thing"* rather than as its own list.
+
+#### September 23 — every deployment URL was public, and the third class was why
+
+The third class was set to **untouched** for a good reason — the X webhook is registered against
+`dungeon-knights.vercel.app`, and a host rule phrased "not the apex" had already taken the game
+offline once. But *untouched* on a Vercel project means: the project alias, and **one URL per build,
+forever**, each one a full copy of the game sharing the production store. Measured on the live
+project before this was changed:
+
+| what | measured |
+|---|---|
+| `dungeon-knights.vercel.app/menu` | **200** — the whole game, no password |
+| `dungeon-knights-nib9iy0s5-…vercel.app/menu` (a build from that morning) | **200** — same |
+| the same URL's `/api/points/leaderboard` | **200** — the live points API |
+| Vercel project protection (`ssoProtection`) | **null** — every deployment public by default |
+| `dungeonknights.io/menu` | **308 → `app.dungeonknights.io`**, which has **no DNS record** — so the game was broken on the real domain *and* open on the alias |
+| `dungeonknights.io/api/discord/interactions` | **308 → the same dead host**. Discord has **no** endpoint registered today (`(none set)`, read from the application record), and the wiring tool's preflight requires an unsigned request to answer **401** — so the redirect is what would have made the wiring fail, before any slash command existed to break |
+
+**What changed.** `isAppRequest` fails closed: in production a host is gated unless it is the apex
+**by name**. The gate serves the password screen *on the host being asked* — it never redirects to a
+name that may not resolve, which is what makes the fail-closed direction safe this time. What has to
+stay reachable from outside is a **path**, not a hostname, so `/api/x/events` (was already exempt) and
+`/api/discord/interactions` (newly) are in `GLOBAL_OPEN`. The old reason for the third class is
+therefore answered twice over: `/api/x/events` — the path `tools/x-webhook-register.js` targets, and the
+reason the third class was ever left open — is unchanged and still answers on every host (measured:
+**401** to an unsigned POST), and the endpoint `discord-setup --wire-app` is pointed at now answers
+**401** to an unsigned request instead of redirecting, which is what its preflight is waiting for.
+Neither registration is confirmed from this machine: no `X_*` variables exist locally or in the
+project's production environment, and Discord's application record reads `interactions_endpoint_url:
+null`. Both are *able* to be wired now; neither was wired before.
+
+Also in this pass: `next.config.js` gained `X-Content-Type-Options`, `Referrer-Policy`,
+`X-Frame-Options: DENY`, a CSP of `frame-ancestors 'none'; base-uri 'self'; object-src 'none'` (no
+`script-src` — nothing there can break a page, and the three directives close framing, `<base>`
+injection and plugin embeds), `Permissions-Policy`, HSTS with `includeSubDomains`, and
+`poweredByHeader: false`. `APP_GATE_PASSWORD` was added to the **Preview** environment — it was set
+for Production only, so the fail-closed rule would have described a gate that was not actually there
+on any preview deployment. *Its value is the one in `.env.development.local`; production keeps its
+own.* (The API cannot read a `sensitive` value back, so a first attempt copied an empty string —
+deleted, and this is why the value came from the local file instead.)
+
+**Verified on a preview deployment** (`dungeon-knights-b2l87hn30-…vercel.app`, production-mode build,
+not the live site): every page — `/`, `/menu`, `/mint`, `/game`, `/points`, `/portfolio`, `/genesis` —
+answers `307 → /gate?next=…` **on its own hostname**; `/api/x/events` and `/api/discord/interactions`
+answer `401` to an unsigned request instead of redirecting; the password round trip works (cookie is
+`HttpOnly`, the password is not in it) and `/menu` then answers `200` with `noindex, nofollow`; all
+six headers present and `x-powered-by` gone. `check-gate` went **139 → 139 offline + 7 live = 146**,
+with the new fail-closed checks falsified by mutation (restoring `return false` fails eight by name;
+`return true` — gating the apex too — fails two; removing the Discord exemption fails one).
+
+One harness bug was fixed on the way: the live check `a game path on the apex 308s to the gated host`
+asked for plain `/menu`, which on `localhost` takes the *neither* branch and answers `200` — it had
+never entered the branch it names. It now asks `?__app=0`, where `/menu` really does 308.
+
+**Still to do by hand:** add the `app` CNAME at Namecheap. Vercel wants
+`app.dungeonknights.io → 03e3c9616dec48fa.vercel-dns-017.com` (or `cname.vercel-dns.com`); the domain
+is already in the project and marked verified, it is only the record that is missing (`misconfigured:
+true`). Until it exists, the game is unreachable on the apex *and* correctly gated everywhere else —
+which is the safe half of the problem, but not the finished one.
 
 #### The bug that shipped inside the first version
 
@@ -314,7 +378,7 @@ entries were purged.
 #### The harnesses, and what they refuse to believe
 
 ```bash
-node tools/check-gate.js                    # 133 checks, offline
+node tools/check-gate.js                    # 139 checks, offline
 APP_GATE_LIVE_PASSWORD=<dev password> node tools/check-gate.js --against-live   # +7 on the running server
 node tools/check-waitlist.js                # 102 checks, offline, in a temp working directory
 ```
@@ -374,11 +438,16 @@ dungeonknights.io/api/waitlist    200   {"count":N} — reading the shared KV st
 dungeonknights.io/api/points/me   401   auth required, as it should be
 dungeonknights.io/menu            308   → https://app.dungeonknights.io/menu   (parked: no DNS yet)
 www.dungeonknights.io/            308   → https://dungeonknights.io/
-dungeon-knights.vercel.app/       200   the Kingdom Gate hub — unchanged, and it must stay that way
-dungeon-knights.vercel.app/menu   200   the game — unchanged
+dungeon-knights.vercel.app/       200   the Kingdom Gate hub — *as measured that day*
+dungeon-knights.vercel.app/menu   200   the game — *as measured that day*
 dungeon-knights.vercel.app/api/x/events  400   reachable, not gated, not redirected (unsigned GET)
 app.dungeonknights.io             —     does not resolve yet (no CNAME; the alias also cannot be set)
 ```
+
+Two rows are a **snapshot of September 22**: since the September 23 change (not yet deployed when this
+was written) `dungeon-knights.vercel.app/` and `/menu` answer the password screen, while
+`/api/x/events` still answers directly — 400, exempt by path. The apex rows are unchanged in every
+version of this design.
 
 **The apex and the vercel host have been re-measured since the copy pass** (all still 200, and the copy
 is the new copy). Two things the table cannot show: `/genesis` carries the new headline and none of the
@@ -555,8 +624,10 @@ curl -s -H "privy-app-id: $PRIVY_APP_ID" "https://auth.privy.io/api/v1/apps/$PRI
 
 `twitter_oauth: true` is the enabling. `allowed_domains: []` is deliberate for now: the app is still
 in Privy's *development mode*, where nothing is refused, and listing origins would only take effect
-once it is upgraded to production — at which point it must list every host the game is opened on,
-including the `*.vercel.app` deployment URLs, or those hosts stop working. The end-to-end proof is
+once it is upgraded to production — at which point it must list every host the game is opened on:
+the apex and, once its CNAME exists, `app.dungeonknights.io`. The `*.vercel.app` deployment URLs no
+longer need listing for players, because as of September 23 they are behind the password and nobody
+signs in from one. The end-to-end proof is
 that `privyBridge.linkX()` on the live origin resolves and lands on
 `x.com/i/oauth2/authorize?redirect_uri=https://auth.privy.io/api/v1/oauth/callback` (before the fix it
 rejected instead of navigating); the consent screen itself needs an X session, which is the player's.
