@@ -29,10 +29,13 @@ export default function Providers({ appId, children }) {
             config={{
                 defaultChain: DEFAULT_CHAIN,
                 supportedChains: SUPPORTED_CHAINS,
-                // Both are enabled on the Privy app; anything else (social sign-in, SMS,
-                // passkeys) is off there and stays off here, so the modal never offers a
-                // method the app would refuse.
-                loginMethods: ['wallet', 'email'],
+                // These three are enabled on the Privy app; anything else (SMS, passkeys, the
+                // other socials) is off there and stays off here, so the modal never offers a
+                // method the app would refuse. `twitter` is not only a way in — Privy's
+                // `linkTwitter` is refused outright for a provider the app has not enabled,
+                // which is what the Points page's "Link X account" button runs on, so this
+                // list is part of the binding working at all.
+                loginMethods: ['wallet', 'email', 'twitter'],
                 embeddedWallets: {
                     ethereum: {
                         createOnLogin: 'users-without-wallets',
