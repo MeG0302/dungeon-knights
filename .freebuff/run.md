@@ -3674,7 +3674,31 @@ dungeon-knights-meglast320-1694.vercel.app, and leaves the project's custom doma
 is invisible at the URL people actually open. Always re-alias, then verify the *custom* domain,
 not the deployment URL.
 
-**The current deploy** (September 23, the referral gate, the airdrop card and the phone layout):
+**The current deploy** (September 24, the board naming and the Discord card):
+`dungeon-knights-bzi8oo7sd-meglast320-1694`, aliased across **`dungeonknights.io`**,
+**`www.dungeonknights.io`** and **`dungeon-knights.vercel.app`**, built from the committed tree
+`710ee5a`. Verified on the live host rather than the deployment URL: `/`, `/points`, `/portfolio`
+and `/genesis` are `200`; `www` 308s to the apex; `/menu` 308s to the gated host; and the
+`.vercel.app` alias still 307s to `/gate` on its own hostname, so the security pass holds. The
+served chunk `app/points/page-b7176be2bfb0df01.js` carries `Join the Discord`, `Open the invite`,
+`zZFqA9Fqe`, `names you by this handle`, `lb-handle` and `lb-proof`, and `/css/points.css?v=11`
+serves the new rules (`lb-handle`, `lb-proof`, `discord-card`, `discord-mark`) — the sheet is
+`max-age=0, must-revalidate` with an ETag, so a returning player revalidates and gets it without a
+version bump. Read from the live DOM: 14 of the 15 rendered rows name the player by the handle they
+bound, rank 13 is a wallet that has bound nothing and falls back to `0xd99a…d3ac`, every row keeps
+its address in `title`, and the Discord card points at the invite with `target="_blank"` and its
+styles applied. At 390px the document is 390 wide with no offender past the edge and the card at
+347.
+
+**No live row carries a check mark, and that is the data, not the code.** The mark renders only
+where `x.verified === true`, which `bindX(address, identity, { verified: true })` sets on the
+**Privy-proved** path only; every binding on today's board was typed, so `handleProved` is `false`
+for all of them and the mark is correctly absent. Rendering of the proved state was proven on a
+**local** store with a seeded proved row (the ✓ beside `@dungeonknights`), not on production —
+seeding a proved binding in the production store is the same thing the referral harness refuses to
+do. So: the naming and the fallback are proven live, the ✓ is proven offline plus locally.
+
+**The deploy before it** (September 23, the referral gate, the airdrop card and the phone layout):
 `dungeon-knights-nib9iy0s5-meglast320-1694`, aliased across **`dungeonknights.io`**,
 **`www.dungeonknights.io`** and **`dungeon-knights.vercel.app`**, built from the committed tree
 `daffe56`. Verified on the live host, not the deployment URL: `/points` and `/portfolio` are `200`,
