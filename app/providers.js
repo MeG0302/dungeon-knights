@@ -7,9 +7,9 @@ import { DEFAULT_CHAIN, SUPPORTED_CHAINS } from '../lib/privy-chains';
  * Privy, mounted once, around every route.
  *
  * This is the app's login: the modal lists the wallets a player might already have
- * (MetaMask, Coinbase, WalletConnect, Rainbow, or whatever the browser injects) plus email,
- * and Privy creates an embedded wallet for anyone who arrives without one — which is the
- * only way the game is playable on a phone, where no extension can be installed.
+ * (MetaMask, Coinbase, WalletConnect, Rainbow, or whatever the browser injects) plus email
+ * and X, and Privy creates an embedded wallet for anyone who arrives without one — which is
+ * the only way the game is playable on a phone, where no extension can be installed.
  *
  * **The App ID comes from the server**, passed in by `app/layout.js` from `PRIVY_APP_ID`,
  * rather than from a `NEXT_PUBLIC_` copy in a client config: one value, one place, and no

@@ -537,6 +537,30 @@ And one thing no code can do: add `https://app.dungeonknights.io` to **Privy's a
 wallet login on the app host will be refused. `dungeonknights.io` needs to be there too for the points
 page.
 
+#### Linking X needs the dashboard, not just the code
+
+On September 23 the Points page's *Link X account* button failed at Privy's `oauth/init` with
+`403 / "Login with Twitter not allowed"`. Privy refuses `linkTwitter` for any provider the **app** has
+not enabled, so no client config could fix it: the switch is
+**dashboard → User management → Authentication → X (formerly Twitter)**, left on Privy's own default
+credentials. `loginMethods: ['wallet', 'email', 'twitter']` in `app/providers.js` is the other half —
+the modal must not offer a method the app would refuse, and vice versa.
+
+The switch is readable without the dashboard, which is how to confirm it without trusting the UI:
+
+```bash
+curl -s -H "privy-app-id: $PRIVY_APP_ID" "https://auth.privy.io/api/v1/apps/$PRIVY_APP_ID" \
+  | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const a=JSON.parse(s);console.log('twitter_oauth:',a.twitter_oauth,'allowed_domains:',JSON.stringify(a.allowed_domains))})"
+```
+
+`twitter_oauth: true` is the enabling. `allowed_domains: []` is deliberate for now: the app is still
+in Privy's *development mode*, where nothing is refused, and listing origins would only take effect
+once it is upgraded to production — at which point it must list every host the game is opened on,
+including the `*.vercel.app` deployment URLs, or those hosts stop working. The end-to-end proof is
+that `privyBridge.linkX()` on the live origin resolves and lands on
+`x.com/i/oauth2/authorize?redirect_uri=https://auth.privy.io/api/v1/oauth/callback` (before the fix it
+rejected instead of navigating); the consent screen itself needs an X session, which is the player's.
+
 ### The Genesis collection page (`/genesis`)
 
 **Not deployed — this is the one page of this work that a fresh `vercel --prod` publishes to
