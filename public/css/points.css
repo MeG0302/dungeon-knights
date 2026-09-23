@@ -505,6 +505,26 @@ it, so the tab still shows what has been done — the count of what is left is t
     color: var(--accent-gold);
 }
 
+/* The board names a player by the X account they earn from, so the name needs one piece of furniture
+   the old address rows did not: a mark for a binding Privy vouched for. A typed handle looks exactly
+   like a proved one otherwise, and the difference is the only thing standing between a player's own
+   name and somebody else's typed into a box. */
+.lb-handle {
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.lb-proof {
+    flex: none;
+    padding: 0 4px;
+    border: 1px solid rgba(90, 160, 90, 0.55);
+    border-radius: 3px;
+    font-size: 9px;
+    line-height: 1.4;
+    color: #8fce8f;
+}
+
 /* Empty, loading and error states share one look. */
 .lb-state {
     display: flex;
@@ -1015,6 +1035,24 @@ link, and X is asked about it before anything is paid.
 .x-bind-card.is-bound {
     border-color: var(--border-base);
     background: rgba(0, 0, 0, 0.28);
+}
+
+/* The Discord invite, in the same family as the X card above it and deliberately quieter: the X card
+   is a gate, this is a door, and the styling should not suggest otherwise. The blurple is the brand's
+   own, lightened for a near-black panel. */
+.discord-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid var(--border-base);
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.28);
+}
+
+.discord-mark {
+    flex: none;
+    color: #8b93f8;
 }
 
 .x-proof-tag {

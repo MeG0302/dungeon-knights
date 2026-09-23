@@ -16,6 +16,11 @@ import PointsDungeon from './dungeon';
 const ASSETS = '/assets/points/';
 const BOARD_LIMIT = 25;
 
+// The server invite. It sits with the X card because the two answer the same question — where the
+// campaign is run, and where a player should be — but it is a **door, not a gate**: earning needs X
+// and needs nothing here, which is why this is a link rather than a button that binds an account.
+const DISCORD_INVITE = 'https://discord.gg/zZFqA9Fqe';
+
 // Arya's walkthrough of this page. The key is both an identity and the once-ever latch:
 // `/arya.js` remembers `dk_arya_tour_<id>`, so this runs for a newcomer and stays quiet for
 // anyone who has already been through it — including anyone who skipped it. The footer's
@@ -1635,6 +1640,9 @@ export default function PointsPage() {
                                                 : 'Bound. Every post is checked against this handle before it pays.'}
                                             {' '}One X account earns for one wallet, so a binding is permanent.
                                         </div>
+                                        <div className="wallet-card-meta">
+                                            The board names you by this handle rather than by your address.
+                                        </div>
                                         <div className="x-bind-actions">
                                             {/* Offered whenever the binding is unproved, which is not the same as
                                                 "only when an X account is already linked": a typed binding leaves
@@ -1696,6 +1704,30 @@ export default function PointsPage() {
                                     </>
                                 )}
                                 {xErrors.bind && <div className="x-task-line is-error">{xErrors.bind}</div>}
+                            </div>
+
+                            {/* ------------------------------------------------------ the Discord
+                                A door, not a gate. The card above is what earning requires; this is
+                                where the campaign is run — announcements, task drops and support —
+                                and it needs no wallet, no handle and no signature, which is why it
+                                is a plain invite rather than something that binds an account. It
+                                promises nothing about roles: no page here can yet prove which
+                                Discord account is which, and a card that implied otherwise would be
+                                the kind of claim the copy pass removed everywhere else. */}
+                            <div className="discord-card">
+                                <div className="wallet-card-line">
+                                    <svg className="discord-mark" viewBox="0 0 127.14 96.36" width={16} height={16} aria-hidden="true" focusable="false">
+                                        <path fill="currentColor" d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.43-12.74S54,46,53.89,53,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5-12.74,11.44-12.74S96.23,46,96.12,53,91.08,65.69,84.69,65.69Z" />
+                                    </svg>
+                                    <strong>Join the Discord</strong>
+                                </div>
+                                <div className="wallet-card-meta">
+                                    Announcements, task drops and support live in the server — it is where the
+                                    campaign is run from. No wallet needed to read it.
+                                </div>
+                                <a className="btn btn-secondary btn-sm w-full" href={DISCORD_INVITE} target="_blank" rel="noopener noreferrer">
+                                    Open the invite
+                                </a>
                             </div>
 
                             {/* The wallet and the X binding sit above both tabs, because each half of
@@ -2235,8 +2267,20 @@ export default function PointsPage() {
                                             {board.rows.map((entry) => (
                                                 <div key={entry.address} className={`lb-row ${entry.isYou ? 'is-you' : ''} ${entry.rank <= 3 ? `top-${entry.rank}` : ''}`}>
                                                     <span className="lb-rank">{entry.rank}</span>
-                                                    <span className="lb-name">
-                                                        {entry.short}
+                                                    {/* Named by the account they earn from, and the address stays
+                                                        in the tooltip so a name is still checkable against it. The
+                                                        check is only for a binding Privy vouched for: a typed handle
+                                                        is a name somebody chose, and this is the one mark that
+                                                        separates it from somebody else's typed into a box. */}
+                                                    <span className="lb-name" title={entry.address}>
+                                                        {entry.handle ? (
+                                                            <>
+                                                                <span className="lb-handle">@{entry.handle}</span>
+                                                                {entry.handleProved && (
+                                                                    <span className="lb-proof" title="Proved with Privy">✓</span>
+                                                                )}
+                                                            </>
+                                                        ) : entry.short}
                                                         {entry.isYou && <span className="lb-you-tag">you</span>}
                                                     </span>
                                                     <span className="lb-points">{entry.points.toLocaleString()}</span>
@@ -2246,8 +2290,15 @@ export default function PointsPage() {
                                             {connected && state.rank && state.rank > board.rows.length && (
                                                 <div className="lb-row is-you">
                                                     <span className="lb-rank">{state.rank}</span>
-                                                    <span className="lb-name">
-                                                        {shortAddress(state.address)}
+                                                    <span className="lb-name" title={state.address}>
+                                                        {state.x?.username ? (
+                                                            <>
+                                                                <span className="lb-handle">@{state.x.username}</span>
+                                                                {state.x.verified && (
+                                                                    <span className="lb-proof" title="Proved with Privy">✓</span>
+                                                                )}
+                                                            </>
+                                                        ) : shortAddress(state.address)}
                                                         <span className="lb-you-tag">you</span>
                                                     </span>
                                                     <span className="lb-points">{points.toLocaleString()}</span>

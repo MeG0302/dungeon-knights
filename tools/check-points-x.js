@@ -1062,6 +1062,47 @@ globalThis.fetch = async (url, options = {}) => {
             : Boolean(t.blurb && t.cta))),
         `${quoteState.length} task(s) in the tab`);
 
+    // ------------------------------------------------ what the board calls everybody
+    console.log('');
+    console.log('The board names players by the account they earn from');
+
+    // Three wallets with three different amounts of identity: a proved binding, one that was typed,
+    // and none at all. The board is public and has always published addresses, so the rule pinned
+    // here is not "hide the address" — it is *which name a row is shown by*, and that a name typed
+    // into a box is never presented as one that was proved.
+    const named = fresh();
+    await Program.bindX(named, { id: '9101', username: 'Named' }, { verified: true });
+    const typedOnly = fresh();
+    await Program.bindX(typedOnly, { id: '9102', username: 'Typed' });
+    for (const who of [named, typedOnly]) await Program.clearLevel(who, 0);
+
+    // Points **without** a binding cannot be earned any more — every way to earn needs X — so this
+    // state is written directly. It is still the state the board has to have an answer for: it is
+    // what a wallet from before the X gate looks like, and for a board that must never print
+    // `@undefined` the fallback is the address, which is the only name such a wallet has.
+    const anonymous = fresh();
+    await Store.updateWallet(anonymous, (w) => ({ ...w, points: 140 }));
+
+    const board = await Program.leaderboard(100);
+    const rowFor = (address) => board.find((r) => r.address === address);
+    const namedRow = rowFor(named);
+    const typedRow = rowFor(typedOnly);
+    const anonRow = rowFor(anonymous);
+
+    rec('a proved binding is the name its row carries, lowercased the way the store holds it',
+        namedRow?.handle === 'named', String(namedRow?.handle));
+    rec('  … and the row says it was proved', namedRow?.handleProved === true, String(namedRow?.handleProved));
+    rec('a typed binding is the name its row carries too', typedRow?.handle === 'typed', String(typedRow?.handle));
+    rec('  … but never as proved — that mark is the whole difference between the two',
+        typedRow?.handleProved === false, String(typedRow?.handleProved));
+    rec('a wallet that has bound nothing is still on the board, shown by its address',
+        anonRow?.handle === null && anonRow?.short === `${anonymous.slice(0, 6)}…${anonymous.slice(-4)}`,
+        `${anonRow?.handle} / ${anonRow?.short}`);
+    rec('the address stays in every row, so a name is still checkable against it',
+        namedRow?.address === named && anonRow?.address === anonymous, '');
+    rec('and the caller is still marked, whatever the board calls them',
+        (await Program.leaderboard(100, named)).find((r) => r.address === named)?.isYou === true, '');
+
     // ------------------------------------------------------------------- the last mile
     console.log('');
     console.log('The route layer');
