@@ -194,9 +194,14 @@ same tokens as the rankings tabs on the right, at a size that fits a 400px colum
 /* ---------------------------------------------------------------------------
    A one-time task
 
-A claim rather than a proof: the reward is stated, the step is a button, and the card says in the
-small print that nothing was checked. The claimed state dims the whole card instead of removing
-it, so the tab still shows what has been done — the count of what is left is the point of the tab.
+A claim rather than a proof: the reward is stated, the step is a button, and the card asks for the
+step without claiming anything about how it is judged. The claimed state dims the whole card
+instead of removing it, so the tab still shows what has been done — the count of what is left is
+the point of the tab.
+
+These cards live in the **wide** pane, not the column beside it: a card carries an ask, a reward
+and a link box, and at 400px the tab read as stacked furniture. The grid below is what gives them
+room; the header colour is the only hover they need.
    */
 .one-task {
     display: flex;
@@ -206,6 +211,17 @@ it, so the tab still shows what has been done — the count of what is left is t
     border: 1px solid var(--border-base);
     border-radius: 4px;
     background: rgba(0, 0, 0, 0.28);
+    transition: border-color 0.15s ease;
+}
+
+/* Colour rather than movement: the card does not lift, so nothing here fights a reduced-motion
+   preference or makes a long list twitch as the pointer crosses it. */
+.one-task:not(.is-claimed):hover {
+    border-color: rgba(212, 168, 67, 0.4);
+}
+
+.one-task:focus-within {
+    border-color: rgba(212, 168, 67, 0.5);
 }
 
 .one-task.is-claimed {
@@ -242,6 +258,120 @@ it, so the tab still shows what has been done — the count of what is left is t
     font-size: 10px;
     line-height: 1.5;
     color: var(--text-muted);
+}
+
+/* ========================================================== the one-time task pane
+
+Two columns as soon as the pane can hold two — 380px is the width a card needs before its link box
+starts to feel like a slot — and one below that. `auto-fit` rather than a fixed count, so the same
+rule serves the wide pane, a tablet and a phone without three declarations to keep in step.
+   ============================================================================== */
+.one-task-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+    gap: 12px;
+    align-items: start;
+}
+
+/* Claimed cards sit under the divider: dimmed, but present. A receipt that disappears reads as a
+   bug, and on this tab it is the only place the player can see what they have already done. */
+.one-task-grid.is-done {
+    opacity: 0.82;
+}
+
+.one-task-divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 18px 0 10px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.one-task-divider-line {
+    flex: 1;
+    height: 1px;
+    background: var(--border-base);
+}
+
+/* What is still worth going after, in the pane's own header. It replaces the Leaderboard buttons
+   while this tab is open, so it has to read as a fact rather than as something to press. */
+.one-available-pill {
+    padding: 4px 10px;
+    border: 1px solid rgba(212, 168, 67, 0.4);
+    border-radius: 3px;
+    background: rgba(212, 168, 67, 0.08);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: var(--accent-gold);
+    white-space: nowrap;
+}
+
+/* The summary that stayed behind in the narrow column: how far along, and one segment per task
+   rather than a percentage, because the number of tasks is small enough to count. */
+.one-progress {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 12px;
+    border: 1px solid var(--border-base);
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.28);
+}
+
+.one-progress-head {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.one-progress-count {
+    color: var(--accent-gold);
+}
+
+.one-progress-track {
+    display: flex;
+    gap: 3px;
+    height: 6px;
+}
+
+.one-progress-seg {
+    flex: 1;
+    border-radius: 2px;
+    background: var(--border-base);
+}
+
+.one-progress-seg.is-done {
+    background: var(--accent-gold);
+}
+
+/* Which pane the tasks are in depends on the width, so the sentence that says where they are has to
+   change with it — the same 860px the layout itself stacks at. */
+.one-hint-narrow {
+    display: none;
+}
+
+@media (max-width: 860px) {
+    .one-hint-wide {
+        display: none;
+    }
+
+    .one-hint-narrow {
+        display: inline;
+    }
+
+    .one-task-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 /* A narrow column stacks the two buttons instead of squeezing them. */

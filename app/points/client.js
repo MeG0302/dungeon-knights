@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 // The Points page is a React route, not a legacy page, so it has to pull Arya in
 // itself — the shared gate-keeper popup used across the rest of the game.
 import Script from 'next/script';
-import { VAULT_LEVELS, VAULT_ENTRY_TOTAL, STREAK_BASE, STREAK_MAX_MULTIPLIER } from '../../lib/points-config';
+import { VAULT_LEVELS, VAULT_ENTRY_TOTAL, STREAK_BASE, STREAK_MAX_MULTIPLIER, DISCORD_INVITE } from '../../lib/points-config';
 import {
     attachRef, claimRef, clearSession, connectWallet, fetchLeaderboard, fetchMe, fetchXStatus, forgetWallet,
     isAddress, onAccountsChanged, pendingRef, readRefFromUrl,
@@ -19,11 +19,6 @@ const ASSETS = '/assets/points/';
 // still sees their own row — the page appends it below with their real rank — so shrinking the list
 // hides other players' totals, never the player's own place in the running.
 const BOARD_LIMIT = 10;
-
-// The server invite. It sits with the X card because the two answer the same question — where the
-// campaign is run, and where a player should be — but it is a **door, not a gate**: earning needs X
-// and needs nothing here, which is why this is a link rather than a button that binds an account.
-const DISCORD_INVITE = 'https://discord.gg/zZFqA9Fqe';
 
 // Arya's walkthrough of this page. The key is both an identity and the once-ever latch:
 // `/arya.js` remembers `dk_arya_tour_<id>`, so this runs for a newcomer and stays quiet for
@@ -567,6 +562,14 @@ export default function PointsPage() {
     const openOneTime = connected
         ? (state?.oneTime || []).filter((task) => !task.claimed && !task.pending && !task.rejected).length
         : 0;
+    // The one-time tab's own arithmetic, in one place. The tab's badge, the progress panel on the
+    // left and the heading over the task list all read these, so three parts of one screen cannot
+    // disagree about how many tasks are left or what they are worth.
+    const oneTimeAll = state?.oneTime || [];
+    const oneTimeDone = oneTimeAll.filter((task) => task.claimed);
+    const oneTimeOpen = oneTimeAll.filter((task) => !task.claimed);
+    const oneTimeAvailable = oneTimeOpen.reduce((sum, task) => sum + (task.reward || 0), 0);
+    const oneTimeEarned = oneTimeDone.reduce((sum, task) => sum + (task.credited || task.reward || 0), 0);
     const live = () => liveRef.current;
 
     /** Open the announcements tab and let its badge go, for good. */
@@ -1429,6 +1432,47 @@ export default function PointsPage() {
         }
     };
 
+    /**
+     * One task, as its card.
+     *
+     * Two shapes, because there are two bargains. A post to quote is a **checked** task and gets the
+     * same card the campaign and the daily share use — `id` is the task's own `kind`, which is the
+     * string the server is asked to settle, and nothing here rebuilds it from the task's id. A step
+     * off our own pages is a **claimed** task and gets `OneTimeTaskCard`, whose reward is paid by the
+     * claim endpoint under that same id.
+     */
+    const renderOneTimeTask = (task) => (task.proof === 'verify' ? (
+        <XTaskCard
+            key={task.id}
+            id={task.kind}
+            title={task.title}
+            reward={task.reward}
+            hint={task.hint}
+            cta={task.cta}
+            onCta={() => window.open(task.postUrl, '_blank', 'noopener')}
+            task={task}
+            busy={xBusy}
+            error={xErrors[task.kind]}
+            draft={xDrafts[task.kind] || ''}
+            onDraft={(value) => setXDrafts((d) => ({ ...d, [task.kind]: value }))}
+            onSubmit={(url) => submitXTask(task.kind, url)}
+            onCheck={() => checkXTask(task.kind)}
+            wait={xWait[task.kind] || 0}
+        />
+    ) : (
+        <OneTimeTaskCard
+            key={task.id}
+            task={task}
+            busy={xBusy === task.id}
+            error={xErrors[task.id]}
+            onClaim={() => handleOneTimeClaim(task.id)}
+            canClaim={connected && bound}
+            blockedWhy={!bound
+                ? 'Bind your X account first. This task pays against it'
+                : undefined}
+        />
+    ));
+
     // The stylesheets are rendered in BOTH branches. Returning the vault on its own
     // used to unmount these <link>s, which stripped theme.css and points.css off the
     // page — that is why the vault rendered as raw unstyled HTML.
@@ -2028,11 +2072,14 @@ export default function PointsPage() {
                             )}
 
                             {/* ---------------------------------------------------- one-time tasks
-                                Steps a player takes once, paid once. The tab exists because the
-                                bargain differs from everything above it, and the cards are written
-                                to match: an ask in one sentence, a reward, and a button that opens
-                                the post. Where the *mode* decides what a claim can honestly say
-                                (the follow), that sentence comes from the server — see `blurb`. */}
+                                Steps a player takes once, paid once. **The cards live in the wide
+                                panel beside this one** — a post to quote needs room for a link box
+                                and a paragraph, and a column this narrow made the tab read as
+                                stacked furniture. What stays here is the summary: how far along the
+                                wallet is, and what is still worth going after.
+
+                                Where the *mode* decides what a claim can honestly say (the
+                                follow), that sentence comes from the server — see `blurb`. */}
                             {panel === 'onetime' && (
                                 <>
                                     <div className="panel-section-title">
@@ -2046,59 +2093,58 @@ export default function PointsPage() {
                                             : ' A follow claim is reviewed before it is credited, usually within 30\u201345 minutes.'}
                                     </p>
 
+                                    {connected && oneTimeAll.length > 0 && (
+                                        <>
+                                            <div className="one-progress">
+                                                <div className="one-progress-head">
+                                                    <span>Claimed</span>
+                                                    <span className="one-progress-count">
+                                                        {oneTimeDone.length} of {oneTimeAll.length}
+                                                    </span>
+                                                </div>
+                                                {/* The bar is the same fact as the count, drawn: one segment per
+                                                    task, filled for the ones this wallet has been paid for. */}
+                                                <div className="one-progress-track" role="presentation">
+                                                    {oneTimeAll.map((task) => (
+                                                        <span
+                                                            key={task.id}
+                                                            className={`one-progress-seg ${task.claimed ? 'is-done' : ''}`}
+                                                            title={`${task.title} — ${task.claimed ? 'claimed' : `${task.reward} PTS`}`}
+                                                        />
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            <div className="stat-row">
+                                                <span className="stat-label">Still on the table</span>
+                                                <span className="stat-value" style={{ fontSize: 12, color: 'var(--accent-gold)' }}>
+                                                    {oneTimeAvailable.toLocaleString()} PTS
+                                                </span>
+                                            </div>
+                                            <div className="stat-row">
+                                                <span className="stat-label">Earned from tasks</span>
+                                                <span className="stat-value" style={{ fontSize: 12 }}>
+                                                    {oneTimeEarned.toLocaleString()} PTS
+                                                </span>
+                                            </div>
+                                        </>
+                                    )}
+
                                     {!connected ? (
                                         <div className="lb-state">
                                             <img src={`${ASSETS}White_logo_on_black_background_2K_20260919011421-autocrop-hair.png`} alt="" className="points-icon empty-state-icon" width={40} height={40} style={{ filter: 'brightness(0) invert(1)' }} />
                                             <p style={{ fontStyle: 'italic' }}>Connect your wallet to see and claim these.</p>
                                         </div>
-                                    ) : (state?.oneTime || []).length === 0 ? (
+                                    ) : oneTimeAll.length === 0 ? (
                                         <div className="lb-state">
                                             <p style={{ fontStyle: 'italic' }}>No one-time tasks are open right now. Check back soon.</p>
                                         </div>
                                     ) : (
-                                        state.oneTime.map((task) => (
-                                            task.proof === 'verify' ? (
-                                                /* A quote-repost: the same card the campaign and the share use, because
-                                                   it is the same bargain — paste the link to your post and X is asked about it.
-                                                   `id` is the task's `kind`, which is the string the server is asked to
-                                                   settle; nothing here rebuilds it from the id. */
-                                                <XTaskCard
-                                                    key={task.id}
-                                                    id={task.kind}
-                                                    title={task.title}
-                                                    reward={task.reward}
-                                                    hint={task.hint}
-                                                    cta={task.cta}
-                                                    onCta={() => window.open(task.postUrl, '_blank', 'noopener')}
-                                                    task={task}
-                                                    busy={xBusy}
-                                                    error={xErrors[task.kind]}
-                                                    draft={xDrafts[task.kind] || ''}
-                                                    onDraft={(value) => setXDrafts((d) => ({ ...d, [task.kind]: value }))}
-                                                    onSubmit={(url) => submitXTask(task.kind, url)}
-                                                    onCheck={() => checkXTask(task.kind)}
-                                                    wait={xWait[task.kind] || 0}
-                                                />
-                                            ) : (
-                                            <OneTimeTaskCard
-                                                key={task.id}
-                                                task={task}
-                                                busy={xBusy === task.id}
-                                                error={xErrors[task.id]}
-                                                onClaim={() => handleOneTimeClaim(task.id)}
-                                                canClaim={connected && bound}
-                                                blockedWhy={!bound
-                                                    ? 'Bind your X account first. This task pays against it'
-                                                    : undefined}
-                                            />
-                                            )
-                                        ))
+                                        <div className="one-task-footer">
+                                            <span className="one-hint-wide">The tasks are listed in the panel beside this one.</span>
+                                            <span className="one-hint-narrow">The tasks are listed below this panel.</span>
+                                        </div>
                                     )}
-
-                                    <div className="one-task-footer">
-                                        New tasks appear here as the campaign runs. The tab shows a count when
-                                        one is waiting.
-                                    </div>
                                 </>
                             )}
 
@@ -2214,23 +2260,75 @@ export default function PointsPage() {
                         </div>
                     </aside>
 
-                    {/* RIGHT: Leaderboard / Referrals */}
+                    {/* RIGHT: the wide panel — the board and the referral list normally, and the
+                        one-time task list while that tab is open. The tasks take this side rather
+                        than the narrow one because their cards want width: a post to quote carries a
+                        link box, an ask and two buttons, and in a 400px column they were the reason
+                        the tab read as cramped. The board is not lost — it is one tab away, and its
+                        state (the rows, the referral list) is untouched while it is hidden. */}
                     <main className="side-panel" data-arya="board" style={{ flex: 1, borderRight: 'none' }}>
                         <div className="side-panel-header" style={{ justifyContent: 'space-between' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <img src={`${ASSETS}Golden_trophy_pixel_art_icon_2K_20260919011419-autocrop-hair.png`} alt="" className="panel-header-icon points-icon" width={20} height={20} />
-                                Rankings
+                                {panel === 'onetime' ? 'One-time Tasks' : 'Rankings'}
                             </div>
-                            <div style={{ display: 'flex', gap: 4 }}>
-                                <button className={`btn btn-sm ${tab === 'leaderboard' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setTab('leaderboard')} style={{ fontSize: 11, padding: '4px 12px', letterSpacing: 0.5 }}>
-                                    Leaderboard
-                                </button>
-                                <button className={`btn btn-sm ${tab === 'referrals' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setTab('referrals')} style={{ fontSize: 11, padding: '4px 12px', letterSpacing: 0.5 }}>
-                                    My Referrals
-                                </button>
-                            </div>
+                            {panel === 'onetime' ? (
+                                <span className="one-available-pill">
+                                    {oneTimeAvailable > 0 ? `${oneTimeAvailable.toLocaleString()} PTS available` : 'All claimed'}
+                                </span>
+                            ) : (
+                                <div style={{ display: 'flex', gap: 4 }}>
+                                    <button className={`btn btn-sm ${tab === 'leaderboard' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setTab('leaderboard')} style={{ fontSize: 11, padding: '4px 12px', letterSpacing: 0.5 }}>
+                                        Leaderboard
+                                    </button>
+                                    <button className={`btn btn-sm ${tab === 'referrals' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setTab('referrals')} style={{ fontSize: 11, padding: '4px 12px', letterSpacing: 0.5 }}>
+                                        My Referrals
+                                    </button>
+                                </div>
+                            )}
                         </div>
                         <div className="side-panel-body">
+                            {panel === 'onetime' ? (
+                                <>
+                                    {!connected ? (
+                                        <div className="lb-state">
+                                            <img src={`${ASSETS}White_logo_on_black_background_2K_20260919011421-autocrop-hair.png`} alt="" className="points-icon empty-state-icon" width={40} height={40} style={{ filter: 'brightness(0) invert(1)' }} />
+                                            <p style={{ fontStyle: 'italic' }}>Connect your wallet to see and claim these.</p>
+                                        </div>
+                                    ) : oneTimeAll.length === 0 ? (
+                                        <div className="lb-state">
+                                            <p style={{ fontStyle: 'italic' }}>No one-time tasks are open right now. Check back soon.</p>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            {/* Open first, claimed after — so the tasks still worth doing lead,
+                                                and the ones already paid read as a receipt rather than as work
+                                                left undone. The goalless state shares a grid either way. */}
+                                            <div className="one-task-grid">
+                                                {oneTimeOpen.map(renderOneTimeTask)}
+                                            </div>
+
+                                            {oneTimeDone.length > 0 && (
+                                                <>
+                                                    <div className="one-task-divider">
+                                                        <span>Claimed</span>
+                                                        <span className="one-task-divider-line" />
+                                                    </div>
+                                                    <div className="one-task-grid is-done">
+                                                        {oneTimeDone.map(renderOneTimeTask)}
+                                                    </div>
+                                                </>
+                                            )}
+                                        </>
+                                    )}
+
+                                    <div className="one-task-footer">
+                                        New tasks appear here as the campaign runs. The tab shows a count when
+                                        one is waiting.
+                                    </div>
+                                </>
+                            ) : (
+                            <>
                             <div className="stat-row">
                                 <span className="stat-label">Your Points</span>
                                 <span className="stat-value" style={{ color: 'var(--accent-gold)' }}>
@@ -2366,6 +2464,8 @@ export default function PointsPage() {
                                         </>
                                     )}
                                 </div>
+                            )}
+                            </>
                             )}
                         </div>
                     </main>

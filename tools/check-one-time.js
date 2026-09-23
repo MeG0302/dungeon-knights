@@ -11,9 +11,10 @@
  * And the claim path must stay blind to these tasks, or a checked task could be paid on a tap with
  * its verifier bypassed entirely.
  *
- * The waitlist task is the other extreme and gets the same treatment: it has **nothing** behind it,
- * so the rules pinned here are that it pays on the claim itself, prices nothing twice, and says in
- * as many words that nothing was checked.
+ * The two off-site tasks — the Genesis waitlist and the Discord — are the other extreme and get the
+ * same treatment: they have **nothing** behind them, so the rules pinned here are that they pay on
+ * the claim itself, price nothing twice, and ask for the step without making a claim about a check
+ * in either direction.
  *
  * So this checks the rules three ways: the link parser and the store document directly, the *tab*
  * through the real API on a running server, and the payout through the same endpoints a page uses.
@@ -25,7 +26,7 @@
 
 import crypto from 'node:crypto';
 import { addExtraTask, extraOneTimeTasks, parsePostUrl, removeExtraTask } from '../lib/points-tasks.js';
-import { ONE_TIME_TASKS, oneTimeTask } from '../lib/points-config.js';
+import { ONE_TIME_TASKS, oneTimeTask, DISCORD_INVITE } from '../lib/points-config.js';
 import {
     documentRead, documentWrite, purgeWallet, updateWallet, getWallet, STORAGE_DRIVER, storageDescription,
 } from '../lib/points-store.js';
@@ -215,31 +216,39 @@ function shippedPostId(card) {
 
         // ------------------------------------------- a task nothing checks, and says so
         console.log('');
-        console.log('The waitlist task: no verifier behind it, and the card admits it');
+        console.log('The off-site tasks: nothing behind them, and no claim made either way');
 
-        // It is the only one-time task with nothing behind it — no post for X to be asked about and
-        // no review window — so what is worth pinning is that its own copy says that, and that it is
-        // a **different kind** from the follow. Reusing `claim` would hand it the follow's proof
-        // mode, and the day this deployment is wired to X's follow webhook it would start demanding a
-        // follow event for something that has nothing to do with following.
+        // They are the only one-time tasks with nothing behind them — no post for X to be asked
+        // about and no review window — so what is worth pinning is that they are a **different kind**
+        // from the follow, and that their copy stays an ask. Reusing `claim` would hand them the
+        // follow's proof mode, and the day this deployment is wired to X's follow webhook they would
+        // start demanding a follow event for something that has nothing to do with following.
         const waited = ONE_TIME_TASKS.filter((task) => task.proof === 'visit');
-        rec('the waitlist is a task of its own kind, not a claim wearing the follow’s proof',
-            waited.length === 1 && waited[0].id === 'waitlist',
+        rec('the two off-site tasks are a kind of their own, not claims wearing the follow’s proof',
+            waited.length === 2 && waited.every((task) => ['waitlist', 'discord'].includes(task.id)),
             waited.map((task) => `${task.id}:${task.proof}`).join(', ') || '(none)');
-        rec('  … it sends the player to our own waitlist page, not to X',
-            Boolean(waited[0]?.url?.endsWith('/genesis')) && !/x\.com|twitter\.com/.test(waited[0]?.url || ''),
-            waited[0]?.url);
-        rec('  … it promises no review window, and keeps one sentence because there is one truth',
-            !waited[0]?.review && !waited[0]?.blurbChecked && Number.isInteger(waited[0]?.reward) && waited[0].reward > 0
-            && /no check/i.test(waited[0]?.blurb || '')
-            && !/review|30\u201345 minutes|X tells/i.test(waited[0]?.blurb || ''),
-            (waited[0]?.blurb || '').slice(0, 72) + '…');
         // The claim endpoint reads this registry and nothing else, so a task it cannot find is a card
         // that refuses to pay; and a `kind` on it would let the post endpoint try to settle it, which
         // is the one door a task with no post must not have.
-        rec('  … and the claim path can find it, with no post kind to be settled by',
-            Boolean(oneTimeTask('waitlist')) && !waited[0]?.kind,
-            `lookup=${Boolean(oneTimeTask('waitlist'))} kind=${waited[0]?.kind || 'none'}`);
+        rec('  … both are in the registry the claim path reads, with no post kind on either',
+            waited.every((task) => Boolean(oneTimeTask(task.id)) && !task.kind),
+            waited.map((task) => `${task.id} lookup=${Boolean(oneTimeTask(task.id))} kind=${task.kind || 'none'}`).join(' · '));
+        rec('  … and each one goes where its card says it goes',
+            waited.find((task) => task.id === 'waitlist')?.url?.endsWith('/genesis') === true
+            && waited.find((task) => task.id === 'discord')?.url === DISCORD_INVITE
+            && waited.every((task) => !/x\.com|twitter\.com/.test(task.url || '')),
+            waited.map((task) => `${task.id} → ${task.url}`).join(' · '));
+        // The owner's rule for these two, and the reason it is pinned here: a task with nothing behind
+        // it gets an **ask**, not a caveat. It must not promise a check it cannot run, and it must not
+        // advertise the absence of one either — both are claims about our plumbing under a card a
+        // player is trying to finish. The receipt at the foot of a claimed card is where what happened
+        // gets said, and that line is checked below against a running server.
+        rec('  … and each card asks for the step without a word about how it is judged',
+            waited.every((task) => !task.review && !task.blurbChecked
+                && Number.isInteger(task.reward) && task.reward > 0
+                && task.blurb.split('.').filter(Boolean).length <= 2
+                && !/no check|nothing was checked|on your word|review|cannot see|X tells us|verified/i.test(task.blurb)),
+            waited.map((task) => `${task.reward} PTS · ${task.blurb}`).join(' | '));
 
         // ------------------------------------------------------------------ the live half
         if (!BASE) {
@@ -362,9 +371,10 @@ function shippedPostId(card) {
 
             const receiptView = ((await api('/api/points/me', { token: waiterToken })).data?.state?.oneTime || [])
                 .find((task) => task.id === 'waitlist');
-            rec('  … and the card stays as a receipt that says nothing was checked',
+            rec('  … and the card stays as a receipt that says what happened, not what was checked',
                 Boolean(receiptView) && receiptView.claimed === true
-                && /nothing was checked/i.test(receiptView.claimedNote || ''),
+                && /credited on claim/i.test(receiptView.claimedNote || '')
+                && !/nothing was checked|no check/i.test(receiptView.claimedNote || ''),
                 receiptView?.claimedNote);
 
             const againWait = await api('/api/points/task', {
@@ -373,6 +383,25 @@ function shippedPostId(card) {
             rec('  … and a second tap pays nothing more',
                 againWait.status === 200 && againWait.data?.alreadyCredited === true && !againWait.data?.credited,
                 `${againWait.status} · alreadyCredited=${againWait.data?.alreadyCredited}`);
+
+            // The Discord task is the same bargain, so it is the same path — and worth running, because
+            // "two tasks, one engine" is exactly the kind of claim that quietly stops being true.
+            const paidDiscord = await api('/api/points/task', {
+                method: 'POST', token: waiterToken, body: { action: 'claim', task: 'discord' },
+            });
+            rec('  the Discord task pays the same way, once, for the same wallet',
+                paidDiscord.status === 200 && paidDiscord.data?.credited === 500,
+                `${paidDiscord.status} · ${paidDiscord.data?.credited} PTS`);
+            const discordAgain = await api('/api/points/task', {
+                method: 'POST', token: waiterToken, body: { action: 'claim', task: 'discord' },
+            });
+            rec('  … and its second tap pays nothing more',
+                discordAgain.status === 200 && discordAgain.data?.alreadyCredited === true,
+                `alreadyCredited=${discordAgain.data?.alreadyCredited}`);
+            rec('  … so both rewards are on the balance, and nothing else is',
+                (await api('/api/points/me', { token: waiterToken })).data?.state?.points
+                    === (waiterCard?.reward || 500) + 500,
+                `${(await api('/api/points/me', { token: waiterToken })).data?.state?.points} PTS`);
 
             // The identity behind it, which is the only thing holding a task with no check down:
             // a binding is permanent and one-per-handle, so the cheapest way to farm this is still a
