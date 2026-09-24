@@ -112,7 +112,7 @@ function pointsTourSteps(live) {
             target: '[data-arya="share"]',
             text: () => (now().shared
                 ? 'Today&rsquo;s share is already claimed — your entry was paid out at double. It resets with the vault tomorrow.'
-                : `Clear all three floors and this unlocks. The picture and the text are ready for you here: save the picture, post the run, and paste the link to your post. The text tags <strong>@${(now().share && now().share.tag) || 'DNGrobinhood'}</strong> and carries your invite link. I ask X one thing about that post before paying — that it tags us — and then the whole entry doubles: <strong>${VAULT_ENTRY_TOTAL} becomes ${VAULT_ENTRY_TOTAL * 2} PTS</strong>. Once a day, same as the vault.`),
+                : `Clear all three floors and this unlocks. One press opens X with the post already written — and the picture comes with it, riding in on your invite link, so there is nothing to attach. Then paste the link to your post back here. The text tags <strong>@${(now().share && now().share.tag) || 'DNGrobinhood'}</strong> and carries your invite link. I ask X one thing about that post before paying — that it tags us — and then the whole entry doubles: <strong>${VAULT_ENTRY_TOTAL} becomes ${VAULT_ENTRY_TOTAL * 2} PTS</strong>. Once a day, same as the vault.`),
         },
         {
             // The tab, not its contents: the contents only exist while that tab is open, and a
@@ -181,78 +181,19 @@ function pointsTourSteps(live) {
  * The tag and the text are the server's (`state.share`), not this component's: what the page shows
  * and what X is asked about have to be the same words.
  */
-/**
- * Whether this device's share sheet is one X could be a target of — a phone or a tablet, in
- * practice. Used for two things that must agree: which way the post button posts, and what its label
- * promises. A desktop browser has `navigator.share` too, and the sheet it opens has no X in it.
- */
-function deviceSharesToX() {
-    if (typeof navigator === 'undefined' || typeof matchMedia !== 'function') return false;
-    return navigator.maxTouchPoints > 0 || matchMedia('(pointer: coarse)').matches;
-}
-
-/**
- * The same picture, re-encoded as a PNG.
- *
- * The clipboard takes `image/png` and nothing else, so the run card — a JPEG — has to be converted
- * rather than handed over as it is. Done once, when the kit appears, so the click itself contains a
- * single clipboard call and no decoding.
- */
-async function toPngBlob(blob) {
-    if (!blob || blob.type === 'image/png') return blob;
-    if (typeof createImageBitmap !== 'function') return null;
-    try {
-        const bitmap = await createImageBitmap(blob);
-        const canvas = document.createElement('canvas');
-        canvas.width = bitmap.width;
-        canvas.height = bitmap.height;
-        canvas.getContext('2d').drawImage(bitmap, 0, 0);
-        bitmap.close?.();
-        return await new Promise((resolve, reject) => canvas.toBlob(
-            (out) => (out ? resolve(out) : reject(new Error('png encode failed'))),
-            'image/png',
-        ));
-    } catch {
-        return null;
-    }
-}
-
-function ShareKit({ share, onSave, saveDisabled, picture }) {
+function ShareKit({ share }) {
     if (!share) return null;
     return (
         <div className="x-share-kit">
-            {/* The instruction has to outlive the toast it used to be. The composer takes the focus,
-                so the sentence telling a desktop player to paste was being delivered to the tab they
-                had just left. */}
-            {picture === 'copied' ? (
-                <p className="x-share-picture">
-                    <strong>The run card is on your clipboard.</strong> Press{' '}
-                    <strong>Ctrl+V</strong> (<strong>&#8984;V</strong> on a Mac) in the post to attach it.
-                </p>
-            ) : picture === 'saved' ? (
-                <p className="x-share-picture">
-                    <strong>The run card is in your downloads.</strong> Attach it in the post with the
-                    picture button.
-                </p>
-            ) : null}
-            {/* A link rather than an image, so a phone can long-press it to save. */}
-            <a className="x-share-photo" href={share.cardImage} target="_blank" rel="noreferrer">
-                <img src={share.cardImage} alt="The picture that goes out with your share" loading="lazy" />
-            </a>
-            <ol className="x-share-steps">
-                <li>On a phone, the post button sends the picture to X as an attachment.</li>
-                <li>On a computer, X&rsquo;s composer link carries text only. The button copies the picture for you — press <strong>Ctrl+V</strong> (<strong>&#8984;V</strong> on a Mac) in the post to attach it, or the file is saved instead.</li>
-                <li>Your invite link shows the same picture as a card, so the post looks right even with no file attached.</li>
-                <li>Post it, then paste the link below. We check that the post tags <strong>@{share.tag}</strong>.</li>
-            </ol>
-            <button
-                type="button"
-                className="btn btn-secondary btn-sm w-full"
-                onClick={onSave}
-                disabled={saveDisabled}
-            >
-                Save picture
-            </button>
+            {/* The picture as the post will show it — the card X unfurls from the invite link in the
+                text below. Shown once, as what it is: nothing here needs to be saved or attached. */}
+            <div className="x-share-photo">
+                <img src={share.ogImage} alt="The picture your invite link carries into the post" loading="lazy" />
+            </div>
+            <p className="x-share-carry">
+                The button opens X with the words below already written, picture and all — the picture
+                comes in on your invite link. Post it, then paste the link to your post underneath.
+            </p>
             {/* Today's day marker is part of the text, and the check looks for it. One line under
                 it, because a player who tidies the text by hand should know before they post rather
                 than after a refusal that reads like a fault of theirs. */}
@@ -508,13 +449,6 @@ export default function PointsPage() {
     const [xDrafts, setXDrafts] = useState({ campaign: '', share: '' });
     const [xWait, setXWait] = useState({ campaign: 0, share: 0 });
     const [sharePrompt, setSharePrompt] = useState(false);
-    // Where the picture ended up on the last press of the post button (`copied` / `saved`), so the kit
-    // can keep saying it after the toast has gone. Null until a press has happened.
-    const [sharePicture, setSharePicture] = useState(null);
-    // Whether the post button can hand the picture to X through the platform's share sheet, which is
-    // a question about the device rather than about the click — so it is asked once, after mount.
-    const [sharesToX, setSharesToX] = useState(false);
-    useEffect(() => { setSharesToX(deviceSharesToX()); }, []);
     // The `New` badge on the announcements tab. Read in an effect, never during render, so the
     // server's paint and the first client paint agree — a storage-off browser just keeps the badge.
     useEffect(() => {
@@ -1018,11 +952,13 @@ export default function PointsPage() {
                 setXErrors((e) => ({
                     ...e,
                     bind: attempt.ok
-                        ? (attempt.via === 'login'
-                            ? 'Finish signing in with X in the Privy window — that links the account in the same step.'
-                            : (alreadyBound
-                                ? 'Finish linking X in the Privy window, then press that button again.'
-                                : 'Finish linking X in the Privy window, then press Link X again, or type your handle below.'))
+                        ? (attempt.via === 'wallet'
+                            ? 'Sign in with the wallet you already play with. That is deliberate: signing in with X here is what makes Privy build a second wallet, and the one you have is your identity. Finish the sign-in, then press Link X again to attach the account.'
+                            : (attempt.via === 'login'
+                                ? 'Finish signing in with X in the Privy window — that links the account in the same step.'
+                                : (alreadyBound
+                                    ? 'Finish linking X in the Privy window, then press that button again.'
+                                    : 'Finish linking X in the Privy window, then press Link X again, or type your handle below.')))
                         : (attempt.reason || 'Could not start the X link. Type your handle below instead.'),
                 }));
                 return;
@@ -1049,126 +985,28 @@ export default function PointsPage() {
     }, [connected, flash, state?.x?.username]);
 
     // -------------------------------------------------------------- the daily share
-    // The picture cannot ride in X's composer link — attaching a file on someone's behalf needs the
-    // paid API — so it reaches the post by the two routes that are real, and the card says which one
-    // a given device gets: a phone's share sheet attaches it, and on a computer the composer opens
-    // with the picture on the clipboard to paste. The tag and the text come down from the server
-    // (`state.share`), so what this page shows and what X is asked about are the same words.
+    // The post is one redirect. The words come down from the server (`state.share`) — the day marker,
+    // the doubled total and the player's own invite link — and the picture travels *inside* that
+    // link, because `/points` declares a card image for X to unfurl. Nothing has to be attached on
+    // the way, so there is no picture here to save, copy or paste.
     const shareKit = state?.share || null;
-    // Both routes need the picture **in hand before the click**: `navigator.share()` and `window.open()`
-    // are only allowed the gesture that started it, and fetching inside the handler is an `await`
-    // that spends that gesture. So the kit fetches once, when it appears, and the handler awaits
-    // nothing before it acts.
-    const shareFileRef = useRef(null);   // jpeg — what a share sheet can attach
-    const sharePngRef = useRef(null);    // png — the only thing the clipboard takes
 
-    useEffect(() => {
-        let alive = true;
-        shareFileRef.current = null;
-        sharePngRef.current = null;
-        if (!shareKit?.cardImage || typeof File !== 'function') return () => {};
-        (async () => {
-            try {
-                const blob = await (await fetch(shareKit.cardImage)).blob();
-                if (!alive) return;
-                shareFileRef.current = new File([blob], 'dungeon-knights-points-vault.jpg', {
-                    type: blob.type || 'image/jpeg',
-                });
-                sharePngRef.current = await toPngBlob(blob);
-            } catch {
-                // No picture in hand: the composer still opens, and the invite link still unfurls into
-                // the card. A degraded path, not a broken one.
-            }
-        })();
-        return () => { alive = false; };
-    }, [shareKit?.cardImage]);
-
-    /**
-     * Save the picture on its own. A real anchor click, so it consumes no gesture the composer
-     * might need — which is why this is safe to offer next to the post button.
-     *
-     * This is the route for a player who would rather attach the file by hand: the one thing X's
-     * composer link cannot do for them, and the card says so instead of implying otherwise.
-     */
-    const saveShareImage = useCallback(() => {
-        if (!shareKit?.cardImage) return false;
-        const link = document.createElement('a');
-        link.href = shareKit.cardImage;
-        link.download = 'dungeon-knights-points-vault.jpg';
-        link.rel = 'noopener';
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        return true;
-    }, [shareKit?.cardImage]);
-
-    /**
-     * The picture on the clipboard, so it can be pasted into the composer.
-     *
-     * This is the only way an image is ever *attached* on a computer: X's compose link carries text
-     * only, and a desktop browser's share sheet has no X in it to send to. The PNG was encoded when
-     * the card appeared, so there is nothing to await before the one call that matters.
-     */
-    const copyShareImage = useCallback(async () => {
-        const png = sharePngRef.current;
-        if (!png || typeof ClipboardItem !== 'function' || !navigator.clipboard?.write) return false;
-        try {
-            await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
-            return true;
-        } catch {
-            // An unfocused document, a refused permission, a browser that will not take an image —
-            // all the same answer, and the file still saves.
-            return false;
-        }
-    }, []);
 
     /**
      * Put the run in a post.
      *
-     * The order here is the whole point, and it was wrong once. On a computer `navigator.share`
-     * exists, the sheet it opens carries no X, and this returned from that path without ever opening
-     * the composer — a button that did nothing at all. So the sheet is offered only where a touch
-     * pointer says it can reach X, and everywhere else the composer opens **synchronously**, in the
-     * same task as the click, because a window opened after an `await` is one a popup blocker is
-     * entitled to refuse. The clipboard write starts first for the same reason in reverse: a new tab
-     * takes the focus, and a background document cannot write to the clipboard.
+     * Opened **synchronously**, in the same task as the click, because a window opened after an
+     * `await` is one a popup blocker is entitled to refuse. There is nothing to await any more: the
+     * composer link is built on the server, and the picture needs no fetch to reach the post — it
+     * arrives with the invite link X unfurls.
      */
-    const composeShare = useCallback(async () => {
+    const composeShare = useCallback(() => {
         const text = shareKit?.text || '';
         const intent = shareKit?.intentUrl
             || `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
-        const file = shareFileRef.current;
-        const touches = deviceSharesToX();
-
-        // A phone's share sheet is the one route that puts the picture *in* the post as a file.
-        if (file && touches && typeof navigator.share === 'function' && navigator.canShare?.({ files: [file] })) {
-            try {
-                await navigator.share({ files: [file], text });
-                return { post: 'shared', picture: 'attached' };
-            } catch (e) {
-                // Changed their mind — do not follow it with a composer they did not ask for.
-                if (e?.name === 'AbortError') return { post: 'cancelled', picture: 'none' };
-                // Anything else means the sheet could not carry it, and the composer is the answer.
-            }
-        }
-
-        // Two orderings, because one thing pulls the other way. A clipboard write is refused with
-        // `NotAllowedError: Document is not focused` if it is still pending when the new tab takes the
-        // focus (measured, not guessed), while `window.open` wants the click's activation — which
-        // survives a clipboard write, since the PNG is already encoded and the call is a single
-        // round trip, but would not survive a fetch.
-        //
-        // So: focused — the normal case, a click implies focus — the write goes first and is awaited
-        // and the tab opens underneath it. Not focused, and the clipboard is unavailable anyway, so
-        // the tab opens inside the click and the picture is saved instead of copied.
-        const canCopy = typeof document !== 'undefined' && document.hasFocus()
-            && typeof ClipboardItem === 'function' && !!navigator.clipboard?.write;
-        const copied = canCopy ? await copyShareImage() : false;
         const win = window.open(intent, '_blank', 'noopener');
-        if (!win) return { post: 'blocked', picture: copied ? 'copied' : 'none' };
-        if (copied) return { post: 'opened', picture: 'copied' };
-        return { post: 'opened', picture: saveShareImage() ? 'saved' : 'none' };
-    }, [copyShareImage, saveShareImage, shareKit?.intentUrl, shareKit?.text]);
+        return { post: win ? 'opened' : 'blocked' };
+    }, [shareKit?.intentUrl, shareKit?.text]);
 
     /** Sharing the finished entry doubles it — once a day, and paid by the server. */
     const handleShareX = useCallback(async () => {
@@ -1177,42 +1015,21 @@ export default function PointsPage() {
             return;
         }
         setError(null);
-        const { post, picture } = await composeShare();
+        const { post } = composeShare();
         // A window the browser refused is not a post, and saying nothing about it is how a button
-        // comes to look dead. The picture may still have made it to the clipboard, which is worth
-        // saying, because that is enough to finish the job by hand.
+        // comes to look dead.
         if (post === 'blocked') {
-            setError(picture === 'copied'
-                ? 'Your browser blocked the tab X would have opened. The run card is on your clipboard, so open X\u2019s composer and press Ctrl+V (\u2318V) to attach it.'
-                : 'Your browser blocked the tab X would have opened. Allow pop-ups for this site and press the button again.');
+            setError('Your browser blocked the tab X would have opened. Allow pop-ups for this site and press the button again.');
             return;
         }
-        if (post === 'cancelled') {
-            flash('Nothing posted. The button is still here when you want it.');
-            return;
-        }
-        setSharePicture(picture === 'none' ? null : picture);
         // Opening the composer is only half of it. The doubling is paid when the link to the post
         // comes back here and X confirms the bound handle wrote it, so this hands the player to the
         // card that takes the link rather than claiming a bonus on a tap — including out of the
         // vault, which covers the page.
         setSharePrompt(true);
         setInDungeon(false);
-        flash(post === 'shared'
-            ? 'Picture and text are in your post. Finish it on X, then paste the link below to claim the double.'
-            : picture === 'copied'
-                ? 'The post is open in a new tab and the run card is on your clipboard. Press Ctrl+V (\u2318V) to attach the picture, then paste the link below to claim the double.'
-                : 'The post is open in a new tab. The picture is in your downloads if you want it attached. Post the run, then paste the link below to claim the double.');
+        flash('The post is open in a new tab, words and picture already in it. Finish it on X, then paste the link below to claim the double.');
     }, [bound, composeShare, flash]);
-
-    /** Save just the picture, for a player who wants it in hand first. */
-    const handleSaveShareImage = useCallback(() => {
-        if (!saveShareImage()) {
-            setError('The share picture is not available on this deployment.');
-            return;
-        }
-        flash('Picture saved. Attach the file in your post, or let the link card carry it for you.');
-    }, [flash, saveShareImage]);
 
     /**
      * File the link to a post and let the server decide.
@@ -1749,6 +1566,11 @@ export default function PointsPage() {
                                             later is what makes the binding provable. One account per wallet, and it
                                             stays bound.
                                         </div>
+                                        <div className="wallet-card-meta">
+                                            Already playing with a wallet? Linking X signs you in with <em>that</em>
+                                            {' '}wallet and attaches the account to it. It never builds a second one,
+                                            and it never moves your points.
+                                        </div>
                                     </>
                                 )}
                                 {xErrors.bind && <div className="x-task-line is-error">{xErrors.bind}</div>}
@@ -1931,13 +1753,8 @@ export default function PointsPage() {
                                 icon={`${ASSETS}White_logo_on_black_background_2K_20260919011421-autocrop-hair.png`}
                                 reward={state?.entryTotalToday || VAULT_ENTRY_TOTAL}
                                 hint={`Finish the vault, then post the run. The picture and text — tagged @${shareKit?.tag || 'DNGrobinhood'}, with your invite link — are below. Paste your post's link and the run doubles (${VAULT_ENTRY_TOTAL} → ${VAULT_ENTRY_TOTAL * 2} PTS). Once a day.`}
-                                kit={<ShareKit share={shareKit} onSave={handleSaveShareImage} saveDisabled={!connected} picture={sharePicture} />}
-                                cta={state?.sharedToday
-                                    ? 'Shared today · resets with the vault'
-                                    // The label says what the press will do: on a computer the picture cannot be
-                                    // attached for the player, so the button is honest about the extra keystroke
-                                    // instead of promising something X's composer link cannot carry.
-                                    : (sharesToX ? 'Post the run on X' : 'Copy picture & open X')}
+                                kit={<ShareKit share={shareKit} />}
+                                cta={state?.sharedToday ? 'Shared today · resets with the vault' : 'Post the run on X'}
                                 onCta={handleShareX}
                                 ctaDisabled={!connected || !bound || !entryComplete || !!state?.sharedToday}
                                 ctaTitle={!connected
@@ -1946,9 +1763,7 @@ export default function PointsPage() {
                                         ? 'Bind your X account first'
                                         : (!entryComplete
                                             ? 'Clear all three floors first'
-                                            : (sharesToX
-                                                ? 'Opens X with the run text filled in, and hands the picture to X'
-                                                : 'Opens X with the run text filled in, and puts the run card on your clipboard to paste into the post')))}
+                                            : 'Opens X with the post written, picture in the link'))}
 
                                 task={state?.tasks?.share}
                                 busy={xBusy}

@@ -306,6 +306,22 @@ globalThis.fetch = async (url, options = {}) => {
         /00:00 UTC/.test(clientSource) && /the marker X is asked about/.test(clientSource),
         'the card, not a tooltip');
 
+    // The post button is a redirect and nothing else — the words are prefilled on the server and the
+    // picture arrives on the invite link, so there is no file to fetch, copy, paste or save. Each of
+    // those was a real mechanism once, and each one is a way for the button to claim something a
+    // composer link cannot do.
+    rec('the post button opens X and nothing else',
+        /const win = window\.open\(intent, '_blank', 'noopener'\)/.test(clientSource),
+        'one window.open, in the click');
+    rec('no picture is fetched, copied or saved on the way',
+        !/ClipboardItem|navigator\.share|link\.download|createImageBitmap/.test(clientSource),
+        'no attachment path left');
+    rec('and the card says where the picture comes from',
+        /comes in on your invite link/.test(clientSource), 'the carry line');
+    rec('the post button promises only the post, on every device',
+        /'Post the run on X'/.test(clientSource) && !/Copy picture & open X/.test(clientSource),
+        'one label, not two');
+
     // The throttle is what makes "check again" honest rather than free: the same link cannot be
     // re-checked on demand. The rest of this section moves past it the way a minute would.
     const againSoon = await Program.submitTask(gate, 'share', CAMPAIGN);
@@ -348,21 +364,25 @@ globalThis.fetch = async (url, options = {}) => {
         `ref=${postedRef} → ${postedOwner === gate ? 'this wallet' : String(postedOwner)}`);
     rec('the composer link is prefilled with exactly that text',
         kit.intentUrl.includes(encodeURIComponent(kit.text)), '');
-    rec('and the card picture is the one the page offers for download',
-        kit.cardImage === Config.SHARE_CARD_IMAGE && kit.ogImage === Config.SHARE_OG_IMAGE,
-        `${kit.cardImage} / ${kit.ogImage}`);
+    // One picture, one file. The share card previews the same asset the invite link declares as its
+    // link card, so what a player is shown and what X unfurls cannot drift apart — and there is no
+    // second crop left over from a download path that no longer exists.
+    rec('and the picture shown is the one the invite link carries',
+        kit.ogImage === Config.SHARE_OG_IMAGE && kit.cardImage === undefined,
+        `${kit.ogImage}${kit.cardImage === undefined ? '' : ` (plus a second: ${kit.cardImage})`}`);
 
     // ----------------------------------------------------------------------- the picture
     console.log('');
     console.log('The picture that goes out with a share');
 
     const root = path.join(__dirname, '..');
-    for (const [label, asset] of [
-        ['the card X unfurls', Config.SHARE_OG_IMAGE],
-        ['the picture the kit saves', Config.SHARE_CARD_IMAGE],
-    ]) {
-        rec(`${label} is where the config says it is`, fs.existsSync(path.join(root, 'public', asset)), asset);
+    for (const asset of [Config.SHARE_OG_IMAGE]) {
+        rec('the card X unfurls is where the config says it is', fs.existsSync(path.join(root, 'public', asset)), asset);
     }
+    // And it is the one the page renders, read from the page rather than assumed: an image the kit
+    // does not show is a picture the player has to take on trust.
+    rec('and the card on the page points at that same file',
+        new RegExp(`src=\\{share\\.ogImage\\}`).test(clientSource), 'the kit previews the unfurl');
     // The crop is ours rather than X's: `summary_large_image` renders at 1.91:1, and handing it the
     // photo's own shape would let X decide which part of the knight to cut off.
     const ogSize = jpegSize(path.join(root, 'public', Config.SHARE_OG_IMAGE));

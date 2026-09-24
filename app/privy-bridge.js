@@ -144,6 +144,20 @@ export default function PrivyBridge() {
              */
             linkX: () => startXLink({
                 authenticated: stateRef.current.authenticated,
+                // Read at click time rather than captured when this bridge mounted: the answer is
+                // about the wallet this browser is holding *now*, and `wallet-source.js` — a plain
+                // script — may not have loaded when this effect first ran.
+                //
+                // True means the player already has a wallet of their own, so signing in with X
+                // would make Privy build them a second one. `lib/x-link.js` sends that player
+                // through a wallet sign-in instead.
+                keepsItsOwnWallet: () => {
+                    try {
+                        return window.DKWallet?.ownsWallet?.() === true;
+                    } catch {
+                        return false;
+                    }
+                },
                 linkTwitter: () => {
                     markPrivyFlowStarted();
                     return stateRef.current.linkTwitter?.();

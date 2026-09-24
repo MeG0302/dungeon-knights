@@ -595,6 +595,30 @@ const settle = async (times = 6) => {
         })(),
         'no address');
 
+    // --------------------------------------------------- who would be given a second wallet
+    // `ownsWallet()` is what `lib/x-link.js` asks before it decides which sign-in a player gets, so
+    // it has to be the same fact the shadow rule turns on — an extension holding the address in use
+    // — and nothing looser. Each branch is pinned, because every one of them decides whether a
+    // player who clicks *Link X* is handed a wallet they did not ask for.
+    rec('a browser whose own wallet is here says so',
+        (() => {
+            const own = load({ injected: fakeExtension(), storage: { walletAddress: EXT } });
+            return own.window.DKWallet.ownsWallet() === true;
+        })(),
+        'extension holding the address in use');
+    rec('an extension with no address in use is not one yet',
+        (() => {
+            const fresh = load({ injected: fakeExtension(), storage: {} });
+            return fresh.window.DKWallet.ownsWallet() === false;
+        })(),
+        'nothing saved');
+    rec('and a saved address this device cannot reach is not one either',
+        (() => {
+            const orphan = load({ storage: { walletAddress: EXT } });
+            return orphan.window.DKWallet.ownsWallet() === false;
+        })(),
+        'no extension');
+
     // --------------------------------------------------------------------- report
     console.log('');
     const failed = results.filter((r) => !r.pass);

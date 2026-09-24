@@ -112,7 +112,67 @@ process.on('unhandledRejection', () => { unhandled += 1; });
     rec('an SDK that throws synchronously (the type it advertises) is handled too',
         out.ok === true && out.via === 'login', JSON.stringify(out));
 
-    // ------------------------------------------------------- 3. every real failure is an answer
+    // ------------------------------------ 3. the wallet that must not be duplicated
+    console.log('');
+    console.log('A player who already has a wallet signs in with it, not with X');
+
+    // Privy builds an embedded wallet for a user who arrives without one (`createOnLogin:
+    // 'users-without-wallets'`), and a player arriving through X is exactly that user. So for a
+    // browser already holding a wallet, *signing in with X* is how a second wallet gets made — the
+    // wallet `public/wallet-source.js` then has to refuse to play with. The sign-in must go through
+    // the wallet instead, which links it and builds nothing.
+    fake = sdk({ authenticated: false });
+    out = await startXLink({ ...fake, keepsItsOwnWallet: () => true });
+    rec('a player who already holds a wallet is sent through a wallet sign-in',
+        out.ok === true && out.via === 'wallet', JSON.stringify(out));
+    rec('and it is the wallet modal that was asked for, so nothing is built for them',
+        JSON.stringify(calls.loginMethods) === JSON.stringify([['wallet']]), JSON.stringify(calls.loginMethods));
+    rec('nothing was linked before the sign-in landed', calls.link === 0, `link ${calls.link}`);
+
+    // The lapsed-session path arrives by the same door, or a retry becomes the way a second wallet
+    // gets made after all.
+    fake = sdk({ authenticated: true, linkRejects: SDK_AUTH_ERROR });
+    out = await startXLink({ ...fake, keepsItsOwnWallet: () => true });
+    rec('a lapsed session retries through the wallet door too',
+        out.ok === true && out.via === 'wallet' && calls.login === 1
+        && JSON.stringify(calls.loginMethods) === JSON.stringify([['wallet']]),
+        `${JSON.stringify(out)} / ${JSON.stringify(calls.loginMethods)}`);
+
+    // `via` is what the page tells the player, so it is a claim about the modal that was asked for
+    // and has to be checked against it. Mutating the options while leaving `via` alone fails exactly
+    // one check otherwise — the page would say "sign in with your wallet" over a Twitter modal.
+    for (const [ownWallet, expected] of [[true, 'wallet'], [false, 'login']]) {
+        const probe = sdk({ authenticated: false });
+        const answer = await startXLink({ ...probe, keepsItsOwnWallet: () => ownWallet });
+        const asked = JSON.stringify(calls.loginMethods);
+        const wanted = JSON.stringify([[ownWallet ? 'wallet' : 'twitter']]);
+        rec(`the door named and the door asked for agree (${expected})`,
+            answer.via === expected && asked === wanted, `${answer.via} / ${asked}`);
+    }
+
+    // And the accessor crosses a script boundary, so it can be missing or throw. Neither may turn a
+    // click into a button that does nothing — the X door is still open, and X is the one account
+    // every player here is binding anyway.
+    fake = sdk({ authenticated: false });
+    out = await startXLink({ ...fake, keepsItsOwnWallet: () => { throw new Error('no wallet-source here'); } });
+    rec('an accessor that throws falls back to signing in with X',
+        out.ok === true && out.via === 'login', JSON.stringify(out));
+    rec('and an answer that is not a boolean is read as "no wallet here"',
+        (await (async () => {
+            const f = sdk({ authenticated: false });
+            const r = await startXLink({ ...f, keepsItsOwnWallet: () => 'yes' });
+            return r.via === 'login';
+        })()),
+        'strictly true or nothing');
+    rec('with no wallet there is nothing to protect, so X is still the door',
+        (await (async () => {
+            const f = sdk({ authenticated: false });
+            const r = await startXLink({ ...f, keepsItsOwnWallet: () => false });
+            return r.via === 'login';
+        })()),
+        'first wallet comes from X');
+
+    // ------------------------------------------------------- 4. every real failure is an answer
     console.log('');
     console.log('When it cannot be started, it says so — quietly');
 
@@ -193,6 +253,23 @@ process.on('unhandledRejection', () => { unhandled += 1; });
         /attempt\.via === 'login'/.test(page), "via === 'login'");
     rec('the page no longer branches on a promise being truthy',
         !/const started = window\.privyBridge\?\.linkX\?\.\(\);/.test(page), 'no `started`');
+
+    // The wiring that makes the third section true in a browser rather than only in this file.
+    rec('the bridge asks the wallet seam whether this browser owns its wallet',
+        /keepsItsOwnWallet: \(\) => \{[\s\S]{0,160}?window\.DKWallet\?\.ownsWallet\?\.\(\)/.test(bridge),
+        'read at click time, not at mount');
+    rec('and the fact it reads is the shadow rule itself, in one place',
+        /ownsWallet: \(\) => Boolean\(native\(\)\) && Boolean\(savedAddress\(\)\)/.test(read('public/wallet-source.js')),
+        'extension + the address in use');
+    // The premise of the whole rule: a user who arrives *with* no wallet is the only one Privy gives
+    // one to. Change this and the wallet-first sign-in stops being the fix.
+    rec('the Privy config still builds a wallet only for a player who has none',
+        /createOnLogin: 'users-without-wallets'/.test(read('app/providers.js')),
+        "createOnLogin: 'users-without-wallets'");
+    rec('and the page says which door it took, and why',
+        /attempt\.via === 'wallet'/.test(page), "via === 'wallet'");
+    rec('the page never claims a link started when it asked for a wallet',
+        /Sign in with the wallet you already play with/.test(page), 'the wallet sentence');
 
     const failed = results.filter((r) => !r.pass);
     console.log('');

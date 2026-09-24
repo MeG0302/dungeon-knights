@@ -469,6 +469,19 @@
         /** True when a Privy session is what the page is playing with. */
         signedInWithPrivy: () => !!state.provider,
         /**
+         * True when a browser extension is here **and** it is holding the address this site has been
+         * playing with — the two conditions, together, that make a Privy wallet shadowed rather than
+         * adopted (see `chooseWalletIdentity`).
+         *
+         * It is the answer to one question asked elsewhere: would signing in with X build this player
+         * a second wallet? Privy only makes an embedded wallet for a user who arrives without one
+         * (`createOnLogin: 'users-without-wallets'` in `app/providers.js`), and an X sign-in is
+         * exactly that user — so for this player, yes, and `lib/x-link.js` signs them in with their
+         * own wallet instead. Deliberately the same condition as the shadow rule: one fact, asked
+         * from both ends.
+         */
+        ownsWallet: () => Boolean(native()) && Boolean(savedAddress()),
+        /**
          * The Privy wallet that was **refused** because this browser was already playing with a
          * different address, or null. Named as the one that was turned away, so a page can explain
          * the sign-in instead of looking like it did nothing.

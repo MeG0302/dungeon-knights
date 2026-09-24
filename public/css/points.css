@@ -1247,10 +1247,9 @@ link, and X is asked about it before anything is paid.
     height: auto;
 }
 
-/* Where the picture went on the last press of the post button. It outlives the toast on purpose:
-   the composer takes the focus, so a fading sentence in the tab the player just left is a sentence
-   nobody reads — this one is still here when they come back for the link. */
-.x-share-picture {
+/* How the picture gets into the post: on the invite link, which X unfurls into this card. One
+   sentence, because there is no second step — nothing to attach, nothing to save. */
+.x-share-carry {
     margin: 0;
     padding: 8px 9px;
     border: 1px solid rgba(212, 175, 55, 0.45);
@@ -1260,18 +1259,6 @@ link, and X is asked about it before anything is paid.
     font-size: 11px;
     line-height: 1.5;
     color: var(--text-primary, #eee);
-}
-
-.x-share-steps {
-    margin: 0;
-    padding-left: 18px;
-    font-size: 11px;
-    line-height: 1.5;
-    color: var(--text-secondary, var(--text-muted));
-}
-
-.x-share-steps li + li {
-    margin-top: 4px;
 }
 
 /* The post as it will be sent — selectable, because the words are what a player pastes when they
