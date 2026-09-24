@@ -6,10 +6,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Script from 'next/script';
 import { VAULT_LEVELS, VAULT_ENTRY_TOTAL, STREAK_BASE, STREAK_MAX_MULTIPLIER, DISCORD_INVITE } from '../../lib/points-config';
 import {
-    attachRef, claimRef, clearSession, connectWallet, fetchLeaderboard, fetchMe, fetchXStatus, forgetWallet,
-    isAddress, onAccountsChanged, pendingRef, readRefFromUrl,
-    readSession, refLink, requestBindX, requestClear, requestOneTimeClaim, requestShare, requestTask,
-    requestTaskCheck, savedAddress, shortAddress, signIn, stashRef, walletCapabilities,
+    attachRef, claimRef, clearSession, connectWallet, fetchGiveaway, fetchLeaderboard, fetchMe,
+    fetchXStatus, forgetWallet, isAddress, markCapsuleForm, onAccountsChanged, pendingRef,
+    readRefFromUrl, readSession, refLink, requestBindX, requestCapsuleClaim, requestCapsuleRegister,
+    requestClear, requestOneTimeClaim, requestShare, requestTask, requestTaskCheck, savedAddress,
+    shortAddress, signIn, stashRef, walletCapabilities,
 } from '../../lib/points-client';
 import PointsDungeon from './dungeon';
 
@@ -29,6 +30,41 @@ const TOUR_ID = 'points-v1';
 // Where the browser remembers that the announcements tab has been opened once, so its `New` badge
 // is a pointer rather than a decoration. Local on purpose — see the state that reads it.
 const ANNOUNCE_SEEN_KEY = 'dk_points_announce_seen';
+
+// The same trick for the capsule tab: a win that has not been looked at wears a badge once, and the
+// badge goes away because this browser has seen it — not because a server call said so.
+const CAPSULE_SEEN_KEY = 'dk_points_capsule_seen';
+
+/**
+ * What each rung of a capsule's ladder is called on the card.
+ *
+ * The words are here rather than derived from the status so that the sentence a player reads is the
+ * one somebody chose: `missed` is a fact about their week, not a code, and `sent` is the only one that
+ * means the capsule has actually left.
+ */
+const CAPSULE_WORDS = {
+    won: 'To claim',
+    claimed: 'Waiting to be sent',
+    sent: 'Sent',
+    missed: 'Not claimed',
+};
+
+/** Milliseconds until an instant, floored at zero. */
+function msUntil(iso) {
+    const at = Date.parse(String(iso || ''));
+    if (!Number.isFinite(at)) return 0;
+    return Math.max(0, at - Date.now());
+}
+
+/** `04:12:39`, or `12:39` under an hour. Two units, because a countdown to midnight needs hours. */
+function formatLeft(ms) {
+    const total = Math.floor(Math.max(0, ms) / 1000);
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const seconds = total % 60;
+    const pad = (n) => String(n).padStart(2, '0');
+    return hours > 0 ? `${pad(hours)}:${pad(minutes)}:${pad(seconds)}` : `${pad(minutes)}:${pad(seconds)}`;
+}
 
 /**
  * The steps she reads out. Every line is a function so that the wallet and vault steps
@@ -139,14 +175,19 @@ function pointsTourSteps(live) {
                 : 'The top ten wallets on the program, ranked by points. Connect yours and your row appears in it, tagged <strong>you</strong>. The second tab lists who you brought in.'),
         },
         {
-            // The tab, for the same reason the one-time step targets its tab: the panel's contents
-            // are only in the DOM while that tab is open, and a spotlight aimed at markup that is not
-            // on the page is aimed at nothing. She talks about the board just above this, which is
-            // what the giveaway is decided on.
+            // The tab again, for the reason every tab step targets a tab: the panel's contents only
+            // exist while it is open. The board she just talked about is the one this is decided on,
+            // which is why this step follows it rather than sitting with the others.
+            kind: 'brace',
+            mood: 'Ten capsules a day',
+            target: '[data-arya="capsule-tab"]',
+            text: 'And here is the one to come back for: every single day, the ten wallets topping <strong>that day&rsquo;s</strong> board each get a <strong>free Knight capsule</strong>. It is a fresh race at every midnight UTC, so one full run today puts you in it — and a tie goes to whoever got there first. This tab tells you where you stand, what is waiting to be claimed, and what you have already won.',
+        },
+        {
             kind: 'think',
             mood: 'Something to win',
             target: '[data-arya="announce-tab"]',
-            text: 'One more, and it is the good one: when the season closes, the wallets still on this board each get a <strong>free Knight capsule</strong>. Nothing to enter and nothing to claim — being on the board is the whole of it. The <strong>Announcements</strong> tab carries it, and the date lands there first.',
+            text: 'One more, and it is the long game: when the season closes, the wallets still on the season board each get a <strong>free Knight capsule</strong> on top of the daily ones. Nothing to enter and nothing to claim — being on the board is the whole of it. The <strong>Announcements</strong> tab carries it, the draw log, and every date as it lands.',
         },
         {
             kind: 'clear',
@@ -315,6 +356,12 @@ function XTaskCard({
  * the one thing under the player's thumb.
  */
 function OneTimeTaskCard({ task, busy, error, onClaim, canClaim, blockedWhy }) {
+    // The step is one tap and the reward is one tap, so the card asks for the step *before* it offers
+    // the reward: a claim button sitting under "follow us on X" is a button somebody presses first and
+    // reads second, and the first tap on a one-time task is the only one they get. The tick is local
+    // because it is a statement about what the player just did, not a record the server can keep.
+    const [done, setDone] = useState(false);
+
     if (!task) return null;
     const claimed = !!task.claimed;
     const pending = !!task.pending;
@@ -343,6 +390,7 @@ function OneTimeTaskCard({ task, busy, error, onClaim, canClaim, blockedWhy }) {
                     href={task.url}
                     target="_blank"
                     rel="noreferrer"
+                    onClick={() => setDone(true)}
                 >
                     {task.cta}
                 </a>
@@ -350,8 +398,8 @@ function OneTimeTaskCard({ task, busy, error, onClaim, canClaim, blockedWhy }) {
                     type="button"
                     className="btn btn-primary btn-sm"
                     onClick={onClaim}
-                    disabled={busy || claimed || rejected || !canClaim}
-                    title={!canClaim && blockedWhy ? blockedWhy : undefined}
+                    disabled={busy || claimed || rejected || !canClaim || (!done && !pending)}
+                    title={!canClaim && blockedWhy ? blockedWhy : (!done && !pending ? 'Open the page first, then claim' : undefined)}
                 >
                     {claimed
                         ? 'Claimed'
@@ -361,9 +409,19 @@ function OneTimeTaskCard({ task, busy, error, onClaim, canClaim, blockedWhy }) {
                                 ? 'Checking\u2026'
                                 : pending
                                     ? 'Check status'
-                                    : `Claim ${task.reward} PTS`}
+                                    : done
+                                        ? `Claim ${task.reward} PTS`
+                                        : 'Claim'}
                 </button>
             </div>
+            {!done && !claimed && !pending && !rejected && (
+                <div className="task-tick">
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDone(true)}>
+                        I have done this
+                    </button>
+                    <span>then the claim unlocks</span>
+                </div>
+            )}
             {pending && (
                 <div className="x-task-line is-pending">
                     <span>
@@ -389,6 +447,180 @@ function OneTimeTaskCard({ task, busy, error, onClaim, canClaim, blockedWhy }) {
                 </div>
             )}
             {error && <div className="x-task-line is-error">{error}</div>}
+        </div>
+    );
+}
+
+/**
+ * A live countdown to the next draw.
+ *
+ * Ticking on a timer rather than rendering the server's `closes in` once, because this is a deadline
+ * a player plans around — the difference between "I have an hour" and "I have a minute" is the whole
+ * of whether they start a run. The *instant* is always the server's; only the arithmetic is local.
+ */
+function DrawCountdown({ to }) {
+    const [left, setLeft] = useState(() => msUntil(to));
+    useEffect(() => {
+        setLeft(msUntil(to));
+        if (!to) return undefined;
+        const timer = setInterval(() => setLeft(msUntil(to)), 1000);
+        return () => clearInterval(timer);
+    }, [to]);
+    return <span className="draw-countdown">{formatLeft(left)}</span>;
+}
+
+/** One chip of status, in the same words on every card that has one. */
+function TaskChip({ word, tone = 'open' }) {
+    return <span className={`task-chip is-${tone}`}>{word}</span>;
+}
+
+/**
+ * One "post something" task, as three steps rather than a wall.
+ *
+ * The old card put the ask, the button, the link box and the reward side by side and left the player
+ * to work out the order — and the same paragraph sat under four nearly identical cards. The steps are
+ * the order: open the post, write it, hand the link back. None of them is hidden (a stepper that
+ * reveals one control at a time makes a two-minute task take five), but the one that is *next* is lit,
+ * so the card always answers "what now?".
+ *
+ * The tag is copyable because it is the part people mistype, and the check is what the server does
+ * with the pasted link — so the card's job is only to make the writing easy and the pasting obvious.
+ */
+function OneTimePostCard({
+    task, tag, busy, error, draft, onDraft, onSubmit, onCheck, wait,
+}) {
+    const [opened, setOpened] = useState(false);
+    const [copied, setCopied] = useState(false);
+    const [wrote, setWrote] = useState(false);
+
+    const state = task?.state || 'none';
+    const paid = state === 'verified';
+    const pending = state === 'pending';
+
+    // Which step is lit: nothing opened yet, then written, then hand the link over. A paid task lights
+    // none of them, because there is nothing left to do.
+    const step = paid ? 0 : (!opened ? 1 : (!wrote ? 2 : 3));
+
+    const copyTag = async () => {
+        try {
+            await navigator.clipboard.writeText(`@${tag}`);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        } catch {
+            setCopied(false);
+        }
+    };
+
+    return (
+        <div className={`task-card ${paid ? 'is-claimed' : ''} ${pending ? 'is-pending' : ''}`}>
+            <div className="task-card-head">
+                <span className="task-card-title">{task.title}</span>
+                <span className={`x-task-reward ${paid ? 'is-paid' : ''}`}>
+                    {paid ? `+${task.credited || task.reward} \u2713` : `+${task.reward} PTS`}
+                </span>
+            </div>
+
+            <ol className="task-steps">
+                <li className={`task-step ${step === 1 ? 'is-now' : ''} ${opened ? 'is-done' : ''}`}>
+                    <span className="task-step-n">1</span>
+                    <div className="task-step-body">
+                        <span className="task-step-say">Open the post</span>
+                        <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => { setOpened(true); window.open(task.postUrl, '_blank', 'noopener'); }}
+                        >
+                            {task.cta}
+                        </button>
+                    </div>
+                </li>
+                <li className={`task-step ${step === 2 ? 'is-now' : ''} ${wrote ? 'is-done' : ''}`}>
+                    <span className="task-step-n">2</span>
+                    <div className="task-step-body">
+                        <span className="task-step-say">{task.hint}</span>
+                        <div className="task-step-actions">
+                            <button type="button" className="btn btn-ghost btn-sm" onClick={copyTag}>
+                                {copied ? 'Copied' : `Copy @${tag}`}
+                            </button>
+                            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setWrote(true)}>
+                                I posted it
+                            </button>
+                        </div>
+                    </div>
+                </li>
+                <li className={`task-step ${step === 3 ? 'is-now' : ''}`}>
+                    <span className="task-step-n">3</span>
+                    <div className="task-step-body">
+                        <span className="task-step-say">Paste the link to your post</span>
+                        {paid ? (
+                            <div className="x-task-line is-paid">
+                                <span>Checked with X \u00b7 {task.credited || task.reward} PTS paid</span>
+                            </div>
+                        ) : (
+                            <div className="x-task-submit">
+                                <input
+                                    className="x-task-input"
+                                    value={draft}
+                                    onChange={(e) => onDraft(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter' && String(draft || '').trim()) onSubmit(draft); }}
+                                    placeholder="https://x.com/you/status/…"
+                                    aria-label={`Your link for ${task.title}`}
+                                    disabled={busy}
+                                />
+                                <button
+                                    type="button"
+                                    className="btn btn-primary btn-sm"
+                                    onClick={() => onSubmit(draft)}
+                                    disabled={busy || !String(draft || '').trim()}
+                                >
+                                    {busy ? 'Asking X\u2026' : 'Check my post'}
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </li>
+            </ol>
+
+            {pending && (
+                <div className="points-banner points-banner-warn x-task-note" role="status">
+                    <span>{task.reason || 'X has not indexed that post yet \u2014 it can take a moment.'}</span>
+                    <button className="btn btn-ghost btn-sm" onClick={onCheck} disabled={busy || wait > 0}>
+                        {wait > 0 ? `Check again in ${wait}s` : 'Check again'}
+                    </button>
+                </div>
+            )}
+            {state === 'failed' && (
+                <div className="points-banner points-banner-error x-task-note" role="alert">
+                    <span>{task.reason || error || 'That post did not pass the check.'}</span>
+                </div>
+            )}
+            {state === 'expired' && (
+                <div className="points-banner points-banner-warn x-task-note" role="status">
+                    <span>{task.reason || 'That submission expired \u2014 post again and paste the new link.'}</span>
+                </div>
+            )}
+            {error && state !== 'failed' && <div className="x-task-line is-error">{error}</div>}
+        </div>
+    );
+}
+
+/**
+ * One row of the capsule ladder: what was won, the day it was for, and where it is now.
+ *
+ * `To claim` is the only rung that is a job for the player, so it is the only one that says how long
+ * is left \u2014 a claim window is one day, and a row that just said "won" would be a capsule lost by
+ * somebody who read the page the next evening.
+ */
+function CapsuleRow({ row }) {
+    const tone = row.status === 'sent' ? 'paid' : row.status === 'missed' ? 'fail' : row.claimable ? 'open' : 'wait';
+    return (
+        <div className={`draw-row is-${row.status}`}>
+            <span className="draw-row-day">
+                {row.label}
+                <span className="draw-row-when">{row.day}</span>
+            </span>
+            <span className="draw-row-what">{row.capsule?.name || 'Knight capsule'}</span>
+            <TaskChip word={CAPSULE_WORDS[row.status] || row.status} tone={tone} />
         </div>
     );
 }
@@ -449,13 +681,30 @@ export default function PointsPage() {
     const [xDrafts, setXDrafts] = useState({ campaign: '', share: '' });
     const [xWait, setXWait] = useState({ campaign: 0, share: 0 });
     const [sharePrompt, setSharePrompt] = useState(false);
-    // The `New` badge on the announcements tab. Read in an effect, never during render, so the
+    // ------------------------------------------------------------- the daily capsule draw
+    // `publicGiveaway` is what a signed-out visitor gets: today's board and the last draw, both
+    // public. A signed-in player reads it from `state` instead — the same object, fetched with the
+    // wallet they are already loading, so the panel and the total on the same screen cannot be one
+    // refresh out of step. Only one of the two is ever set.
+    const [publicGiveaway, setPublicGiveaway] = useState(null);
+    const [giveawayError, setGiveawayError] = useState(null);
+    // Which capsule action is mid-flight ('register' | 'claim' | 'form'), and the server's own reason
+    // when one is refused — shown, because arriving too late for a claim is an answer, not a glitch.
+    const [capsuleBusy, setCapsuleBusy] = useState(null);
+    const [capsuleError, setCapsuleError] = useState(null);
+    const [capsuleCopied, setCapsuleCopied] = useState(false);
+    // Whether the capsule tab has been opened in this browser. Starts `true` so the badge only ever
+    // appears once the effect below has proved it should.
+    const [capsuleSeen, setCapsuleSeen] = useState(true);
+    // The `New` badges on the two tabs that have one. Read in an effect, never during render, so the
     // server's paint and the first client paint agree — a storage-off browser just keeps the badge.
     useEffect(() => {
         try {
             setAnnounceRead(window.localStorage.getItem(ANNOUNCE_SEEN_KEY) === '1');
+            setCapsuleSeen(window.localStorage.getItem(CAPSULE_SEEN_KEY) === '1');
         } catch {
             setAnnounceRead(false);
+            setCapsuleSeen(false);
         }
     }, []);
     const noticeTimer = useRef(null);
@@ -502,8 +751,18 @@ export default function PointsPage() {
     const oneTimeAll = state?.oneTime || [];
     const oneTimeDone = oneTimeAll.filter((task) => task.claimed);
     const oneTimeOpen = oneTimeAll.filter((task) => !task.claimed);
+    // The one-time tab is two kinds of work now, and the split is the point: a task that asks for a
+    // post is a different amount of effort from one that asks you to click a link, and a player
+    // deciding what to do next should be able to see which is which at a glance.
+    const oneTimeQuick = oneTimeOpen.filter((task) => task.proof !== 'verify');
+    const oneTimePosting = oneTimeOpen.filter((task) => task.proof === 'verify');
     const oneTimeAvailable = oneTimeOpen.reduce((sum, task) => sum + (task.reward || 0), 0);
     const oneTimeEarned = oneTimeDone.reduce((sum, task) => sum + (task.credited || task.reward || 0), 0);
+    // The giveaway: the wallet's own copy when signed in, the public one otherwise. See the state
+    // above for why only one of the two is ever set.
+    const giveaway = (connected ? state?.giveaway : publicGiveaway) || null;
+    // A capsule that is waiting on the player, which is what the tab's badge counts.
+    const capsuleOpen = giveaway?.open || null;
     const live = () => liveRef.current;
 
     /** Open the announcements tab and let its badge go, for good. */
@@ -515,6 +774,31 @@ export default function PointsPage() {
         } catch {
             // Storage off: the badge comes back on the next visit, which is the harmless way round.
         }
+    };
+
+    /** Open the capsule draw tab and let its badge go — the same once-per-browser trick. */
+    const openCapsules = () => {
+        setPanel('capsule');
+        setCapsuleSeen(true);
+        try {
+            window.localStorage.setItem(CAPSULE_SEEN_KEY, '1');
+        } catch {
+            // Storage off: see above.
+        }
+    };
+
+    /**
+     * Scroll the wide panel to one of the two task groups.
+     *
+     * The summary on the left used to end by saying "they are listed in the panel beside this one",
+     * which is true and useless: the list can be longer than the screen, so a player who wants the
+     * posting tasks still has to hunt for them. The group headings are the anchors, and the panel
+     * scrolls to the one that was asked for.
+     */
+    const jumpToTaskGroup = (which) => {
+        const el = document.getElementById(which === 'post' ? 'task-group-post' : 'task-group-quick');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        else flash('Scroll the list on the right — the tasks are grouped by what they ask for.');
     };
 
     const flash = useCallback((message) => {
@@ -560,6 +844,21 @@ export default function PointsPage() {
      * belongs to an effect that can.
      */
     useEffect(() => () => clearTimeout(noticeTimer.current), []);
+
+    /**
+     * The board a signed-out visitor sees: today's standings and the last draw.
+     *
+     * Asked for only when there is no session, because a signed-in page gets the same object — plus
+     * its own row and capsules — from `/me`. One source per session, never both.
+     */
+    const loadPublicGiveaway = useCallback(async () => {
+        try {
+            setPublicGiveaway(await fetchGiveaway());
+            setGiveawayError(null);
+        } catch (e) {
+            setGiveawayError(e.message);
+        }
+    }, []);
 
     const loadBoard = useCallback(async () => {
         try {
@@ -625,6 +924,13 @@ export default function PointsPage() {
             alive = false;
         };
     }, [attachPendingRef, loadBoard]);
+
+    // The board is loaded on arrival rather than when its tab is opened: the tab wears a badge when a
+    // capsule is waiting, and a badge that only appears once you have already clicked the tab is not a
+    // badge. A signed-in page has no such problem — its giveaway arrives with `/me`.
+    useEffect(() => {
+        if (!connected) loadPublicGiveaway();
+    }, [connected, loadPublicGiveaway]);
 
     useEffect(() => {
         let alive = true;
@@ -1117,6 +1423,80 @@ export default function PointsPage() {
         }
     }, [flash, loadBoard]);
 
+    /** Fold a capsule endpoint's answer back into the panel, with no second round trip. */
+    const applyCapsuleState = (result) => {
+        if (!result?.state) return;
+        setState((prev) => (prev ? { ...prev, giveaway: { ...prev.giveaway, ...result.state } } : prev));
+    };
+
+    /**
+     * Prove the wallet, once, so a capsule can be sent to it.
+     *
+     * A signature rather than a click because this is the address a valuable thing will be sent to —
+     * see `lib/capsule-claims.js`. Nothing is paid here and nothing changes for a wallet that has
+     * won nothing yet; it is the standing permission that makes a win deliverable.
+     */
+    const handleRegisterCapsule = useCallback(async () => {
+        setCapsuleBusy('register');
+        setCapsuleError(null);
+        try {
+            const result = await requestCapsuleRegister();
+            applyCapsuleState(result);
+            flash(result.message || 'Wallet registered.');
+        } catch (e) {
+            setCapsuleError(e.message);
+        } finally {
+            setCapsuleBusy(null);
+        }
+    }, [flash]);
+
+    /** Claim one day's capsule. The wallet signs the day it is claiming, and the server compares. */
+    const handleClaimCapsule = useCallback(async (day) => {
+        setCapsuleBusy('claim');
+        setCapsuleError(null);
+        try {
+            const result = await requestCapsuleClaim(day);
+            applyCapsuleState(result);
+            flash(result.message || 'Claimed.');
+        } catch (e) {
+            // A closed window comes back with the state that says so, so the card can stop offering a
+            // claim it will not accept instead of shouting the same sentence at the next tap.
+            applyCapsuleState(e.payload);
+            setCapsuleError(e.message);
+        } finally {
+            setCapsuleBusy(null);
+        }
+    }, [flash]);
+
+    /** "I have submitted the form" — self-declared, and labelled that way on the card. */
+    const handleMarkCapsuleForm = useCallback(async (day) => {
+        setCapsuleBusy('form');
+        setCapsuleError(null);
+        try {
+            const result = await markCapsuleForm(day);
+            applyCapsuleState(result);
+            flash(result.message || 'Marked as submitted.');
+        } catch (e) {
+            setCapsuleError(e.message);
+        } finally {
+            setCapsuleBusy(null);
+        }
+    }, [flash]);
+
+    /** The address to paste into the form, off the player's own clipboard. */
+    const handleCopyWallet = async () => {
+        const who = state?.address || address || '';
+        if (!who) return;
+        try {
+            await navigator.clipboard.writeText(who);
+            setCapsuleCopied(true);
+            setTimeout(() => setCapsuleCopied(false), 2000);
+            flash('Wallet address copied — paste it into the form.');
+        } catch {
+            flash('Copying is blocked here. Select the address on this card and copy it.');
+        }
+    };
+
     const handleEnterDungeon = () => {
         if (!connected || entryComplete || !bound) return;
         // The vault covers the page, so her walkthrough and its spotlight must not still
@@ -1259,16 +1639,11 @@ export default function PointsPage() {
      * claim endpoint under that same id.
      */
     const renderOneTimeTask = (task) => (task.proof === 'verify' ? (
-        <XTaskCard
+        <OneTimePostCard
             key={task.id}
-            id={task.kind}
-            title={task.title}
-            reward={task.reward}
-            hint={task.hint}
-            cta={task.cta}
-            onCta={() => window.open(task.postUrl, '_blank', 'noopener')}
             task={task}
-            busy={xBusy}
+            tag={state?.share?.tag || 'DNGrobinhood'}
+            busy={xBusy === task.kind}
             error={xErrors[task.kind]}
             draft={xDrafts[task.kind] || ''}
             onDraft={(value) => setXDrafts((d) => ({ ...d, [task.kind]: value }))}
@@ -1313,7 +1688,7 @@ export default function PointsPage() {
             {/* Versioned like every other sheet: an unversioned `/theme.css` is a CSS change
                 that never reaches a returning player. */}
             <link rel="stylesheet" href="/theme.css?v=7" />
-            <link rel="stylesheet" href="/css/points.css?v=11" />
+            <link rel="stylesheet" href="/css/points.css?v=13" />
             <link rel="stylesheet" href="/css/arya.css?v=3" />
             <Script src="/arya.js?v=4" strategy="afterInteractive" />
             {/* The header's wallet pill gets the same menu every other page's control has. It is
@@ -1422,6 +1797,26 @@ export default function PointsPage() {
                                 >
                                     One-time Tasks
                                     {openOneTime > 0 && <span className="points-tab-badge">{openOneTime}</span>}
+                                </button>
+                                {/*
+                                    Third, and between the tasks and the announcements, which is where it
+                                    belongs: it is the daily thing a player comes back for, and it is neither a
+                                    task you do once nor news you read.
+                                */}
+                                <button
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={panel === 'capsule'}
+                                    className={`points-tab ${panel === 'capsule' ? 'is-active' : ''}`}
+                                    onClick={() => openCapsules()}
+                                    data-arya="capsule-tab"
+                                >
+                                    Capsule Draw
+                                    {capsuleOpen && (
+                                        <span className={`points-tab-badge ${capsuleSeen ? '' : 'is-new'}`}>
+                                            {capsuleSeen ? 1 : 'New'}
+                                        </span>
+                                    )}
                                 </button>
                                 <button
                                     type="button"
@@ -1954,11 +2349,228 @@ export default function PointsPage() {
                                             <p style={{ fontStyle: 'italic' }}>No one-time tasks are open right now. Check back soon.</p>
                                         </div>
                                     ) : (
-                                        <div className="one-task-footer">
-                                            <span className="one-hint-wide">The tasks are listed in the panel beside this one.</span>
-                                            <span className="one-hint-narrow">The tasks are listed below this panel.</span>
+                                        <>
+                                            {/* Where the work is, in two numbers, so the panel answers "what is
+                                                left" before the list does. Each count is a door onto its own
+                                                group in the wide panel, and the anchor is why the sentence
+                                                under each one can say what that group takes. */}
+                                            <div className="task-jump">
+                                                <button type="button" className="task-jump-row" onClick={() => jumpToTaskGroup('quick')}>
+                                                    <span className="task-jump-title">Quick wins</span>
+                                                    <span className="task-jump-say">No posting — open a page, tap claim</span>
+                                                    <span className="task-jump-count">{oneTimeQuick.length || '✓'}</span>
+                                                </button>
+                                                <button type="button" className="task-jump-row" onClick={() => jumpToTaskGroup('post')}>
+                                                    <span className="task-jump-title">Post &amp; paste a link</span>
+                                                    <span className="task-jump-say">Three steps each — write it, then hand over the link</span>
+                                                    <span className="task-jump-count">{oneTimePosting.length || '✓'}</span>
+                                                </button>
+                                            </div>
+
+                                            <ol className="draw-steps">
+                                                <li className="draw-step">
+                                                    <span className="draw-step-n">1</span>
+                                                    <span>Do what the card asks. Every step opens in a new tab, so this page stays where it is.</span>
+                                                </li>
+                                                <li className="draw-step">
+                                                    <span className="draw-step-n">2</span>
+                                                    <span>Hand it back here — a link to your post, or a tap on claim.</span>
+                                                </li>
+                                                <li className="draw-step">
+                                                    <span className="draw-step-n">3</span>
+                                                    <span>Points land once it checks out. A claim that needs review says so with a time.</span>
+                                                </li>
+                                            </ol>
+                                            <div className="one-task-footer">
+                                                Each task pays a single time per X account, ever — so a card that is
+                                                done stays done, on this wallet, for good.
+                                            </div>
+                                        </>
+                                    )}
+                                </>
+                            )}
+
+                            {/* --------------------------------------------------- the capsule draw
+                                Ten capsules, every day, to the top ten of **that day's** board —
+                                which is a different bargain from everything else on this page: the
+                                vault pays points for what you did, and this pays a Knight capsule for
+                                where you finished. The panel carries the pitch, the countdown, the
+                                player's own day, the claim and the capsules they have won; the
+                                standings live in the wide panel beside it, because a board wants
+                                width and a claim wants a thumb.
+
+                                Nothing here decides any of it: the size, the deadline, the claim
+                                window and the message the wallet signs all come from the server, so
+                                the page cannot promise a day the draw is not running. */}
+                            {panel === 'capsule' && (
+                                <>
+                                    <div className="panel-section-title">
+                                        <img src={`${ASSETS}capsule-panel.png`} alt="" className="points-icon" width={16} height={16} />
+                                        Daily Capsule Draw
+                                    </div>
+                                    <p className="panel-hint">
+                                        Ten free Knight capsules every day, to the ten wallets topping that
+                                        day&rsquo;s board. Nothing to buy and nothing to enter.
+                                    </p>
+
+                                    <div className="draw-hero" data-arya="capsule">
+                                        <div className="draw-hero-top">
+                                            <span className="draw-hero-prize">10 free Knight capsules</span>
+                                            <span className="draw-hero-day">{giveaway ? `Day ${giveaway.dayNumber}` : 'Today'}</span>
+                                        </div>
+                                        <div className="draw-hero-clock">
+                                            <span className="draw-hero-label">Closes in</span>
+                                            {giveaway
+                                                ? <DrawCountdown to={giveaway.nextDrawAt} />
+                                                : <span className="draw-countdown">&mdash;</span>}
+                                        </div>
+                                        <div className="draw-hero-foot">Days turn over at 00:00 UTC, so a fresh board every day.</div>
+                                    </div>
+
+                                    {giveawayError && <div className="x-task-line is-error">{giveawayError}</div>}
+
+                                    {/* The order they actually happen in, which is also the order the
+                                        card below resolves in: earn, finish, claim. */}
+                                    <ol className="draw-steps">
+                                        <li className="draw-step">
+                                            <span className="draw-step-n">1</span>
+                                            <span>Earn points today — clear the three vault floors, then double the run on X.</span>
+                                        </li>
+                                        <li className="draw-step">
+                                            <span className="draw-step-n">2</span>
+                                            <span>Be in the top ten when the day closes at 00:00 UTC. Ties go to whoever got there first.</span>
+                                        </li>
+                                        <li className="draw-step">
+                                            <span className="draw-step-n">3</span>
+                                            <span>Claim it here the next day and hand your wallet over in the form.</span>
+                                        </li>
+                                    </ol>
+
+                                    {connected && giveaway?.mine && (
+                                        <div className="draw-mine">
+                                            <span className="draw-mine-rank">{giveaway.mine.rank ? `#${giveaway.mine.rank}` : 'Unranked'}</span>
+                                            <span className="draw-mine-points">{giveaway.mine.points.toLocaleString()} PTS today</span>
                                         </div>
                                     )}
+                                    {connected && giveaway?.mine && !giveaway.mine.onBoard && (
+                                        <div className="draw-nudge">
+                                            <span>You have not earned today yet, so there is nothing on the board with your name on it.</span>
+                                            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPanel('daily')}>
+                                                Open Daily Run
+                                            </button>
+                                        </div>
+                                    )}
+                                    {!connected && (
+                                        <div className="lb-state lb-state-small">
+                                            Connect a wallet to take a place on today&rsquo;s board.
+                                        </div>
+                                    )}
+
+                                    {/* ---------------------------------------------- the claim
+                                        One card, three answers: a capsule waiting to be claimed, a wallet that
+                                        is registered and nothing to collect, or neither — in which case the
+                                        only useful thing on it is the one-time proof that makes a future win
+                                        deliverable. */}
+                                    {connected && giveaway && (
+                                        <div className="draw-claim">
+                                            {capsuleOpen ? (
+                                                <>
+                                                    <div className="draw-claim-head">
+                                                        <span className="draw-claim-title">{capsuleOpen.label} capsule</span>
+                                                        <TaskChip word="To claim" tone="open" />
+                                                    </div>
+                                                    <p className="draw-claim-say">
+                                                        {capsuleOpen.rank ? `You finished #${capsuleOpen.rank} on that board` : 'You were on that board'}
+                                                        {capsuleOpen.points ? ` with ${capsuleOpen.points.toLocaleString()} PTS` : ''}. Claim it
+                                                        today — a win has to be submitted on the day it is drawn.
+                                                    </p>
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-primary btn-md w-full"
+                                                        onClick={() => handleClaimCapsule(capsuleOpen.day)}
+                                                        disabled={capsuleBusy === 'claim'}
+                                                        data-arya="capsule-claim"
+                                                    >
+                                                        <img src={`${ASSETS}capsule-panel.png`} alt="" className="btn-icon-img" />
+                                                        {capsuleBusy === 'claim' ? 'Waiting for your wallet…' : 'Claim it — sign to prove your wallet'}
+                                                    </button>
+                                                    <div className="draw-claim-form">
+                                                        <span className="draw-claim-form-say">
+                                                            {capsuleOpen.formSubmittedAt
+                                                                ? 'Marked as submitted. Capsules are sent by hand, so give it a little time.'
+                                                                : 'Then hand your wallet over in the form. It is restricted for now and may ask for a Google sign-in — if it will not open, tell us on Discord and we will take it there.'}
+                                                        </span>
+                                                        <div className="draw-claim-actions">
+                                                            <a className="btn btn-secondary btn-sm" href={giveaway.formUrl} target="_blank" rel="noreferrer">
+                                                                Open the form
+                                                            </a>
+                                                            <button type="button" className="btn btn-ghost btn-sm" onClick={handleCopyWallet}>
+                                                                {capsuleCopied ? 'Address copied' : 'Copy my address'}
+                                                            </button>
+                                                            {!capsuleOpen.formSubmittedAt && (
+                                                                <button
+                                                                    type="button"
+                                                                    className="btn btn-ghost btn-sm"
+                                                                    onClick={() => handleMarkCapsuleForm(capsuleOpen.day)}
+                                                                    disabled={capsuleBusy === 'form'}
+                                                                >
+                                                                    {capsuleBusy === 'form' ? 'Saving…' : 'I submitted it'}
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                        <a className="draw-claim-help" href={DISCORD_INVITE} target="_blank" rel="noreferrer">
+                                                            Can&rsquo;t open the form? Ask in the Discord
+                                                        </a>
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <div className="draw-claim-head">
+                                                        <span className="draw-claim-title">Nothing waiting today</span>
+                                                        <TaskChip
+                                                            word={giveaway.registration ? 'Wallet registered' : 'Wallet not registered'}
+                                                            tone={giveaway.registration ? 'paid' : 'wait'}
+                                                        />
+                                                    </div>
+                                                    <p className="draw-claim-say">
+                                                        {giveaway.registration
+                                                            ? 'Anything you win from here can be sent to this wallet. Come back tonight to see how today’s board finished.'
+                                                            : 'One free signature proves this wallet is yours, which is what lets a capsule you win be sent to it. No gas, nothing moves.'}
+                                                    </p>
+                                                    {!giveaway.registration && (
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-primary btn-sm w-full"
+                                                            onClick={handleRegisterCapsule}
+                                                            disabled={capsuleBusy === 'register'}
+                                                        >
+                                                            {capsuleBusy === 'register' ? 'Waiting for your wallet…' : 'Register my wallet — one signature'}
+                                                        </button>
+                                                    )}
+                                                </>
+                                            )}
+                                            {capsuleError && <div className="x-task-line is-error">{capsuleError}</div>}
+                                        </div>
+                                    )}
+
+                                    {/* -------------------------------------------- the ladder
+                                        Every capsule ever won, newest first, because the two rungs a
+                                        player needs to understand are "waiting to be sent" and "not
+                                        claimed" — and the second one is a real deadline that passed. */}
+                                    {connected && giveaway?.capsules?.length > 0 && (
+                                        <>
+                                            <div className="panel-section-title">Your capsules</div>
+                                            <div className="draw-ledger">
+                                                {giveaway.capsules.map((row) => <CapsuleRow key={row.day} row={row} />)}
+                                            </div>
+                                        </>
+                                    )}
+
+                                    <div className="draw-note">
+                                        Capsules are recorded on your wallet here and sent to the address you
+                                        register. Only points you earned by playing count towards a board —
+                                        referral commission does not.
+                                    </div>
                                 </>
                             )}
 
@@ -1995,11 +2607,40 @@ export default function PointsPage() {
                                         <div className="announce-kicker">Season giveaway</div>
                                         <h3 className="announce-title">Free Knight capsules for the leaderboard</h3>
                                         <p className="announce-line">
-                                            Hold your place on the leaderboard until the season closes, and a free
-                                            Knight capsule is yours. Nothing to enter, nothing to claim — being on
-                                            the board is the whole of it.
+                                            Hold your place on the season board until it closes, and a free Knight
+                                            capsule is yours. Nothing to enter and nothing to claim — being on the
+                                            board is the whole of it.
+                                        </p>
+                                        <p className="announce-note">
+                                            This is the season-long one. The <strong>daily</strong> draw — ten capsules
+                                            to the top ten of every day&rsquo;s board, starting again each midnight UTC
+                                            — lives on the Capsule Draw tab.
                                         </p>
                                     </div>
+
+                                    {/* The record of the draws themselves, written by the same event that
+                                        paid them: what happened, on which day, and how many capsules it
+                                        took. Anything the owner publishes can ride in the same feed — it is
+                                        the reason this tab is where a date "lands first". */}
+                                    {giveaway?.news?.length > 0 && (
+                                        <>
+                                            <div className="one-task-divider">
+                                                <span>Draw log</span>
+                                                <span className="one-task-divider-line" />
+                                            </div>
+                                            <div className="announce-feed">
+                                                {giveaway.news.map((entry) => (
+                                                    <div key={entry.id} className="announce-item">
+                                                        <div className="announce-item-head">
+                                                            <span className="announce-item-title">{entry.title}</span>
+                                                            <span className="announce-item-day">{entry.day}</span>
+                                                        </div>
+                                                        <p className="announce-item-body">{entry.body}</p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </>
+                                    )}
 
                                     <div className="announce-steps">
                                         <div className="announce-step">
@@ -2082,12 +2723,16 @@ export default function PointsPage() {
                     <main className="side-panel" data-arya="board" style={{ flex: 1, borderRight: 'none' }}>
                         <div className="side-panel-header" style={{ justifyContent: 'space-between' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <img src={`${ASSETS}Golden_trophy_pixel_art_icon_2K_20260919011419-autocrop-hair.png`} alt="" className="panel-header-icon points-icon" width={20} height={20} />
-                                {panel === 'onetime' ? 'One-time Tasks' : 'Rankings'}
+                                <img src={`${ASSETS}${panel === 'capsule' ? 'capsule-panel.png' : 'Golden_trophy_pixel_art_icon_2K_20260919011419-autocrop-hair.png'}`} alt="" className="panel-header-icon points-icon" width={20} height={20} />
+                                {panel === 'onetime' ? 'One-time Tasks' : panel === 'capsule' ? 'Today’s board' : 'Rankings'}
                             </div>
                             {panel === 'onetime' ? (
                                 <span className="one-available-pill">
                                     {oneTimeAvailable > 0 ? `${oneTimeAvailable.toLocaleString()} PTS available` : 'All claimed'}
+                                </span>
+                            ) : panel === 'capsule' ? (
+                                <span className="one-available-pill">
+                                    {giveaway ? `${giveaway.size} capsules \u00b7 Day ${giveaway.dayNumber}` : 'The daily draw'}
                                 </span>
                             ) : (
                                 <div style={{ display: 'flex', gap: 4 }}>
@@ -2100,8 +2745,144 @@ export default function PointsPage() {
                                 </div>
                             )}
                         </div>
-                        <div className="side-panel-body">
-                            {panel === 'onetime' ? (
+                        {/* `side-panel-body-wide` is what turns this pane's contents into a column of
+                            their own: centred, at a readable width, with one rhythm down the pane. */}
+                        <div className="side-panel-body side-panel-body-wide">
+                            {panel === 'capsule' ? (
+                                <>
+                                    <div className="draw-board-sub">
+                                        {giveaway
+                                            ? `The top ${giveaway.size} of this board when ${giveaway.day} closes at 00:00 UTC each win a free Knight capsule. Rankings count points earned today only.`
+                                            : 'Loading today’s board…'}
+                                    </div>
+
+                                    {giveaway?.board?.length ? (
+                                        <div className="leaderboard-table">
+                                            <div className="lb-header">
+                                                <span className="lb-rank">#</span>
+                                                <span className="lb-name">Player</span>
+                                                <span className="lb-points">Today</span>
+                                                <span className="lb-prize">Prize</span>
+                                                {/* The prize is one capsule for every row on this board, so the
+                                                    column marks it with the capsule itself rather than spelling
+                                                    the same word down ten rows. The lede above says it in words. */}
+                                            </div>
+                                            {giveaway.board.map((row) => (
+                                                <div key={row.address} className={`lb-row ${row.isYou ? 'is-you' : ''} ${row.rank <= 3 ? `top-${row.rank}` : ''}`}>
+                                                    <span className="lb-rank">{row.rank}</span>
+                                                    {/* The same name rule the season board uses: the bound handle where
+                                                        there is one, the address where there is not, and a check only
+                                                        for a binding Privy vouched for. */}
+                                                    <span className="lb-name" title={row.address}>
+                                                        {row.handle ? (
+                                                            <>
+                                                                <span className="lb-handle">@{row.handle}</span>
+                                                                {row.handleProved && (
+                                                                    <span className="lb-proof" title="Proved with Privy">✓</span>
+                                                                )}
+                                                            </>
+                                                        ) : row.short}
+                                                        {row.isYou && <span className="lb-you-tag">you</span>}
+                                                    </span>
+                                                    <span className="lb-points">{row.points.toLocaleString()}</span>
+                                                    <span className="lb-prize">
+                                                        {row.rank <= (giveaway.size || 10)
+                                                            ? (
+                                                                <img
+                                                                    src={`${ASSETS}capsule-panel.png`}
+                                                                    alt="Wins a Knight capsule"
+                                                                    className="points-icon lb-prize-icon"
+                                                                    width={14}
+                                                                    height={14}
+                                                                />
+                                                            )
+                                                            : '—'}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="draw-empty">
+                                            <img
+                                                src={`${ASSETS}capsule-panel.png`}
+                                                alt=""
+                                                className="points-icon draw-empty-icon"
+                                                width={38}
+                                                height={38}
+                                            />
+                                            <div className="draw-empty-title">Nobody is on today’s board yet</div>
+                                            <p className="draw-empty-say">
+                                                The board only counts points earned today, so it starts empty every
+                                                midnight. Clear the three vault floors — and double the run on X —
+                                                and the first place, and a free Knight capsule, is yours.
+                                            </p>
+                                            <button
+                                                type="button"
+                                                className="btn btn-primary btn-sm"
+                                                onClick={() => setPanel('daily')}
+                                            >
+                                                Open the daily run
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {/* What happened last night — the record of a day that has closed, so a
+                                        player can see the rule working before they are ever in it. */}
+                                    {giveaway?.latest && (
+                                        <>
+                                            <div className="one-task-divider">
+                                                <span>{`Last draw · ${giveaway.latest.day}`}</span>
+                                                <span className="one-task-divider-line" />
+                                            </div>
+                                            {giveaway.latest.winners?.length ? (
+                                                <>
+                                                    <p className="draw-board-say">
+                                                        {giveaway.latest.winners.length === 1
+                                                            ? 'One wallet was on that board, and it took the capsule.'
+                                                            : `${giveaway.latest.winners.length} wallets took a capsule from that day’s board.`}
+                                                    </p>
+                                                    {/* The board a day later, so the columns are the board's:
+                                                        rank, player, what they earned, and the capsule. The same
+                                                        name rule as everywhere else — the bound handle where there
+                                                        is one, the address where there is not, a check only for a
+                                                        binding Privy vouched for. */}
+                                                    <div className="draw-ledger">
+                                                        {giveaway.latest.winners.map((winner) => (
+                                                            <div key={winner.address} className="draw-row is-winners">
+                                                                <span className="draw-row-rank">#{winner.rank}</span>
+                                                                <span className="draw-row-name" title={winner.address}>
+                                                                    {winner.handle ? (
+                                                                        <>
+                                                                            <span className="lb-handle">@{winner.handle}</span>
+                                                                            {winner.handleProved && (
+                                                                                <span className="lb-proof" title="Proved with Privy">✓</span>
+                                                                            )}
+                                                                        </>
+                                                                    ) : (
+                                                                        `${winner.address.slice(0, 6)}…${winner.address.slice(-4)}`
+                                                                    )}
+                                                                </span>
+                                                                <span className="draw-row-what">{winner.points.toLocaleString()} PTS</span>
+                                                                <TaskChip word={giveaway.latest.capsule?.name || 'Capsule'} tone="paid" />
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <p className="draw-board-say">
+                                                    Nobody earned on that day, so no capsule was drawn. The board
+                                                    only counts what a wallet actually played for.
+                                                </p>
+                                            )}
+                                        </>
+                                    )}
+
+                                    <div className="draw-note">
+                                        Ranks are decided by points, and a tie goes to whoever got there first. A
+                                        wallet that earned nothing that day is not on the board at all.
+                                    </div>
+                                </>
+                            ) : panel === 'onetime' ? (
                                 <>
                                     {!connected ? (
                                         <div className="lb-state">
@@ -2114,12 +2895,44 @@ export default function PointsPage() {
                                         </div>
                                     ) : (
                                         <>
-                                            {/* Open first, claimed after — so the tasks still worth doing lead,
-                                                and the ones already paid read as a receipt rather than as work
-                                                left undone. The goalless state shares a grid either way. */}
-                                            <div className="one-task-grid">
-                                                {oneTimeOpen.map(renderOneTimeTask)}
-                                            </div>
+                                            {/* Two groups, because they are two amounts of work: a step off our
+                                                own pages is a click and a tap, and a post is three steps with a
+                                                paragraph to write in between. A player deciding what to do next
+                                                should be able to see which is which without reading the cards.
+                                                Open tasks first, claimed ones after, as before — the tab is about
+                                                what is still worth doing. */}
+                                            {oneTimeQuick.length > 0 && (
+                                                <section className="task-group" id="task-group-quick">
+                                                    <div className="task-group-head">
+                                                        <span className="task-group-title">Quick wins · no posting</span>
+                                                        <span className="task-group-count">{oneTimeQuick.length}</span>
+                                                    </div>
+                                                    <p className="task-group-say">
+                                                        Open the page it asks for, then claim. Each one pays a single time
+                                                        per X account, ever.
+                                                    </p>
+                                                    <div className="one-task-grid">
+                                                        {oneTimeQuick.map(renderOneTimeTask)}
+                                                    </div>
+                                                </section>
+                                            )}
+
+                                            {oneTimePosting.length > 0 && (
+                                                <section className="task-group" id="task-group-post">
+                                                    <div className="task-group-head">
+                                                        <span className="task-group-title">Post &amp; paste the link</span>
+                                                        <span className="task-group-count">{oneTimePosting.length}</span>
+                                                    </div>
+                                                    <p className="task-group-say">
+                                                        Three steps each: open the post, write your own words and tag
+                                                        @{state?.share?.tag || 'DNGrobinhood'}, then paste the link to your
+                                                        post so we can check it. One post pays one of these — never two.
+                                                    </p>
+                                                    <div className="one-task-grid">
+                                                        {oneTimePosting.map(renderOneTimeTask)}
+                                                    </div>
+                                                </section>
+                                            )}
 
                                             {oneTimeDone.length > 0 && (
                                                 <>

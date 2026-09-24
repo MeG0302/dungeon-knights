@@ -1,6 +1,12 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
+  "crons": [
+    {
+      "path": "/api/points/draw",
+      "schedule": "10 0 * * *"
+    }
+  ],
   "redirects": [
     {
       "source": "/(.*)",

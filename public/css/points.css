@@ -118,15 +118,21 @@
 }
 
 /* ---------------------------------------------------------------------------
-   The left panel's two tabs
+   The tabs down the left panel
 
-The daily run and the one-time tasks are different bargains, so they get a tab each rather than
-sitting in one long column. The strip is the first thing in the panel — above the wallet card —
-because choosing between the two is the first decision a returning player makes. Styled from the
-same tokens as the rankings tabs on the right, at a size that fits a 400px column.
+The daily run, the one-time tasks, the capsule draw and the announcements are four different
+bargains, so they get a tab each rather than sitting in one long column. The strip is the first
+thing in the panel — above the wallet card — because choosing between them is the first decision a
+returning player makes. Styled from the same tokens as the rankings tabs on the right.
+
+Four of them, in a 400px column, is what forced this into a grid. As one row of `flex: 1` buttons
+they were ~90px each against labels that read 100-120px upper-cased, so "One-time Tasks" broke over
+three lines and "Announcements" spilled past the panel's own edge. Two columns give every label the
+room it actually needs, and the height that buys is spent on the tap target rather than on wrapping.
    */
 .points-tabs {
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 4px;
     padding: 3px;
     border: 1px solid var(--border-base);
@@ -135,21 +141,25 @@ same tokens as the rankings tabs on the right, at a size that fits a 400px colum
 }
 
 .points-tab {
-    flex: 1;
+    /* `relative` is for the badge, which is out of the flow on purpose: in the flow it pushes the
+       label sideways, and a labelled tab that re-centres itself when a count appears reads as a
+       layout glitch rather than as news. */
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
-    padding: 7px 10px;
+    min-width: 0;
+    padding: 9px 22px;
     border: 1px solid transparent;
     border-radius: 3px;
     background: transparent;
     color: var(--text-muted);
     font-family: inherit;
-    font-size: 11px;
+    font-size: 10.5px;
     font-weight: 700;
-    letter-spacing: 0.8px;
+    letter-spacing: 0.7px;
     text-transform: uppercase;
+    white-space: nowrap;
     cursor: pointer;
     transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
 }
@@ -170,15 +180,19 @@ same tokens as the rankings tabs on the right, at a size that fits a 400px colum
 }
 
 /* How many one-time tasks are still unclaimed. Only rendered when the answer is above zero, so
-   it reads as a nudge rather than a permanent badge. */
+   it reads as a nudge rather than a permanent badge — and it sits in the corner, so the label it
+   belongs to stays centred where it is. */
 .points-tab-badge {
-    min-width: 16px;
+    position: absolute;
+    top: 4px;
+    right: 5px;
+    min-width: 15px;
     padding: 0 4px;
     border-radius: 8px;
     background: var(--accent-gold, #d4a843);
     color: #14100a;
-    font-size: 9.5px;
-    line-height: 16px;
+    font-size: 9px;
+    line-height: 15px;
     text-align: center;
     letter-spacing: 0;
 }
@@ -671,6 +685,49 @@ rule serves the wide pane, a tablet and a phone without three declarations to ke
 .lb-state-small {
     padding: 16px;
     font-size: 11px;
+}
+
+/*
+   The daily board before anybody has earned on it.
+
+   This is the state most players will meet first — the board is empty every midnight, by definition —
+   so it is a card with something to say rather than a centred apology. `.lb-state` is right for
+   "loading" and "connect a wallet"; here the panel has a job to explain and a next step to offer, and
+   a bordered box with a heading, one sentence and a button is how the rest of this page asks for
+   something. The board's own header, its lede and its footnote sit outside it, so the empty state
+   reads as the middle of a panel rather than as the whole panel.
+ */
+.draw-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 34px 24px 30px;
+    border: 1px solid var(--border-base);
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.28);
+    text-align: center;
+}
+
+.draw-empty-icon {
+    opacity: 0.6;
+}
+
+.draw-empty-title {
+    font-family: var(--font-heading, inherit);
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--accent-gold);
+}
+
+.draw-empty-say {
+    margin: 0;
+    max-width: 54ch;
+    font-size: 11.5px;
+    line-height: 1.7;
+    color: var(--text-muted);
 }
 
 /* Referral ledger: who you invited, what they have, what you were paid. */
@@ -1509,3 +1566,691 @@ link, and X is asked about it before anything is paid.
     align-items: stretch;
     gap: 8px;
 }
+
+/* ================================================================ the panels do not squash
+ *
+ * Both panels are scrolling flex columns, and a flex item shrinks by default. Normally `min-height:
+ * auto` stops it shrinking past its own content — but that protection is switched off the moment a
+ * box clips, and several blocks here clip (`overflow: hidden` on the capsule ledger and the task
+ * summary, because they are rounded rows). Measured: the two-row task summary rendered **1.3px**
+ * tall inside a panel that was scrolling, with both of its rows laid out at 50px and invisible.
+ *
+ * So the rule is stated once, for every block in either panel: the panel scrolls, the blocks keep
+ * their height. Anything that genuinely wants to shrink can say so itself.
+ *
+ * Scoped to the page, not to `.side-panel-body` alone, because that class is the site's shared name
+ * for the inside of a panel — genesis, staking and the legacy pages all use it.
+ */
+.points-page .side-panel-body > * {
+    flex-shrink: 0;
+}
+
+/* ============================================== the wide pane is a column, not a canvas
+ *
+ * The right-hand pane is as wide as the window — over a thousand pixels on a desktop — and a
+ * sentence set across all of it, with a table underneath and a footnote three hundred pixels below
+ * anything else, is what "messy" looks like in a dark UI: three small things floating in a lot of
+ * black. So the pane keeps its full width for the background it sits on and hands its contents a
+ * column of their own, centred, at a width a paragraph can be read at. Everything in the pane lines
+ * up down one edge, which is the whole difference.
+ *
+ * 940px is chosen against the two things that share the pane: the one-time cards want 380px each
+ * plus a gap to sit two-up, and the board's four columns want a rank column, a name, a score and a
+ * prize without any of them being squeezed.
+ */
+.points-page .side-panel-body-wide {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.points-page .side-panel-body-wide > * {
+    width: 100%;
+    max-width: 940px;
+    margin-inline: auto;
+}
+
+/* ================================================================ the daily capsule draw
+ *
+ * Ten capsules a day, and the panel that runs it. Three things share this vocabulary and they
+ * should not drift apart: the hero (what is being given away and when it closes), the claim (what
+ * the player has to do about it), and the ladder (what has already happened to each win).
+ *
+ * The countdown is the only thing here that moves on its own, and it is the one number worth
+ * watching — it is the difference between starting a run and missing the day.
+ * ---------------------------------------------------------------------------------------- */
+.draw-hero {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px;
+    border: 1px solid var(--border-bronze, var(--border-base));
+    border-radius: 5px;
+    background:
+        radial-gradient(120% 100% at 50% 0%, rgba(94, 168, 255, 0.12), transparent 66%),
+        rgba(0, 0, 0, 0.34);
+}
+
+.draw-hero-top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.draw-hero-prize {
+    font-family: var(--font-heading, inherit);
+    font-size: 13px;
+    letter-spacing: 0.4px;
+    color: var(--text-primary);
+}
+
+.draw-hero-day {
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 1.4px;
+    text-transform: uppercase;
+    color: var(--accent-gold-dim, var(--accent-gold));
+}
+
+.draw-hero-clock {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 2px;
+}
+
+.draw-hero-label {
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+/* Tabular figures, because a countdown whose digits change width twitches once a second. */
+.draw-countdown {
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 20px;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 1px;
+    color: var(--accent-gold);
+}
+
+.draw-hero-foot {
+    font-size: 10px;
+    line-height: 1.5;
+    color: var(--text-muted);
+}
+
+/* The numbered lines, used by both panels — the shape is "step", not "capsule". */
+.draw-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.draw-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+}
+
+.draw-step-n {
+    flex: 0 0 18px;
+    height: 18px;
+    border: 1px solid var(--border-bronze, var(--border-base));
+    border-radius: 50%;
+    font-size: 10px;
+    line-height: 17px;
+    text-align: center;
+    color: var(--accent-gold);
+}
+
+.draw-mine {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 1px solid var(--border-base);
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.28);
+}
+
+.draw-mine-rank {
+    font-family: var(--font-heading, inherit);
+    font-size: 15px;
+    color: var(--accent-gold);
+}
+
+.draw-mine-points {
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-secondary);
+}
+
+.draw-nudge {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 1px dashed var(--border-base);
+    border-radius: 4px;
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--text-muted);
+}
+
+/* ---------------------------------------------------------------- the claim card
+   One card, three answers — see the panel's own note. The border colour carries the state, because
+   the state is the whole reason the card exists. */
+.draw-claim {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid var(--border-bronze, var(--border-base));
+    border-radius: 5px;
+    background: rgba(212, 168, 67, 0.05);
+}
+
+.draw-claim-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.draw-claim-title {
+    font-family: var(--font-heading, inherit);
+    font-size: 12.5px;
+    color: var(--text-primary);
+}
+
+.draw-claim-say,
+.draw-claim-form-say {
+    margin: 0;
+    font-size: 10.5px;
+    line-height: 1.55;
+    color: var(--text-secondary, var(--text-muted));
+}
+
+.draw-claim-form {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-base);
+}
+
+.draw-claim-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.draw-claim-help {
+    font-size: 10px;
+    color: var(--accent-gold-dim, var(--accent-gold));
+    text-decoration: underline;
+}
+
+/* ------------------------------------------------------------------ the ladder
+   Every capsule ever won. Rows, not cards: this is a list of facts about days, and a card per fact
+   would be several screens of furniture for a player who has won a few. */
+.draw-ledger {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border-base);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.draw-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.draw-row:last-child {
+    border-bottom: none;
+}
+
+.draw-row-day {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-family: var(--font-heading, inherit);
+    letter-spacing: 0.3px;
+    color: var(--text-primary);
+}
+
+.draw-row-when {
+    font-size: 9.5px;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted);
+}
+
+.draw-row-what {
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+/* A day that closed unclaimed. Dimmed rather than hidden, because it is the row that explains why
+   the window is a day. */
+.draw-row.is-missed {
+    opacity: 0.7;
+}
+
+.draw-row.is-sent {
+    background: rgba(90, 160, 90, 0.05);
+}
+
+/*
+   A settled day's winners, listed in the wide pane.
+
+   These are `.draw-row`s — the same row the player's own capsule ladder uses — but the pane is not
+   the same size and the row is not the same shape. The ladder's row is two things: a day and its
+   state. This one is a board seen a day later, so it is four columns, matching the board above it:
+   rank, player, what they earned, the capsule. Left as `1fr auto` the third cell had nowhere to go
+   and wrapped onto a second grid line, where the chip stretched the full width of the pane and the
+   row read as two broken halves.
+ */
+.draw-row.is-winners {
+    grid-template-columns: 48px 1fr 96px 132px;
+    gap: 12px;
+    padding: 9px 14px;
+}
+
+.draw-row-rank {
+    font-family: var(--font-heading, inherit);
+    font-weight: 700;
+    color: var(--text-muted);
+}
+
+/* `.lb-handle` brings the truncation with it; the row only has to line the two up. */
+.draw-row-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    color: var(--text-primary);
+}
+
+.draw-row.is-winners .draw-row-what {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: var(--accent-gold);
+}
+
+/* The chip is a marker, not a column: right-aligned at its own width, never stretched. */
+.draw-row.is-winners .task-chip {
+    justify-self: end;
+}
+
+/* The fine print of a draw panel. It ends the panel, so it is drawn as the panel's footnote: a
+   hairline above it and a quieter size, rather than a sentence floating in the middle of one. */
+.draw-note {
+    margin-top: 4px;
+    padding: 12px 2px 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    font-size: 10.5px;
+    line-height: 1.6;
+    color: var(--text-muted);
+}
+
+/* The wide pane's lede: what this board is for, in one breath. It is capped in *characters* rather
+   than by the pane, because the pane is a thousand pixels across on a desktop and a single line of
+   that length is a line nobody reads to the end. */
+.draw-board-sub {
+    max-width: 78ch;
+    font-size: 11.5px;
+    line-height: 1.65;
+    color: var(--text-secondary, var(--text-muted));
+}
+
+.draw-board-say {
+    max-width: 78ch;
+    font-size: 11.5px;
+    line-height: 1.6;
+    color: var(--text-muted);
+}
+
+/* The daily board's last column: the prize beside what the row earned, where a standings column
+   would be. It holds the capsule itself — every row on this board wins one, so ten rows of the word
+   "capsule" said nothing the picture does not say at a glance — and the em dash for a row outside
+   the cut, which the board cannot currently produce but the rule still answers for. */
+.lb-prize {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    font-size: 10px;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    color: var(--accent-gold-dim, var(--accent-gold));
+}
+
+.lb-prize-icon {
+    opacity: 0.85;
+}
+
+/* ============================================================== status chips
+   One vocabulary for every state on this page, so "waiting" reads the same on a capsule as it does
+   on a task. */
+.task-chip {
+    flex: 0 0 auto;
+    padding: 2px 7px;
+    border: 1px solid var(--border-base);
+    border-radius: 10px;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    color: var(--text-muted);
+}
+
+.task-chip.is-open {
+    border-color: rgba(212, 168, 67, 0.45);
+    color: var(--accent-gold);
+}
+
+.task-chip.is-wait {
+    border-color: rgba(200, 168, 96, 0.35);
+    color: rgba(220, 196, 140, 0.9);
+}
+
+.task-chip.is-paid {
+    border-color: rgba(90, 160, 90, 0.45);
+    color: #96d096;
+}
+
+.task-chip.is-fail {
+    border-color: rgba(232, 164, 155, 0.35);
+    color: #e8a49b;
+}
+
+/* ============================================================== the task groups
+   Two headings, because the two kinds of work are different amounts of work. */
+.task-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.task-group + .task-group {
+    margin-top: 18px;
+}
+
+.task-group-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border-base);
+}
+
+.task-group-title {
+    font-family: var(--font-heading, inherit);
+    font-size: 13px;
+    letter-spacing: 0.6px;
+    color: var(--text-primary);
+}
+
+.task-group-count {
+    min-width: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: rgba(212, 168, 67, 0.14);
+    font-size: 10px;
+    line-height: 18px;
+    text-align: center;
+    color: var(--accent-gold);
+}
+
+.task-group-say {
+    margin: 0;
+    font-size: 11px;
+    line-height: 1.55;
+    color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------------- the steps
+   The three-step card. Steps are never hidden — a stepper that reveals one control at a time makes a
+   two-minute task take five — but the one that is next is marked, so the card always answers "what
+   now". */
+.task-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+    border: 1px solid var(--border-base);
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.28);
+    transition: border-color 0.15s ease;
+}
+
+.task-card:not(.is-claimed):hover {
+    border-color: rgba(212, 168, 67, 0.4);
+}
+
+.task-card:focus-within {
+    border-color: rgba(212, 168, 67, 0.5);
+}
+
+.task-card.is-claimed {
+    border-color: rgba(90, 160, 90, 0.4);
+    background: rgba(90, 160, 90, 0.05);
+}
+
+.task-card.is-pending {
+    border-color: rgba(200, 168, 96, 0.45);
+    background: rgba(200, 168, 96, 0.05);
+}
+
+.task-card-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.task-card-title {
+    font-family: var(--font-heading, inherit);
+    font-size: 12.5px;
+    line-height: 1.35;
+    color: var(--text-primary);
+}
+
+.task-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.task-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 9px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.02);
+}
+
+/* The one under the player's thumb right now. A border rather than a fill: a filled step reads as
+   done, and two of the three are done at any moment. */
+.task-step.is-now {
+    border-color: rgba(212, 168, 67, 0.35);
+    background: rgba(212, 168, 67, 0.06);
+}
+
+.task-step.is-done .task-step-n {
+    border-color: rgba(90, 160, 90, 0.5);
+    color: #96d096;
+}
+
+.task-step-n {
+    flex: 0 0 18px;
+    height: 18px;
+    border: 1px solid var(--border-bronze, var(--border-base));
+    border-radius: 50%;
+    font-size: 10px;
+    line-height: 17px;
+    text-align: center;
+    color: var(--accent-gold);
+}
+
+.task-step-body {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    flex: 1;
+    min-width: 0;
+}
+
+.task-step-say {
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--text-secondary, var(--text-muted));
+}
+
+.task-step-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+/* The arm-then-claim line on a task paid by a claim: the step first, the reward second. */
+.task-tick {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+/* ---------------------------------------------------- the summary on the left
+   Two numbers, each a door onto its own group: the panel used to end by saying the tasks were "in
+   the panel beside this one", which is true and useless when the list is longer than the screen. */
+.task-jump {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border-base);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.task-jump-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 2px 8px;
+    padding: 9px 10px;
+    border: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    background: transparent;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.task-jump-row:last-child {
+    border-bottom: none;
+}
+
+.task-jump-row:hover {
+    background: rgba(212, 168, 67, 0.06);
+}
+
+.task-jump-row:focus-visible {
+    outline: 1px solid var(--accent-gold);
+    outline-offset: -1px;
+}
+
+.task-jump-title {
+    font-family: var(--font-heading, inherit);
+    font-size: 11.5px;
+    color: var(--text-primary);
+}
+
+.task-jump-say {
+    grid-column: 1 / 2;
+    font-size: 10px;
+    line-height: 1.45;
+    color: var(--text-muted);
+}
+
+.task-jump-count {
+    grid-row: 1 / 3;
+    grid-column: 2 / 3;
+    min-width: 20px;
+    font-size: 15px;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    color: var(--accent-gold);
+}
+
+/* ============================================================ the draw log
+   What the announcements tab adds for the giveaway: one row per settled day, written by the draw
+   itself. */
+.announce-feed {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.announce-item {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 9px 10px;
+    border: 1px solid var(--border-base);
+    border-left: 2px solid var(--accent-gold-dim, var(--accent-gold));
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.26);
+}
+
+.announce-item-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.announce-item-title {
+    font-family: var(--font-heading, inherit);
+    font-size: 11.5px;
+    color: var(--text-primary);
+}
+
+.announce-item-day {
+    font-size: 9.5px;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted);
+}
+
+.announce-item-body {
+    margin: 0;
+    font-size: 10.5px;
+    line-height: 1.5;
+    color: var(--text-secondary, var(--text-muted));
+}
+

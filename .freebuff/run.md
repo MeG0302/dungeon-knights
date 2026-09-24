@@ -1400,6 +1400,77 @@ The browser asks; it never decides.
   | `/x` | `GET` / `POST {action}` | what this wallet has bound and whether this deployment can prove a link / `bind` (with an optional Privy `accessToken`) or `unbind` |
   | `/task` | `POST {action, task, url}` | `submit` the link to a post for `campaign` or `share`, or `check` a pending one again |
   | `/leaderboard` | `GET ?limit=` | the public board (`isYou` when a token is sent) |
+  | `/draw` | `GET ?day=` | settle the daily capsule draw — Vercel's cron. Self-authenticating (`Bearer $CRON_SECRET`) and **503 when that is unset**; `?day=` settles one day, `&maxDays=` bounds a backlog |
+  | `/giveaway` | `GET` | the public half of the draw — today's board, the last draw, the news feed. No session needed; settles up to 3 days on the read |
+  | `/capsule` | `GET ?purpose=` / `POST {action, day}` | the message to sign / `register`, `claim`, or `form` (winner submitted the form). **Session only** — every path answers 401 without one |
+
+### The daily capsule draw — ten a day, and the team sends them
+
+Ten capsules a day go to the top ten of the day's board. A capsule is a real prize and there is
+nowhere on chain to mint one for a giveaway yet (`contracts/Capsules.sol` mints for the weekly raffle
+and nothing else), so the shape is: the **site records** the win against the wallet, the winner
+**proves the address by signing**, and the team **sends the capsule by hand**. Everything below
+exists to make that last mile safe and repeatable.
+
+- **The day is UTC, always** — `todayKey()`, the same value the X day marker counts on. Nobody's
+  local midnight is a finish line, and a board and its draw can never be looking at two days.
+- **What counts** — `countsTowardDaily()`, one predicate, asked by both the tally and the draw.
+  Everything counts except `referral_commission`: that cut is paid to the inviter for somebody
+  else's play, and on a board that decides prizes there is no reading of "today" under which it
+  belongs. A reason added later gets a decision here rather than being silently included.
+- **One write** — `credit()` bumps the wallet *and* the day's board (`dk:points:day:<day>`, a Redis
+  ZSET with a 35-day TTL, plus a stamp hash for the tie-break). A tally kept on the wallet beside it
+  would be a second answer to "what did this player earn today", and two answers are one more than
+  can be kept in step. Ties go to whoever got there first — hence the stamp, written in the same call.
+- **Settlement is idempotent per day, and happens two ways on purpose.** `vercel.json` schedules
+  `/api/points/draw` at `10 0 * * *` — ten past midnight UTC, so the clock cannot still be inside
+  the day being drawn — and **any page read settles too** (`settleDraws()` in `stateFor`). A cron
+  that does not run is then a late record rather than a lost day, which is what makes it safe for
+  the route to fail closed.
+- **The route authenticates itself** — `Authorization: Bearer $CRON_SECRET`, compared in constant
+  time — which is why it sits in `GLOBAL_OPEN` in `lib/app-routing.js` beside the two webhooks. A
+  scheduler cannot type a password either. It answers **503 when the secret is unset** rather than
+  serving the call, so the exemption cannot outlive the check.
+- **Registering** and **claiming** are both signatures, from `lib/capsule-claims.js`. The message
+  carries a family line, a purpose (`register` or `claim`) and — for a claim — a `Day:` line, so a
+  signature for one day is useless for another and a sign-in can never be replayed as a claim. Ten
+  minutes to use it; the nonce commits to all of it.
+- **The window closes on the claim, not on the win.** `CAPSULE_CLAIM_WINDOW_DAYS` defaults to 1 and
+  counts the day the draw settles, because the rule is that a winner hands over the wallet that day.
+  A win nobody claimed reads `missed` on the ledger and **stays on the fulfilment list anyway** —
+  quietly dropping it is how a promised prize goes missing.
+- **The form is delivery only, and restricted for now.** `CAPSULE_FORM_URL` is an env var precisely
+  so the launch link can be swapped for a published one without a release. Until it is, most winners
+  meet a Google sign-in, so the card says what the link needs and offers the Discord invite beside it.
+
+The team's list is `tools/points-capsules.js`: the draw record (`dk:points:draws`) joined with each
+winner's wallet, which is where the claim and the sent marker live.
+
+```bash
+node tools/points-capsules.js                       # every drawn day, newest first
+node tools/points-capsules.js --todo                # only what still needs sending
+node tools/points-capsules.js --day 2026-09-23      # one day in full, with the evidence per winner
+node tools/points-capsules.js --csv --day 2026-09-23 > day.csv
+node tools/points-capsules.js --send 2026-09-23 0xabc… --note "tx 0x…"   # the only thing that writes
+node tools/points-capsules.js --scan                # read the wallets rather than the record
+node tools/points-capsules.js --draw 2026-09-23     # settle a day by hand
+```
+
+`--send` refuses a wallet nobody has claimed for unless `--force` says the team decided otherwise by
+hand: the point of the signature is that it happens *before* the capsule leaves. On production the
+store is Upstash, so pull the credentials in for the one command — **never** into `.env.local`:
+
+```bash
+npx vercel env pull /tmp/prod.env --environment=production
+node --env-file=/tmp/prod.env tools/points-capsules.js --todo
+```
+
+The panel the player sees and the tool the team runs are the same ladder — **won → claimed → sent,
+or missed** — derived by `lib/points-capsules.js`, so nothing in the browser decides a status. Both
+harnesses are bare node: `node tools/check-draw.js` (46 checks: winner picking, the tie-break, the
+idempotent settle, the guard that is released, the day-shape check) and
+`node tools/check-capsule-claim.js` (44: the two message families, the day binding, the window, the
+status ladder).
 
 ### Invite codes — five characters, and the loop a late claim makes possible
 
