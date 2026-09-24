@@ -60,7 +60,7 @@ function pointsTourSteps(live) {
             text: () => {
                 const v = now();
                 if (v.connected) {
-                    return `That is you: <strong>${shortAddress(v.address)}</strong>${v.rank ? `, rank <strong>#${v.rank}</strong> of ${(v.players || 0).toLocaleString()} players` : ''}. Every point you earn is tied to this wallet rather than to this browser, so it follows you anywhere you sign in.`;
+                    return `That is you: <strong>${shortAddress(v.address)}</strong>${v.rank ? `, rank <strong>#${v.rank}</strong>` : ''}. Every point you earn is tied to this wallet rather than to this browser, so it follows you anywhere you sign in.`;
                 }
                 if (!v.walletReady) {
                     return 'But there is no wallet in this browser, so the vault stays shut. Install MetaMask (or any Web3 wallet), reload, and the gate opens for you.';
@@ -1461,7 +1461,6 @@ export default function PointsPage() {
                                         </div>
                                         <div className="wallet-card-meta">
                                             {state.rank ? `Rank #${state.rank}` : 'Unranked'}
-                                            {state.players ? ` of ${state.players.toLocaleString()} players` : ''}
                                             {state.entries ? ` · ${state.entries} vault run${state.entries === 1 ? '' : 's'}` : ''}
                                         </div>
                                     </>
@@ -2022,7 +2021,6 @@ export default function PointsPage() {
                                         <span className="stat-value">
                                             {connected
                                                 ? `${state?.rank ? `#${state.rank}` : 'Unranked'}`
-                                                    + `${state?.players ? ` of ${state.players.toLocaleString()}` : ''}`
                                                     + ` · ${points.toLocaleString()} PTS`
                                                 : 'Connect your wallet'}
                                         </span>
@@ -2154,7 +2152,7 @@ export default function PointsPage() {
                                 <div className="stat-row">
                                     <span className="stat-label">Your Rank</span>
                                     <span className="stat-value">
-                                        {state.rank ? `#${state.rank} of ${state.players.toLocaleString()}` : 'Unranked'}
+                                        {state.rank ? `#${state.rank}` : 'Unranked'}
                                     </span>
                                 </div>
                             )}

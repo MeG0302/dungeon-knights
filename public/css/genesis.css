@@ -163,13 +163,6 @@
 .gn-aside-cta { padding-top: 16px; }
 .gn-cta-btn { justify-content: center; }
 
-.gn-count {
-    margin-top: 10px;
-    font-size: 11.5px;
-    letter-spacing: 0.4px;
-    color: var(--text-muted);
-}
-
 .gn-aside-fine {
     margin: 12px 0 0;
     font-size: 10.5px;
@@ -565,7 +558,6 @@
     gap: 10px 14px;
 }
 
-.gn-form-row .gn-count { margin-top: 0; }
 .gn-submit { justify-content: center; }
 
 .gn-message {

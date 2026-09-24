@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useState } from 'react';
 import { GENESIS_PFP } from '../../lib/knights';
 import {
     CAPSULES_PER_WEEK, GENESIS_SUPPLY, HASH_POWER_BANDS, HASH_POWER_MAX, HASH_POWER_MIN,
@@ -56,30 +56,14 @@ export default function GenesisClient({ shots = [] }) {
     const [busy, setBusy] = useState(false);
     const [done, setDone] = useState(false);
     const [message, setMessage] = useState(null);
-    const [count, setCount] = useState(null);
 
-    useEffect(() => {
-        let cancelled = false;
-        (async () => {
-            try {
-                const res = await fetch('/api/waitlist', { cache: 'no-store' });
-                const body = await res.json();
-                if (!cancelled) setCount(Number(body?.count) || 0);
-            } catch {
-                // A missing count is not worth a word on a page like this — the form still works.
-            }
-        })();
-        return () => { cancelled = true; };
-    }, []);
-
-    // Only ever a number that is true. There is deliberately no empty state: "no one is in line yet"
-    // is a sentence about us, not about the knight being sold, and it invites a visitor to read a
-    // queue of zero as evidence about the collection rather than about the day.
-    const countLine = useMemo(() => {
-        const size = Number(count) || 0;
-        if (size <= 0) return null;
-        return `${fmtInt(size)} ${size === 1 ? 'knight' : 'knights'} already in line.`;
-    }, [count]);
+    // No queue size is printed anywhere on this page, and no position either.
+    //
+    // The page used to read the count from `/api/waitlist` and print it beside the form. The owner
+    // asked that no running total sit on a public page, and a position is the same number wearing a
+    // hat: for the newest arrival, "you are number 2 in line" *is* the size of the queue. The list
+    // still lives in the store, the endpoint still answers with both numbers, and the only reader
+    // that prints them is `tools/waitlist.js` — which needs the store's own credentials.
 
     async function submit(event) {
         event.preventDefault();
@@ -122,15 +106,13 @@ export default function GenesisClient({ shots = [] }) {
                 return;
             }
 
-            const position = Number(body?.position) || 0;
             setMessage({
                 kind: 'ok',
                 text: body?.alreadyRegistered === true
-                    ? `You are already on the list, still number ${position}. We will email you when Genesis opens.`
-                    : `You are number ${position} in line. We will email you when Genesis opens.`,
+                    ? 'You are already on the list. We will email you when Genesis opens.'
+                    : 'You are on the list. We will email you when Genesis opens.',
             });
             setDone(true);
-            if (Number(body?.count) >= 0) setCount(Number(body.count));
         } catch {
             setMessage({ kind: 'error', text: 'The server did not answer. Try again in a moment.' });
             setBusy(false);
@@ -207,7 +189,6 @@ export default function GenesisClient({ shots = [] }) {
                                     <img src="assets/ui/sword.png" className="btn-icon-img" alt="" />
                                     Join the waitlist
                                 </a>
-                                {countLine && <div className="gn-count" id="genesisCount">{countLine}</div>}
                                 <p className="gn-aside-fine">
                                     No wallet needed. The mint happens on OpenSea, and we only email you
                                     about the mint.
@@ -429,7 +410,6 @@ export default function GenesisClient({ shots = [] }) {
                                         <button className="btn btn-primary btn-md gn-submit" id="waitlistSubmit" type="submit" disabled={busy || done}>
                                             {done ? 'You are on the list' : busy ? 'Joining…' : 'Join the waitlist'}
                                         </button>
-                                        {countLine && <span className="gn-count" id="waitlistCount">{countLine}</span>}
                                     </div>
 
                                     {message && (

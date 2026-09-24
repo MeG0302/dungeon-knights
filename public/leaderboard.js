@@ -229,12 +229,11 @@ class LeaderboardManager {
         
         this.body.innerHTML = tableHTML;
         
-        // Update stats. The server's totals cover every player, not just the rows shown.
+        // The claimed total only. How many players are on this board is the size of the player base, and
+        // the owner asked that no running total be printed.
         const totalClaimed = this.totals ? this.totals.totalClaimed : sorted.reduce((sum, e) => sum + e.totalRewards, 0);
-        const totalPlayers = this.totals ? this.totals.players : sorted.length;
         const allTime = this.totals ? ' all time' : '';
         this.stats.innerHTML = `
-            <strong>${totalPlayers}</strong> players • 
             <strong>${totalClaimed.toFixed(2)}</strong> DNG claimed${allTime}
         `;
         

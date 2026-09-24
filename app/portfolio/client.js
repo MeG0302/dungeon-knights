@@ -574,7 +574,7 @@ export default function PortfolioClient() {
                                         <span className="pf-hero-value">{fmtInt(points.data.points)}</span>
                                         <span className="pf-hero-label">
                                             points
-                                            {points.data.rank ? ` · rank #${fmtInt(points.data.rank)} of ${fmtInt(points.data.players)}` : ''}
+                                            {points.data.rank ? ` · rank #${fmtInt(points.data.rank)}` : ''}
                                         </span>
                                     </div>
                                     <dl className="pf-rows">

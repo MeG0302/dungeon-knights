@@ -304,8 +304,12 @@ function freshProcess(snippet, env = {}) {
         'the form moved to /genesis with the collection');
     rec('  … and none of its fields are left behind either',
         !/waitlistEmail|waitlistSubmit|waitlistFollowed|waitlistCard/.test(landing));
-    rec('  … and the queue count is what this page still reads',
-        /id=\\?"genesisCount\\?"/.test(landing) && /home\.js/.test(landing) && /home\.css/.test(landing));
+    // The landing used to read the queue count and print it. The owner's instruction is that no
+    // running total sits on a public page, so the check is turned around rather than dropped: the
+    // number is still the store's, and the thing worth guarding is that it does not creep back into
+    // the markup — a total on a page nobody can check is worse than no total at all.
+    rec('  … and no queue size is printed there',
+        !/genesisCount/.test(landing) && !/home\.js/.test(landing) && /home\.css/.test(landing));
 
     rec('the collection page carries the one form', /<form/.test(genesis) && /id="waitlist"/.test(genesis));
     rec('the email field is typed as an email so phones offer the right keyboard',
