@@ -513,6 +513,97 @@ probe entry was then removed and the store returned to `0` — verified through 
 not just the tool. (Its credentials turned out to be readable from `vercel env pull`, so cleaning up
 automatically was possible; the file was deleted afterwards.)
 
+#### The daily share was once per wallet, ever (September 24)
+
+The owner cleared all three floors on day 2, posted the run, and pasted the link — and the page said
+**"That one is already paid."** The post was fine. The payout gate was wrong.
+
+**Read from the production store rather than inferred.** The wallet `0x7a20fef9ee0a4ee2003f3649af7c181b7d35783e`
+(handle `5_main88275`, bound 2026-09-23) held:
+
+```
+levelsCleared : {"2026-09-24":[0,1,2]}                                  ← today's three floors
+points        : 7050
+tasks.share   : { state: "verified", day: "2026-09-21", credited: 900 }  ← day 1's share, paid
+```
+
+And their post (status `2103149823780425895`) **passes the real verifier** — checked by running
+`verifyPost` against it with the same expectations the server builds: author `5_main88275`, tagged
+`@DNGrobinhood`, carrying `Day 2`.
+
+**The bug.** `shareTaskId()` is the constant `"share"`, so every day's share lives in **one record
+slot**, and the record carries the day it was verified on. `submitTask` asked only *whether* that
+record was verified, never *which day* it was:
+
+```js
+if (record?.state === 'verified' && (record.credited || 0) > 0) return { alreadyCredited: true };
+```
+
+So the first day a wallet ever shared, the daily bonus became a once-ever bonus — and every later
+day was refused as already paid. The page kept offering the button the whole time, because `taskView`
+already drops a record from another day (`daily && stored.day !== day ? null : stored`): **the view
+was day-aware and the payout was not**, which is exactly the shape of a player being told they had
+already been paid for a post they had just made.
+
+**The fix** (`lib/points-program.js`):
+
+- `submitTask` — an earlier day's record no longer counts as already paid; a record from **today**
+  still does, so the once-a-day rule is untouched.
+- `checkTask` — the day is asked about *before* the two state answers, so an earlier day's share is
+  answered as `day-over` rather than `alreadyCredited`; a record that was already **paid** keeps its
+  receipt instead of being rewritten as `expired` (rewriting a settled claim as a failure is its own
+  lie, and the old code would have done it the moment the day turned).
+- `settle` — the once-a-tap guard is keyed to the day (a daily reward can only be paid twice *today*),
+  and `sharedOn` is **added to** rather than replaced: it is a calendar, and swapping it for today
+  threw away every day before it.
+
+**Coverage.** `check-points-x` **184 → 194**, with the case written in the shape the real wallet
+carried (verified + credited share from yesterday, today's floors cleared). All five new guards were
+falsified by mutation, each caught **by name**: M1 the day check (4 checks fail, first one *"a share
+that was paid on an earlier day does not block today's — credited 0 — refused as alreadyCredited"*),
+M2 the receipt rewrite, M3 the ordering in `checkTask`, M4 the guard's day, M5 `sharedOn`. Whole fleet
+green, production build clean.
+
+Deployed as `dungeon-knights-m0sy46hky-meglast320-1694`, all four aliases re-pointed: `/` `/points`
+`/portfolio` `/genesis` all **200**, `.vercel.app/points` still **307 → /gate**, and
+`POST /api/points/vault` without a session still **401**. The claim itself cannot be exercised from
+here — it needs the player's own signed session, and writing a test wallet into the live store is what
+these harnesses refuse to do — so the end-to-end proof is the owner pasting their post again inside
+the same UTC day.
+
+**Not committed** — production was published from the working directory.
+
+#### Deploy record — no running totals on the public pages (September 24)
+
+The owner asked for "1721 mock waitlist" entries so the front page would look fuller. **No fabricated
+number was written anywhere, and the other half of the request was done instead** — every place that
+printed a count of the queue or of the player base is gone:
+
+- the landing (`lib/static-pages.js`) no longer reads `/api/waitlist` at all: the `home-count` element
+  and the `home.js` script are gone and `public/home.js` is deleted, so the page asks the server for
+  nothing. `public/css/home.css` lost `.home-count` with them.
+- the Genesis page prints no queue size and no position. Its confirmation used to say *you are number X
+  in line*, and at the end of a queue a position **is** the total; it now says *you are on the list*.
+  `.gn-count` left `public/css/genesis.css` and the count state, its fetch and its `useMemo` left the
+  page — it no longer calls `GET /api/waitlist` (it still `POST`s to it).
+- `/points` lost `of N players` in three places (wallet card, *Your standing*, *Your Rank*) and Arya's
+  line lost it too; `/portfolio` lost it from the hero; the legacy board's `N players •` is gone, with
+  its claimed-DNG total kept, which is the number that grows.
+
+The count itself is untouched and still honest — `COUNT_KEY`, the endpoint's `count` and `position`, and
+`tools/waitlist.js` are all as they were; the store's own comment now says so. `check-waitlist`'s pin was
+**turned around rather than dropped**: it used to assert the landing *read* the count and now asserts no
+queue size is *printed* there, so a total cannot creep back onto the page.
+
+Deployed as `dungeon-knights-f2p30vizr-meglast320-1694`, all four aliases re-pointed. Measured live: the
+apex is `200` with **0** hits for `genesisCount`/`home.js`, `/points` `/portfolio` `/genesis` are all
+`200`, the live genesis chunk has **0** hits for `already in line` and still carries `/api/waitlist`, the
+live points chunk carries no rendered total, `.vercel.app/points` still `307 → /gate`, `app/gate` `200`.
+Offline: `check-waitlist` 102/102, `check-genesis` 72/72, and the rest of the fleet green.
+
+**Not committed.** Production was published from the working directory, which is the trap this file warns
+about: the live site is ahead of `main` until this pass is committed.
+
 #### The vault's `?demo=1` fixture is gone, in the code and in production
 
 The Staking Vault used to render a fixture vault on request (`?demo=1`): one knight per published band,

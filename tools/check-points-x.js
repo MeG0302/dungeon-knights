@@ -545,6 +545,97 @@ globalThis.fetch = async (url, options = {}) => {
         (await tasksOf(patient)).share.state === 'none', (await tasksOf(patient)).share.state);
     rec('  … and nothing was credited', (await points(patient)) === patientPoints, `${await points(patient)} PTS`);
 
+    // ------------------------------------------------------- the day after a share was paid
+    // THE BUG THIS SECTION EXISTS FOR, because it was live and a real player hit it.
+    //
+    // The share lives in one record slot (`share`) that carries the day it was verified on. The
+    // gate that decides whether a submission is a repeat asked only *whether* the record was
+    // verified, never *which day* — so once a wallet had shared on day one, every day after it was
+    // refused with `alreadyCredited`, and the player was told "that one is already paid" about a
+    // post they had made minutes earlier. The page kept offering the button throughout, because
+    // `taskView` already drops a record from another day: the view and the payout disagreed, and the
+    // view was the honest half. Measured on the real wallet the day it happened: a verified share
+    // from day 1 (`credited: 900`) and today's three floors cleared, refused as already paid.
+    console.log('');
+    console.log('The day after a share was paid');
+
+    const returning = fresh();
+    await Program.bindX(returning, { id: '7771', username: 'returning' });
+    await Store.updateWallet(returning, (w) => {
+        w.levelsCleared = { [today]: [0, 1, 2] };
+        w.sharedOn = { [yesterday]: true };
+        w.tasks = {
+            ...(w.tasks || {}),
+            share: {
+                state: 'verified',
+                url: 'https://x.com/returning/status/1900000000000000011?s=20',
+                reason: null,
+                code: 'ok',
+                attempts: 1,
+                day: yesterday,
+                submittedAt: `${yesterday}T10:00:00.000Z`,
+                lastCheckedAt: `${yesterday}T10:00:00.000Z`,
+                verifiedAt: `${yesterday}T10:00:00.000Z`,
+                credited: 900,
+            },
+        };
+        return w;
+    });
+
+    // Asking *about* yesterday is the same question from the other side, and it has to answer about
+    // the day rather than about the payout: an earlier day's share is not today's submission.
+    const stalePaid = await Program.checkTask(returning, 'share');
+    rec('asking about an earlier day’s paid share answers about the day, not “already paid”',
+        stalePaid.code === 'day-over' && stalePaid.alreadyCredited !== true, `${stalePaid.code}`);
+    rec('  … and the paid record keeps its receipt instead of being rewritten as expired',
+        (await Store.getWallet(returning)).tasks.share.state === 'verified',
+        (await Store.getWallet(returning)).tasks.share.state);
+
+    const returningBefore = await points(returning);
+    stub.x.author = 'returning';
+    stub.x.text = null;
+    const dayTwo = await Program.submitTask(returning, 'share',
+        'https://x.com/returning/status/1900000000000000012?s=20');
+    rec('a share that was paid on an earlier day does not block today’s',
+        dayTwo.credited === 900 && dayTwo.alreadyCredited !== true,
+        `credited ${dayTwo.credited}${dayTwo.alreadyCredited ? ' — refused as alreadyCredited' : ''}`);
+    rec('  … so today’s run is doubled rather than yesterday’s being re-paid',
+        (await points(returning)) === returningBefore + 900, `${returningBefore} → ${await points(returning)} PTS`);
+    rec('  … and the record now belongs to today', (await tasksOf(returning)).share.day === today,
+        (await tasksOf(returning)).share.day);
+    rec('  … and the day it doubled is added to the calendar, not swapped for it',
+        (await Store.getWallet(returning)).sharedOn?.[yesterday] === true
+        && (await Store.getWallet(returning)).sharedOn?.[today] === true,
+        JSON.stringify((await Store.getWallet(returning)).sharedOn));
+
+    // The other half of the rule, and the reason the fix is a day and not a switch: the daily bonus
+    // is still paid once a day.
+    const sameDayAgain = await Program.submitTask(returning, 'share',
+        'https://x.com/returning/status/1900000000000000013?s=20');
+    rec('  … while a second post the *same* day still pays nothing',
+        sameDayAgain.credited === 0 && sameDayAgain.alreadyCredited === true,
+        `credited ${sameDayAgain.credited}`);
+    rec('  … and the balance did not move again',
+        (await points(returning)) === returningBefore + 900, `${await points(returning)} PTS`);
+
+    // Two taps arriving together, which the record cannot settle: the record is written *after* the
+    // check, so the guard is what stops the pair. It is keyed to the day, because for a daily reward
+    // "twice" can only mean twice today — taking today's own guard here is what that promises, and a
+    // key without the day would let this second submission pay on top of the first.
+    const tapOne = fresh();
+    await Program.bindX(tapOne, { id: '7772', username: 'tapone' });
+    await Store.updateWallet(tapOne, (w) => {
+        w.levelsCleared = { [today]: [0, 1, 2] };
+        return w;
+    });
+    stub.x.author = 'tapone';
+    await Store.claimGuard(`task-credit:${tapOne}:${Config.shareTaskId()}:${today}`);
+    const secondTap = await Program.submitTask(tapOne, 'share', 'https://x.com/tapone/status/1900000000000000014?s=20');
+    rec('a share arriving while another is still settling pays nothing',
+        secondTap.credited === 0 && secondTap.alreadyCredited === true, `credited ${secondTap.credited}`);
+    rec('  … and the guard that stopped it is today’s, not one carried over from another day',
+        (await points(tapOne)) === 0, `${await points(tapOne)} PTS`);
+
     // -------------------------------------------------------------------- the campaign
     console.log('');
     console.log('The campaign reward');
