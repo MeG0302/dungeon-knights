@@ -477,6 +477,29 @@ was written) `dungeon-knights.vercel.app/` and `/menu` answer the password scree
 `/api/x/events` still answers directly — 400, exempt by path. The apex rows are unchanged in every
 version of this design.
 
+#### Deploy record — the share redirect and the wallet-first X link (September 24)
+
+Built from `2c4e7ee` and **all five aliases re-pointed at it**, because a custom-domain alias pins to
+a deployment and does not follow the next build:
+
+```
+dungeonknights.io                 200
+dungeonknights.io/points          200   the card the post unfurls: og:image points-og.jpg, 1200×630
+www.dungeonknights.io             308   → apex
+dungeon-knights.vercel.app/points 307   → /gate   (the gate holds)
+app.dungeonknights.io/           307   → /gate   (200 on /gate)
+app.dungeonknights.io/gate        200
+dungeonknights.io/gate            308   → the app host
+```
+
+Verified on the live page rather than only in the bundle — read from the DOM on `dungeonknights.io`,
+signed in: the share text is `Day 2: I just cleared all three Points Vault dungeons today and racked
+up 1800 points @DNGrobinhood https://dungeonknights.io/points?ref=<code>`, the kit is
+`photo | carry | text | marker`, the preview is `/assets/points/points-og.jpg` at 1200×630, the cta
+reads *Post the run on X*, and there are **zero** save/copy buttons. At 390px: no overflow at all.
+The served chunk (`app/points/page-*.js`) carries the same three strings and neither of the removed
+ones, which is the check that separates "deployed" from "built".
+
 **The apex and the vercel host have been re-measured since the copy pass** (all still 200, and the copy
 is the new copy). Two things the table cannot show: `/genesis` carries the new headline and none of the
 old sentences, and `/points` serves a chunk whose wording is the rewritten one. Both were checked against
@@ -1525,73 +1548,41 @@ only thing that decides whether a post exists, who wrote it, and what it says.
   are written by one function. The amount is fixed **at submission time**, so clearing another
   floor afterwards cannot raise the bonus on a post already published, and a share whose day rolls
   over before X confirms it is `expired` rather than paid.
-- **The picture reaches the post two ways, and which one a device gets is decided *before* the
-  click.** X's composer link (`twitter.com/intent/tweet?text=…`) can prefill **text only** — posting
-  an image on a player's behalf needs the paid API — so `/points` declares `points-og.jpg` as its
-  Open Graph / Twitter card in `app/points/page.js` and the invite link every share carries unfurls
-  into that picture; that works everywhere with nothing to attach. For a real attachment there are
-  two routes, picked by **pointer** rather than by poking at capabilities:
-  - a **touch** pointer where `navigator.canShare({files})` agrees → the OS share sheet, the one path
-    that puts the file *in* the post as a file;
-  - everywhere else → the composer opens and the picture goes on the **clipboard** as a PNG
-    (`toPngBlob` — the clipboard takes nothing but PNG and the card is a JPEG) to paste with Ctrl+V,
-    falling back to a saved file when the write is refused.
+- **The picture reaches the post one way: on the invite link.** X's composer link
+  (`twitter.com/intent/tweet?text=…`) can prefill **text only** — posting an image on a player's behalf
+  needs the paid API — so `/points` declares `points-og.jpg` as its Open Graph / Twitter card in
+  `app/points/page.js`, and the invite link every share carries unfurls into that picture. Nothing is
+  attached, so nothing is fetched, copied, pasted or saved: the button opens the composer and that is
+  the whole of it. The kit previews that same file — one asset, not a second crop kept for a download
+  path that no longer exists — so what a player is shown and what X unfurls cannot disagree. What this
+  cannot do is *verify* the picture: oEmbed cannot see attachments, so X is asked about the author and
+  the tag, and the card says as much rather than implying otherwise.
 
-  The picture is fetched and encoded **once, when the kit appears**, never inside the handler:
-  `navigator.share()` and `window.open()` are both only allowed the gesture that started the click,
-  and an `await` inside the handler spends it. What this cannot be is *verified* — oEmbed cannot see
-  attachments, so X is asked about the author and the tag, and the card says as much rather than
-  implying otherwise.
-
-  **The share button did nothing at all on a desktop, and the shape of that bug is worth keeping.**
+  **History, kept because the shape recurs: the share button did nothing at all on a desktop.**
   `composeShare` tried the share sheet first, guarded on `navigator.share` **existing** — which it does
   on desktop Chrome/Edge — fetched the picture with an `await`, and then `return`ed from that branch.
   So on a computer it either handed the run card to the *Windows* share sheet (which has no X in it, so
-  the composer never opened) or, when the sheet could not take files, reached `window.open` only after
-  an `await` — a spent gesture a popup blocker may refuse. Measured by clicking the real button with
-  `navigator.share`, `window.open` and `navigator.clipboard` instrumented, which is the only reason
-  the branch was not guessed at:
+  the composer never opened) or reached `window.open` only after an `await` — a spent gesture a popup
+  blocker may refuse. It was measured by clicking the real button with `navigator.share`, `window.open`
+  and `navigator.clipboard` instrumented, which is why the card's label was once different per device.
+  All of that machinery is gone; what survives is the rule it was fixed to: **the composer opens
+  synchronously, in the same task as the click.** A refused `window.open` still says so on the card
+  rather than leaving a button that looks dead.
 
-  | condition | before | after |
-  |---|---|---|
-  | no `navigator.share` | composer in 5 ms | composer in 1 ms, PNG to clipboard |
-  | `navigator.share`, files shareable (**desktop Chrome**) | **composer never opened** | composer in **0 ms**, PNG to clipboard |
-  | touch + files shareable | share sheet (1 file) | share sheet (1 file) — unchanged |
-  | `navigator.share`, files not shareable | composer after the fetch (12 ms) | composer in 0 ms, PNG to clipboard |
-
-  The fix is the ordering, not a new feature: the sheet is offered only to a touch pointer, and the
-  composer opens **synchronously in the same task as the click**. A refused `window.open` now says so on
-  the card instead of leaving a dead-looking button, and it says whether the picture still made it to
-  the clipboard, because that is enough to finish by hand.
-
-  **The clipboard write then corrected that ordering, and the reason is worth the sentence.** Writing
-  an image to the clipboard is refused with `NotAllowedError: Document is not focused` if it is still
-  *pending* when the new tab takes the focus — measured by calling the real `clipboard.write` in a
-  document that was not focused, having watched the write be *started* before `window.open` and lost
-  anyway. So there are two orderings, chosen by one question asked in the click:
-
-  ```js
-  const canCopy = document.hasFocus() && typeof ClipboardItem === 'function' && !!navigator.clipboard?.write;
-  const copied = canCopy ? await copyShareImage() : false;   // a pre-encoded PNG: one round trip
-  const win = window.open(intent, '_blank', 'noopener');     // still inside the click's activation
-  ```
-
-  Focused — the normal case, since a click implies focus — the write is awaited first and the tab opens
-  underneath it, because an activation survives a single clipboard round trip but would not survive a
-  fetch. Not focused, and the clipboard is unavailable anyway, so the tab opens inside the click and the
-  file is saved instead. Both paths measured: focused → `clipboard.write` then `window.open`; unfocused
-  → `window.open` only. **What cannot be measured here is a browser accepting the write**: the preview
-  webview's document is never focused, so the clipboard branch can only be exercised with the focus
-  check stubbed. The fallback is what a refusal lands on, and it is a saved file plus a sentence saying so.
-
-- **The button says what it will do, and the kit keeps saying it afterwards.** On a touch device the cta
-  reads *Post the run on X*; on a computer it reads *Copy picture & open X*, because X's compose link
-  cannot carry a file and pretending otherwise is how a player comes to report that the button "did
-  nothing". After a press the kit grows a line — `.x-share-picture` — that outlives the toast, because
-  the toast was being delivered to the tab the composer had just taken the focus from: *The run card is
-  on your clipboard. In the post, press Ctrl+V (⌘V) to attach it*, or the downloads wording when the
-  write was refused. The four steps under the picture were rewritten in the same pass to say per
-  platform what actually happens instead of implying the button attaches a file.
+- **The button promises only the post, on every device.** The cta reads *Post the run on X* everywhere —
+  there is no second label, because there is no second behaviour. Under the picture the card carries one
+  line (`.x-share-carry`) saying where the picture comes from, the post's exact text, and the day-marker
+  note; the four per-platform steps and the *Save picture* button went with the download path.
+- **A link that a player already has must not be given a second wallet.** `lib/x-link.js` decides which
+  sign-in a player who has no Privy session gets, and it is not always X. A browser that is already
+  playing with a wallet of its own (an extension holding the address this site has used — the same two
+  conditions `public/wallet-source.js` shadows a Privy wallet on, exposed there as
+  `DKWallet.ownsWallet()`) is signed in **with that wallet** (`loginMethods: ['wallet']`, reported to the
+  page as `via: 'wallet'`), because an X sign-in arrives with no wallet attached and the app's Privy
+  config (`createOnLogin: 'users-without-wallets'` in `app/providers.js`) builds one for exactly that
+  user. X's link is then attached to the account that already owns the wallet. Signing in with the
+  wallet first links it, so no embedded wallet is created at all — which is the point: a *second* wallet
+  would be one this site then has to refuse to play with, for a player who never asked for it.
 - **The states, and the words for each.** `pending` (X has not indexed it — a real answer, not an
   error), `verified`, `failed` (X answered and the post is not yours / no tag / no link), `expired`
   (no good answer within the attempt ceiling, or the day ended first). The throttle is server-side
@@ -1751,7 +1742,9 @@ warm the route again before believing anything a live harness says.
 ```bash
 node tools/check-refs.js        # 49 checks, offline: the invite codes — shape, uniqueness, both link
                                 # forms, the attach-later refusals, and the first-visit case
-node tools/check-points-x.js    # 165 checks, offline: a stubbed X and a stubbed Privy, real ES256
+node tools/check-points-x.js    # 184 checks, offline: a stubbed X and a stubbed Privy, real ES256,
+                                # plus the share card itself — the post button opens the composer and
+                                # nothing else, with no fetch/copy/save path left behind it
 node tools/check-streak.js      # 19 checks, offline: the 1×–15× ladder, the cap, a gap resets it,
                                 # and one bonus per day however the third floors arrive
 node tools/check-announce.js    # 20 checks, offline: the announcement's promise word for word, that no
@@ -1766,9 +1759,11 @@ node tools/check-one-time.js http://localhost:3000   # 26 checks: the same plus 
 node tools/check-oauth-return.js # 69 checks, offline: the rule, both halves of the wiring, the
                                 # middleware strip, the leftovers of the version it replaced, and the
                                 # note a dropped callback leaves (read once, secure delete included)
-node tools/check-x-link.js      # 25 checks, offline: starting the X link — a signed-in player goes to
-                                # the link flow, an unauthened one to sign-in-with-X, and **no path
-                                # rejects** (unhandled rejections are counted, not assumed away)
+node tools/check-x-link.js      # 39 checks, offline: starting the X link — a signed-in player goes to
+                                # the link flow, one with no wallet to sign-in-with-X, one who already
+                                # holds a wallet to a **wallet** sign-in (so nothing is built for
+                                # them), and **no path rejects** (unhandled rejections are counted,
+                                # not assumed away)
 node tools/check-x-bind.js      # 28 checks, offline: which X handle a wallet binds — a proved one
                                 # winning over a typed one, every way a proof fails landing provisional,
                                 # and that the route and the page still do what the rule assumes
@@ -2313,15 +2308,16 @@ The share's two pictures are generated from one source file, which is **not** se
 ```bash
 # source: points/daily share/share-card.jpg (the photo the campaign uses, 1337×746)
 ffmpeg -y -i "points/daily share/share-card.jpg" -vf "scale=1200:-2,setsar=1" \\
-  -c:v mjpeg -q:v 3 public/assets/points/share-card.jpg      # 1200×670, the attachable one
+  -c:v mjpeg -q:v 3 public/assets/points/share-card.jpg      # 1200×670 — no longer referenced
 ffmpeg -y -i "points/daily share/share-card.jpg" -vf "scale=1200:-2,crop=1200:630,setsar=1" \\
-  -c:v mjpeg -q:v 3 public/assets/points/points-og.jpg       # 1200×630, the card X unfurls
+  -c:v mjpeg -q:v 3 public/assets/points/points-og.jpg       # 1200×630 — the card, and the kit's preview
 ```
 
 The crop is ours rather than X's on purpose: `summary_large_image` renders at 1.91:1, so handing it
 the photo's own 1.79:1 would let X choose which part of the knight to cut off. `check-points-x.js`
 reads the JPEG's frame header and asserts **1200×630**, which is the only way to tell that from
-"it looks fine".
+"it looks fine". The 1200×670 `share-card.jpg` is the **leftover** of the attach-by-hand path — nothing
+reads it now, and the file stays on disk only because it is the source crop above.
 
 `check-points-x.js` runs everything in **one sandboxed process** (a throwaway `cwd` for the file
 driver, `globalThis.fetch` replaced by a stub), which is what makes the awkward answers testable:
@@ -2801,9 +2797,10 @@ One honest limit: the **shadowing** row is proven against a fake extension in th
 this machine has no extension to test with. The other rows are exercised through the shipped file.
 
 ```bash
-node tools/check-wallet-source.js    # 65 checks: dormant, injected-wins, a session that owns the
-                                    # wallet, **a login that must not move the wallet**, what the
-                                    # seam answers when the page asks it for accounts, a
+node tools/check-wallet-source.js    # 68 checks: dormant, injected-wins, a session that owns the
+                                    # wallet, **a login that must not move the wallet**, what
+                                    # `ownsWallet()` answers (the fact the X link is decided on),
+                                    # what the seam answers when the page asks it for accounts, a
                                     # logged-out bridge, a late bridge, a closed login, sign-out,
                                     # chain mismatch — against a fake bridge and stub DOM
 ```
@@ -3826,9 +3823,52 @@ stops on a prompt that looks exactly like a hang (a 180 s timeout, twice).
 
 ### The custom domain — `dungeonknights.io`
 
-Bought from **Namecheap** on 2026-09-21T18:50:29Z (the registry's `add period` runs for the first five
-days). **Live since September 22** — DNS on Namecheap's BasicDNS (`dns1/dns2.registrar-servers.com`),
-both hosts answering from Vercel, TLS issued per host.
+First bought from **Namecheap** on 2026-09-21T18:50:29Z and live from September 22. On **2026-09-24 that
+registration vanished from the registry** and the name was re-registered at **Hostinger** the same day,
+so the zone now sits on Hostinger's nameservers (`byte` / `pixel.dns-parking.com`) and records are
+edited in **hPanel → Domains → `dungeonknights.io` → *Manage DNS records***. The record values below
+still apply; only the place you type them changed.
+
+#### 2026-09-24 — the name was deleted, and what that reads like
+
+The site went dark with nothing wrong in the app: production `Ready`, `/gate` answering 200, every alias
+still attached. The **name** was gone — NXDOMAIN from Google, Cloudflare *and* Quad9, the `io` TLD's own
+server (`a2.nic.io`) answering NXDOMAIN for the apex **and for `-type=ns`**, and the registry's RDAP at
+**404** while a control (`github.io`) returned 200. `whois.com` was selling the name. A registration
+deleted 3 days into the registry's 5-day add period is a reversed/failed payment or a fraud review —
+*not* ICANN registrant-email suspension, which leaves the domain in WHOIS as `clientHold` for 15 days.
+
+Recovery, in the order it actually happened:
+
+1. Re-registered the same name. RDAP flipped `404` → `200` at once.
+2. **Waited for the delegation.** A fresh registration is in RDAP *before* the `io` zone publishes its
+   NS, so RDAP says 200 while DNS still says NXDOMAIN. Poll the TLD itself —
+   `nslookup -type=ns dungeonknights.io a2.nic.io` — which has no cache in the path. Took ~10 minutes.
+3. **Hostinger locks nameserver changes for 24 h after a registration** (*"Nameserver changes for this
+   domain are temporarily unavailable"*), so the nameserver route was unavailable and the **record
+   route** was used instead. That is also why `app` finally has a record.
+4. Hostinger's default zone serves a **parking page** (`A @ → 2.57.91.91`,
+   `CNAME www → dungeonknights.io`, title *"Parked Domain name on Hostinger DNS system"*). Those
+   records have to be **deleted**, not merely added to — an apex answering both Vercel's IP and the
+   parking IP serves the parking page at random.
+
+With the first A record in place, `vercel domains verify` reported **"Valid Configuration:
+dungeonknights.io is configured (A record) and verified for project dungeon-knights"**, and the apex was
+live on `216.198.79.1` with TLS. Vercel's own DNS zone is still populated (`vercel dns ls`), so switching
+to `ns1/ns2.vercel-dns.com` after the 24 h lock brings all three hosts up in one edit.
+
+**Resolved the same day.** The re-registered zone carries `A @ 216.198.79.1`, `CNAME www →
+03e3c9616dec48fa.vercel-dns-017.com` and `CNAME app → 03e3c9616dec48fa.vercel-dns-017.com`, and every
+host answers: the apex **200** with TLS, `www` **308 → apex**, and `app` **307 → `/gate`** — the private
+host that had never resolved in its life. Setting the `app` alias is what made Vercel issue its
+certificate (*"Generating a certificate… Issuing a certificate for app.dungeonknights.io", 12 s*), so a
+host with no TLS is an alias that was never set, not a broken domain; the first request can still fail
+while the cert lands.
+
+One trap worth keeping: **the two Hostinger nameservers disagree briefly while a zone edit propagates.**
+Right after the save, `nslookup … byte.dns-parking.com` answered NXDOMAIN for `app` while Google's
+resolver already held the CNAME at its 14400 TTL. Trust a public resolver plus `vercel domains verify`,
+never a single `nslookup` against one nameserver.
 
 Two things about reading a domain's state, both of which misled me once:
 
@@ -3838,8 +3878,9 @@ Two things about reading a domain's state, both of which misled me once:
   registry.
 - **NXDOMAIN right after a purchase is negative caching, not a failed registration.** `8.8.8.8`
   answered NXDOMAIN because the name genuinely did not exist minutes earlier; it had cached that
-  answer. `nslookup <domain> dns1.registrar-servers.com` asks the authoritative server and skips the
-  cache entirely — that is how the records were confirmed *before* Vercel's own check ran.
+  answer. `nslookup <domain> <the zone's own nameserver>` asks the authoritative server and skips the
+  cache entirely — that is how the records were confirmed *before* Vercel's own check ran. To get past
+  a negative cache on the TLD as well, ask the TLD itself: `nslookup -type=ns <domain> a2.nic.io`.
 
 Read the record set off Vercel itself rather than from memory — `vercel domains verify <domain>`
 prints it, and it is the only authority on what the deployment expects:
