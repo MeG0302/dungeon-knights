@@ -520,6 +520,26 @@ rule serves the wide pane, a tablet and a phone without three declarations to ke
     color: #e0c882;
 }
 
+/* A win is not a warning and not a failure, and it is the one banner on this page a player is glad
+   to see — so it is the gold of the prize rather than the amber of a setup task. It sits in the
+   flow above the two panels instead of floating, because it carries the only action on the page
+   with a deadline attached and nothing should be able to cover it. */
+.points-banner-won {
+    align-items: center;
+    margin: 10px 16px 0;
+    border: 1px solid var(--border-bronze, var(--border-base));
+    background:
+        radial-gradient(120% 140% at 0% 0%, rgba(212, 168, 67, 0.16), transparent 70%),
+        rgba(0, 0, 0, 0.4);
+    color: #e6d3a0;
+}
+
+/* The button goes to the end of the sentence, not under it: one line, one action. */
+.points-banner-won .btn {
+    margin-left: auto;
+    flex: 0 0 auto;
+}
+
 .points-banner code {
     font-family: var(--font-mono, ui-monospace, monospace);
     font-size: 10.5px;
@@ -1791,6 +1811,22 @@ link, and X is asked about it before anything is paid.
     border-top: 1px solid var(--border-base);
 }
 
+/* The wallet that would be copied, on its own line and in the mono face the rest of the site uses for
+   addresses — selectable by hand, because copying is blocked in some browsers and a player has to be
+   able to read the thing off the screen. */
+.draw-claim-addr {
+    overflow-wrap: anywhere;
+    padding: 6px 8px;
+    border: 1px solid var(--border-base);
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.32);
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 10.5px;
+    line-height: 1.4;
+    color: var(--accent-gold);
+    user-select: all;
+}
+
 .draw-claim-actions {
     display: flex;
     flex-wrap: wrap;
@@ -1827,6 +1863,38 @@ link, and X is asked about it before anything is paid.
 
 .draw-row:last-child {
     border-bottom: none;
+}
+
+/* The ladder's row is three facts, not two: the day it was won, what was won, and where it is now.
+
+   It was written as `1fr auto` when the row was a day and a state, and the third cell has been
+   wrapping onto a second grid line ever since — which put the status chip full width under a row of
+   text, so the state read as a button rather than as a fact about the day above it. Named by what it
+   is *not* (`:not(.is-winners)`) because the settled-day ledger below shares this row and sets its
+   own four-column shape. */
+.draw-row:not(.is-winners) {
+    /* Two columns, and the capsule's name is not one of them.
+
+       Measured rather than guessed: on the 400px left panel the three cells need 165 + 84 + 126 px
+       plus gaps, and 356 is what there is — so one of them had to give, and it was always going to
+       be the day. Shrinking it made "won 2 days ago" wrap inside its own cell, which turned that
+       row into a two-line row while its neighbours stayed one, and a list where one row is twice as
+       tall for an invisible reason reads as a rendering bug.
+
+       The name is the cell that can afford to go: it says the same thing on every row today (ten a
+       day, every one a Common capsule), while the day and the state are what differ. It is on the
+       row's tooltip instead, and on the claim card in full. */
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+}
+
+.draw-row:not(.is-winners) .draw-row-what {
+    display: none;
+}
+
+/* The day's own words never wrap: `won 2 days ago` broken across two lines reads as two facts. */
+.draw-row-when {
+    white-space: nowrap;
 }
 
 .draw-row-day {
@@ -1928,6 +1996,141 @@ link, and X is asked about it before anything is paid.
     font-size: 11.5px;
     line-height: 1.6;
     color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------------- the cut line
+   Ten capsules go to the ten wallets at the top of the day's board, and a full daily run pays the same
+   to every wallet that finishes it — so tenth place is a tie on a busy day, and the wallets level with
+   it used to be nowhere on this page. They are the ones with a reason to play another run tonight, so
+   the band is framed as a race rather than as a footnote: the score they all share is the panel's own
+   byline, the dashed rule under it is literally where the prize stops, and the clock sits where a race
+   puts one.
+
+   Deliberately *not* a continuation of the table above it. Those rows wear the capsule they win; an
+   eleventh row under them paying nothing would read as a board with a mistake in it. Same columns,
+   different frame. */
+.draw-cut {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 11px 12px 12px;
+    border: 1px solid var(--border-bronze, var(--border-base));
+    border-radius: 5px;
+    background:
+        radial-gradient(120% 120% at 50% 0%, rgba(212, 168, 67, 0.1), transparent 62%),
+        rgba(0, 0, 0, 0.3);
+}
+
+.draw-cut-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding-bottom: 7px;
+    border-bottom: 1px dashed rgba(212, 168, 67, 0.4);
+}
+
+.draw-cut-title {
+    font-family: var(--font-heading, inherit);
+    font-size: 12px;
+    letter-spacing: 0.4px;
+    color: var(--text-primary);
+}
+
+/* The score every wallet in the band is on. It is the band's whole point, so it is the loudest thing
+   in it — and tabular, because it is a number to compare against the row the player is on. */
+.draw-cut-level {
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.5px;
+    color: var(--accent-gold);
+}
+
+.draw-cut-say {
+    max-width: 78ch;
+    margin: 0;
+    font-size: 11px;
+    line-height: 1.6;
+    color: var(--text-secondary, var(--text-muted));
+}
+
+.draw-cut-hold {
+    color: var(--accent-gold);
+}
+
+.draw-cut-list {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border-base);
+    border-radius: 4px;
+    overflow: hidden;
+    background: rgba(0, 0, 0, 0.22);
+}
+
+.draw-cut-row {
+    display: grid;
+    grid-template-columns: 48px 1fr auto;
+    align-items: center;
+    gap: 12px;
+    padding: 7px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    font-size: 11.5px;
+    color: var(--text-secondary);
+}
+
+.draw-cut-row:last-child {
+    border-bottom: none;
+}
+
+/* The board's own `is-you`, because a player reading this band is doing one thing: looking for their
+   own row. The gold left edge is what the board above uses, so the two answer in the same language. */
+.draw-cut-row.is-you {
+    padding-left: 9px;
+    border-left: 3px solid var(--accent-gold);
+    background: rgba(212, 168, 67, 0.12);
+    color: var(--text-primary);
+}
+
+.draw-cut-rank {
+    font-family: var(--font-heading, inherit);
+    font-weight: 700;
+    color: var(--text-muted);
+}
+
+.draw-cut-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-primary);
+}
+
+.draw-cut-points {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: var(--accent-gold);
+}
+
+.draw-cut-foot {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 0;
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+/* The same countdown the hero uses, at the band's scale: 20px of gold inside a 10px footnote would be
+   the loudest thing in the panel, and this one is a footnote's clock, not the deadline's. */
+.draw-cut-clock .draw-countdown {
+    font-size: 13px;
+    letter-spacing: 0.5px;
 }
 
 /* The daily board's last column: the prize beside what the row earned, where a standings column

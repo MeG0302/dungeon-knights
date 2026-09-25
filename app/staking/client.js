@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 // Arya is the shared gate keeper across the game; a React route has to pull her in
 // itself, the same way the Points page does.
 import Script from 'next/script';
+import BackLink from '../back-link';
 import {
     connectWallet, forgetWallet, hasInjectedWallet, onAccountsChanged, savedAddress, shortAddress,
 } from '../../lib/points-client';
@@ -720,7 +721,7 @@ export default function StakingClient() {
         <>
             {/* Versioned like every other sheet: an unversioned `/theme.css` is a CSS change
                 that never reaches a returning player. */}
-            <link rel="stylesheet" href="/theme.css?v=7" />
+            <link rel="stylesheet" href="/theme.css?v=8" />
             <link rel="stylesheet" href="/css/staking.css?v=9" />
             <link rel="stylesheet" href="/css/arya.css?v=3" />
             {/* ethers v5 UMD, the same pinned copy every legacy page loads — first in the list,
@@ -744,9 +745,12 @@ export default function StakingClient() {
                 {pageStyles}
                 <div className="page staking-page" style={{ background: 'var(--bg-dark)' }}>
                     <header className="header">
-                        <button className="btn btn-ghost btn-sm" onClick={() => { window.location.href = '/'; }}>
-                            <img src="assets/ui/exit cross.png" className="btn-icon-img" alt="" /> Kingdom Gate
-                        </button>
+                        <div className="header-left">
+                            <BackLink />
+                            <button className="btn btn-ghost btn-sm" onClick={() => { window.location.href = '/'; }}>
+                                <img src="assets/ui/exit cross.png" className="btn-icon-img" alt="" /> Kingdom Gate
+                            </button>
+                        </div>
                         <div className="header-title">STAKING VAULT</div>
                         <div className="header-actions" />
                     </header>
@@ -909,9 +913,12 @@ export default function StakingClient() {
             <div className="page staking-page" style={{ background: 'var(--bg-dark)' }}>
 
                 <header className="header">
-                    <button className="btn btn-ghost btn-sm" onClick={() => { window.location.href = '/'; }}>
-                        <img src="assets/ui/exit cross.png" className="btn-icon-img" alt="" /> Kingdom Gate
-                    </button>
+                    <div className="header-left">
+                        <BackLink />
+                        <button className="btn btn-ghost btn-sm" onClick={() => { window.location.href = '/'; }}>
+                            <img src="assets/ui/exit cross.png" className="btn-icon-img" alt="" /> Kingdom Gate
+                        </button>
+                    </div>
                     <div className="header-title">STAKING VAULT</div>
                     <div className="header-actions" data-arya="wallet">
                         {connected && (

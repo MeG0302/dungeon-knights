@@ -1422,6 +1422,17 @@ exists to make that last mile safe and repeatable.
   ZSET with a 35-day TTL, plus a stamp hash for the tie-break). A tally kept on the wallet beside it
   would be a second answer to "what did this player earn today", and two answers are one more than
   can be kept in step. Ties go to whoever got there first — hence the stamp, written in the same call.
+- **The board does not stop at the ten it pays.** A full daily run pays the same to every wallet that
+  finishes it, so a tie at tenth place is the normal shape of a busy day, and a board that ended at
+  the ten awarded showed the wallets in that tie a list they were not on and a rule that had already
+  gone against them. `cutLine()` (pure, in `lib/points-draw.js`) splits the ordered rows at the cut:
+  the ten winners, plus every wallet **level with the tenth** — which is exactly one of them, since the
+  tie-break is `at` first and the address last, both of which are already in the ordering. The page
+  lists them under the board as *Fighting for the last capsule* with the shared score as the band's
+  byline, and says the rule out loud: the first of them to bank another point goes past the line. No
+  cut is drawn until the board fills the prize — a field of six is paid in full — and a tie deeper than
+  the read (30 rows, the same depth the settlement reads) is reported as "or more" rather than counted.
+  The band changes **nothing** about who is paid: `pickWinners` is `cutLine().winners`.
 - **Settlement is idempotent per day, and happens two ways on purpose.** `vercel.json` schedules
   `/api/points/draw` at `10 0 * * *` — ten past midnight UTC, so the clock cannot still be inside
   the day being drawn — and **any page read settles too** (`settleDraws()` in `stateFor`). A cron
@@ -1439,9 +1450,28 @@ exists to make that last mile safe and repeatable.
   counts the day the draw settles, because the rule is that a winner hands over the wallet that day.
   A win nobody claimed reads `missed` on the ledger and **stays on the fulfilment list anyway** —
   quietly dropping it is how a promised prize goes missing.
-- **The form is delivery only, and restricted for now.** `CAPSULE_FORM_URL` is an env var precisely
-  so the launch link can be swapped for a published one without a release. Until it is, most winners
-  meet a Google sign-in, so the card says what the link needs and offers the Discord invite beside it.
+- **The form is delivery only, and now it is a *published* one.** `https://forms.gle/tW461j7xzFY65iL89`
+  is the form as anybody can open it; the link the site shipped with was the Docs **editor** link,
+  which asks every player who is not signed into our Google account for a sign-in instead of showing
+  them a question. The env var stays — a form is a thing that gets replaced — and so does the rule
+  about which kind of link it is: `capsuleFormNeedsSignIn()` **reads the URL** rather than asserting a
+  mode, so the card says "it may ask for a Google sign-in, tell us on Discord" for an `/edit` link and
+  "it asks for the address above, so copy it and paste it in" for a published one. An unreadable link
+  counts as restricted, because "check on Discord" is the safe thing to say about a URL we cannot
+  parse. The address itself is printed on the claim card (mono, selectable) next to the copy button —
+  a form that asks for an address is exactly where people paste the wrong one.
+- **A win is announced, not just recorded.** The draw settles at 00:00 UTC, so a win is always
+  discovered the day *after* the board that earned it, and the only trace of it used to be a badge on
+  a tab. Now: a banner above the panels (`data-arya="capsule-won"`, in the flow so nothing can cover
+  it, deliberately not dismissable — dismissing it would not stop the clock), naming the day in words
+  and carrying the one button that matters; and the ledger row says **`won yesterday`** beside the
+  date, because "2026-09-24" says nothing about whether the window is still open. Both come from
+  `relativeDayLabel()` (today · yesterday · N days ago, and the date past a fortnight, where "23 days
+  ago" is a number nobody converts back). **The ladder row had to change shape for it**, and by
+  measurement rather than taste: on the 400px panel the three cells needed 165 + 84 + 126px and there
+  are 356, so the day wrapped inside its own cell and one row became twice as tall as its neighbours
+  for a reason nobody could see. The capsule's name left the ladder row (it is the same on every row
+  today) and lives on the row's tooltip; two columns, one line, every row 31px.
 
 The team's list is `tools/points-capsules.js`: the draw record (`dk:points:draws`) joined with each
 winner's wallet, which is where the claim and the sent marker live.
@@ -1467,10 +1497,35 @@ node --env-file=/tmp/prod.env tools/points-capsules.js --todo
 
 The panel the player sees and the tool the team runs are the same ladder — **won → claimed → sent,
 or missed** — derived by `lib/points-capsules.js`, so nothing in the browser decides a status. Both
-harnesses are bare node: `node tools/check-draw.js` (46 checks: winner picking, the tie-break, the
-idempotent settle, the guard that is released, the day-shape check) and
-`node tools/check-capsule-claim.js` (44: the two message families, the day binding, the window, the
-status ladder).
+harnesses are bare node: `node tools/check-draw.js` (65 checks: winner picking, the cut line and the
+tie band off a real board, the tie-break, the idempotent settle, the guard that is released, the
+day-shape check) and
+`node tools/check-capsule-claim.js` (56: the two message families, the day binding, the window, the
+status ladder, which kind of form link is configured and what the card says about it, the win banner,
+the day-in-words ledger, and the 36 exported frames of the capsule's turn).
+
+**The form, the notice and the turn (September 25).** Seven mutations, all caught: M1
+`capsuleFormNeedsSignIn` always answering "published" (so a restricted editor link ships with no
+warning on the card) → *"and it is a *published* form, not the editor link only its owner can open"*;
+M2 `relativeDayLabel` giving the date back for yesterday → *"a win says which day it was in words a
+player reads without converting"*; M3 the frame name **clamping** instead of wrapping → *"the frame
+names are 1-based, padded and wrap both ways, so any drag lands on a real frame"* (this one was a real
+bug the check found first, not a mutation written to pass); M4 dropping `when` from the capsule
+record → *"every capsule the panel shows carries it"*; M5 the portfolio tally losing a rung → *"the
+rungs it reports are the rungs of the claim ladder"*; M6 removing the win banner → *"a win is announced
+to the player, not just recorded against the wallet"*; M7 one exported frame deleted from disk →
+*"every frame the page can ask for is on disk, and there are no strays"*.
+
+**The tie band (September 25).** Five mutations, all caught: M1 the band's ranks off by one (2 checks
+fail, first *"the wallets level with the tenth are listed, ranked on from the cut"*), M2 the contender
+filter dropped (4, first *"the wallets level with the tenth are listed…"*), M3 the read edge never
+reported (first *"but a read that stops inside the tie says so rather than guessing"*), M4 the display
+cap removed (first *"a tie too big to list is bounded, and said as a lower bound rather than counted as
+shown"*), M5 the ordering rule sorting the caller's array in place (4, first *"the biggest day wins"*).
+Two of those needed a fixture fixed before they could be caught at all, which is the part worth
+remembering: **M2 passed at first because no fixture had a wallet *below* the line**, and M5 passed
+until the purity fixture was scrambled — a caller's array already in score order is exactly the case
+where an in-place sort is invisible. A guard's harness is only as sharp as its rows.
 
 ### Invite codes — five characters, and the loop a late claim makes possible
 
@@ -3393,7 +3448,31 @@ In development the store is the **file** driver (`.data/points.json`), so the lo
 directly while working on the panel; production uses KV, and a fresh deployment starts every wallet's
 log empty for the reason above.
 
-**Checking it.** `node tools/check-portfolio.js` — 53 checks. The ones worth knowing: every
+**My capsules (September 25).** The one card on the page whose subject is a picture, and the only
+control on it the reader touches: the count of capsules the wallet has won (`state.giveaway.capsules`,
+the same list the Points page renders, counted — never re-derived), broken into the rungs of the claim
+ladder, with the prize itself from `CAPSULE_SPIN` turning under a pointer, the arrow keys or **one
+unhurried turn on arrival** (no motion at all under `prefers-reduced-motion`, frames warmed after the
+first paint so the drag is never the thing that waits).
+
+The art is the owner's 8-second 360° turn — 1280×720 ProRes 4444 with alpha, **72 MB**, which is not a
+thing a page asks a player to download to look at a picture. It is exported once into 36 stills, a
+square crop on the capsule (the content box was measured off the alpha channel: `x 460…824, y 56…676`):
+
+```
+ffmpeg -y -i "<Magical capsule 360, nobg>.mov" \
+  -vf "crop=640:640:320:40,scale=384:384:flags=lanczos,fps=4.5" \
+  -c:v libwebp -q:v 82 -compression_level 6 -pix_fmt yuva420p \
+  public/assets/points/capsule-spin/capsule-%02d.webp
+```
+
+36 frames at 384², ~21 KB each, **952 KB in total** — and `CAPSULE_SPIN` in `lib/points-config.js` is
+the one place that says how many there are, because the exporter, the page and the harness all have to
+agree. Stills rather than a `<video>` because a drag has to answer on the frame it is asked for, and a
+72 MB ProRes file cannot be seeked instantly — `capsuleSpinFrame()` wraps in **both** directions, since
+a drag is a subtraction that routinely lands on frame 0 or less.
+
+**Checking it.** `node tools/check-portfolio.js` — 59 checks. The ones worth knowing: every
 `/api/…` path the page reads is checked against the filesystem (a one-word typo there is a section
 that says "the chain could not be read" forever, which looks like a node problem and is a bug); the
 page must not contain a chain call, a signer or a provider; the Genesis bands must come from the
@@ -4366,3 +4445,147 @@ an earlier map rename, throws at boot and the game never starts:
 here — the dungeon keys and the map art are being changed by hand right now, which is exactly
 when a stale `selectedDungeon` reaches a player, and defaulting an unknown key to `crypts` is a
 one-line call someone should make deliberately.
+
+### The pitch deck (`/pitch`) — private by absence, and asserted on every run
+
+Eleven argument slides and a cover, on the game host, behind the Kingdom Gate password. The content
+is data (`lib/pitch-deck.js`), the shell is `app/pitch/client.js`, the sheet is
+`public/css/pitch.css?v=1`, and `tools/check-pitch.js` holds all of it to its own claims.
+
+**It is private by absence.** `/pitch` is deliberately *not* in `APP_OPEN` (or `APEX_PUBLIC`), so
+`classify()` returns `other` and the gate covers it with no rule of its own. That is the safest
+place for a deck — but it is also one line away from being public, and adding `/pitch` to an
+exemption list is invisible in a browser, so the harness asks `lib/app-routing.js` directly: no
+cookie + a configured password must answer `{action:'gate', next:'/pitch'}`, the apex must redirect
+it to the gated host, and the routing module must not name `/pitch` at all.
+
+**Every figure is derived.** The deck imports `reward-config.js`, `knights.js`, `staking-config.js`
+and `points-config.js`, so the weekly budget, the basis points, the tier table, the capsule ramp and
+the draw size are the same objects the site and the contracts were built from. Two invariants are
+checked rather than assumed: the four line shares sum to exactly `10,000` (the vault's constructor
+reverts otherwise) and the four line budgets sum to the weekly budget. All nine addresses are
+compared character for character against `public/contract-addresses.js` — both directions, so a
+tenth contract has to be added to the deck too.
+
+**Two bugs found by measuring, not by looking.**
+
+1. **The deck walked itself forward, a slide a second.** `scroll-snap-type: y proximity` *plus*
+   `scroll-behavior: smooth` on the same element: Chromium re-animates to the nearest snap point
+   whenever the layout changes, and this deck changes layout on purpose once a second (the live
+   countdown on the growth slide ticks, and the reveals toggle classes). Measured at 1440×900:
+   `1,798 → 4,103` over six seconds with smooth, rock steady at every position without it. The
+   animated jump is `scrollIntoView({behavior:'smooth'})` in the arrows and the dot rail, which does
+   not need the CSS property — so the property is gone and the note on `.pitch-deck` says why.
+2. **Five slides were 50–125px taller than the deck.** At 1440×900 the deck is 799px tall and slides
+   6, 7, 8, 9 and 12 measured 907 / 869 / 922 / 911 / 850 — a slide whose last card sits below the
+   fold is a slide nobody reads, and the counter was wrong on top of it. The rhythm was tightened
+   globally (padding, gaps, type scale) and four slides were trimmed; all twelve now measure ≤ 800px.
+   The counter itself was `scrollTop / clientHeight`, which stops matching the slide index the moment
+   one slide overflows; it now picks the slide whose `offsetTop` is nearest.
+
+**Five mutations, each caught by name:**
+
+| mutation | what the run reported |
+|---|---|
+| `/pitch` added to `APP_OPEN` | 4 checks fail, first *"the deck is behind the gate…"*, and `classify('/pitch')` reads `app-open` |
+| a block `kind` with no renderer (`bullets`) | *"every block kind a slide uses has a renderer, so no sentence goes missing — no case for: bullets"* |
+| one character of `CONTRACTS.token` | *"the deck's token address is the one the site resolves"*, plus the two both-directions address checks |
+| one unbalanced `**` in the growth slide | *"every **bold**, *italic* and `code` marker in the copy is balanced, so none prints literally — points: Every day, the top **10 of…"* |
+| the weekly budget typed by hand (`"1,400,000"`) | *"the economy slide still prints the budget the vault releases…"* |
+
+The marker check is worth reading twice: it walks the renderer's own grammar over every string and
+fails if any character between markers is a marker character. A count of markers is **not** enough —
+`**a** b * c` has an even number of asterisks and still prints one literally, which is exactly what
+the first draft of that check waved through.
+
+### The ← in every header, and what the capsule weighs
+
+Two owner requests, one turn each, and both are the same shape: a rule that lived in a page moved
+somewhere it could be *walked*.
+
+**The arrow.** Every page header now begins with `←` and then the Kingdom Gate button — the same
+left-hand group, `.header-left`, so the bar keeps its three top-level children and the title does not
+slide. The two are the same decision at two depths: back to where you were, or back to the front
+door.
+
+It does **not** call `history.back()`. The browser's history is the whole tab, not our product, so on
+a page opened from a bookmark, a Discord link or a search result, `history.back()` leaves the site —
+from the outside that is the button being broken. `lib/back-trail.js` keeps our own list of our own
+pages, per tab, in `sessionStorage`, and the arrow walks that. Three consequences worth stating: a
+reload is not a visit (a repeat of the current page is collapsed rather than pushed, so the arrow
+cannot point at itself); a cold page shows **no arrow at all**, because there is no last page to
+restore and the front door is already the button beside it; and a same-origin referrer is the second
+way in, for the hard navigations a trail never sees, with the origin checked so another site can
+never become a destination. The label names the page (`Back to Points Program`) from a map in the
+same module, and an unknown path falls back to the path itself.
+
+Six pages carry it — genesis, pitch, points, portfolio, staking (two headers: boot and ready) and
+tokenomics — through one component, `app/back-link.js`. The **hub has none**, deliberately: it is the
+front door, and the arrow is for the pages behind it.
+
+**The throw.** "When I drag this capsule it should scroll for a longer time with inertia" — so the
+decay moved out of the page and into `lib/points-config.js` as `CAPSULE_FLING` + `capsuleFling()`,
+beside the frames it acts on: a release speed in, a duration, a distance and a turn count out. That
+is what makes the feel checkable. `tools/check-portfolio.js` walks the curve:
+
+| release | coast |
+|---|---|
+| `0.006` frames/ms (60 px/s, the threshold) | 2.31 s · 0.28 turn |
+| `0.02` (a gentle nudge) | 4.32 s · 0.93 turn |
+| `0.05` (a normal flick, 500 px/s) | 5.84 s · 2.31 turns |
+| `0.12` (the cap, 1200 px/s — and anything harder) | 7.30 s · 5.55 turns |
+
+Measured in the browser with scripted pointer input on the real page: a 200px flick over 400ms
+coasts **5.4 s and 68 frames** (the curve's 5.84 s, a little under because the hand's velocity is
+smoothed over the last few events), and a 20px placement over 800ms coasts **0 ms** — it stops where
+it was put, which is the other half of the request.
+
+The cap is load bearing, not decoration: one pointer event can cross a phone in one frame, and the
+smoothed velocity on a fast swipe comes out in the frames-per-millisecond tens — uncapped that is a
+hundred turns after one flick.
+
+The **caption is gone** on purpose: "Drag to spin" under the art read as a label on a toy, and the
+gesture teaches itself now that letting go keeps the wheel going. The instruction still exists where
+it is the only way to know — the element's `aria-label`.
+
+`public/theme.css` moved to **`?v=8`** in all seven places that link it (six page clients plus
+`lib/static-pages.js`, which links it twice): the arrow's rules are in that sheet, and a page left on
+`v7` renders an unstyled button in the bar.
+
+**Fifteen mutations, each caught by name.** Harnesses: `tools/check-back.js` is new (18 checks — the
+trail walked with real arrays, then every header read for the arrow and its place), and
+`check-portfolio` went 62 → 67 with the curve walked rather than matched as text.
+
+| mutation | what the run reported |
+|---|---|
+| `previousPage` stops comparing with the page you are on | *"and loading it again is not a second visit…"* + *"and returning to a page you have already seen is still a visit"* |
+| `rememberPage` pushes the page it is already on | the same two — a reload becomes a visit |
+| `sameOriginPath` stops checking the origin | *"and only a referrer from our own origin is trusted"* |
+| the control calls `router.back()` instead of the trail | *"and it navigates to the trail rather than handing the decision to the browser"* |
+| `<BackLink />` deleted from one header | *"every page header renders the arrow, and it is the first control in the bar"* + *"and it comes before the way home…"* |
+| `.header-left` renamed in the sheet | *"and the arrow and its group are styled in the shared sheet"* |
+| one page left on `theme.css?v=7` | *"and the sheet that carries the rule is the one every page asks for"* — **only after the check was fixed; see below** |
+| `if (!back) return null;` removed | *"and a browser that refuses storage gets no arrow instead of a crash"* |
+| `friction: 1` (a flick that never decays) | *"and a flick coasts for seconds rather than a moment…"* + *"and even a gentle nudge keeps turning for a beat…"* |
+| `max: 1000000` (the launch cap removed) | *"and no release, however hard, spins for ever: the launch speed is capped"* |
+| `min: 0` (a placement is thrown too) | *"and a careful placement is not thrown at all…"* |
+| `stop: 0.01`, above the throw threshold | *"and a flick coasts for seconds…"* + *"and the friction is a decay and not a constant…"* |
+| the page stops calling `capsuleFling` | *"and the throw is the shared curve, not a second copy of the numbers in the page"* |
+| the friction dropped from the animation step | *"and a flick is thrown rather than dropped: it keeps turning and slows to a stop"* |
+| `.pf-spin-hint` back in the sheet | *"and the section is styled, the frame included and no caption under it"* |
+
+Two things this run taught, both worth keeping:
+
+1. **One check of my own was too weak, and a mutation found it.** The version check first read the
+   *legacy* pages rather than the six page clients, so a page left on `v7` sailed straight through
+   (its `13 links` were 7 legacy links plus one per page, and it never looked at the numbers in the
+   app). It now reads every source that links the sheet and requires one version, at least 8, in all
+   of them.
+2. **Two mutations had to be re-run.** `\(` in a `sed` *basic* expression is a capture group, not a
+   literal paren, so the mutation never landed and the harness was reporting on unmutated code —
+   which is the trap the whole exercise exists to avoid. The re-run applied them and both were caught.
+
+Not touched, and known: `tools/check-kv-store.js` is red on the committed tree as well as here — it
+is a live-KV harness whose child process fails against the configured store, unrelated to any of
+this.
+

@@ -99,6 +99,86 @@ for (const key of ['KV_REST_API_URL', 'KV_REST_API_TOKEN', 'UPSTASH_REDIS_REST_U
         Array.isArray(Draw.pickWinners([])) && Draw.pickWinners([]).length === 0
         && Draw.pickWinners(null).length === 0, '');
 
+    // ----------------------------------------------------------------------------- the cut line
+    console.log('');
+    console.log('The cut line, and the wallets fighting for it (pure)');
+
+    /**
+     * A row for the pure rule. The addresses are zero-padded so they sort in the order they were
+     * made, which keeps the tie-break's last resort (the address) out of the way of the checks about
+     * `at` — a harness that could not tell those two apart could not check either.
+     */
+    const row = (n, points, at) => ({ address: `0x${String(n).padStart(40, '0')}`, points, at });
+
+    // Nine clear of the line, then three level on 2450, then one wallet below it that has no business
+    // in the band. The wallet holding the tenth capsule is deliberately *not* the first of the three:
+    // `at` decides, and the row stamped earliest is the tenth, which is the whole reason the band can
+    // be shown without changing who is paid.
+    const tied = [
+        row(1, 3400, 10), row(2, 3300, 20), row(3, 3200, 30), row(4, 3100, 40), row(5, 3000, 50),
+        row(6, 2900, 60), row(7, 2800, 70), row(8, 2700, 80), row(9, 2600, 90),
+        row(10, 2450, 200), row(11, 2450, 150), row(12, 2450, 300), row(13, 2100, 400),
+    ];
+    const split = Draw.cutLine(tied, 10);
+
+    rec('the ten that are paid are still the ten, whatever is level with them',
+        split.winners.length === 10 && split.winners[9].points === 2450 && split.points === 2450,
+        `the cut is ${split.points} PTS`);
+    rec('the wallets level with the tenth are listed, ranked on from the cut',
+        split.contenders.length === 2 && split.contenders[0].rank === 11
+        && split.contenders[1].rank === 12 && split.contenders.every((r) => r.points === 2450),
+        `#${split.contenders.map((r) => r.rank).join(' and #')} at the same score`);
+    rec('  and the spot is the tie-break\u2019s: the earliest stamp of the level wallets takes it',
+        split.winners[9].at === 150 && split.winners[9].address === tied[10].address
+        && split.contenders.map((r) => r.at).join(',') === '200,300',
+        `at ${split.winners[9].at} holds it over at ${split.contenders.map((r) => r.at).join(' and ')}`);
+    rec('the count is about the line, so the wallet holding the spot is counted too',
+        split.level === 3, `${split.level} wallets level`);
+    rec('the band is ordered by the rule that pays, so the page cannot disagree with the draw',
+        split.contenders.map((r) => r.at).every((at, i, all) => i === 0 || all[i - 1] < at),
+        'earliest first, same as the winners');
+    rec('the winners the band is cut under are the winners the draw pays',
+        Draw.pickWinners(tied, 10).map((r) => r.address).join(',') === split.winners.map((r) => r.address).join(','),
+        'one ordering, two views');
+
+    // Ten distinct scores and an eleventh wallet well below the line: nothing here is level with the
+    // cut, so the band must be empty even though there *are* rows under it.
+    const sharp = [
+        row(1, 3400, 10), row(2, 3300, 20), row(3, 3200, 30), row(4, 3100, 40), row(5, 3000, 50),
+        row(6, 2900, 60), row(7, 2800, 70), row(8, 2700, 80), row(9, 2600, 90), row(10, 2451, 100),
+        row(11, 1000, 110),
+    ];
+    rec('an outright cut has no band to show, however many wallets are under it',
+        Draw.cutLine(sharp, 10).contenders.length === 0 && Draw.cutLine(sharp, 10).level === 1,
+        `nobody level with the tenth, of ${sharp.length} on the board`);
+    rec('a field shorter than the prize has no cut line at all: it is paid in full',
+        Draw.cutLine(sharp.slice(0, 4), 10).points === null
+        && Draw.cutLine(sharp.slice(0, 4), 10).contenders.length === 0
+        && Draw.cutLine(sharp.slice(0, 4), 10).winners.length === 4,
+        '4 rows, 4 capsules, no line drawn');
+
+    // Twenty-five wallets level on a two-digit score is a pathological day, and the band must describe
+    // it without either lying about the size of the tie or turning into twenty-five identical rows.
+    const crowd = [...sharp.slice(0, 9), ...Array.from({ length: 25 }, (u, i) => row(100 + i, 2450, 500 + i))];
+    const capped = Draw.cutLine(crowd, 10, { max: 3 });
+    rec('a tie too big to list is bounded, and said as a lower bound rather than counted as shown',
+        capped.contenders.length === 3 && capped.truncated === true && capped.level === 25,
+        `3 of ${capped.level} listed`);
+    rec('  and with room to list it, every wallet in the tie is named and nothing more is claimed',
+        Draw.cutLine(crowd, 10, { max: 30 }).contenders.length === 24
+        && Draw.cutLine(crowd, 10, { max: 30 }).truncated === false,
+        '24 listed, 25 level');
+
+    // Handed in ascending on purpose. A caller\u2019s array that is already in score order is the one
+    // case where an in-place sort inside the rule cannot be seen, so the fixture is a scrambled copy:
+    // the mistake this pins is `rows.sort(...)` on the caller\u2019s list, and only disorder reveals it.
+    const scrambled = [...tied].reverse();
+    const orderBefore = scrambled.map((r) => r.address).join(',');
+    Draw.cutLine(scrambled, 10);
+    rec('the rule reads the rows it is given and leaves them alone',
+        scrambled.map((r) => r.address).join(',') === orderBefore,
+        'no in-place sort of a caller\u2019s array');
+
     // --------------------------------------------------------------------------- the day key
     console.log('');
     console.log('A day key has to be a day');
@@ -269,6 +349,39 @@ for (const key of ['KV_REST_API_URL', 'KV_REST_API_TOKEN', 'UPSTASH_REDIS_REST_U
         shown.map((row) => `${row.points}`).join(' \u2265 '));
     rec('a day nobody played has no board rows to show', (await Draw.dayBoard('2026-09-24', 10)).length === 0, '');
 
+    // ------------------------------------------------------------------ the band, off a real board
+    console.log('');
+    console.log('The band, read off a day board the store actually holds');
+
+    // A day that has not closed, so nothing settles it and the running state of the page is the thing
+    // under test. Three wallets on one score and a two-capsule prize: the third is the tie the band
+    // exists for, and it is the wallet that is reading the page.
+    const band = '2026-10-01';
+    const tiedField = [];
+    for (const name of ['tie-a', 'tie-b', 'tie-c']) tiedField.push(await earner(name));
+    for (const [i, address] of tiedField.entries()) await Store.bumpDailyPoints(address, band, 800, 500 + i);
+
+    const banded = await Draw.dayBoardCut(band, { me: tiedField[2], size: 2, depth: 10 });
+    rec('a day board carries its cut line, and the wallets standing on it',
+        banded.board.length === 2 && banded.cut.points === 800
+        && banded.cut.contenders.length === 1 && banded.cut.contenders[0].rank === 3,
+        `#${banded.cut.contenders[0].rank} level on ${banded.cut.points} PTS`);
+    rec('  and the wallet reading the page is flagged in the band it is in',
+        banded.cut.contenders[0].isYou === true && banded.board.every((r) => r.isYou === false),
+        'the band knows who is looking at it');
+    rec('a board the read saw in full is not called incomplete',
+        banded.cut.level === 2 && banded.cut.truncated === false,
+        'two level at the cut, and both of them seen');
+    rec('  but a read that stops inside the tie says so rather than guessing',
+        (await Draw.dayBoardCut(band, { size: 2, depth: 3 })).cut.truncated === true,
+        'a three-row read of a three-row tie');
+    rec('no cut is drawn until the prize is full',
+        (await Draw.dayBoardCut(band, { size: 5, depth: 10 })).cut === null,
+        'three wallets, five capsules');
+    rec('dayBoard is the same board with the band thrown away',
+        (await Draw.dayBoard(band, 2)).length === 2 && (await Draw.dayBoard(band, 2))[0].rank === 1,
+        'the shape the ladder reads');
+
     // -------------------------------------------------------------------------------- wiring
     console.log('');
     console.log('The wiring a unit test cannot see');
@@ -299,6 +412,16 @@ for (const key of ['KV_REST_API_URL', 'KV_REST_API_TOKEN', 'UPSTASH_REDIS_REST_U
         /giveawayView\(key, \{ doc \}\)/.test(stateFor) && /doc: loaded = null/.test(
             fs.readFileSync(path.join(__dirname, '..', 'lib', 'points-capsules.js'), 'utf8')),
         'no second wallet read');
+    const capsules = fs.readFileSync(path.join(__dirname, '..', 'lib', 'points-capsules.js'), 'utf8');
+    const pointsClient = fs.readFileSync(path.join(__dirname, '..', 'app', 'points', 'client.js'), 'utf8');
+    rec('the panel\u2019s board is read past the ten it pays, so the tie has something to render',
+        /dayBoardCut\(day, \{ me: key \}\)/.test(capsules) && /cut: board\.cut/.test(capsules),
+        'the view carries the cut to the page');
+    rec('  and the band is drawn for the wallets it names, with the tie-break said out loud',
+        /data-arya="cut"/.test(pointsClient) && /cut\?\.contenders\?\.length/.test(pointsClient)
+        && /reached the total first/.test(pointsClient),
+        'the band, and why somebody is standing on it');
+
     rec('draw boards are pruned once a settlement has drawn something',
         /await pruneDailyKeys\(/.test(fs.readFileSync(path.join(__dirname, '..', 'lib', 'points-draw.js'), 'utf8')),
         '35 days kept');

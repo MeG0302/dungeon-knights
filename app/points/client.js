@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 // The Points page is a React route, not a legacy page, so it has to pull Arya in
 // itself — the shared gate-keeper popup used across the rest of the game.
 import Script from 'next/script';
+import BackLink from '../back-link';
 import { VAULT_LEVELS, VAULT_ENTRY_TOTAL, STREAK_BASE, STREAK_MAX_MULTIPLIER, DISCORD_INVITE } from '../../lib/points-config';
 import {
     attachRef, claimRef, clearSession, connectWallet, fetchGiveaway, fetchLeaderboard, fetchMe,
@@ -615,9 +616,14 @@ function CapsuleRow({ row }) {
     const tone = row.status === 'sent' ? 'paid' : row.status === 'missed' ? 'fail' : row.claimable ? 'open' : 'wait';
     return (
         <div className={`draw-row is-${row.status}`}>
-            <span className="draw-row-day">
+            {/* The capsule's name is not a column on this row — see the sheet for the measurement —
+                so the day cell carries it, with the date, on its tooltip. */}
+            <span className="draw-row-day" title={`${row.capsule?.name || 'Knight capsule'} · ${row.day}`}>
                 {row.label}
-                <span className="draw-row-when">{row.day}</span>
+                {/* The day it was won, in words (`won yesterday`), because the date is the one thing
+                    about a win nobody reads at a glance — and whether the window is still open is the
+                    only question this row has to answer. The date is still the tooltip. */}
+                <span className="draw-row-when" title={row.day}>{row.when ? `won ${row.when}` : row.day}</span>
             </span>
             <span className="draw-row-what">{row.capsule?.name || 'Knight capsule'}</span>
             <TaskChip word={CAPSULE_WORDS[row.status] || row.status} tone={tone} />
@@ -1687,8 +1693,8 @@ export default function PointsPage() {
         <>
             {/* Versioned like every other sheet: an unversioned `/theme.css` is a CSS change
                 that never reaches a returning player. */}
-            <link rel="stylesheet" href="/theme.css?v=7" />
-            <link rel="stylesheet" href="/css/points.css?v=13" />
+            <link rel="stylesheet" href="/theme.css?v=8" />
+            <link rel="stylesheet" href="/css/points.css?v=17" />
             <link rel="stylesheet" href="/css/arya.css?v=3" />
             <Script src="/arya.js?v=4" strategy="afterInteractive" />
             {/* The header's wallet pill gets the same menu every other page's control has. It is
@@ -1738,9 +1744,12 @@ export default function PointsPage() {
 
                 {/* Header */}
                 <header className="header">
-                    <button className="btn btn-ghost btn-sm" onClick={() => { window.location.href = '/'; }}>
-                        <img src="assets/ui/exit cross.png" className="btn-icon-img" alt="" /> Kingdom Gate
-                    </button>
+                    <div className="header-left">
+                        <BackLink />
+                        <button className="btn btn-ghost btn-sm" onClick={() => { window.location.href = '/'; }}>
+                            <img src="assets/ui/exit cross.png" className="btn-icon-img" alt="" /> Kingdom Gate
+                        </button>
+                    </div>
                     <div className="header-title">POINTS PROGRAM</div>
                     <div className="header-actions">
                         {connected && (
@@ -1755,6 +1764,30 @@ export default function PointsPage() {
                         </div>
                     </div>
                 </header>
+
+                {/* The message a winner wakes up to.
+
+                    The draw settles at 00:00 UTC, so a win is *always* discovered the day after the
+                    board that earned it — and until this banner existed the only sign of one was a
+                    badge on a tab and a row in a ledger two clicks away. It is a deadline rather than
+                    news: a win has to be handed over on the day it is drawn, so the banner names the
+                    day in words, what it was won with, and carries the one button that matters. It
+                    clears itself the moment the capsule is claimed, because that is what it is for —
+                    and it is not dismissable, because dismissing it would not stop the clock. */}
+                {connected && capsuleOpen && (
+                    <div className="points-banner points-banner-won" role="status" data-arya="capsule-won">
+                        <img src={`${ASSETS}capsule-panel.png`} alt="" className="points-icon" width={18} height={18} />
+                        <span>
+                            {`You won a Knight capsule for ${capsuleOpen.when || capsuleOpen.day}`}
+                            {capsuleOpen.rank ? ` — #${capsuleOpen.rank} on that board` : ''}
+                            {capsuleOpen.points ? ` with ${capsuleOpen.points.toLocaleString()} PTS` : ''}
+                            {'. A win has to be claimed on the day it is drawn, so claim it today.'}
+                        </span>
+                        <button type="button" className="btn btn-primary btn-sm" onClick={() => setPanel('capsule')}>
+                            Claim it
+                        </button>
+                    </div>
+                )}
 
                 {/* Two-panel layout. `min-height: 0` (in points.css) is what keeps the
                     panels inside the viewport — a flex child defaults to min-height:auto,
@@ -2498,15 +2531,28 @@ export default function PointsPage() {
                                                         <span className="draw-claim-form-say">
                                                             {capsuleOpen.formSubmittedAt
                                                                 ? 'Marked as submitted. Capsules are sent by hand, so give it a little time.'
-                                                                : 'Then hand your wallet over in the form. It is restricted for now and may ask for a Google sign-in — if it will not open, tell us on Discord and we will take it there.'}
+                                                                : giveaway.formNeedsSignIn
+                                                                    ? 'Then hand your wallet over in the form. It is restricted for now and may ask for a Google sign-in — if it will not open, tell us on Discord and we will take it there.'
+                                                                    : 'Then hand your wallet over in the form: it asks for the address above, so copy it and paste it in. Capsules are sent by hand, so give it a little time.'}
+                                                        </span>
+                                                        {/* The address itself, printed.
+
+                                                            "Copy my address" is a promise taken on trust, and a form
+                                                            that asks for an address is exactly where people paste the
+                                                            wrong one — a wallet they last used, or the one in the
+                                                            browser that is not connected here. The row shows what
+                                                            would be copied, so the player can see it is the wallet
+                                                            they are signed in with before the form asks for it. */}
+                                                        <span className="draw-claim-addr" data-arya="claim-address">
+                                                            {state?.address || address || '—'}
                                                         </span>
                                                         <div className="draw-claim-actions">
-                                                            <a className="btn btn-secondary btn-sm" href={giveaway.formUrl} target="_blank" rel="noreferrer">
-                                                                Open the form
-                                                            </a>
                                                             <button type="button" className="btn btn-ghost btn-sm" onClick={handleCopyWallet}>
                                                                 {capsuleCopied ? 'Address copied' : 'Copy my address'}
                                                             </button>
+                                                            <a className="btn btn-secondary btn-sm" href={giveaway.formUrl} target="_blank" rel="noreferrer">
+                                                                Open the form
+                                                            </a>
                                                             {!capsuleOpen.formSubmittedAt && (
                                                                 <button
                                                                     type="button"
@@ -2826,6 +2872,69 @@ export default function PointsPage() {
                                         </div>
                                     )}
 
+                                    {/* The cut line, and the wallets standing on it.
+
+                                        A full daily run pays the same to every wallet that finishes it, so a
+                                        tie at tenth place is the normal shape of a busy day — and a board that
+                                        stopped at the ten it pays showed the wallets in that tie a list they
+                                        were not on and a rule that had already gone against them. They are listed
+                                        here instead, under the winner they are level with, with the tie-break said
+                                        out loud: this is the difference between a player who starts another run
+                                        tonight and a player who goes to bed. */}
+                                    {giveaway?.cut?.contenders?.length > 0 && (
+                                        <section className="draw-cut" data-arya="cut">
+                                            <div className="draw-cut-head">
+                                                <span className="draw-cut-title">Fighting for the last capsule</span>
+                                                <span className="draw-cut-level">
+                                                    {giveaway.cut.points.toLocaleString()} PTS
+                                                </span>
+                                            </div>
+                                            <p className="draw-cut-say">
+                                                {`${giveaway.cut.level}${giveaway.cut.truncated ? '+' : ''} wallets are level on that score and one capsule is between them. `}
+                                                <span className="draw-cut-hold">
+                                                    #{giveaway.size || 10} holds it
+                                                </span>
+                                                {' — the tie goes to whoever reached the total first, so the first of them to bank another point goes past the line and takes it.'}
+                                            </p>
+                                            {/* The same rank-name-score columns as the board above, and the same
+                                                name rule: the bound handle where there is one, the address where
+                                                there is not, a check only for a binding Privy vouched for. */}
+                                            <div className="draw-cut-list">
+                                                {giveaway.cut.contenders.map((row) => (
+                                                    <div key={row.address} className={`draw-cut-row ${row.isYou ? 'is-you' : ''}`}>
+                                                        <span className="draw-cut-rank">#{row.rank}</span>
+                                                        <span className="draw-cut-name" title={row.address}>
+                                                            {row.handle ? (
+                                                                <>
+                                                                    <span className="lb-handle">@{row.handle}</span>
+                                                                    {row.handleProved && (
+                                                                        <span className="lb-proof" title="Proved with Privy">✓</span>
+                                                                    )}
+                                                                </>
+                                                            ) : row.short}
+                                                            {row.isYou && <span className="lb-you-tag">you</span>}
+                                                        </span>
+                                                        <span className="draw-cut-points">{row.points.toLocaleString()}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            <p className="draw-cut-foot">
+                                                <span>One more point is enough.</span>
+                                                {giveaway.nextDrawAt && (
+                                                    <span className="draw-cut-clock">
+                                                        <DrawCountdown to={giveaway.nextDrawAt} />
+                                                        {' left to earn it'}
+                                                    </span>
+                                                )}
+                                            </p>
+                                            {giveaway.cut.truncated && (
+                                                <p className="draw-cut-foot">
+                                                    More wallets are level on that score than are listed here.
+                                                </p>
+                                            )}
+                                        </section>
+                                    )}
+
                                     {/* What happened last night — the record of a day that has closed, so a
                                         player can see the rule working before they are ever in it. */}
                                     {giveaway?.latest && (
@@ -2879,7 +2988,9 @@ export default function PointsPage() {
 
                                     <div className="draw-note">
                                         Ranks are decided by points, and a tie goes to whoever got there first. A
-                                        wallet that earned nothing that day is not on the board at all.
+                                        wallet that earned nothing that day is not on the board at all, and the
+                                        wallets level with the cut are listed under it — one of them takes that
+                                        last capsule the moment they earn more.
                                     </div>
                                 </>
                             ) : panel === 'onetime' ? (

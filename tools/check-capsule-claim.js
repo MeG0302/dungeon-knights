@@ -294,8 +294,33 @@ for (const key of ['KV_REST_API_URL', 'KV_REST_API_TOKEN', 'UPSTASH_REDIS_REST_U
         && !/\bplayers\b|\btotal\b/i.test(JSON.stringify(view.mine)),
         'unranked today, one capsule');
     rec('and the form link it hands out is the configured one',
-        view.formUrl === Config.CAPSULE_FORM_URL && /docs\.google\.com\/forms/.test(view.formUrl),
+        view.formUrl === Config.CAPSULE_FORM_URL && /^https:\/\/(forms\.gle|docs\.google\.com)/.test(view.formUrl),
         view.formUrl.replace(/^https:\/\//, '').slice(0, 46) + '\u2026');
+    rec('  \u2026 and it is a *published* form, not the editor link only its owner can open',
+        Config.capsuleFormNeedsSignIn(view.formUrl) === false
+        && Config.capsuleFormNeedsSignIn('https://docs.google.com/forms/d/18i-Zn5UxiycTdTVak0H9U8p2H0TIm3fFftEwntkCbqs/edit') === true
+        && Config.capsuleFormNeedsSignIn('https://docs.google.com/forms/d/18i-Zn5UxiycTdTVak0H9U8p2H0TIm3fFftEwntkCbqs') === true
+        && Config.capsuleFormNeedsSignIn('not a url') === true
+        && Config.capsuleFormNeedsSignIn('') === true,
+        'the editor link and an unreadable link both count as restricted');
+    rec('  \u2026 and the panel says which of the two that link is, rather than promising a sign-in',
+        view.formNeedsSignIn === Config.capsuleFormNeedsSignIn(view.formUrl),
+        view.formNeedsSignIn ? 'an editor link: the card warns about the Google sign-in' : 'a published link: the card asks for the address instead');
+
+    // The day a win happened, in words. A ledger row prints it beside the date, because "2026-09-24"
+    // is the one thing about a win that says nothing about whether the window is still open.
+    const back = (n) => new Date(Date.parse(`${today}T00:00:00.000Z`) - n * 86400000).toISOString().slice(0, 10);
+    const words = (day) => Config.relativeDayLabel(day, new Date(`${today}T12:00:00.000Z`));
+    rec('a win says which day it was in words a player reads without converting',
+        words(today) === 'today' && words(back(1)) === 'yesterday' && words(back(2)) === '2 days ago',
+        'today \u00b7 yesterday \u00b7 2 days ago');
+    rec('  \u2026 and past a fortnight it hands the date back, because nobody converts "23 days ago"',
+        words(back(13)) === '13 days ago' && words(back(14)) === back(14)
+        && words('not-a-day') === '',
+        `${words(back(13))} in words, ${words(back(14))} as the date`);
+    rec('  \u2026 and every capsule the panel shows carries it',
+        view.capsules.length > 0 && view.capsules.every((row) => typeof row.when === 'string' && row.when.length > 0),
+        view.capsules.map((row) => `${row.day} \u2192 ${row.when}`).join(', '));
 
     const anon = await Capsules.giveawayView(null);
     rec('a visitor with no wallet gets the board and none of the personal fields',
@@ -303,11 +328,59 @@ for (const key of ['KV_REST_API_URL', 'KV_REST_API_TOKEN', 'UPSTASH_REDIS_REST_U
         && anon.registration === null && Array.isArray(anon.board) && Array.isArray(anon.news),
         'public board, no wallet data');
 
+    // --------------------------------------------------------------- the capsule in the round
+    console.log('');
+    console.log('The capsule in the round (the art the portfolio spins)');
+
+    // The frames are exported from a 72 MB ProRes turn, so the page does not ask for a frame it
+    // cannot have: the name it builds wraps at both ends, which is what lets a drag run past the
+    // last frame and keep turning.
+    const spin = Config.CAPSULE_SPIN;
+    rec('the frame names are 1-based, padded and wrap both ways, so any drag lands on a real frame',
+        Config.capsuleSpinFrame(1).endsWith('capsule-01.webp')
+        && Config.capsuleSpinFrame(spin.frames).endsWith(`capsule-${spin.frames}.webp`)
+        && Config.capsuleSpinFrame(spin.frames + 1) === Config.capsuleSpinFrame(1)
+        && Config.capsuleSpinFrame(0) === Config.capsuleSpinFrame(spin.frames)
+        && Config.capsuleSpinFrame(-1) === Config.capsuleSpinFrame(spin.frames - 1),
+        `${spin.frames} frames, wrapping both ways`);
+
+    const spinDir = path.join(__dirname, '..', 'public', spin.dir.replace(/^\//, ''));
+    const spinFiles = fs.existsSync(spinDir)
+        ? fs.readdirSync(spinDir).filter((f) => f.endsWith(`.${spin.ext}`))
+        : [];
+    const wanted = Array.from({ length: spin.frames }, (unused, i) => path.basename(Config.capsuleSpinFrame(i + 1)));
+    rec('every frame the page can ask for is on disk, and there are no strays',
+        spinFiles.length === spin.frames && wanted.every((file) => spinFiles.includes(file)),
+        `${spinFiles.length} of ${spin.frames} frames in public${spin.dir}`);
+    rec('  \u2026 and they are still small enough to warm in the background of a portfolio page',
+        spinFiles.length > 0 && spinFiles.every((file) => fs.statSync(path.join(spinDir, file)).size < 60 * 1024),
+        `${Math.round(spinFiles.reduce((sum, file) => sum + fs.statSync(path.join(spinDir, file)).size, 0) / 1024)} KB in total`);
+
     // ----------------------------------------------------------------------------- wiring
     console.log('');
     console.log('The wiring a unit test cannot see');
 
     const route = fs.readFileSync(path.join(__dirname, '..', 'app', 'api', 'points', 'capsule', 'route.js'), 'utf8');
+    const panel = fs.readFileSync(path.join(__dirname, '..', 'app', 'points', 'client.js'), 'utf8');
+
+    // The three things a winner sees before they are told anything: the message they wake up to, the
+    // sentence that matches the form they will actually be sent to, and the address printed where
+    // they can check it is theirs. Each is invisible to a unit test and would fail quietly.
+    rec('a win is announced to the player, not just recorded against the wallet',
+        /data-arya="capsule-won"/.test(panel) && /capsuleOpen.when/.test(panel)
+        && /won a Knight capsule for/.test(panel),
+        'the banner above the panels, naming the day in words');
+    rec('  \u2026 and the card\u2019s sentence follows the link it is holding, rather than promising a sign-in',
+        /giveaway.formNeedsSignIn/.test(panel)
+        && /it asks for the address above/.test(panel)
+        && /may ask for a Google sign-in/.test(panel),
+        'one sentence per kind of form');
+    rec('  \u2026 and the address it would copy is printed on the card',
+        /data-arya="claim-address"/.test(panel) && /state\?\.address \|\| address/.test(panel),
+        'the wallet that would be pasted into the form');
+    rec('and the ledger gives the day it was won in words beside the date',
+        /won \$\{row.when\}/.test(panel) && /title=\{row.day\}/.test(panel),
+        'won yesterday, with the date in the tooltip');
     const lib = fs.readFileSync(path.join(__dirname, '..', 'lib', 'points-capsules.js'), 'utf8');
     const session = fs.readFileSync(path.join(__dirname, '..', 'lib', 'points-session.js'), 'utf8');
 

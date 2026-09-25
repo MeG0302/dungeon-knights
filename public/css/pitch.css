@@ -1,0 +1,1044 @@
+/* ==========================================================================
+   THE PITCH DECK — /pitch
+   ==========================================================================
+
+   A deck rather than a document: one slide per screen, snapped, animated in
+   when it becomes the live one. Three rules hold it together, and each exists
+   because of a way this page could break rather than a way it could look:
+
+     - **Every reveal is behind `.pitch-deck.is-ready`.** That class is added
+       by the client after it mounts, so a reader with scripting off, a
+       crawler, or a bundling mistake gets twelve readable slides instead of
+       twelve blank panels. Nothing on this page depends on an animation
+       having run.
+     - **The slide stage is a flex chain of definite heights** — `.pitch-stage`
+       (`flex: 1 1 0`) › `.pitch-deck` (`height: 100%`) › `.pitch-slide`
+       (`min-height: 100%`). A percentage height needs a definite parent, and
+       "the deck is as tall as what is left of the viewport" is exactly the
+       thing flexbox only promises when the basis is 0.
+     - **Snapping is `proximity`, not `mandatory`.** A slide with a long table
+       on a 720px-tall laptop is taller than its screen, and mandatory snapping
+       turns scrolling inside such a slide into a fight with the scroller. The
+       arrows move a whole slide either way.
+     - **`scroll-behavior` is deliberately absent from the deck.** See the note
+       on `.pitch-deck` below: with it set, the browser's own re-snap fights the
+       deck's live content and walks the deck forward on its own.
+
+   The palette is `theme.css`'s: stone, bronze, one gold accent. Nothing here
+   redefines a token — a second copy of `--accent-gold` is a second thing to
+   keep in step with the rest of the game.
+   ========================================================================== */
+
+.pitch-page,
+.pitch-page * {
+  box-sizing: border-box;
+}
+
+.pitch-page h1,
+.pitch-page h2,
+.pitch-page h3,
+.pitch-page p,
+.pitch-page ol,
+.pitch-page ul,
+.pitch-page li,
+.pitch-page figure,
+.pitch-page blockquote,
+.pitch-page pre,
+.pitch-page table,
+.pitch-page span {
+  margin: 0;
+  padding: 0;
+}
+
+.pitch-page ol,
+.pitch-page ul {
+  list-style: none;
+}
+
+.pitch-page {
+  background: var(--bg-void);
+}
+
+/* ==========================================================================
+   STAGE — progress line, deck, controls
+   ========================================================================== */
+
+.pitch-stage {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.pitch-progress {
+  position: relative;
+  height: 2px;
+  flex-shrink: 0;
+  background: var(--border-dim);
+  overflow: hidden;
+}
+
+.pitch-progress-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--border-bronze), var(--accent-gold-light));
+  transition: width 0.35s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.pitch-deck {
+  position: relative;
+  flex: 1 1 0;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scroll-snap-type: y proximity;
+  /* No `scroll-behavior: smooth` here, and it is not an oversight. With smooth behaviour on the
+     snapping element, Chromium re-animates to the nearest snap point every time the layout changes
+     — and this deck changes layout once a second by design (the live countdown on the growth slide
+     ticks, the reveals toggle classes) — so the container crawled forward a slide every second or
+     so, on its own, forever. Measured: 1,798 → 4,103 over six seconds with smooth, and rock steady
+     at every position with it removed. The animated jump is `scrollIntoView({behavior:'smooth'})`
+     in the arrows and the dot rail, which does not need this property to be set. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-bronze) transparent;
+  outline: none;
+}
+
+.pitch-deck::-webkit-scrollbar {
+  width: 10px;
+}
+
+.pitch-deck::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.pitch-deck::-webkit-scrollbar-thumb {
+  background: var(--border-bronze);
+  border-radius: 6px;
+}
+
+.pitch-slide {
+  position: relative;
+  min-height: 100%;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(20px, 3.2vh, 44px) clamp(20px, 4vw, 72px) clamp(62px, 7vh, 78px);
+  /* The ruled paper look: a hairline gold spine down the left of every slide, and one thin
+     gradient so the eye lands on the top-left corner rather than in the middle of the text. */
+  background:
+    linear-gradient(180deg, rgba(212, 175, 55, 0.035) 0%, rgba(13, 10, 8, 0) 42%),
+    radial-gradient(1200px 620px at 12% -10%, rgba(212, 175, 55, 0.055), rgba(13, 10, 8, 0) 70%);
+}
+
+.pitch-slide::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: linear-gradient(180deg, var(--accent-gold-dim), rgba(201, 168, 76, 0.04) 62%, transparent);
+}
+
+.pitch-inner {
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  /* Tight on purpose. A dense slide that runs 100px past the screen is a slide whose bottom line
+     nobody reads — the deck is presented, not scrolled — so the rhythm gives height back to the
+     content rather than spending it on air between blocks. */
+  gap: clamp(10px, 1.6vh, 20px);
+}
+
+.pitch-slide-foot {
+  position: absolute;
+  left: clamp(20px, 4vw, 72px);
+  right: clamp(20px, 4vw, 72px);
+  bottom: clamp(18px, 3vh, 30px);
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-dim);
+  font-family: var(--font-heading);
+  font-size: 10.5px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.pitch-slide-mark {
+  color: var(--accent-gold-dim);
+}
+
+.pitch-slide-index {
+  text-align: right;
+}
+
+/* ---------------------------------------------------------------- the reveals */
+.pitch-deck.is-ready .pitch-inner > * {
+  opacity: 0;
+  transform: translateY(16px);
+  transition:
+    opacity 0.55s ease,
+    transform 0.55s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.pitch-deck.is-ready .pitch-slide.is-live .pitch-inner > * {
+  opacity: 1;
+  transform: none;
+}
+
+.pitch-slide.is-live .pitch-inner > *:nth-child(1) { transition-delay: 40ms; }
+.pitch-slide.is-live .pitch-inner > *:nth-child(2) { transition-delay: 100ms; }
+.pitch-slide.is-live .pitch-inner > *:nth-child(3) { transition-delay: 160ms; }
+.pitch-slide.is-live .pitch-inner > *:nth-child(4) { transition-delay: 220ms; }
+.pitch-slide.is-live .pitch-inner > *:nth-child(5) { transition-delay: 280ms; }
+.pitch-slide.is-live .pitch-inner > *:nth-child(6) { transition-delay: 340ms; }
+.pitch-slide.is-live .pitch-inner > *:nth-child(7) { transition-delay: 400ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pitch-deck {
+    scroll-behavior: auto;
+  }
+
+  .pitch-deck.is-ready .pitch-inner > *,
+  .pitch-deck.is-ready .pitch-slide.is-live .pitch-inner > * {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .pitch-progress-fill {
+    transition: none;
+  }
+}
+
+/* ------------------------------------------------------------------- the controls */
+.pitch-nav {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 18px;
+  background: var(--bg-dark);
+  border-top: 1px solid var(--border-base);
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.pitch-nav-arrow {
+  min-width: 38px;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.pitch-dots {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.pitch-dot-item {
+  display: flex;
+}
+
+.pitch-dot {
+  width: 26px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-heading);
+  font-size: 10px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.pitch-dot:hover {
+  border-color: var(--border-bronze);
+  color: var(--text-secondary);
+}
+
+.pitch-dot.is-past {
+  border-color: var(--border-bronze);
+  color: var(--text-secondary);
+}
+
+.pitch-dot.is-on {
+  background: linear-gradient(180deg, #3d3018 0%, #2a2010 100%);
+  border-color: var(--accent-gold);
+  color: var(--accent-gold-light);
+  box-shadow: 0 0 0 1px rgba(212, 175, 55, 0.25);
+}
+
+.pitch-dot-label {
+  transform: translateY(-0.5px);
+}
+
+.pitch-count {
+  margin-left: auto;
+  font-family: var(--font-heading);
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: var(--accent-gold);
+  white-space: nowrap;
+}
+
+.pitch-hint {
+  font-size: 10.5px;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.pitch-hint-link {
+  font-family: var(--font-heading);
+  font-size: 10.5px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--accent-gold-dim);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+
+.pitch-hint-link:hover {
+  color: var(--accent-gold-light);
+  border-bottom-color: var(--border-gold);
+}
+
+.pitch-stamp {
+  font-family: var(--font-heading);
+  font-size: 10.5px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+   TYPOGRAPHY
+   ========================================================================== */
+
+.pitch-kicker {
+  font-family: var(--font-heading);
+  font-size: 11px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--accent-gold);
+}
+
+.pitch-title {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: clamp(1.35rem, 2.6vw, 2.05rem);
+  line-height: 1.2;
+  letter-spacing: 0.5px;
+  color: var(--text-primary);
+  max-width: 30ch;
+}
+
+.pitch-lede {
+  font-size: clamp(0.92rem, 1.2vw, 1.02rem);
+  line-height: 1.62;
+  color: var(--text-secondary);
+  max-width: 82ch;
+}
+
+.pitch-note {
+  border-left: 3px solid var(--border-bronze);
+  background: linear-gradient(90deg, rgba(201, 168, 76, 0.08), rgba(0, 0, 0, 0));
+  padding: 12px 16px;
+  font-size: 0.92rem;
+  line-height: 1.7;
+  color: var(--text-secondary);
+  max-width: 92ch;
+}
+
+.pitch-note.is-warn {
+  border-left-color: var(--danger);
+  background: linear-gradient(90deg, rgba(192, 57, 43, 0.12), rgba(0, 0, 0, 0));
+}
+
+.pitch-quote {
+  border-left: 3px solid var(--accent-gold);
+  background: linear-gradient(90deg, rgba(212, 175, 55, 0.09), rgba(0, 0, 0, 0));
+  padding: 16px 22px;
+  max-width: 96ch;
+}
+
+.pitch-quote-text {
+  font-size: clamp(0.95rem, 1.3vw, 1.08rem);
+  line-height: 1.75;
+  color: var(--text-primary);
+}
+
+.pitch-page code {
+  font-family: 'Source Code Pro', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.88em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border-dim);
+  color: var(--accent-gold-light);
+}
+
+.pitch-page strong {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+/* `*italic*` in the copy — a qualifier, not an aside: it is rendered rather than emphasised with
+   colour, because a second gold word in a sentence competes with the one the reader should price. */
+.pitch-page em {
+  font-style: italic;
+  color: var(--text-primary);
+}
+
+/* ==========================================================================
+   COVER
+   ========================================================================== */
+
+.pitch-cover {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 6px;
+}
+
+.pitch-cover-crest {
+  width: 54px;
+  height: 54px;
+  image-rendering: pixelated;
+  filter: brightness(1.25) sepia(0.4) hue-rotate(5deg);
+}
+
+.pitch-cover-word {
+  font-family: var(--font-display);
+  font-size: clamp(0.85rem, 1.4vw, 1rem);
+  letter-spacing: 6px;
+  text-transform: uppercase;
+  color: var(--text-gold);
+}
+
+.pitch-cover-title {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: clamp(2.1rem, 5.6vw, 4.1rem);
+  line-height: 1.05;
+  letter-spacing: 0.5px;
+  color: var(--text-primary);
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.7), 0 0 60px rgba(212, 175, 55, 0.16);
+}
+
+.pitch-cover-tagline {
+  font-size: clamp(0.95rem, 1.4vw, 1.12rem);
+  line-height: 1.75;
+  color: var(--text-secondary);
+  max-width: 70ch;
+}
+
+.pitch-cover-meta {
+  font-family: var(--font-heading);
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* ==========================================================================
+   CHIPS
+   ========================================================================== */
+
+.pitch-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pitch-chip {
+  font-family: var(--font-heading);
+  font-size: 10.5px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-base);
+  border-radius: 999px;
+  padding: 6px 14px;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+/* ==========================================================================
+   STATS — one ruled strip, hairline gaps rather than cards
+   ========================================================================== */
+
+.pitch-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(186px, 1fr));
+  gap: 1px;
+  background: var(--border-dim);
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.pitch-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 11px 14px 13px;
+  background: linear-gradient(180deg, var(--bg-panel) 0%, var(--bg-dark) 100%);
+}
+
+.pitch-stat-value {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: clamp(1.35rem, 2.4vw, 1.9rem);
+  line-height: 1.15;
+  color: var(--accent-gold);
+}
+
+.pitch-stat-label {
+  font-family: var(--font-heading);
+  font-size: 10.5px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+
+.pitch-stat-sub {
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+/* ==========================================================================
+   CARDS
+   ========================================================================== */
+
+.pitch-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(258px, 1fr));
+  gap: 12px;
+}
+
+.pitch-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 13px 16px 15px;
+  background: linear-gradient(180deg, rgba(33, 30, 26, 0.95) 0%, rgba(18, 16, 14, 0.95) 100%);
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-inset), var(--shadow-sm);
+  overflow: hidden;
+}
+
+.pitch-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--border-bronze), rgba(201, 168, 76, 0));
+}
+
+.pitch-card-badge {
+  align-self: flex-start;
+  font-family: var(--font-heading);
+  font-size: 9.5px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--accent-gold-dim);
+  border: 1px solid var(--border-bronze);
+  border-radius: 3px;
+  padding: 2px 7px;
+}
+
+.pitch-card-title {
+  font-family: var(--font-heading);
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--text-primary);
+}
+
+.pitch-card-text {
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+/* ==========================================================================
+   STEPS
+   ========================================================================== */
+
+.pitch-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--border-dim);
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.pitch-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 9px 16px;
+  background: linear-gradient(180deg, var(--bg-panel) 0%, var(--bg-dark) 100%);
+}
+
+.pitch-step-num {
+  flex-shrink: 0;
+  width: 30px;
+  font-family: var(--font-heading);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--accent-gold-dim);
+  padding-top: 2px;
+}
+
+.pitch-step-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.pitch-step-title {
+  font-family: var(--font-heading);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: var(--accent-gold);
+}
+
+.pitch-step-text {
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--text-secondary);
+}
+
+/* ==========================================================================
+   TABLE
+   ========================================================================== */
+
+.pitch-table-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.pitch-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.pitch-table thead th {
+  background: var(--bg-raised);
+  border-bottom: 1px solid var(--border-bronze);
+  font-family: var(--font-heading);
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--accent-gold);
+  text-align: left;
+  padding: 9px 12px;
+}
+
+.pitch-table tbody th,
+.pitch-table tbody td {
+  border-bottom: 1px solid var(--border-dim);
+  padding: 8px 12px;
+  text-align: left;
+  vertical-align: top;
+  color: var(--text-secondary);
+}
+
+.pitch-table tbody th {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.pitch-table tbody tr:nth-child(even) th,
+.pitch-table tbody tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.pitch-table tbody tr:last-child th,
+.pitch-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.pitch-table-caption {
+  font-size: 11.5px;
+  line-height: 1.65;
+  color: var(--text-muted);
+  max-width: 96ch;
+}
+
+/* ==========================================================================
+   CODE
+   ========================================================================== */
+
+.pitch-code {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-md);
+  background: rgba(0, 0, 0, 0.4);
+  padding: 12px 16px 14px;
+  overflow-x: auto;
+}
+
+.pitch-code-label {
+  font-family: var(--font-heading);
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.pitch-code-pre {
+  font-family: 'Source Code Pro', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: var(--accent-gold-light);
+  white-space: pre;
+}
+
+/* ==========================================================================
+   LIVE READ
+   ========================================================================== */
+
+.pitch-live {
+  border: 1px solid var(--border-bronze);
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, rgba(33, 30, 26, 0.9) 0%, rgba(13, 10, 8, 0.9) 100%);
+  padding: 14px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pitch-live-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.pitch-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.14);
+  animation: pitch-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes pitch-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pitch-live-dot {
+    animation: none;
+  }
+}
+
+.pitch-live-title {
+  font-family: var(--font-heading);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--success);
+}
+
+.pitch-live-source {
+  margin-left: auto;
+  font-family: 'Source Code Pro', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+.pitch-live-cells {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.pitch-live-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-left: 12px;
+  border-left: 2px solid var(--border-base);
+}
+
+.pitch-live-cell.is-key {
+  border-left-color: var(--accent-gold);
+}
+
+.pitch-live-label {
+  font-family: var(--font-heading);
+  font-size: 9.5px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.pitch-live-value {
+  font-family: var(--font-heading);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.pitch-live-cell.is-key .pitch-live-value {
+  font-size: 20px;
+  color: var(--accent-gold-light);
+  font-variant-numeric: tabular-nums;
+}
+
+.pitch-live-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.pitch-live-fine {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  max-width: 100ch;
+}
+
+/* ==========================================================================
+   LINKS
+   ========================================================================== */
+
+.pitch-links {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 10px;
+}
+
+.pitch-link-item {
+  display: flex;
+}
+
+.pitch-link {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.28);
+  text-decoration: none;
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+}
+
+.pitch-link:hover {
+  border-color: var(--accent-gold);
+  background: rgba(212, 175, 55, 0.07);
+  transform: translateY(-1px);
+}
+
+.pitch-link-label {
+  font-family: var(--font-heading);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--accent-gold);
+}
+
+.pitch-link-sub {
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--text-muted);
+  word-break: break-word;
+}
+
+/* ==========================================================================
+   SHORT SCREENS AND PHONES
+   ========================================================================== */
+
+/* A 720px-tall laptop is the common case for a deck being presented, and the dense slides
+   (economy, unit economics) are the ones that overflow first. Shrinking the gaps and the
+   quiet third lines keeps the whole slide on one screen instead of asking the presenter to
+   scroll mid-sentence. */
+@media (max-height: 800px) {
+  .pitch-inner {
+    gap: 12px;
+  }
+
+  .pitch-stat-sub,
+  .pitch-live-fine {
+    display: none;
+  }
+
+  .pitch-step {
+    padding: 9px 14px;
+  }
+
+  .pitch-card {
+    padding: 13px 15px 14px;
+  }
+}
+
+@media (max-width: 720px) {
+  .pitch-slide {
+    padding-bottom: clamp(84px, 12vh, 110px);
+  }
+
+  .pitch-title {
+    max-width: none;
+  }
+
+  .pitch-hint,
+  .pitch-stamp {
+    display: none;
+  }
+
+  .pitch-nav {
+    gap: 8px;
+    padding: 7px 12px;
+    flex-wrap: wrap;
+  }
+
+  .pitch-dot {
+    width: 22px;
+    height: 20px;
+    font-size: 9.5px;
+  }
+
+  .pitch-count {
+    margin-left: 0;
+  }
+
+  .pitch-dots {
+    order: 3;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .pitch-table {
+    font-size: 11.5px;
+  }
+
+  .pitch-table thead th,
+  .pitch-table tbody th,
+  .pitch-table tbody td {
+    padding: 7px 8px;
+  }
+}
+
+/* ==========================================================================
+   PRINT — the deck as a document, because that is how it gets sent
+   ========================================================================== */
+
+@media print {
+  .pitch-page {
+    height: auto;
+    overflow: visible;
+    background: #fff;
+    --bg-void: #fff;
+    --bg-dark: #fff;
+    --bg-panel: #fff;
+    --bg-raised: #fff;
+    --text-primary: #14100c;
+    --text-secondary: #332c22;
+    --text-muted: #6a6155;
+    --accent-gold: #8a6d1f;
+    --accent-gold-light: #6d5413;
+    --accent-gold-dim: #8a7a44;
+    --border-base: #c9bfa8;
+    --border-dim: #ded6c6;
+    --border-bronze: #b09a63;
+  }
+
+  .pitch-page .header,
+  .pitch-progress,
+  .pitch-nav {
+    display: none !important;
+  }
+
+  .pitch-deck {
+    height: auto;
+    overflow: visible;
+    scroll-snap-type: none;
+  }
+
+  .pitch-deck.is-ready .pitch-inner > *,
+  .pitch-deck.is-ready .pitch-slide.is-live .pitch-inner > * {
+    opacity: 1;
+    transform: none;
+  }
+
+  .pitch-slide {
+    min-height: 0;
+    padding: 14mm 12mm 20mm;
+    break-after: page;
+    page-break-after: always;
+    background: none;
+  }
+
+  .pitch-slide::before {
+    display: none;
+  }
+
+  .pitch-card,
+  .pitch-stat,
+  .pitch-step,
+  .pitch-live,
+  .pitch-code,
+  .pitch-link {
+    background: #fff;
+    box-shadow: none;
+  }
+
+  .pitch-table tbody tr:nth-child(even) th,
+  .pitch-table tbody tr:nth-child(even) td {
+    background: #f7f5f0;
+  }
+
+  .pitch-slide-foot {
+    position: static;
+    margin-top: 10mm;
+  }
+
+  .pitch-slide-mark {
+    color: #8a7a44;
+  }
+}

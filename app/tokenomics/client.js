@@ -28,6 +28,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Script from 'next/script';
+import BackLink from '../back-link';
 import { SITE_NAME } from '../../lib/site';
 import { forgetWallet, savedAddress, shortAddress } from '../../lib/points-client';
 import {
@@ -245,7 +246,7 @@ export default function TokenomicsClient() {
         <>
             {/* Versioned like every other sheet in the site: an unversioned `/theme.css` is a CSS
                 change that never reaches a returning player. */}
-            <link rel="stylesheet" href="/theme.css?v=7" />
+            <link rel="stylesheet" href="/theme.css?v=8" />
             <link rel="stylesheet" href="/css/tokenomics.css?v=2" />
             {/* The header's wallet pill carries the same menu every other route's control has.
                 No ethers: the balance on this page is a server read. */}
@@ -260,9 +261,12 @@ export default function TokenomicsClient() {
             <div className="page tk-page">
 
                 <header className="header">
-                    <button className="btn btn-ghost btn-sm" onClick={() => { window.location.href = '/'; }}>
-                        <img src="assets/ui/exit cross.png" className="btn-icon-img" alt="" /> Kingdom Gate
-                    </button>
+                    <div className="header-left">
+                        <BackLink />
+                        <button className="btn btn-ghost btn-sm" onClick={() => { window.location.href = '/'; }}>
+                            <img src="assets/ui/exit cross.png" className="btn-icon-img" alt="" /> Kingdom Gate
+                        </button>
+                    </div>
                     <div className="header-title">$DNG ECONOMY</div>
                     <div className="header-actions">
                         <span className="tk-num tk-supply">SUPPLY · {compact(DNG_SUPPLY)} DNG</span>

@@ -586,6 +586,77 @@
     color: var(--text-secondary);
 }
 
+/* ------------------------------------------------------------------- My capsules
+   The one card on this page whose subject is a picture. Everything else here is a number read off
+   a chain; this is a box with something glowing inside it, and the art has to carry it — so the
+   turn gets the top of the card, the count sits under it in the same `pf-hero` the points panel
+   uses, and the two read as one object. */
+.pf-capsules {
+    position: relative;
+    overflow: hidden;
+}
+
+/* A warm pool behind the capsule, so the object looks lit rather than pasted onto a dark card. */
+.pf-capsules::before {
+    content: '';
+    position: absolute;
+    top: -40px;
+    left: 50%;
+    width: 260px;
+    height: 260px;
+    transform: translateX(-50%);
+    background: radial-gradient(closest-side, rgba(212, 168, 67, 0.14), transparent 72%);
+    pointer-events: none;
+}
+
+/* The turn itself.
+
+   Deliberately capped rather than allowed to fill the column: at 220px the capsule reads as an
+   object you can pick up, and the reward for a wider screen is the rest of the page rather than a
+   bigger box. `touch-action: none` is what lets a finger drag it without the page scrolling
+   underneath, and `user-select: none` stops a drag from selecting the picture. */
+.pf-spin {
+    position: relative;
+    width: 100%;
+    max-width: 220px;
+    aspect-ratio: 1 / 1;
+    margin: 2px auto 10px;
+    border-radius: 50%;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+}
+
+.pf-spin.is-dragging {
+    cursor: grabbing;
+}
+
+.pf-spin:focus-visible {
+    outline: 1px solid var(--accent-gold);
+    outline-offset: 6px;
+}
+
+.pf-spin-frame {
+    display: block;
+    width: 100%;
+    height: 100%;
+    /* The frames are cut with alpha, so the shadow has to come from the picture rather than from a
+       box: this is what stops the capsule looking like a sticker on a rectangle. */
+    filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.55));
+    -webkit-user-drag: none;
+}
+
+/* There is no caption under the capsule, and its absence is the decision. "Drag to spin" was
+   printed there for a while — it faded to 30% once you had spun it once — and it came off for the
+   reason a caption under a prize always should: the gesture is discoverable by trying it, and the
+   words read as a label on a toy rather than a thing you own. A reader who cannot see the page
+   still gets the instruction, in the element's `aria-label`, which is the only place it belongs. */
+
+.pf-capsule-count {
+    justify-content: center;
+    text-align: center;
+}
+
 /* --------------------------------------------------------------------------- phone */
 @media (max-width: 900px) {
     /* This used to drop the art entirely and paint a flat scrim — which is what a phone visitor

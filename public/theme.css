@@ -169,6 +169,30 @@ body {
   display: flex; align-items: center; gap: 12px;
 }
 
+/* The two left-hand controls are one group: the arrow that goes back to the page you were on, and
+   the Kingdom Gate button that goes home. They sit together because they are the same decision at
+   two depths, and because the bar is `justify-content: space-between` — dropped in as a fourth
+   child instead of a wrapper, the arrow would have been pushed out to the far edge and dragged the
+   page title off centre with it. */
+.header-left {
+  display: flex; align-items: center; gap: 8px;
+  min-width: 0;
+}
+
+/* An arrow, not a word, so it does not get a word's width. The class is written as `.header
+   .back-link` rather than on its own because `.btn-sm` sets the padding of every small button and
+   is declared further down this sheet: a bare `.back-link` would be overruled by it. */
+.header .back-link {
+  padding: 3px 9px 4px;
+  font-size: 15px;
+  line-height: 1;
+  letter-spacing: 0;
+  /* A glyph is narrow, so the padding a word would not need is spent here: measured at 30×27 in
+     the bar, which is the smallest a control can be and still be a control rather than a mark. */
+  min-width: 30px;
+  min-height: 27px;
+}
+
 /* A phone cannot hold the whole bar. At 390px the crest button, the title and the two right-hand
    controls came to 535px, so the wallet chip and the balance pill simply sat past the right edge —
    which is worse than it sounds, because those two are the only way back to the wallet on a page
@@ -192,6 +216,16 @@ body {
   .header .btn {
     padding: 4px 8px;
     font-size: 11px;
+  }
+
+  /* The one button on the bar that is a glyph: 11px is a word's size, and a 5px arrow is not a
+     control a thumb can find. Measured on a 390px viewport at 32×26 — taller than the words beside
+     it by nothing, so the wrapping bar does not grow a row to hold it. */
+  .header .back-link {
+    padding: 2px 6px;
+    font-size: 15px;
+    min-width: 32px;
+    min-height: 26px;
   }
 
   .header-actions {

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import BackLink from '../back-link';
 import { GENESIS_PFP } from '../../lib/knights';
 import {
     CAPSULES_PER_WEEK, GENESIS_SUPPLY, HASH_POWER_BANDS, HASH_POWER_MAX, HASH_POWER_MIN,
@@ -123,7 +124,7 @@ export default function GenesisClient({ shots = [] }) {
         <>
             {/* Versioned like every other sheet: an unversioned `/theme.css` is a CSS change that
                 never reaches a returning player. */}
-            <link rel="stylesheet" href="/theme.css?v=7" />
+            <link rel="stylesheet" href="/theme.css?v=8" />
             <link rel="stylesheet" href="/css/genesis.css?v=3" />
 
             <div className="page genesis-page">
@@ -147,10 +148,13 @@ export default function GenesisClient({ shots = [] }) {
                 <div className="gn-scrim" />
 
                 <header className="header">
-                    <a className="btn btn-ghost btn-sm" href="/">
-                        <img src="assets/ui/exit cross.png" className="btn-icon-img" alt="" />
-                        Dungeon Knights
-                    </a>
+                    <div className="header-left">
+                        <BackLink />
+                        <a className="btn btn-ghost btn-sm" href="/">
+                            <img src="assets/ui/exit cross.png" className="btn-icon-img" alt="" />
+                            Dungeon Knights
+                        </a>
+                    </div>
                     <div className="header-title">GENESIS KNIGHTS</div>
                     <div className="header-actions">
                         <a className="btn btn-primary btn-sm" href="#waitlist">Join the waitlist</a>

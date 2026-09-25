@@ -276,11 +276,88 @@ rec('the panels that do work are not blurred',
     (client.match(/pf-card pf-soon/g) || []).length === SOON.length,
     `${(client.match(/pf-card pf-soon/g) || []).length} marked cards`);
 
-console.log('');
-const failed = results.filter((r) => !r.pass);
-console.log(`${results.length - failed.length}/${results.length} checks passed`);
-if (failed.length) {
+// --------------------------------------------------- 12. My capsules, and the turn itself
+// The one card on this page whose subject is a picture, and the only control here the reader
+// touches. What it must not become is a second opinion about capsules: the count is the server's
+// list, counted, and every rung in it is the rung the server worked out.
+rec('My capsules counts what the server says the wallet holds, rather than re-deriving it',
+    /points\.data\?\.giveaway\?\.capsules/.test(body) && /const capsuleTally = \{/.test(body)
+    && !/doc\.capsules/.test(body),
+    'one source, counted');
+rec('  and the rungs it reports are the rungs of the claim ladder',
+    ["'won'", "'claimed'", "'sent'", "'missed'"].every((status) => body.includes(`countOf(${status})`)),
+    'won \u00b7 claimed \u00b7 sent \u00b7 missed');
+rec('a win is given as a deadline here, not as a trophy on a shelf',
+    /claim(ed)? on the day it is drawn/i.test(client),
+    'the same rule the draw panel states');
+rec('the turn is built from the exported frames, never from a path typed into the page',
+    /capsuleSpinFrame\(/.test(body) && /CAPSULE_SPIN/.test(body) && !/capsule-spin\//.test(body),
+    'the naming lives in points-config, and the page reads it');
+rec('  and it answers to a pointer, to the arrow keys, and to a reader who asked for less motion',
+    /onPointerDown=/.test(body) && /ArrowRight/.test(body) && /prefers-reduced-motion/.test(body),
+    'drag, keys, and no arrival turn under reduced motion');
+// The throw, in its two halves.
+//
+//   - The **browser** half stays a source check: an animation frame at all (a release that drops the
+//     wheel where it is), momentum smoothed from the hand, a friction that multiplies per millisecond
+//     rather than a step that adds, and a page that reads the shared curve instead of keeping a
+//     private copy of the numbers — the last one is the bug that wears a constant.
+//   - The **feel** half is now walkable. The decay moved into `lib/points-config.js` as a pure
+//     function — a release speed in, a duration and a distance out — so "it coasts for a while" is
+//     asserted as seconds and turns rather than pattern-matched as text. The bounds below are
+//     deliberately loose: what must not happen is a flick that is over instantly, or one that
+//     outlives the flick by a minute, and everything between those two is the owner's taste.
+rec('  and a flick is thrown rather than dropped: it keeps turning and slows to a stop',
+    /requestAnimationFrame/.test(body) && /cancelAnimationFrame/.test(body)
+    && /velocity\.current \* 0\.6/.test(body)
+    && /speed \*= Math\.pow\(CAPSULE_FLING\.friction, dt\)/.test(body)
+    && /Math\.abs\(speed\) < CAPSULE_FLING\.stop/.test(body),
+    'momentum from the hand, smoothed, decayed per millisecond, and interruptible by a new grab');
+rec('  and the throw is the shared curve, not a second copy of the numbers in the page',
+    /capsuleFling\(velocity\.current\)/.test(body) && /if \(thrown\.speed\) fling\(thrown\.speed\)/.test(body)
+    && !/FLING_FRICTION/.test(body) && !/MIN_FLING/.test(body),
+    'CAPSULE_FLING and capsuleFling, imported from points-config');
+rec('and the section is styled, the frame included and no caption under it',
+    /\.pf-capsules\s*\{/.test(css) && /\.pf-spin\s*\{/.test(css) && !/pf-spin-hint/.test(css),
+    'pf-capsules, pf-spin, and deliberately no pf-spin-hint');
+
+(async () => {
+    const Config = await import('../lib/points-config.js');
+    const fling = Config.CAPSULE_FLING;
+    const flick = Config.capsuleFling(0.05);
+    const nudge = Config.capsuleFling(0.02);
+    const hardest = Config.capsuleFling(50);
+
+    rec('  and a flick coasts for seconds rather than a moment — the point of handing it momentum',
+        flick.durationMs > 4000 && flick.turns > 1.5,
+        `0.05 frames/ms coasts ${(flick.durationMs / 1000).toFixed(2)}s over ${flick.turns.toFixed(2)} turns`);
+    rec('  and even a gentle nudge keeps turning for a beat, because the wheel has weight',
+        nudge.durationMs > 1000 && nudge.durationMs < flick.durationMs,
+        `0.02 frames/ms coasts ${(nudge.durationMs / 1000).toFixed(2)}s, under the flick's ${(flick.durationMs / 1000).toFixed(2)}s`);
+    rec('  and no release, however hard, spins for ever: the launch speed is capped',
+        hardest.durationMs < 8000 && hardest.frames < 250 && hardest.speed === fling.max,
+        `capped at ${fling.max} frames/ms → ${(hardest.durationMs / 1000).toFixed(2)}s, ${hardest.turns.toFixed(2)} turns`);
+    rec('  and the friction is a decay and not a constant: some fraction lost every millisecond',
+        fling.friction > 0 && fling.friction < 1 && fling.stop > 0 && fling.stop < fling.min,
+        `friction ${fling.friction}, stop ${fling.stop} under min ${fling.min}`);
+    rec('  and a careful placement is not thrown at all, because a release is not always a flick',
+        Config.capsuleFling(0.003).speed === 0 && Config.capsuleFling(0.003).durationMs === 0
+        && Config.capsuleFling(0.02).speed !== 0,
+        `under ${fling.min} frames/ms the capsule stays where it was put`);
+    rec('  and nothing gets past it: a non-number, a zero and a wild speed all answer a real coast',
+        [NaN, undefined, null, 0, -3, 1e9].every((v) => {
+            const out = Config.capsuleFling(v);
+            return Number.isFinite(out.durationMs) && out.durationMs >= 0
+                && Number.isFinite(out.frames) && out.frames >= 0;
+        }),
+        'NaN · undefined · null · 0 · -3 · 1e9');
+
     console.log('');
-    for (const f of failed) console.log(`  FAILED: ${f.label}`);
-    process.exitCode = 1;
-}
+    const failed = results.filter((r) => !r.pass);
+    console.log(`${results.length - failed.length}/${results.length} checks passed`);
+    if (failed.length) {
+        console.log('');
+        for (const f of failed) console.log(`  FAILED: ${f.label}`);
+        process.exitCode = 1;
+    }
+})();

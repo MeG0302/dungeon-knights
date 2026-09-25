@@ -2,11 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Script from 'next/script';
+import BackLink from '../back-link';
 import {
     connectWallet, fetchMe, forgetWallet, onAccountsChanged, readSession, savedAddress, shortAddress,
     walletCapabilities,
 } from '../../lib/points-client';
 import { describeEarn } from '../../lib/points-history';
+import {
+    CAPSULE_FLING, CAPSULE_SPIN, capsuleFling, capsuleSpinFrame,
+} from '../../lib/points-config';
 import { GENESIS_PFP, RARITY, knightPfp } from '../../lib/knights';
 import { DEFAULT_CHAIN } from '../../lib/privy-chains';
 
@@ -49,6 +53,30 @@ import { DEFAULT_CHAIN } from '../../lib/privy-chains';
 
 const ASSETS = '/assets/points/';
 const RARITY_ORDER = ['legendary', 'epic', 'rare', 'uncommon', 'common'];
+
+/* ------------------------------------------------------------- the capsule's throw
+ *
+ * The turn is dragged by the pointer, and a drag that stops dead on release is a picture that has
+ * been *placed* rather than one that has been *spun* — the whole thing is a wheel, and a wheel that
+ * does not carry on has no weight. So a release hands its momentum to a decaying animation: the
+ * frame position keeps advancing at the speed the hand was moving, slowing by a fixed fraction per
+ * millisecond until it is at rest, and a new grab catches it mid-throw.
+ *
+ * **The numbers that decide how that feels are not in this file.** `CAPSULE_FLING` and
+ * `capsuleFling` live in `lib/points-config.js`, beside the frames they act on, so that the coast is
+ * a value `tools/check-portfolio.js` can *walk* — a release speed in, a duration and a distance out
+ * — rather than four constants a harness can only match as text. What is left here is the browser
+ * half of the throw: the pointer, the animation frame, and reduced motion.
+ *
+ * How long it lasts is the owner's decision and it is deliberately long. The first version settled
+ * in about two seconds, which measured as a throw and read as a nudge; a normal flick now spends
+ * close to six seconds getting there, and the hardest flick allowed is capped at about seven. The
+ * curve in `points-config` is where those two figures are derived rather than typed.
+ */
+
+/** Ten pixels a frame: the picture is roughly one full turn wide, so the gesture and the object
+    travel at the same speed under the thumb. */
+const PX_PER_FRAME = 10;
 
 const fmtInt = (n) => (Number.isFinite(Number(n)) ? Number(n).toLocaleString('en-US') : '—');
 const fmtDng = (n) => {
@@ -297,11 +325,24 @@ export default function PortfolioClient() {
         ? (points.data?.recentTotal ?? recentLog.length)
         : 0;
 
+    // The capsules this wallet has won, newest first, taken straight off the same state the Points
+    // page renders. One source, so the count on this page and the ledger on that one cannot
+    // disagree — and nothing here re-derives a status the server already worked out.
+    const capsules = points.phase === 'ready' ? (points.data?.giveaway?.capsules || []) : [];
+    const capsuleCount = capsules.length;
+    const countOf = (status) => capsules.filter((row) => row.status === status).length;
+    const capsuleTally = {
+        toClaim: countOf('won'),
+        claimed: countOf('claimed'),
+        sent: countOf('sent'),
+        missed: countOf('missed'),
+    };
+
     // ------------------------------------------------------------------------ render
     const pageStyles = (
         <>
-            <link rel="stylesheet" href="/theme.css?v=7" />
-            <link rel="stylesheet" href="/css/portfolio.css?v=2" />
+            <link rel="stylesheet" href="/theme.css?v=8" />
+            <link rel="stylesheet" href="/css/portfolio.css?v=3" />
             {/* No ethers: every figure on this page is read by the server, so the page itself never
                 calls the chain. `wallet-source.js` is still here for the wallet's own session and
                 the menu, which is what connects and disconnects. */}
@@ -597,6 +638,84 @@ export default function PortfolioClient() {
                             )}
                         </section>
 
+                        {/* ------------------------------------------ My capsules */}
+                        {/*
+                            The one prize on this site nobody has to buy. It is also the only
+                            section here that is not a chain read: a win is recorded on the wallet
+                            by the daily draw, so this is the same ledger the Points page shows —
+                            counted, and with the thing itself drawn above it.
+
+                            The picture is why the section exists. A capsule is a closed box with
+                            something glowing inside, which is exactly what a number cannot say,
+                            so the art turns in the round under the reader's thumb — see
+                            `CapsuleSpin` — and the number below it says how many are theirs.
+
+                            Read-only, like everything on this page: claiming a win is a
+                            signature, and that path belongs to the Points Program where the
+                            window and the form are explained.
+                        */}
+                        <section className="pf-card pf-capsules">
+                            <h2 className="pf-card-title">
+                                <img src={`${ASSETS}capsule-panel.png`} alt="" className="pf-card-icon" /> My capsules
+                            </h2>
+
+                            <CapsuleSpin />
+
+                            {points.phase === 'ready' ? (
+                                <>
+                                    <div className="pf-hero pf-capsule-count">
+                                        <span className="pf-hero-value">{fmtInt(capsuleCount)}</span>
+                                        <span className="pf-hero-label">
+                                            {capsuleCount === 1 ? 'capsule won' : 'capsules won'}
+                                            {capsules[0] ? ` · last ${capsules[0].when}` : ''}
+                                        </span>
+                                    </div>
+                                    {capsuleCount > 0 && (
+                                        <dl className="pf-rows">
+                                            {capsuleTally.toClaim > 0 && (
+                                                <Row
+                                                    label="To claim"
+                                                    value={fmtInt(capsuleTally.toClaim)}
+                                                    hint="by 00:00 UTC"
+                                                />
+                                            )}
+                                            {capsuleTally.claimed > 0 && (
+                                                <Row label="Claimed, being sent" value={fmtInt(capsuleTally.claimed)} />
+                                            )}
+                                            {capsuleTally.sent > 0 && <Row label="Sent" value={fmtInt(capsuleTally.sent)} />}
+                                            {capsuleTally.missed > 0 && (
+                                                <Row
+                                                    label="Not claimed in time"
+                                                    value={fmtInt(capsuleTally.missed)}
+                                                    hint="still on our list"
+                                                />
+                                            )}
+                                        </dl>
+                                    )}
+                                    <p className="pf-note">
+                                        Ten are drawn every day, to the ten wallets topping that UTC day's
+                                        board. A win has to be claimed on the day it is drawn.
+                                        {capsuleTally.toClaim > 0
+                                            ? ' Yours is in the Points Program — claim it there.'
+                                            : ' Finish a full run to be in the next one.'}
+                                    </p>
+                                    <div className="pf-actions">
+                                        <a className="pf-link" href="/points">
+                                            {capsuleTally.toClaim > 0 ? 'Claim your capsule' : 'Open the Points Program'}
+                                        </a>
+                                    </div>
+                                </>
+                            ) : (
+                                <p className="pf-note">
+                                    {points.phase === 'anon'
+                                        ? 'Capsules are part of the Points Program, which is a wallet rather than a browser: sign in there once, and every capsule you win appears here.'
+                                        : points.phase === 'other'
+                                            ? `Capsules belong to the wallet signed in on the Points Program (${shortAddress(points.sessionAddress)}), so they are not counted under this one.`
+                                            : 'Reading your capsules…'}
+                                </p>
+                            )}
+                        </section>
+
                         {/* --------------------------------------------- Activity */}
                         {/* Points, not dungeon runs. What this panel used to list — runs and their $DNG
                             claims — happens in the vault and in the game, both of which are behind the
@@ -671,9 +790,12 @@ export default function PortfolioClient() {
 function Header({ pillRef, address, onDisconnect, balance }) {
     return (
         <header className="header">
-            <button className="btn btn-ghost btn-sm" onClick={() => { window.location.href = '/'; }}>
-                <img src="assets/ui/exit cross.png" className="btn-icon-img" alt="" /> Kingdom Gate
-            </button>
+            <div className="header-left">
+                <BackLink />
+                <button className="btn btn-ghost btn-sm" onClick={() => { window.location.href = '/'; }}>
+                    <img src="assets/ui/exit cross.png" className="btn-icon-img" alt="" /> Kingdom Gate
+                </button>
+            </div>
             <div className="header-title">MY PORTFOLIO</div>
             <div className="header-actions">
                 {address && (
@@ -687,6 +809,207 @@ function Header({ pillRef, address, onDisconnect, balance }) {
                 </div>
             </div>
         </header>
+    );
+}
+
+/**
+ * The capsule, in the round — the one interactive thing on this page.
+ *
+ * The prize for a top-ten day is a closed box with something glowing inside it, and a number cannot
+ * say that. What the art came as was an eight-second 3D turn, which is a 72 MB ProRes file nobody
+ * should be asked to download to look at a picture: it is exported once into `CAPSULE_SPIN`'s
+ * frames, and this swaps between them. Stills rather than a `<video>` because a drag has to answer
+ * on the frame it is asked for, and seeking is not something a page gets to do instantly.
+ *
+ * Three ways in, because the picture is not decoration and a reader who cannot drag should still
+ * see it turn: a pointer drag, the arrow keys once it has focus, and one unhurried turn on arrival.
+ * The turn happens **once** and then stops — a picture that keeps animating behind the reader's
+ * eyes is a page that never settles — and a reader who has asked for reduced motion never sees it
+ * move at all. The frames are warmed after the first paint, so the drag is never the thing that
+ * waits for the network.
+ *
+ * **A release carries its momentum.** Letting go mid-flick throws the wheel: it keeps turning at the
+ * speed the hand was moving and slows down over a couple of seconds, and a new grab catches it where
+ * it is. That is the difference between a picture that has been dragged and one that has been spun —
+ * a wheel with weight — and it is why the position is a float rather than a frame number. The
+ * constants above are the feel; the arrival turn, the keys and reduced motion are not affected by it.
+ */
+function CapsuleSpin({ spin = CAPSULE_SPIN }) {
+    const [frame, setFrame] = useState(1);
+    const [dragging, setDragging] = useState(false);
+    const [auto, setAuto] = useState(true);
+    const dragFrom = useRef(null);
+    const flingFrame = useRef(null);
+    // The position is a *float*, and it is the only copy of where the wheel is. Frames are what the
+    // picture is drawn from, not what it moves in: a drag of one pixel is a tenth of a frame, and a
+    // throw spends most of its life between whole frames — with an integer position the slow end of
+    // a spin would either stutter between two frames or stop dead the moment it could not advance a
+    // whole one.
+    const pos = useRef(1);
+    // Frames per millisecond, smoothed over the last few pointer events so one jittery sample cannot
+    // decide the whole throw.
+    const velocity = useRef(0);
+    const movedAt = useRef(null);
+
+    /** Has the reader asked for less motion? Asked at the moment of the gesture, not at mount. */
+    const calmMotion = () => typeof window !== 'undefined'
+        && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+
+    /** Any frame number at all, wrapped into 1…`frames`. */
+    const wrap = (value) => ((value - 1) % spin.frames + spin.frames) % spin.frames + 1;
+
+    /** Point the picture at a position on the wheel. Whole frames are all it can be drawn at. */
+    const show = (value) => setFrame(wrap(Math.round(value)));
+
+    /** Stop a throw in flight — a new grab, a key, or the component going away. */
+    const stopFling = () => {
+        if (flingFrame.current === null) return;
+        cancelAnimationFrame(flingFrame.current);
+        flingFrame.current = null;
+    };
+
+    useEffect(() => stopFling, []);
+
+    useEffect(() => {
+        if (!auto) return undefined;
+        if (calmMotion()) return undefined;
+        let stepped = 0;
+        const timer = setInterval(() => {
+            stepped += 1;
+            if (stepped >= spin.frames) {
+                // A whole turn, then the still frame it started on.
+                clearInterval(timer);
+                pos.current = 1;
+                setFrame(1);
+                setAuto(false);
+                return;
+            }
+            pos.current = wrap(pos.current + 1);
+            setFrame(pos.current);
+        }, 90);
+        return () => clearInterval(timer);
+    }, [auto, spin.frames]);
+
+    // Warmed after the first paint rather than before it: the page is readable immediately, and the
+    // drag is what the download is for.
+    useEffect(() => {
+        const warmed = [];
+        for (let i = 1; i <= spin.frames; i += 1) {
+            const image = new Image();
+            image.src = capsuleSpinFrame(i, spin);
+            warmed.push(image);
+        }
+        return () => { warmed.length = 0; };
+    }, [spin]);
+
+    /** Stop the arrival turn and any throw in flight the moment the reader takes over. */
+    const takeOver = () => {
+        setAuto(false);
+        stopFling();
+    };
+
+    /**
+     * Let go, and let the wheel keep going.
+     *
+     * `requestAnimationFrame` rather than a timer: this is an animation, and the browser's own clock
+     * is the one that stops it when the tab is hidden. `dt` is clamped because a frame that arrives
+     * after the tab was in the background reports a gap of seconds, and an unclamped step would
+     * teleport the capsule several turns in one frame rather than easing to a stop.
+     */
+    const fling = (from) => {
+        if (calmMotion()) return;
+        let speed = from;
+        let last = performance.now();
+        const tick = (now) => {
+            const dt = Math.min(64, now - last);
+            last = now;
+            pos.current += speed * dt;
+            show(pos.current);
+            speed *= Math.pow(CAPSULE_FLING.friction, dt);
+            if (Math.abs(speed) < CAPSULE_FLING.stop) {
+                flingFrame.current = null;
+                return;
+            }
+            flingFrame.current = requestAnimationFrame(tick);
+        };
+        flingFrame.current = requestAnimationFrame(tick);
+    };
+
+    const onPointerDown = (event) => {
+        takeOver();
+        setDragging(true);
+        // Snapped to the frame on screen, so catching a spin mid-throw does not jump the picture to
+        // wherever the float happened to be between two frames.
+        dragFrom.current = { x: event.clientX, pos: Math.round(pos.current) };
+        movedAt.current = null;
+        velocity.current = 0;
+        try { event.currentTarget.setPointerCapture?.(event.pointerId); } catch { /* not capturable */ }
+    };
+
+    const onPointerMove = (event) => {
+        if (!dragFrom.current) return;
+        const next = dragFrom.current.pos - (event.clientX - dragFrom.current.x) / PX_PER_FRAME;
+        const now = performance.now();
+        const previous = movedAt.current;
+        if (previous && now > previous.t) {
+            const instant = (next - previous.pos) / (now - previous.t);
+            velocity.current = velocity.current * 0.6 + instant * 0.4;
+        }
+        movedAt.current = { pos: next, t: now };
+        pos.current = next;
+        show(next);
+    };
+
+    const endDrag = (event) => {
+        if (!dragFrom.current) return;
+        dragFrom.current = null;
+        setDragging(false);
+        // A flick is what the hand was doing when it let go. `capsuleFling` is what decides whether
+        // the release was a throw at all and how hard it may be: a careful placement comes back as
+        // zero and is left exactly where it was put, and a swipe that outruns the cap is thrown at
+        // the cap rather than for a hundred turns.
+        const thrown = capsuleFling(velocity.current);
+        if (thrown.speed) fling(thrown.speed);
+        velocity.current = 0;
+        movedAt.current = null;
+        try {
+            if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+                event.currentTarget.releasePointerCapture(event.pointerId);
+            }
+        } catch { /* already released */ }
+    };
+
+    const onKeyDown = (event) => {
+        const step = event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowRight' ? 1 : 0;
+        if (!step) return;
+        event.preventDefault();
+        takeOver();
+        pos.current += step;
+        show(pos.current);
+    };
+
+    return (
+        <div
+            className={`pf-spin ${dragging ? 'is-dragging' : ''}`}
+            role="img"
+            aria-label="A Knight capsule, turning. Drag it, or use the arrow keys, to spin it."
+            tabIndex={0}
+            data-arya="capsule-spin"
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={endDrag}
+            onPointerCancel={endDrag}
+            onKeyDown={onKeyDown}
+        >
+            <img
+                className="pf-spin-frame"
+                src={capsuleSpinFrame(frame, spin)}
+                alt=""
+                width={384}
+                height={384}
+                draggable={false}
+            />
+        </div>
     );
 }
 
