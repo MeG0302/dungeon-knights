@@ -5579,3 +5579,37 @@ named here instead of done quietly.
 gate 150/150 · pitch 43/43 · redeem 66/66 · draw 65/65 · capsule-claim 82/82 · points-x 194/194 ·
 token-math 64/64 · session 34/34 · rarity 64/64 · refs 49/49 · back 18/18 · arya 17/17 · run-budget
 39/39 · announce 27/27 · board-map 43/43 · wallet-menu 12/12 · copies 2/2.
+
+**Shipped.** Committed `d1409ee` (*the NFT pages share one showcase card, in this site's own colours*),
+pushed — `64bd72b..d1409ee`, remote head matches local — then
+`npx vercel --prod --yes --scope meglast320-1694`: **Ready in 58s**, deployment
+`dungeon-knights-ck29zgsks-meglast320-1694`. `--prod` aliased only its own scoped URL as §3 warns, so
+**`dungeonknights.io`**, **`www.dungeonknights.io`**, **`app.dungeonknights.io`** and
+**`dungeon-knights.vercel.app`** were pointed at it by hand in a second pass.
+
+```
+/                 200          /docs                200
+/points           200          /sitemap.xml         200
+/genesis          200          /staking             308  -> app.dungeonknights.io (gated)
+/portfolio        200          /mint                308  -> app.dungeonknights.io (gated)
+```
+
+**Read from the live DOM**, not from the response bytes:
+
+- `/genesis` — `theme.css?v=8` + `genesis.css?v=4` + **`nft-ui.css?v=1`**; the bar reads
+  *"GENESIS SUPPLY 1,024 fixed · Draw in 1d 10h 32m · 200 capsules"* with a
+  `rgba(212, 175, 55, 0.12)` shadow and a `#C9A84C` border, `--rarity-genesis` resolves to
+  **`#D4AF37`**, and the ladder bands carry their odds (*"200 SPARK 300–424 19.5% odds"*).
+- `/portfolio` — `theme.css?v=8` + `portfolio.css?v=5` + **`nft-ui.css?v=1`**; five tier tiles
+  LEGENDARY→COMMON with accents `#FFD700 #9C27B0 #2196F3 #4CAF50 #9E9E9E`, each showing its HP and
+  roll odds, the empty state, and its four CTAs.
+- the deployed sheet itself, fetched from the host: **10,330 bytes**, `--nft-glow-soft/strong` =
+  `rgba(212, 175, 55, …)`, `--rarity-genesis: var(--accent-gold)`, the badge's ink `var(--bg-void)`,
+  the id chip `rgba(13, 10, 8, 0.82)` — and **zero** hits for `#00E58A`, `rgba(0, 229, 138)` or
+  `#04120A`. The greens did not go out.
+
+**The two gated routes were not read live.** `/staking` and `/mint` answer `308` on the apex and sit
+behind the gate on `app.dungeonknights.io`, and this browser is not signed in, so they were verified on
+the dev server (`nft-ui.css?v=1` + `staking.css?v=10`, `.sv-tab` × 3 at 44px) and only their *sheet* was
+checked on the live host. Signing in to the gate in the Preview tab would let the same DOM read be
+taken there; nothing else is outstanding.
