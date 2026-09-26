@@ -5613,3 +5613,65 @@ behind the gate on `app.dungeonknights.io`, and this browser is not signed in, s
 the dev server (`nft-ui.css?v=1` + `staking.css?v=10`, `.sv-tab` × 3 at 44px) and only their *sheet* was
 checked on the live host. Signing in to the gate in the Preview tab would let the same DOM read be
 taken there; nothing else is outstanding.
+
+## 9. The Knights panel is closed for now
+
+> "you are not supposed to show anything about knights for now" — with a screenshot of `/portfolio`
+> where the `$DNG` card read **COMING SOON** and the card beside it, **KNIGHTS**, published nine owned
+> knights, a five-rung rarity strip with its HP and roll odds, and two of the wallet's own tiles.
+
+**The scope was asked, not assumed.** The site is *called* Dungeon Knights — the home page, `/genesis`,
+`/docs`, `/staking` and every game screen say the word — so "nothing about knights" could have meant
+the panel in the screenshot or a sweep of the whole site. Two clickable questions settled it: **the
+`/portfolio` Knights panel only** (nothing else on any other page changes), and the wallet's own tiles
+**go too** — no tiers, no hash power, no roll odds, no owned art, and no count in the title either,
+because a figure over the panel is as much of an announcement as the strip under it.
+
+**Emptied, not blurred.** `$DNG` and Genesis are blurred with a label, and that is the right treatment
+for figures that are real but not open yet: the panel keeps the shape of what is coming. It is the
+wrong treatment here — `blur(5px)` leaves a strip a strip and a portrait a portrait, and the request
+was that nothing be *shown*. So the Knights body is **gone**: the tier grid, the six-tile showcase, the
+no-knights empty state, the data-incomplete note, `RARITY`, `RARITY_ORDER`, `knightPfp`, `byTier`,
+`knightList` and the `NftCard` import's knight half, all out of `app/portfolio/client.js`. The panel
+itself stays — title, a `pf-soon-chip` reading **COMING SOON**, one line (*"The knights in this wallet
+will read here when this panel opens."*), and the two blurred, inert buttons into the gated game —
+because a page that quietly loses a card is worse than one that says the card is not open.
+
+**What deliberately did not change.** `lib/knights.js` still publishes the ramp, `nft-ui.css` still
+styles a tier strip, and the **chain read is untouched**: `/api/staking/holdings?collection=knights`
+still feeds `$DNG`'s *"Staked knights"* row and the claimable total inside its own blurred body. The
+only thing that changed is what this page *renders*. Reopening the panel is restoring one section —
+the last revision that rendered it is `50e0d65`.
+
+**The guards moved with the change, in the same commit.** `tools/check-portfolio.js` now carries
+`Knights` in its closed-panel list (chips and notes 3, blurred bodies 2) and four new assertions that
+the absence *holds*: no `nft-tier` / `knightPfp` / `RARITY` / `dropRate` / `knightList` / `byTier`, no
+`knights.data?.balance` in the title, and the sentence still there. Writing them turned up a stale one:
+the sheet check pinned `.pf-tier-strip`, a rule whose markup the showcase port had already replaced
+with `nft-tier-grid` — a guard passing on dead CSS — so the needle is `.pf-soon` now, and the ~40 lines
+of unused `.pf-tier*` rules went out of `public/css/portfolio.css` (`portfolio.css?v=5` → `v=6`).
+
+**Falsified, then deleted.** The four mutations that put knight content back — the strip, the count in
+the title, the panel un-marked, the sentence removed — each failed the named check. The third one failed
+for the *wrong* panel the first time: `pf-card pf-soon[\s\S]{0,400}Knights` was satisfied by the Genesis
+tag under the mutation, so the pattern is now `pf-card pf-soon">(?:(?!pf-card pf-soon">)[\s\S]){0,600}?`
+— the window stops at the next card, which is the only card it may find.
+
+**Verified on the dev server**, with a saved address in `localStorage` so the panels actually render
+(`npx next dev -p 3111` — 3000 is another process's):
+
+- the six cards read `$DNG · KNIGHTS · GENESIS · POINTS · MY CAPSULES · RECENT ACTIVITY`, the first
+  three each carrying a chip and a note, the Knights card holding **zero** `.nft-tier` and zero
+  `.nft-card` elements;
+- the page text contains no `% roll`, no `HP ·` and no `% drop`, and every remaining mention of the
+  word is one of three things: the panel's own title, its note, or text inside a blurred/hidden body
+  (`$DNG`'s *"Staked knights"*, Genesis's empty state, the inert *"Knight's Hall"* button).
+- `npx next build` compiled clean; `/portfolio` is `8.35 kB` / `109 kB` first load. The route's chunks
+  still contain `lib/knights.js` — but in a **shared** chunk (`7780-…`) that `/docs`, `/genesis`,
+  `/pitch`, `/staking` and `/tokenomics` load too, so that is the shared module, not this page.
+
+**Fleet after it:** `check-portfolio` **72/72** (was 68) · `check-docs` 72/72 · gate **150/150** ·
+`check-styles` clean (*"every class each route uses is defined by a sheet that route loads"*).
+
+**Not deployed.** Nothing is committed, pushed or aliased yet — the live host still shows the strip
+from `d1409ee`.

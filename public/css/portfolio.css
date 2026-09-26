@@ -266,48 +266,6 @@
     margin-top: 1px;
 }
 
-/* ----------------------------------------------------------------------- tier strip */
-.pf-tier-strip {
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 8px;
-}
-
-.pf-tier {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 3px;
-    padding: 6px 2px 4px;
-    background: var(--bg-dark);
-    border: 1px solid var(--border-dim);
-    border-radius: var(--radius-sm);
-    min-width: 0;
-}
-
-.pf-tier-art {
-    width: 42px;
-    height: 42px;
-    object-fit: cover;
-    border-radius: 50%;
-    border: 2px solid var(--border-base);
-    background: var(--bg-void);
-}
-
-.pf-tier-name {
-    font-family: var(--font-heading);
-    font-size: 9.5px;
-    letter-spacing: 0.6px;
-    text-transform: uppercase;
-    white-space: nowrap;
-}
-
-.pf-tier-count {
-    font-family: var(--font-display);
-    font-size: 14px;
-    color: var(--text-primary);
-}
-
 /* -------------------------------------------------------------------- supply progress */
 .pf-supply {
     display: flex;
@@ -688,16 +646,9 @@
         font-size: 25px;
     }
 
-    .pf-tier-strip {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
 }
 
 @media (max-width: 560px) {
-    .pf-tier-strip {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
     .pf-identity {
         align-items: flex-start;
         flex-direction: column;

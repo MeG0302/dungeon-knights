@@ -11,7 +11,7 @@ import { describeEarn } from '../../lib/points-history';
 import {
     CAPSULE_FLING, CAPSULE_SPIN, capsuleFling, capsuleSpinFrame,
 } from '../../lib/points-config';
-import { GENESIS_PFP, RARITY, knightPfp } from '../../lib/knights';
+import { GENESIS_PFP } from '../../lib/knights';
 import { bandFor } from '../../lib/staking-config';
 import { DEFAULT_CHAIN } from '../../lib/privy-chains';
 import NftCard from '../nft-card';
@@ -54,7 +54,6 @@ import NftCard from '../nft-card';
  */
 
 const ASSETS = '/assets/points/';
-const RARITY_ORDER = ['legendary', 'epic', 'rare', 'uncommon', 'common'];
 
 /* ------------------------------------------------------------- the capsule's throw
  *
@@ -298,14 +297,8 @@ export default function PortfolioClient() {
     // The chain label comes from the same definition the provider and the add-chain request use,
     // so a deployment that moves to mainnet moves this line with it.
     const chain = readAt ? DEFAULT_CHAIN.name : null;
-    const knightList = knights.data?.knights || [];
     const genesisList = genesis.data?.knights || [];
     const stake = genesis.data?.stake || null;
-
-    const byTier = RARITY_ORDER.reduce((acc, tier) => {
-        acc[tier] = knightList.filter((k) => k.rarity === tier).length;
-        return acc;
-    }, {});
 
     const ownedHashPower = genesisList.reduce((sum, k) => sum + (Number(k.hashPower) || 0), 0);
     const stakedCount = {
@@ -344,7 +337,7 @@ export default function PortfolioClient() {
     const pageStyles = (
         <>
             <link rel="stylesheet" href="/theme.css?v=8" />
-            <link rel="stylesheet" href="/css/portfolio.css?v=5" />
+            <link rel="stylesheet" href="/css/portfolio.css?v=6" />
             <link rel="stylesheet" href="/css/nft-ui.css?v=1" />
             {/* No ethers: every figure on this page is read by the server, so the page itself never
                 calls the chain. `wallet-source.js` is still here for the wallet's own session and
@@ -474,82 +467,31 @@ export default function PortfolioClient() {
                         </section>
 
                         {/* ---------------------------------------------- Knights */}
-                        <section className="pf-card">
+                        {/* Closed at the owner's instruction: for now this page says nothing about
+                            knights. The rarity strip, the hash power, the roll odds and the wallet's
+                            own tiles were printed here, and they are *gone* rather than dimmed — a
+                            blurred strip is still a strip and a blurred portrait is still a
+                            portrait, which is the hole `pf-soon` leaves for figures nobody can
+                            read yet. So the body went, and `RARITY`, `RARITY_ORDER`, `knightPfp`
+                            and the tier count went with it; `lib/knights.js` still publishes all of
+                            it, and `nft-ui.css` still styles the strip it will wear, so reopening
+                            this panel is restoring this one section — the last revision that
+                            rendered it is `50e0d65` — and nothing else. The panel itself stays,
+                            with its `$DNG` and Genesis neighbours, because a page that quietly
+                            lost a card is worse than one that says the card is not open. The chain
+                            read is untouched: `$DNG` prints staked knights and the claimable total
+                            from the same holdings call, which is blurred in its own panel. */}
+                        <section className="pf-card pf-soon">
                             <h2 className="pf-card-title">
                                 <img src="/assets/ui/sword.png" alt="" className="pf-card-icon" /> Knights
-                                <span className="pf-card-count">{knights.phase === 'ready' ? fmtInt(knights.data?.balance) : '—'}</span>
+                                <span className="pf-soon-chip">Coming soon</span>
                             </h2>
-                            {knights.phase === 'error' ? (
-                                <p className="pf-warn">{knights.error}</p>
-                            ) : (
-                                <>
-                                    <div className="nft-tier-grid" role="list" aria-label="Knights by rarity tier">
-                                        {RARITY_ORDER.map((tier) => {
-                                            const meta = RARITY[tier.toUpperCase()];
-                                            return (
-                                                <div className={`nft-tier nft-rarity-${tier}`} role="listitem" key={tier}>
-                                                    <img
-                                                        src={knightPfp(tier)}
-                                                        alt={`${meta.name} knight portrait`}
-                                                        className="nft-tier-art"
-                                                        loading="lazy"
-                                                        decoding="async"
-                                                        width={128}
-                                                        height={128}
-                                                    />
-                                                    <span className="nft-tier-name" style={{ color: meta.color }}>
-                                                        {meta.name}
-                                                    </span>
-                                                    <span className="nft-tier-count nft-num">{fmtInt(byTier[tier])}</span>
-                                                    <span className="nft-tier-odds nft-num">
-                                                        {meta.hashPower} HP · {Math.round(meta.dropRate * 100)}% roll
-                                                    </span>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                    {knightList.length > 0 && (
-                                        <div className="nft-grid" aria-label="Your top knights">
-                                            {[...knightList]
-                                                .sort((a, b) => (b.hashPower || 0) - (a.hashPower || 0))
-                                                .slice(0, 6)
-                                                .map((k) => {
-                                                    const meta = RARITY[String(k.rarity || '').toUpperCase()];
-                                                    return (
-                                                        <NftCard
-                                                            key={k.tokenId}
-                                                            art={knightPfp(k.rarity)}
-                                                            badge={meta?.name}
-                                                            title={k.name || `Knight #${k.tokenId}`}
-                                                            tokenId={k.tokenId}
-                                                            hp={k.hashPower ?? meta?.hashPower}
-                                                            hpMin={15}
-                                                            hpMax={100}
-                                                            rarity={k.rarity}
-                                                            metaTop={meta ? `${meta.dungeonReward} DNG / run · ${meta.dailyRuns} runs` : null}
-                                                            metaBottom={meta ? `${Math.round(meta.dropRate * 100)}% drop` : null}
-                                                        />
-                                                    );
-                                                })}
-                                        </div>
-                                    )}
-                                    {knights.phase === 'ready' && knightList.length === 0 && (
-                                        <div className="nft-empty">
-                                            <span className="nft-empty-title">No Knights yet</span>
-                                            <p className="nft-empty-text">
-                                                Summon your first squad to clear dungeons and earn $DNG. Five tiers from Common to Legendary — every roll is on chain.
-                                            </p>
-                                            <div className="nft-empty-cta">
-                                                <a className="pf-link" href="/mint">Summon a Knight</a>
-                                                <a className="pf-link" href="/genesis">See Genesis (1,024 cap)</a>
-                                            </div>
-                                        </div>
-                                    )}
-                                    {knights.data && !knights.data.complete && (
-                                        <p className="pf-note">{knights.data.note}</p>
-                                    )}
-                                </>
-                            )}
+                            {/* No count, either: `pf-card-count` used to print how many this wallet
+                                held, and a figure in the title is as much of an announcement as the
+                                strip was. */}
+                            <p className="pf-soon-note">
+                                The knights in this wallet will read here when this panel opens.
+                            </p>
                             {/* Blurred with the rest of the gated half: both of these lead into the
                                 game, which on the public host is behind the password. A button that
                                 bounces a stranger to a password screen is worse than one that is

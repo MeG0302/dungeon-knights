@@ -170,8 +170,12 @@ rec('a failed balance cannot render as zero',
 // reading it. What matters is that an edit to the sheet can actually reach a browser.
 rec('the sheet exists and the client asks for it, with a version stamp',
     exists('public/css/portfolio.css') && /\/css\/portfolio\.css\?v=\d+/.test(client));
-rec('it styles the four cards and the empty state',
-    ['.pf-card', '.pf-tier-strip', '.pf-rows', '.pf-activity', '.pf-empty'].every((sel) => css.includes(sel)));
+// The needle here used to be `.pf-tier-strip` — a selector left over from the markup that scored the
+// strip the portfolio no longer renders, and which the test only found because a dead rule in the
+// sheet is a string like any other. It is the closed panels now, which are the thing on this page a
+// reader is most likely to be looking at.
+rec('it styles the cards, the panels that are not open yet and the empty state',
+    ['.pf-card', '.pf-soon', '.pf-rows', '.pf-activity', '.pf-empty'].every((sel) => css.includes(sel)));
 rec('and it has a phone layout', /@media \(max-width: 560px\)/.test(css) && /@media \(max-width: 900px\)/.test(css));
 // The page has its own room. It used to borrow `knight-hall.webp` — the roster's — so a check that
 // only asked "does some hall art resolve" passed on the wrong picture for as long as that lasted.
@@ -183,19 +187,31 @@ rec('and a phone still gets the room, from the small file',
     /url\('\/assets\/hall\/portfolio-mobile\.webp'\)/.test(cssCode)
     && exists('public/assets/hall/portfolio-mobile.webp'));
 
-// ------------------------------------- 8. the two panels that are not live yet
-// The campaign sends Points players here, so the page is public — but two of its panels read
-// things that are not open to players yet. They are blurred with a label rather than emptied,
-// which means each of these has to hold or the blur becomes decoration: the body hidden from
-// assistive tech, the buttons inside genuinely inert, and the label saying what is coming.
-const SOON = ['$DNG', 'Genesis'];
+// ------------------------------------- 8. the panels that are not live yet
+// The campaign sends Points players here, so the page is public — but three of its panels read
+// things that are not open to players yet. Two of them are blurred with a label rather than
+// emptied, which means each of these has to hold or the blur becomes decoration: the body hidden
+// from assistive tech, the buttons inside genuinely inert, and the label saying what is coming.
+//
+// The third is the Knights panel, and it is the harder case: the owner asked for nothing about
+// knights to be shown at all, so it is *emptied* rather than blurred — the rarity strip, the hash
+// power, the roll odds and the wallet's own tiles are out of the file, because a blurred strip is
+// still a strip and a blurred portrait is still a portrait. What has to hold there is the absence,
+// which is why the needles below are the import, the strip's class and the two figures it printed:
+// a leftover import is exactly how that markup comes back by accident.
+const SOON = ['$DNG', 'Genesis', 'Knights'];
+const BLURRED = ['$DNG', 'Genesis'];
+// Each name has to be found on **its own** card. The first version of this was a 400-character window
+// with no rule about what could sit inside it, and going to prove it caught the mutation by the
+// *wrong* panel: strip `pf-soon` off the Knights card and the check still passed, because "Knights"
+// to the Genesis tag below it is well under 400 characters of sentence and comment. Hence the
+// negative lookahead — the window stops at the next card, so the only tag it can find is this one's.
 for (const name of SOON) {
     rec(`the ${name} panel is marked as not live yet`,
-        new RegExp(`pf-card pf-soon[\\s\\S]{0,400}?${name.replace('$', '\\$')}`).test(client)
-        || new RegExp(`${name.replace('$', '\\$')}[\\s\\S]{0,400}?pf-card pf-soon`).test(client),
-        'pf-soon on the card');
+        new RegExp(`pf-card pf-soon">(?:(?!pf-card pf-soon">)[\\s\\S]){0,600}?${name.replace('$', '\\$')}`).test(client),
+        'pf-soon on that card, not on the one below it');
 }
-rec('both panels carry the same chip',
+rec('the panels that are closed carry the same chip',
     (client.match(/pf-soon-chip/g) || []).length === SOON.length,
     `${(client.match(/pf-soon-chip/g) || []).length} chips`);
 rec('each says what will read there, rather than only "coming soon"',
@@ -217,8 +233,20 @@ rec('the listeners are removed, and the read cannot land after unmount',
     /removeEventListener\('privyAuthChanged', read\)/.test(client) && /if \(!alive\) return;/.test(client),
     'cleanup + aliveness guard');
 rec('the blurred body is hidden from a screen reader, which would read it as figures',
-    (client.match(/pf-soon-body" aria-hidden="true"/g) || []).length === SOON.length,
+    (client.match(/pf-soon-body" aria-hidden="true"/g) || []).length === BLURRED.length,
     `${(client.match(/pf-soon-body" aria-hidden="true"/g) || []).length} aria-hidden bodies`);
+// The panel the owner closed, checked as an absence. `lib/knights.js` still publishes the ramp and
+// `nft-ui.css` still styles the strip, so neither can be the guard: what must be true is that this
+// page renders none of it. `hashPower` is deliberately not a needle — the Genesis tiles print one.
+rec('nothing about knights is rendered while the panel is closed',
+    !/nft-tier|knightPfp|RARITY|dropRate|knightList|byTier/.test(body),
+    'no tier strip, no hash power, no roll odds, no owned tiles');
+rec('  … not even as a count in the title, which is a figure in its own right',
+    !/knights\.data\?\.balance/.test(body),
+    'no owned count over the panel');
+rec('  and the panel still says what will read there, rather than only "coming soon"',
+    /The knights in this wallet will read here when this panel opens/.test(client),
+    'the sentence is the panel for now');
 rec('the stylesheet blurs it and makes its controls inert',
     /\.pf-soon-body[^{]*\{[^}]*filter:\s*blur\(/.test(css)
         && /\.pf-soon-body[^{]*\{[^}]*pointer-events:\s*none/.test(css),
@@ -238,12 +266,13 @@ rec('the blur is inert as well as blurred, so nothing behind it can be clicked',
     'shared rule');
 
 // ------------------------------------------------------------------ 10. what the panels print
-// The tier tiles are photos and names now: the reward line under each one was a per-run figure
+// The tier tiles that stood here are gone with the panel (§8), so this is now a claim about the
+// whole client rather than about one strip: the reward line under each tile was a per-run figure
 // printed on a page that cannot see the contract's table, which is the drift the vault exists to
 // avoid. The page reads the numbers it shows; it does not restate the economy.
-rec('the tier tiles carry no reward or runs-per-day line',
+rec('the page quotes no per-run reward and no runs-per-day figure',
     !/pf-tier-econ/.test(client) && !/[0-9]+ DNG · [0-9]+\/day/.test(client),
-    'photo, name and count only');
+    'nothing restates the contract\'s table');
 // A *price*, not the word `$DNG`. The needle here used to be `\$DNG\.` — a figure followed by a
 // full stop, which was a stand-in for "a sentence that quotes a price" and is really a stand-in for
 // "a sentence that mentions $DNG and then ends". The empty state the showcase cards added says
