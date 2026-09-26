@@ -5750,5 +5750,33 @@ shrunk back to `54px` — each failed by name, and the mutator was deleted.
 `check-portfolio` 72/72 · gate 150/150 · pitch 43/43 · copies 2/2. Sheets bumped:
 `docs.css?v=1`→`v=2`, `home.css?v=4`→`v=5`.
 
-**Not deployed.** Nothing is committed or pushed yet; the live hosts still carry the old footer and
-the printed addresses.
+**Shipped.** Committed `c89866e` (*the public pages name no repository, and the contracts list is held
+back*), pushed, then `npx vercel --prod --yes --scope meglast320-1694`: deployment
+`dungeon-knights-5k02av9gs-meglast320-1694`, and the four aliases (`dungeonknights.io`,
+`www.`, `app.`, `dungeon-knights.vercel.app`) pointed at it by hand, `--prod` having aliased only its
+own scoped URL as §3 warns.
+
+```
+/                 200          /docs                200
+/points           200          /sitemap.xml         200
+/genesis          200          /staking             308  -> app.dungeonknights.io (gated)
+/portfolio        200          /mint                308  -> app.dungeonknights.io (gated)
+```
+
+**Read off the live hosts**, not the response bytes:
+
+- `/` — the footer is *POINTS | GENESIS | PORTFOLIO | X | DISCORD | © 2026 Dungeon Knights. All rights
+  reserved. | Follow @DNGrobinhood*, the five links resolve to `/points`, `/genesis`, `/portfolio`,
+  `x.com/DNGrobinhood` and `discord.gg/zZFqA9Fqe`, the sheet is `home.css?v=5`, the buttons clear the
+  footer by 246px at 1440×900 with no scroll, and **no `github` string exists anywhere in the page**.
+- `/docs` — `docs.css?v=2`; the contracts body computes `blur(5px)` / `pointer-events: none` /
+  `user-select: none` / `aria-hidden="true"`, 306px tall, nine rows behind it, the chip reads
+  *Not published yet*; the footer is *Play · Points · Genesis · Portfolio · X · Discord* and again no
+  `github` on the page.
+- the two deployed sheets themselves: `home.css?v=5` **12,878 bytes** and `docs.css?v=2` **26,292
+  bytes**, neither mentioning the repository.
+
+**Still open, and named here so it is not mistaken for done:**
+`https://dungeonknights.io/contract-addresses.js` answers **200** and lists every address the docs
+page now blurs. The blur is a reader-level control; that file is the actual publication, and moving it
+behind the gate is a separate decision.
