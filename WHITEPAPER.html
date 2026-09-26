@@ -1,0 +1,1197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dungeon Knights — Whitepaper v2.0</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Source+Sans+3:ital,wght@0,300;0,400;0,600;0,700;1,400&family=Source+Code+Pro:wght@400;600&display=swap');
+
+    :root {
+      --gold: #c9a84c;
+      --gold-light: #e4c96a;
+      --gold-dark: #a07828;
+      --parchment: #f5f0e1;
+      --parchment-dark: #e8dfc8;
+      --ink: #1a1410;
+      --ink-light: #3d3528;
+      --ink-muted: #6b5e4a;
+      --accent-red: #8b2020;
+      --accent-green: #2d6a2d;
+      --accent-blue: #1a3a5c;
+      --border: #c4b48e;
+      --code-bg: #f0ebe0;
+      --table-header: #2a1f14;
+      --table-row-alt: #ede6d4;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html {
+      font-size: 16px;
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: 'Source Sans 3', Georgia, serif;
+      color: var(--ink);
+      background: var(--parchment);
+      line-height: 1.7;
+    }
+
+    /* ====== NAVIGATION ====== */
+    .nav-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      background: rgba(42, 31, 20, 0.97);
+      backdrop-filter: blur(10px);
+      border-bottom: 2px solid var(--gold-dark);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 2rem;
+      height: 52px;
+    }
+
+    .nav-bar .logo {
+      font-family: 'Cinzel', serif;
+      color: var(--gold);
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-decoration: none;
+    }
+
+    .nav-bar .toc-toggle {
+      background: none;
+      border: 1px solid var(--gold-dark);
+      color: var(--gold);
+      padding: 6px 16px;
+      font-family: 'Source Sans 3', sans-serif;
+      font-size: 0.85rem;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: all 0.2s;
+    }
+
+    .nav-bar .toc-toggle:hover {
+      background: var(--gold-dark);
+      color: var(--parchment);
+    }
+
+    /* ====== TOC SIDEBAR ====== */
+    .toc-sidebar {
+      position: fixed;
+      top: 52px;
+      left: 0;
+      width: 260px;
+      bottom: 0;
+      background: var(--table-header);
+      overflow-y: auto;
+      transform: translateX(-100%);
+      transition: transform 0.3s ease;
+      z-index: 99;
+      padding: 1.5rem 0;
+    }
+
+    .toc-sidebar.open {
+      transform: translateX(0);
+    }
+
+    .toc-sidebar a {
+      display: block;
+      color: var(--gold-light);
+      text-decoration: none;
+      padding: 6px 24px;
+      font-size: 0.9rem;
+      border-left: 2px solid transparent;
+      transition: all 0.2s;
+    }
+
+    .toc-sidebar a:hover {
+      background: rgba(201, 168, 76, 0.1);
+      border-left-color: var(--gold);
+      color: var(--gold);
+    }
+
+    .toc-sidebar .toc-label {
+      color: var(--gold-dark);
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      padding: 12px 24px 4px;
+      font-weight: 600;
+    }
+
+    /* ====== MAIN CONTENT ====== */
+    .page-wrapper {
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 2rem 2.5rem 6rem;
+      padding-top: 5rem;
+    }
+
+    /* ====== COVER ====== */
+    .cover {
+      text-align: center;
+      padding: 4rem 0 3rem;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 2.5rem;
+    }
+
+    .cover .icon {
+      font-size: 3.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .cover h1 {
+      font-family: 'Cinzel', serif;
+      font-size: 2.8rem;
+      color: var(--table-header);
+      letter-spacing: 0.04em;
+      margin-bottom: 0.3rem;
+    }
+
+    .cover .tagline {
+      font-size: 1.15rem;
+      color: var(--ink-muted);
+      font-style: italic;
+      max-width: 500px;
+      margin: 0 auto 1rem;
+      line-height: 1.5;
+    }
+
+    .cover .meta {
+      font-size: 0.85rem;
+      color: var(--ink-muted);
+      margin-top: 1rem;
+    }
+
+    .cover .meta span {
+      display: inline-block;
+      margin: 0 0.5rem;
+    }
+
+    .cover .meta a {
+      color: var(--accent-blue);
+      text-decoration: none;
+    }
+
+    .cover .meta a:hover {
+      text-decoration: underline;
+    }
+
+    /* ====== STATUS BOX ====== */
+    .status-box {
+      background: var(--parchment-dark);
+      border-left: 4px solid var(--gold);
+      padding: 1.2rem 1.5rem;
+      margin: 1.5rem 0 2.5rem;
+      border-radius: 0 6px 6px 0;
+    }
+
+    .status-box p {
+      font-size: 0.95rem;
+      color: var(--ink-light);
+      line-height: 1.6;
+    }
+
+    /* ====== SECTIONS ====== */
+    h2 {
+      font-family: 'Cinzel', serif;
+      font-size: 1.65rem;
+      color: var(--table-header);
+      margin-top: 3rem;
+      margin-bottom: 1rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--border);
+      letter-spacing: 0.02em;
+    }
+
+    h3 {
+      font-family: 'Cinzel', serif;
+      font-size: 1.2rem;
+      color: var(--ink-light);
+      margin-top: 2rem;
+      margin-bottom: 0.6rem;
+    }
+
+    h4 {
+      font-family: 'Source Sans 3', sans-serif;
+      font-weight: 700;
+      font-size: 1rem;
+      color: var(--ink);
+      margin-top: 1.5rem;
+      margin-bottom: 0.4rem;
+    }
+
+    p {
+      margin-bottom: 0.9rem;
+    }
+
+    /* ====== TITLE BLOCK ====== */
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-bottom: 0.8rem;
+    }
+
+    .section-title .num {
+      font-family: 'Cinzel', serif;
+      font-size: 0.8rem;
+      color: var(--gold-dark);
+      background: var(--parchment-dark);
+      border: 1px solid var(--border);
+      border-radius: 50%;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    /* ====== PULL QUOTE ====== */
+    .pull-quote {
+      background: var(--table-header);
+      color: var(--parchment);
+      padding: 1.5rem 2rem;
+      border-radius: 8px;
+      margin: 2rem 0;
+      position: relative;
+    }
+
+    .pull-quote p {
+      font-size: 1.05rem;
+      line-height: 1.7;
+      margin: 0;
+    }
+
+    .pull-quote .highlight {
+      color: var(--gold-light);
+      font-weight: 600;
+    }
+
+    .pull-quote::before {
+      content: '\201C';
+      font-family: 'Cinzel', serif;
+      font-size: 4rem;
+      color: var(--gold-dark);
+      position: absolute;
+      top: -0.2rem;
+      left: 0.8rem;
+      opacity: 0.4;
+    }
+
+    /* ====== TABLES ====== */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.2rem 0 1.8rem;
+      font-size: 0.92rem;
+    }
+
+    thead th {
+      background: var(--table-header);
+      color: var(--gold-light);
+      font-weight: 600;
+      text-align: left;
+      padding: 10px 14px;
+      font-size: 0.85rem;
+      letter-spacing: 0.03em;
+    }
+
+    thead th:first-child { border-radius: 6px 0 0 0; }
+    thead th:last-child { border-radius: 0 6px 0 0; }
+
+    tbody td {
+      padding: 9px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    tbody tr:nth-child(even) {
+      background: var(--table-row-alt);
+    }
+
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    td .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+    }
+
+    .tag-live { background: #d4edda; color: var(--accent-green); }
+    .tag-written { background: #cce5ff; color: var(--accent-blue); }
+    .tag-planned { background: #fff3cd; color: #856404; }
+    .tag-tbd { background: #f8d7da; color: var(--accent-red); }
+    .tag-warn { background: #fff3cd; color: #856404; }
+    .tag-danger { background: #f8d7da; color: var(--accent-red); }
+
+    /* ====== CODE / ADDRESSES ====== */
+    code, .mono {
+      font-family: 'Source Code Pro', monospace;
+      font-size: 0.85em;
+      background: var(--code-bg);
+      padding: 2px 6px;
+      border-radius: 3px;
+      color: var(--accent-blue);
+    }
+
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem 1.2rem;
+      overflow-x: auto;
+      margin: 1rem 0 1.5rem;
+    }
+
+    pre code {
+      background: none;
+      padding: 0;
+      font-size: 0.85rem;
+      line-height: 1.6;
+      color: var(--ink-light);
+    }
+
+    /* ====== LISTS ====== */
+    ul, ol {
+      margin: 0.8rem 0 1.2rem 1.5rem;
+    }
+
+    li {
+      margin-bottom: 0.35rem;
+    }
+
+    li::marker {
+      color: var(--gold-dark);
+    }
+
+    /* ====== DIVIDER ====== */
+    hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 3rem 0;
+    }
+
+    /* ====== EMPHASIS BOXES ====== */
+    .callout {
+      padding: 1rem 1.5rem;
+      border-radius: 6px;
+      margin: 1.2rem 0;
+    }
+
+    .callout-gold {
+      background: rgba(201, 168, 76, 0.1);
+      border-left: 4px solid var(--gold);
+    }
+
+    .callout-gold p { margin: 0; }
+
+    .callout-warning {
+      background: rgba(139, 32, 32, 0.06);
+      border-left: 4px solid var(--accent-red);
+    }
+
+    .callout-warning p { margin: 0; }
+
+    /* ====== FOOTER ====== */
+    .doc-footer {
+      margin-top: 4rem;
+      padding-top: 1.5rem;
+      border-top: 2px solid var(--border);
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--ink-muted);
+    }
+
+    .doc-footer .brand {
+      font-family: 'Cinzel', serif;
+      color: var(--gold-dark);
+      font-size: 1rem;
+    }
+
+    /* ====== PRINT ====== */
+    @media print {
+      .nav-bar, .toc-sidebar, .toc-toggle { display: none !important; }
+      .page-wrapper { max-width: 100%; padding: 0; }
+      body { background: white; }
+      table { page-break-inside: avoid; }
+      h2 { page-break-after: avoid; }
+      .pull-quote { page-break-inside: avoid; }
+    }
+
+    /* ====== MOBILE ====== */
+    @media (max-width: 640px) {
+      .page-wrapper { padding: 1rem 1.2rem 4rem; padding-top: 4rem; }
+      .cover h1 { font-size: 2rem; }
+      .cover .tagline { font-size: 1rem; }
+      h2 { font-size: 1.35rem; }
+      table { font-size: 0.82rem; }
+      thead th, tbody td { padding: 6px 8px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Navigation Bar -->
+<nav class="nav-bar">
+  <a href="#" class="logo">DUNGEON KNIGHTS</a>
+  <button class="toc-toggle" onclick="toggleToc()">&#9776; Contents</button>
+</nav>
+
+<!-- Table of Contents Sidebar -->
+<nav class="toc-sidebar" id="toc">
+  <div class="toc-label">Contents</div>
+  <a href="#abstract">1. Abstract</a>
+  <a href="#problem">2. The Problem</a>
+  <a href="#what-it-is">3. What Dungeon Knights Is</a>
+  <a href="#game-design">4. Game Design</a>
+  <a href="#economy">5. Economy — $DNG</a>
+  <a href="#architecture">6. Architecture</a>
+  <a href="#contracts">7. Contracts</a>
+  <a href="#delivery">8. Delivery So Far</a>
+  <a href="#phase2">9. Phase 2 — Genesis, Staking & Raffle</a>
+  <a href="#roadmap">10. Roadmap</a>
+  <a href="#open-items">11. Open Items</a>
+  <a href="#risks">12. Risks</a>
+  <a href="#closing">13. Closing</a>
+</nav>
+
+<!-- Main Content -->
+<div class="page-wrapper">
+
+  <!-- ====== COVER ====== -->
+  <div class="cover">
+    <div class="icon">&#9876;</div>
+    <h1>Dungeon Knights</h1>
+    <p class="tagline">An NFT idle-RPG where knights you own clear dungeons you watch, and every reward is a signed, on-chain fact rather than a number the browser made up.</p>
+    <div class="meta">
+      <span><strong>Version 2.0</strong> &middot; September 2026</span><br>
+      <span>Public site: <a href="https://dungeonknights.io">dungeonknights.io</a></span><br>
+      <span>The game: <a href="https://dungeon-knights.vercel.app">dungeon-knights.vercel.app</a></span><br>
+      <span>Code: <a href="https://github.com/MeG0302/dungeon-knights">github.com/MeG0302/dungeon-knights</a></span><br>
+      <span>Network: Robinhood Chain testnet, chain ID 46630</span>
+    </div>
+  </div>
+
+  <!-- Status Box -->
+  <div class="status-box">
+    <p>
+      <strong>Status.</strong> The full contract set in Section 7 is deployed on testnet, and the site reads and writes it. The reward vault holds its published 45% allocation on chain, the backend signer is a key of its own (not the owner), and knights can be summoned, staked, unstaked and claimed against the live deployment. The 1,024 Genesis Knights have not been minted; their price in ETH is set at mint on OpenSea. There has been <strong>no third-party security audit</strong> and <strong>no mainnet deployment</strong>. Every claim below is labelled <span class="tag tag-live">Live</span> <span class="tag tag-written">Written</span> or <span class="tag tag-planned">Planned</span>, and any number that is not decided is marked <span class="tag tag-tbd">TBD</span>.
+    </p>
+  </div>
+
+  <hr>
+
+  <!-- ====== SECTION 1 ====== -->
+  <div class="section-title"><span class="num">1</span><h2>Abstract</h2></div>
+
+  <p>Idle and blockchain games share a credibility problem: the player is asked to believe a number. The game says you earned 40 tokens, the token appears, and nothing anywhere proves a dungeon was played or that the payout was the amount the rules promised.</p>
+
+  <p>Dungeon Knights is built the other way round. The game itself is a full canvas engine (five themed dungeons, pathfinding knights, monsters that fight back, chests that open when killed) and the reward layer sits behind a server that times every run on its own clock, prices it from on-chain rarity, and signs exactly that one run. The contract re-derives the price and refuses anything the signature did not authorise.</p>
+
+  <p>Two collections sit on top of that engine. <strong>Knights</strong> are summonable, uncapped, and earned by playing. <strong>Genesis Knights</strong> are fixed at 1,024, minted once, and earned by staking: hash power decides their passive share of the vault and their raffle tickets, while both collections play the same dungeons for the same published table.</p>
+
+  <p>Everything else follows from one decision: <strong>rewards are not minted.</strong> A funded vault releases a fixed weekly budget, four lines partition it, and every published rate is the table times one weekly scale. The token cannot be inflated to pay a promise, so the promise is stated in ratios that survive whatever level the vault can actually fund.</p>
+
+  <!-- ====== SECTION 2 ====== -->
+  <div class="section-title"><span class="num">2</span><h2>The Problem</h2></div>
+
+  <p>Idle and blockchain games share four problems that Dungeon Knights is designed to address:</p>
+
+  <ol>
+    <li><strong>Unverifiable rewards.</strong> Most "play to earn" front ends decide what you earned and then ask the chain to pay it. The chain has no opinion, so the game has no integrity.</li>
+    <li><strong>ROI promises that ignore supply.</strong> A reward table is meaningless without stating where the tokens come from. If rewards are minted, the promise is inflation.</li>
+    <li><strong>Opaque odds.</strong> Drop rates, capsule outcomes and raffle chances are usually hidden, which is exactly where they should be readable. Here they are published tables, and the code asserts them.</li>
+    <li><strong>Testnet fatigue.</strong> Projects ship a pretty front end and no working loop. Here the loop came first: knights pathfind, fight and die, and have since the first build.</li>
+  </ol>
+
+  <!-- ====== SECTION 3 ====== -->
+  <div class="section-title"><span class="num">3</span><h2>What Dungeon Knights Is</h2></div>
+
+  <p>A player owns ERC-721 <strong>knights</strong>, forms a squad of up to <strong>15</strong>, picks one of <strong>five dungeons</strong>, and watches the squad fight through it on a canvas. Clearing pays <strong>$DNG</strong>, subject to per-knight daily limits. A gatekeeper character, <strong>Arya</strong>, walks the player through each surface the first time it is opened.</p>
+
+  <p>Two hostnames, two jobs: the public site carries the campaign, and the game lives on its own host behind the Kingdom Gate while the project is still in its early phase.</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Route</th>
+        <th>Surface</th>
+        <th>What it does</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td><code>dungeonknights.io/</code></td><td>Landing</td><td>Two doors: the Points Program and the Genesis waitlist</td></tr>
+      <tr><td><code>/genesis</code></td><td>Genesis Knights</td><td>The collection in full: supply, hash-power bands, captures, and the waitlist</td></tr>
+      <tr><td><code>/points</code></td><td><strong>Points Program</strong></td><td>Points Vault run, daily share, one-time tasks, referrals, leaderboard, Hall of Fame</td></tr>
+      <tr><td><code>/portfolio</code></td><td>Portfolio</td><td>$DNG, Knights, Genesis, points and recent activity for the connected wallet</td></tr>
+      <tr><td><code>/hub</code></td><td><strong>Hall of Fame</strong></td><td>All-time claims read from real chain events</td></tr>
+      <tr><td><code>/mint</code></td><td><strong>Summoning Chamber</strong></td><td>Summon knights for 500 $DNG, and open capsules</td></tr>
+      <tr><td><code>/menu</code></td><td><strong>Knight's Hall</strong></td><td>Roster, sort/filter, squad selection, DNG balance</td></tr>
+      <tr><td><code>/dungeons</code></td><td>Dungeon select</td><td>Five maps with difficulty, monsters and themes</td></tr>
+      <tr><td><code>/game</code></td><td>Battle</td><td>The canvas engine: knights, monsters, chests, attacks</td></tr>
+      <tr><td><code>/staking</code></td><td><strong>Staking Vault</strong></td><td>Genesis staking with raffle tickets, Knights staking for yield, real reads and writes</td></tr>
+      <tr><td><code>/tokenomics</code></td><td>Tokenomics</td><td>The economy as the API serves it, derived from one file</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ====== SECTION 4 ====== -->
+  <div class="section-title"><span class="num">4</span><h2>Game Design</h2></div>
+
+  <h3>4.1 Knights, Rarity and the Two Collections</h3>
+
+  <p><strong>Five</strong> rarities, one per on-chain enum slot (0&ndash;4), rolled once. Multipliers affect <strong>gameplay stats only</strong>; reward amounts are table-fixed per rarity.</p>
+
+  <p>The odds below are the single published table. <code>tools/check-rarity.js</code> asserts it against the engine, the shared config, the React helpers, the collection contract that mints them, and each reward contract's constructor, so the interface cannot advertise a tier or a number the contracts do not pay:</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Rarity</th>
+        <th>Roll</th>
+        <th>Power &times;</th>
+        <th>Base speed</th>
+        <th>Reward / clear</th>
+        <th>Daily runs</th>
+        <th>Max DNG / day</th>
+        <th>Hash power</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>Common</td><td>50%</td><td>1.0</td><td>1.0</td><td>12</td><td>5</td><td>60</td><td>15</td></tr>
+      <tr><td>Uncommon</td><td>30%</td><td>1.7</td><td>1.7</td><td>20</td><td>5</td><td>100</td><td>25</td></tr>
+      <tr><td>Rare</td><td>15%</td><td>3.0</td><td>3.0</td><td>36</td><td>4</td><td>144</td><td>36</td></tr>
+      <tr><td>Epic</td><td>4%</td><td>7.5</td><td>7.5</td><td>60</td><td>3</td><td>180</td><td>45</td></tr>
+      <tr><td>Legendary</td><td>1%</td><td>15.0</td><td>15.0</td><td>100</td><td>4</td><td>400</td><td>100</td></tr>
+    </tbody>
+  </table>
+
+  <p>The rolls sum to exactly 100%, which matters: <code>rollRarity()</code> accumulates the percentages and falls through to Common for anything past the last entry, so a table that summed to less than 100 would quietly promote a phantom tier rather than fail. An earlier six-tier table advertised a sixth tier that could never be rolled and had no reward slot to be paid from; Section 11 records the closure.</p>
+
+  <p><strong>Hash power is <code>dailyCapacity &divide; 4</code> for every tier.</strong> That identity is what makes staking pay exactly 90% of playing across the whole collection (see Section 5.6). A hand-typed set (5 / 8 / 15 / 40 / 100) was not proportional to earning power, so a Legendary staker earned 2.1&times; its own dungeon income passively while a Common earned 0.7&times;. Deriving the value from capacity removes the judgement call, and <code>tools/check-rarity.js</code> asserts the identity in every table that carries it.</p>
+
+  <p>Stats: <code>power = (10 + rand&middot;15) &times; multiplier &times; variance(0.8&ndash;1.2)</code>, <code>stamina = (300 + rand&middot;100) &times; multiplier</code>. Squad cap <strong>15</strong>. Melee only, 1s attack cooldown, monsters 500 HP, loot chests 250 HP.</p>
+
+  <h3>4.2 The Five Dungeons</h3>
+
+  <table>
+    <thead>
+      <tr><th>#</th><th>Dungeon</th><th>Theme</th><th>Monster</th><th>Monster attacks with</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td><td>Forgotten Crypts</td><td>Bones and skulls</td><td>Skeletal warrior</td><td>Glowing <strong>black beam</strong> from the mouth</td></tr>
+      <tr><td>2</td><td>Goblin Mines</td><td>Crystal-lit shafts</td><td>Goblin</td><td>Green-yellow <strong>acid vomit</strong></td></tr>
+      <tr><td>3</td><td>Overgrown Temple</td><td>Vines and mushrooms</td><td>Plant creature</td><td><strong>Vine whip</strong></td></tr>
+      <tr><td>4</td><td>Magma Chambers</td><td>Lava channels</td><td>Fire demon</td><td><strong>Flames</strong></td></tr>
+      <tr><td>5</td><td>Void Rift</td><td>Cosmic purple</td><td>Void creature</td><td><strong>Cosmic beam</strong></td></tr>
+    </tbody>
+  </table>
+
+  <p>Each dungeon maps to a monster sprite and a themed tile palette.</p>
+
+  <h3>4.3 Combat Rules</h3>
+
+  <ul>
+    <li><strong>Monsters act.</strong> Monsters fight back with the themed attack above, and they <strong>walk 2 tiles off their mean position</strong> when idle, returning when done.</li>
+    <li><strong>Domains and aggro.</strong> A monster only attacks when a knight is inside its domain, a <strong>3-tile radius, all directions</strong>. It <strong>faces the knight that entered</strong>.</li>
+    <li><strong>Short beams.</strong> Attacks are emitted from the mouth and never exceed <strong>2 tiles</strong> in any direction, drawn slim.</li>
+    <li><strong>No interleaving.</strong> Knights and monsters never occupy or mix into the same tile space.</li>
+    <li><strong>Left and right only.</strong> Knights engage monsters horizontally, never vertically, so the fight reads clearly on screen.</li>
+    <li><strong>Off-beat.</strong> Knight and monster attacks are deliberately staggered; they never land on the same frame.</li>
+    <li><strong>Chests are static.</strong> Loot chests do not walk, do not aggro, and open only when their HP is depleted. They are scenery with a health bar, not combatants.</li>
+    <li><strong>No double damage.</strong> An attack animation (beam, whip, or vomit) is <strong>presentation only</strong>. It applies no damage beyond the damage already modelled, exactly as before the animation existed. This is a deliberate design rule, not an oversight.</li>
+  </ul>
+
+  <h3>4.4 Arya, the Dungeon Gate Keeper</h3>
+
+  <p>A hand-drawn character who appears from the lower middle of the screen with an expression matched to the moment, and a line of dialogue written for that moment:</p>
+
+  <table>
+    <thead>
+      <tr><th>Trigger</th><th>What she does</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Entering the Points Program (first time)</td><td>Walks the whole page: what points are, connect wallet, sign once, clear the vault, share to double</td></tr>
+      <tr><td>Entering the Staking Vault (first time)</td><td>Explains the two sides of the vault, tickets and the weekly pool</td></tr>
+      <tr><td>Map selected, dungeon loading</td><td>Holds the screen while monsters, knights and art finish preloading, so the player never sees the placeholder map</td></tr>
+      <tr><td>Dungeon cleared</td><td>Celebrates the clear and the reward</td></tr>
+      <tr><td>Knight minted</td><td>Welcomes the new recruit, in her own voice rather than a browser alert</td></tr>
+      <tr><td>Returning from the game to the Knight's Hall</td><td>Hands the player back to squad management</td></tr>
+    </tbody>
+  </table>
+
+  <p>She is a functional guide, not a decoration: her walkthrough is what makes a wallet prompt legible to someone who has never seen one.</p>
+
+  <h3>4.5 The Points Program</h3>
+
+  <p>Points are a <strong>participation record with no conversion mechanism</strong> (Section 5.8). The program is designed so every visible number is either checked or labelled as reviewed.</p>
+
+  <h4>Binding an X account</h4>
+
+  <p>A wallet binds one X account, and only one: the binding is permanent and cannot be handed back, because a single X account bound to two wallets would be a farm. Earning requires a binding; a run cleared without one is refused. A wallet that joined the game before the campaign can attach an invite code later, and so can an inviter's referee.</p>
+
+  <h4>The Points Vault</h4>
+
+  <p>A three-floor dungeon, reachable only from inside the Points Program, playable with five <strong>dummy epic knights</strong> granted for the run (not NFTs, not your knights). It clears in roughly 20&ndash;25 seconds and runs on its own map.</p>
+
+  <table>
+    <thead>
+      <tr><th>Floor</th><th>Name</th><th>Points</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td><td>Vault Entrance</td><td>100</td></tr>
+      <tr><td>2</td><td>Treasury Hall</td><td>300</td></tr>
+      <tr><td>3</td><td>Inner Sanctum</td><td>500</td></tr>
+      <tr style="font-weight:600;"><td></td><td>Entry total</td><td>900</td></tr>
+    </tbody>
+  </table>
+
+  <p>Flow: clear a floor, choose <strong>Move to Next Dungeon</strong>; on the third floor choose <strong>Exit</strong> (take the points) or <strong>Share on X</strong>, which doubles the whole entry to <strong>1,800 PTS</strong>. Once a day per wallet, reset at UTC midnight, with the share claim guarded so concurrent requests cannot double-pay. Deploy, recall and exit are available from inside the vault. The share is a tagged post carrying the campaign image, so the timeline shows the run rather than a bare link.</p>
+
+  <h4>One-time Tasks</h4>
+
+  <p>A tab of tasks that pay once per wallet, ever. Each carries a button, its reward, and a note about what is actually checked. The first is a follow of <code>@DNGrobinhood</code>; four more are quote-reposts of campaign posts, each paid separately because each is a separate post to quote. Follow and quote claims are <strong>reviewed before they are credited</strong> (typically within 30&ndash;45 minutes, with the deadline shown on the card) so a throwaway account cannot be paid instantly; the review window is visible, not silent.</p>
+
+  <h4>Referrals</h4>
+
+  <p>Every wallet gets a <strong>five-character invite code</strong> at first entry, shown with both links (site and X post). A referral earns <strong>15%</strong> of a first-degree referee's points and <strong>5%</strong> of a second-degree's, credited as the referee earns. Codes are unique, and attaching one after playing is supported because a player who arrives through the front door is still someone's referee.</p>
+
+  <h4>Leaderboard and Hall of Fame</h4>
+
+  <p>The leaderboard is read from the points store; the Hall of Fame reads claim events from chain, so "all-time claimed" is a fact rather than a total the page keeps.</p>
+
+  <h4>Storage</h4>
+
+  <p>Points live in a shared key-value store (permanent across deployments and restarts), with a file driver for local development. Sessions are HMAC-signed tokens issued after a wallet signature, so a wallet cannot be impersonated by editing a request.</p>
+
+  <hr>
+
+  <!-- ====== SECTION 5 ====== -->
+  <div class="section-title"><span class="num">5</span><h2>Economy &mdash; $DNG</h2></div>
+
+  <h3>5.1 Token Parameters</h3>
+
+  <table>
+    <thead>
+      <tr><th>Item</th><th>Value</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Name / symbol</td><td>Dungeon Token / <strong>$DNG</strong></td></tr>
+      <tr><td>Standard</td><td>ERC-20, 18 decimals</td></tr>
+      <tr><td>Total supply</td><td><strong>1,000,000,000</strong>, minted once at deployment</td></tr>
+      <tr><td>Inflation</td><td><strong>None.</strong> The token source is in this repository and carries no privileged mint after construction</td></tr>
+      <tr><td>Chain today</td><td>Robinhood Chain testnet, ID 46630</td></tr>
+      <tr><td>Chain at mainnet</td><td>Robinhood Chain, ID 4663 (Arbitrum Orbit L2, ETH for gas)</td></tr>
+      <tr><td>Contract (live)</td><td><code>0x3D94e56E0d967633830f6d9E42CE43A64FFfD6Ca</code></td></tr>
+    </tbody>
+  </table>
+
+  <p>The first token deployed (<code>0xA8D54F6F&hellip;</code>) is retired; nothing in the game pays in it any more.</p>
+
+  <div class="callout callout-gold">
+    <p><strong>Key principle:</strong> There is no team allocation, so the 15% treasury is the only bucket funding operations and development. Marketing is the only unvested bucket, so its spend cadence is disclosed publicly instead of enforced by a lock.</p>
+  </div>
+
+  <h3>5.2 Where $DNG Comes From and Goes</h3>
+
+  <p><strong>Rewards are released from a funded vault, not minted.</strong> Summoning a knight costs <strong>500 $DNG</strong>. Rewards come from one contract, <code>RewardVault</code>, which holds the 45% reward allocation and is topped up by summon fees, capsule open fees and Genesis mint proceeds converted into it. It releases a fixed weekly budget with a hard ceiling per line, so the pool <strong>cannot pay out what the project has not put in</strong> and cannot be drained inside a week.</p>
+
+  <p>At the reference population the weekly budget is <strong>1,415,120 $DNG</strong>, partitioned across four lines in fixed shares. The shares are derived from the lines themselves, rounded to basis points so they sum to exactly 10,000:</p>
+
+  <table>
+    <thead>
+      <tr><th>Line</th><th>Share</th><th>Basis points</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Genesis dungeon claims</td><td>29.68%</td><td>2968</td></tr>
+      <tr><td>Genesis staking yield</td><td>26.71%</td><td>2671</td></tr>
+      <tr><td>Knights dungeon claims</td><td>22.95%</td><td>2295</td></tr>
+      <tr><td>Knights staking yield</td><td>20.66%</td><td>2066</td></tr>
+    </tbody>
+  </table>
+
+  <p>Two rules bound the vault beyond the budget itself:</p>
+
+  <ul>
+    <li><strong><code>min(configured, balance / 12)</code>.</strong> No week may be released that would leave the vault funded for fewer than twelve more weeks at that rate, so the vault cannot outlive itself.</li>
+    <li><strong>One scale.</strong> Each week the scale is settled from the burn the last week actually produced: <code>epochScale = min(1, budget / lastWeekBurn)</code>. The published table is the <strong>maximum</strong>, never exceeded; when participation rises above the reference, one scale moves every published number down together, so the tier ratios and the 90% staking rule survive at whatever level is fundable. The interface shows the live rate.</li>
+  </ul>
+
+  <div class="callout callout-warning">
+    <p><strong>Note:</strong> The vault's 45% is not a promise: the deployed vault holds it. The other three buckets sit in the deployer wallet today, and moving them is an ordinary ERC-20 transfer.</p>
+  </div>
+
+  <h3>5.3 Token Distribution</h3>
+
+  <table>
+    <thead>
+      <tr><th>Bucket</th><th>Share</th><th>Amount</th><th>Custody</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>Reward vault</strong></td><td><strong>45%</strong></td><td><strong>450,000,000</strong></td><td><code>RewardVault</code>, spent on claims</td></tr>
+      <tr><td>Liquidity</td><td>30%</td><td>300,000,000</td><td>DEX pool, LP locked 12 months</td></tr>
+      <tr><td>Treasury</td><td>15%</td><td>150,000,000</td><td>Multisig, quarterly release</td></tr>
+      <tr><td>Marketing / community</td><td>10%</td><td>100,000,000</td><td>Multisig, no cliff, no vesting</td></tr>
+      <tr><td>Team</td><td><strong>0%</strong></td><td>&mdash;</td><td>none</td></tr>
+    </tbody>
+  </table>
+
+  <h3>5.4 Break-even Math, in Clears</h3>
+
+  <p>Mint cost is 500 $DNG. Quoting ROI in <strong>clears</strong> rather than dollars is deliberate: a token price cannot break this promise, only a reward table can.</p>
+
+  <table>
+    <thead>
+      <tr><th>Rarity</th><th>Reward / clear</th><th>Clears to 500</th><th>At full daily utilisation</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Common</td><td>12</td><td>42</td><td>8.3 days</td></tr>
+      <tr><td>Uncommon</td><td>20</td><td>25</td><td>5.0 days</td></tr>
+      <tr><td>Rare</td><td>36</td><td>14</td><td>3.5 days</td></tr>
+      <tr><td>Epic</td><td>60</td><td>9</td><td>2.8 days</td></tr>
+      <tr><td>Legendary</td><td>100</td><td>5</td><td>1.3 days</td></tr>
+    </tbody>
+  </table>
+
+  <p>Expected value of one fresh summon at the published drop rates, running every daily run:<br>
+  <code>&Sigma; p&middot;reward&middot;runs = 0.50&middot;60 + 0.30&middot;100 + 0.15&middot;144 + 0.04&middot;180 + 0.01&middot;400 = <strong>92.8 $DNG/day</strong></code>, a payback of <strong>5.39 days</strong>, or <strong>24.04 clears</strong>, of full play on average, and considerably longer if you do not run your knights every day. Squad utilisation, not luck, is the dominant variable.</p>
+
+  <p>Note the shape of that sum: it weights each tier's <strong>daily capacity</strong>, and it is a single weighted total rather than <code>E[reward/clear] &times; E[runs/day]</code>. Multiplying the two averages would say 99.01 $DNG/day, because the tiers that pay the most also get the most runs; the two are correlated, and the product of averages is not the average of the product. The harness asserts the two really do differ, so the weighted sum is a decision rather than an accident.</p>
+
+  <p><em>These figures are computed, not typed.</em> <code>lib/reward-config.js</code> and <code>lib/token-math.js</code> derive every number in this section from the tier table in <code>lib/knights.js</code>, and <code>tools/check-token-math.js</code> fails if this document and the code disagree. That harness exists because they had already disagreed: this section once quoted an expected daily earning fifteen per cent lower and a payback a third of a day longer, from a six-tier table whose probabilities summed to <strong>100.7%</strong>. Nothing failed, because the number lived in a sentence.</p>
+
+  <h3>5.5 Daily Limits, the Budget and the Horizon</h3>
+
+  <p>Per-knight daily caps (5/5/4/3/4 runs) are enforced <strong>on chain</strong>, so even a perfect script cannot exceed them. A 15-knight squad of Legendaries caps at 9,000 $DNG/day, and every payout must be signed and must clear the reward-table check.</p>
+
+  <p>Three things bound a payout, in order of strength:</p>
+
+  <ol>
+    <li><strong>The weekly budget</strong> released by the vault, capped at <code>balance / 12</code>.</li>
+    <li><strong>A hard weekly ceiling per line.</strong> A claim that would exceed its line reverts.</li>
+    <li><strong>One published scale</strong> that moves every number together when participation exceeds the reference.</li>
+  </ol>
+
+  <p>The reference population is <strong>50 Genesis and 500 Knights active on a given day</strong>, which is about 5% of each collection. It is published because it is the honest way to state which population the table is sized for: <em>the full table is payable to about 5% of each collection playing daily, and above that the scale falls in proportion.</em> At that reference the vault's 450,000,000 lasts <strong>2,226 days, about 6.1 years</strong>. Holding the table at scale 1.0 forever costs <strong>73,586,240 $DNG a year</strong>.</p>
+
+  <p>If everyone played and staked at once, the burn would be 4,097,920 $DNG/day and one weekly scale would settle every payout at about <strong>34.5%</strong> of the published table, with the vault still solvent on its own horizon. That is the mechanism working, not failing.</p>
+
+  <h3>5.6 Genesis Income</h3>
+
+  <p>Genesis Knights are paid <strong>flat</strong>: a fixed reward per clear and four runs a day for every one of the 1,024, so playing income does not depend on the band a knight landed in. Hash power moves <strong>passive</strong> income only (staking yield and raffle tickets), which is the whole point of the collection's design: every Genesis knight is equally valuable for playing, and the bands distinguish them where the collection says they should be distinguished.</p>
+
+  <h3>5.7 The Staking Rule</h3>
+
+  <p>Staking pays <strong>90% of what the same knight earns by playing</strong>, stated as a ratio inside each collection rather than as an amount. At matched participation both sides come out at exactly 90.0%; when the two diverge (everyone stakes and nobody plays), the realised ratio moves and the interface shows it.</p>
+
+  <p><code>tickets = floor(min(stakedHours, 168) &times; hashPower)</code> for Genesis. The 168-hour (one week) cap is deliberate: parking a knight forever must not be strictly better than playing, and the cap is shown in the interface rather than hidden in a contract.</p>
+
+  <p>Because both staking lines are fixed shares of the budget, a growing Knights collection divides them among more knights: at the reference-size boundary a Knight earns <strong>5.0%</strong> of its reference payout, and lower beyond it. There is no floor to quote because there is no ceiling on the collection; the ratio is a function of size, and the page shows the size it was computed for.</p>
+
+  <h3>5.8 Capsules</h3>
+
+  <p>Capsules are ERC-1155 tokens minted <strong>only by the raffle</strong> (200 a week, Section 9) and opened in the Summoning Chamber. Opening <strong>burns the capsule and mints one Knight</strong>.</p>
+
+  <p><strong>Opening is never free, and its price rises with the collection.</strong> The fee ramps from <strong>500 $DNG</strong> at zero knights to <strong>5,000 $DNG</strong> at the reference size, then stays flat. The crossover is worth knowing because it is the point from which the faucet funds itself: <strong>from roughly 5,746 knights on, the 200 weekly opens alone cover the whole Knights lines.</strong></p>
+
+  <p>All four capsule types draw only from tiers the reward contracts can pay, and each raises a player's <strong>floor</strong> rather than only shifting weight. Every table sums to exactly 100:</p>
+
+  <table>
+    <thead>
+      <tr><th>Capsule</th><th>Common</th><th>Uncommon</th><th>Rare</th><th>Epic</th><th>Legendary</th><th>Expected yield</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Common Capsule</td><td>60%</td><td>25%</td><td>10%</td><td>4%</td><td>1%</td><td>86.6 $DNG/day</td></tr>
+      <tr><td>Rare Capsule</td><td>&mdash;</td><td>30%</td><td>40%</td><td>20%</td><td>10%</td><td>163.6 $DNG/day</td></tr>
+      <tr><td>Legendary Capsule</td><td>&mdash;</td><td>&mdash;</td><td>20%</td><td>40%</td><td>40%</td><td>260.8 $DNG/day</td></tr>
+      <tr><td>Prime Capsule</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>30%</td><td>70%</td><td>334.0 $DNG/day</td></tr>
+    </tbody>
+  </table>
+
+  <p><em>Expected yield</em> is <code>reward &times; dailyRuns</code> per tier, weighted by the table. The ladder is deliberately not steeper: with five tiers the top rung has nowhere to climb but Legendary, and a Prime that were all Legendary would make every other capsule worthless.</p>
+
+  <div class="callout callout-gold">
+    <p><strong>Capsule type split is still TBD.</strong> The split of the 200 weekly capsules across the four types has not been decided. Nothing in the model assumes a split, and the page does not invent one.</p>
+  </div>
+
+  <h3>5.9 Points Are a Closed Loop</h3>
+
+  <p>Points are an off-chain record with no conversion mechanism, no published ratio and no guarantee of one. <code>tools/check-token-math.js</code> asserts that nothing in the repository converts points to $DNG, and fails if a conversion function appears. Wallets are free, so any conversion would be an unbounded claim on a fixed supply.</p>
+
+  <hr>
+
+  <!-- ====== SECTION 6 ====== -->
+  <div class="section-title"><span class="num">6</span><h2>Architecture</h2></div>
+
+  <h3>6.1 Stack</h3>
+
+  <p>Next.js 14 (App Router) &middot; React 18 &middot; a vanilla-JS canvas game engine (vendored, classic scripts) &middot; ethers.js v5 (pinned, offline-capable) &middot; Vercel.</p>
+
+  <p>The engine is <strong>reused, not rewritten</strong>: the <code>/game</code> route renders the exact DOM the original engine expects, injects the engine scripts, and re-fires <code>DOMContentLoaded</code> so the engine boots itself. The React shell supplies routing, metadata and the wallet facade. Server routes hold every secret; nothing sensitive ships to the browser.</p>
+
+  <h3>6.2 The On-chain / Off-chain Split</h3>
+
+  <table>
+    <thead>
+      <tr><th>Layer</th><th>Owns</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>Chain</strong></td><td>Ownership of knights, rarity, hash power, staking positions, raffle tickets, daily run caps, the reward table, payments, nonce replay protection</td></tr>
+      <tr><td><strong>Server</strong></td><td>Run timing, reward pricing, the signature, points records, waitlist records, leaderboard and history read from chain events</td></tr>
+      <tr><td><strong>Browser</strong></td><td>Rendering, input, local session state. <strong>Trusted for nothing that costs money</strong></td></tr>
+    </tbody>
+  </table>
+
+  <h3>6.3 The Signed-Run Gate</h3>
+
+  <p>Three layers, in order:</p>
+
+  <p><strong>1 &middot; Run tokens.</strong> When a dungeon starts, the client asks for a token: an HMAC over <code>address | knightIds | dungeonId | server start time</code>, base64url-encoded, 6-hour TTL. The start time is the <strong>server's</strong>, so a browser cannot backdate a run.</p>
+
+  <p><strong>2 &middot; Minimum time.</strong> <code>minimumTime = max(30s, 300s / &radic;knightCount)</code>, measured on the server clock. One knight must be in the dungeon 5 minutes; fifteen, 77 seconds. This mirrors the design note in <code>KNIGHT-SCALING.md</code>: &radic; scaling, because 2&times; knights is not 2&times; speed.</p>
+
+  <p><strong>3 &middot; Receipts.</strong> On completion the server prices the run <strong>from on-chain rarity</strong> and signs exactly:</p>
+
+  <pre><code>keccak256(abi.encode(
+  player, keccak256(abi.encodePacked(knightIds)),
+  dungeonId, reward, nonce, expiry, block.chainid, contractAddress
+))</code></pre>
+
+  <p>signed as an EIP-191 personal message. The contract independently re-derives the reward from on-chain rarity and requires it to equal the signed total, so a compromised or buggy signer cannot overpay. The nonce is <strong>single-use on chain</strong>, which is why none of this needs a database.</p>
+
+  <p><code>DungeonKnightsGameV4</code> is <strong>deployed and live</strong>; the server signer is a dedicated key that holds no admin rights.</p>
+
+  <h3>6.4 Staking Reads and Writes</h3>
+
+  <p>The Staking Vault reads the wallet's <strong>real holdings</strong> from the collections on chain, the same read path the game uses, so a wallet's actual knights appear rather than a fixture. It can send <strong>approve, stake, unstake and claim</strong> transactions against the deployed staking contracts.</p>
+
+  <p>Honesty about state is a design rule, not a badge that follows a deployment: a side whose staking contract is not configured says it is a preview, because a plan against an empty address is a button that cannot do anything. <code>lib/staking-config.js</code> holds the flag that says the interface can send (<code>STAKING_WRITES_READY</code>, asserted by <code>tools/check-staking.js</code> so it cannot be flipped without the transaction path behind it), and the snapshot requires the contract address as well as the flag. Fixing one constant cannot make a deployment look live that is not.</p>
+
+  <h3>6.5 Points Integrity</h3>
+
+  <ul>
+    <li><strong>Sign-in is a signature.</strong> The server issues a nonce, the wallet signs it, and the signer is recovered. What comes back is a small HMAC-signed token the browser stores and sends as a bearer header. Both halves are stateless; the store only records points.</li>
+    <li><strong>One payout per event, ever.</strong> Vault runs, the daily share, the follow claim and each quote-repost are guarded once per wallet (and once per X account for the follow), with concurrency proven under load rather than assumed.</li>
+    <li><strong>One X account, one wallet.</strong> The binding is permanent; there is no unbind, because an unbind is a farm.</li>
+    <li><strong>The store is shared and permanent.</strong> Points survive restarts and deployments; the local file driver exists for development only.</li>
+    <li><strong>Every claim says what was checked.</strong> A task card states what is verified and what is reviewed before credit; the review deadline is shown.</li>
+  </ul>
+
+  <div class="pull-quote">
+    <p><strong>Does:</strong> no payout without a backend signature; no replay; the reward cannot exceed the on-chain table; the minimum time is enforced on a clock the player does not control; the legacy unsigned contract can be paused so both paths cannot be farmed at once; the vault cannot pay beyond its budget or its runway.</p>
+    <p style="margin-top:0.8rem;"><strong>Does not:</strong> prove a human watched. A bot that starts and finishes runs on schedule still earns, but it must wait exactly as long as an honest player, and the on-chain daily caps bound it either way. Proving gameplay is backend-verification work, not a contract change, and it is on the roadmap (Section 10).</p>
+  </div>
+
+  <hr>
+
+  <!-- ====== SECTION 7 ====== -->
+  <div class="section-title"><span class="num">7</span><h2>Contracts</h2></div>
+
+  <h3>7.1 The Live Set</h3>
+
+  <p>Nine contracts, deployed one step at a time by <code>tools/deploy-phase2.js</code>, which compiles in-process, reads each contract's published numbers back and <strong>refuses to continue if any of them disagree with <code>lib/</code></strong>, then does the wiring as separate steps. Constructor arguments are derived from <code>lib/</code>, never typed.</p>
+
+  <table>
+    <thead>
+      <tr><th>Contract</th><th>Address</th><th>Role</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>RewardVault</code></td><td><code>0x6Cc2&hellip;e0Cc</code></td><td>Holds the 45% reward allocation; releases the weekly budget across four lines</td></tr>
+      <tr><td><code>DNGToken</code></td><td><code>0x3D94&hellip;D6Ca</code></td><td>ERC-20, fixed 1,000,000,000 supply</td></tr>
+      <tr><td><code>GenesisKnights</code></td><td><code>0xbd99&hellip;9e5d</code></td><td>ERC-721, 1,024 supply, on-chain hash power</td></tr>
+      <tr><td><code>GenesisStaking</code></td><td><code>0x173c&hellip;D7FD</code></td><td>Genesis stake/unstake/claim; raffle tickets</td></tr>
+      <tr><td><code>Knights</code></td><td><code>0x27Cf&hellip;1B2D</code></td><td>ERC-721, uncapped, summon and capsule mint</td></tr>
+      <tr><td><code>Capsules</code></td><td><code>0x628a&hellip;2728</code></td><td>ERC-1155 capsules, mintable only by the raffle, burns on open</td></tr>
+      <tr><td><code>KnightsStaking</code></td><td><code>0x27fB&hellip;a627</code></td><td>Knights stake/unstake/claim; yield only</td></tr>
+      <tr><td><code>RaffleContract</code></td><td><code>0xc263&hellip;5b4C</code></td><td>Weekly draw, 200 capsules, ticket ranges per entry</td></tr>
+      <tr><td><code>DungeonKnightsGameV4</code></td><td><code>0xD60F&hellip;d8a8</code></td><td>Signed dungeon runs, reward re-derivation, daily caps</td></tr>
+    </tbody>
+  </table>
+
+  <p>Owner of all nine: <code>0x038d&hellip;f4C9</code> (the deployer). The backend signer is a separate key, <code>0x69EF&hellip;d643C</code>, which holds <code>trustedSigner</code> and no admin role, so the key that signs runs cannot move the economy.</p>
+
+  <div class="callout callout-gold">
+    <p><strong>State on chain today:</strong> The vault holds the full <strong>450,000,000 $DNG</strong> allocation; the Knights collection holds <strong>23 knights</strong> minted in the repaired set; the Genesis collection holds <strong>0</strong>, because minting has not opened.</p>
+  </div>
+
+  <h3>7.2 Lineage, Retirements and the Drained Contracts</h3>
+
+  <p>The lineage is not academic. The earliest versions were <strong>exploited and emptied</strong>, and the recovery is where this project's trust model comes from. All four were drained and disabled on 15 September 2026, with <strong>320,339 $DNG recovered</strong>.</p>
+
+  <table>
+    <thead>
+      <tr><th>Address</th><th>Version</th><th>What went wrong</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>0x45B9&hellip;0E17</code></td><td>V1</td><td>Self-signed rewards exploit</td></tr>
+      <tr><td><code>0xb4ce&hellip;1ec5</code></td><td>V1</td><td>Self-signed rewards exploit</td></tr>
+      <tr><td><code>0xbA21&hellip;797F</code></td><td>V1</td><td>Self-signed rewards exploit</td></tr>
+      <tr><td><code>0xd6D4&hellip;cFd5</code></td><td>V2</td><td>Stranded: 30-second cooldowns blocked claims</td></tr>
+    </tbody>
+  </table>
+
+  <p><strong>Do not interact with those addresses.</strong> The V1 failure is the whole argument of this paper in one incident: when the client signs its own rewards, the client <em>is</em> the attacker, and the treasury is the loss ceiling. V3 removed the client's ability to invent runs; V4 removed the client's ability to invent <em>authorisation</em>.</p>
+
+  <p><strong>Superseded, and recorded on purpose.</strong> <code>DungeonKnightsGameV3-Simple</code> (<code>0xD8de&hellip;36e5</code>) pays the older table <strong>10 / 17 / 30 / 75 / 150</strong> with caps 5/5/4/3/4 and is no longer what the site uses. It is still callable and still unpaused, and it holds 384 $DNG of the <strong>retired</strong> first token (<code>0xA8D54F6F&hellip;</code>). Closing it is a pause and a withdrawal. Its reward numbers are shown here because a repo whose source disagrees with the bytecode it produced should say so: <code>tools/check-rarity.js</code> asserts both the published table on V4 and the divergence recorded in this paragraph.</p>
+
+  <h3>7.3 Security Posture</h3>
+
+  <p><strong>Present:</strong> OpenZeppelin <code>Ownable2Step</code>, <code>SafeERC20</code>, <code>ReentrancyGuard</code>; immutable cross-contract references; treasury balance checked before every transfer; nonce burned before any external call; EIP-2 low-s enforcement in the signature recovery; receipt expiry; admin actions limited to the reward table, daily caps, pause, signer rotation, funding and withdrawal, each emitting an event. The owner key and the run-signing key are separate.</p>
+
+  <div class="callout callout-warning">
+    <p><strong>Not yet present, and this is the largest single risk in the project:</strong> no third-party audit, no timelock, no multisig (the owner is a single externally-owned wallet), and no bug-bounty programme. These are Phase 3 items, and the V1 history above is why they are treated as prerequisites rather than polish.</p>
+  </div>
+
+  <hr>
+
+  <!-- ====== SECTION 8 ====== -->
+  <div class="section-title"><span class="num">8</span><h2>Delivery So Far</h2></div>
+
+  <table>
+    <thead>
+      <tr><th>#</th><th>Shipped</th><th>State</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td><td>Canvas engine: pathfinding, melee combat, stamina, five themed dungeons</td><td>Live</td></tr>
+      <tr><td>2</td><td>Knight NFTs with a five-tier rarity roll, Summoning Chamber, 500 $DNG summons</td><td>Live</td></tr>
+      <tr><td>3</td><td>Knight's Hall: roster, sort/filter, squad selection, up to 15 deployed</td><td>Live</td></tr>
+      <tr><td>4</td><td>Monsters that fight back: themed attacks, 3-tile domains, facing, 2-tile beams, static chests, no double damage</td><td>Live</td></tr>
+      <tr><td>5</td><td>On-chain rewards with daily caps, signed runs, and the funded vault behind them</td><td>Live</td></tr>
+      <tr><td>6</td><td>Hall of Fame and portfolio reads from real chain events</td><td>Live</td></tr>
+      <tr><td>7</td><td>Points Program: vault run, daily share, one-time tasks, referrals, leaderboard, permanent store</td><td>Live</td></tr>
+      <tr><td>8</td><td>Arya the gate keeper across six moments, including holding the screen during dungeon load</td><td>Live</td></tr>
+      <tr><td>9</td><td>Wallet facade with hardware-wallet and mobile paths, plus Privy embedded wallets</td><td>Live</td></tr>
+      <tr><td>10</td><td>Staking Vault: real holdings, live accrual, tickets, capsule odds, and a real transaction path</td><td>Live</td></tr>
+      <tr><td>11</td><td>Genesis page: collection, bands, captures, waitlist, and the Google Form the list also lands in</td><td>Live</td></tr>
+      <tr><td>12</td><td>Two hostnames: public campaign site and a password-gated game host</td><td>Live</td></tr>
+      <tr><td>13</td><td>Verification harnesses: 29 suites under <code>tools/</code>, covering contracts, the economy, points, staking, routing and in-browser behaviour</td><td>Live</td></tr>
+    </tbody>
+  </table>
+
+  <hr>
+
+  <!-- ====== SECTION 9 ====== -->
+  <div class="section-title"><span class="num">9</span><h2>Phase 2 &mdash; Genesis, Staking and the Raffle</h2></div>
+
+  <p><strong>Genesis.</strong> A fixed 1,024-knight collection. Each carries an on-chain <code>hashPower</code> between <strong>300 and 1,000</strong>, which is the only input to staking yield besides time. The rule is deliberately simple to state: <strong>1 hash power = 1 ticket per hour staked.</strong> A 1,000-HP knight banks 1,000 tickets an hour; a 300-HP knight exactly a third of that.</p>
+
+  <p>The distribution is <strong>published before mint and machine-checked</strong>: six bands, a bell with a thin top, 64 knights at 900+, mean hash power 615.5, every count matching a test in <code>tools/check-staking.js</code> so the promise cannot drift once knights are sold. Full tables (tickets per hour, pool share and expected capsules per band) are in <a href="GENESIS-HASH-POWER.md">GENESIS-HASH-POWER.md</a>.</p>
+
+  <p><strong>Staking.</strong> One pool per collection, and they are not interchangeable: Genesis stakes for yield <strong>and</strong> raffle tickets, Knights for yield alone. <code>tickets = floor(min(stakedHours, 168) &times; hashPower)</code>. The 168-hour cap is shown in the interface rather than hidden in a contract.</p>
+
+  <p><strong>The weekly raffle.</strong> <strong>200 capsules</strong> are awarded each week, split in proportion to ticket share, to staked Genesis knights only. The week turns over <strong>Monday 00:00 UTC</strong>, computed from a fixed epoch so no timezone disagrees about which week it is. For the minutes after the boundary, before the draw has run, the interface says <em>Drawing&hellip;</em> rather than showing an expired countdown. At full Genesis participation a knight wins roughly <strong>0.2 capsules per week</strong>, one every five weeks on average; the per-band tables are in the Genesis paper.</p>
+
+  <p><strong>Capsules.</strong> Minted only by the raffle, opened in the Summoning Chamber at the rising fee in Section 5.7, burning the capsule and minting one Knight of the rolled tier. Odds are shown in the interface, every table sums to exactly 100, and <strong>no table offers a tier the reward contracts cannot pay</strong>.</p>
+
+  <p><strong>The weekly pool has a number, because it has funding.</strong> Staking is not a separate promise: it is the Genesis staking line (26.71%) and the Knights staking line (20.66%) of the weekly budget the vault releases, and the interface shows DNG figures derived from the same file the contracts were deployed from.</p>
+
+  <hr>
+
+  <!-- ====== SECTION 10 ====== -->
+  <div class="section-title"><span class="num">10</span><h2>Roadmap</h2></div>
+
+  <table>
+    <thead>
+      <tr><th>Phase</th><th>Focus</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Phase 1</strong> &mdash; Core game and live rewards</td>
+        <td>Five dungeons, five-rarity NFTs, on-chain claims with daily caps, Points Program, Arya, portfolio and Hall of Fame</td>
+        <td><span class="tag tag-live">Shipped</span></td>
+      </tr>
+      <tr>
+        <td><strong>Phase 2</strong> &mdash; Genesis, staking, raffle, capsules</td>
+        <td>The nine-contract set is deployed, wired and used by the site. Remaining: open the Genesis mint and settle the capsule-type split</td>
+        <td><span class="tag tag-live">Shipped</span></td>
+      </tr>
+      <tr>
+        <td><strong>Phase 3</strong> &mdash; Mainnet</td>
+        <td>Deploy to Robinhood Chain mainnet (ID 4663); split remaining supply into published buckets, lock LP, move ownership to multisig with timelock, publish signer rotation policy, commission the audit</td>
+        <td><span class="tag tag-planned">Next</span></td>
+      </tr>
+      <tr>
+        <td><strong>Phase 4</strong> &mdash; Depth</td>
+        <td>Marketplace, equipment and upgrades as a token sink, guilds, seasons and resets, leaderboard prizes, PvP tournaments, backend verification of gameplay rather than timing alone</td>
+        <td><span class="tag tag-planned">Planned</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <hr>
+
+  <!-- ====== SECTION 11 ====== -->
+  <div class="section-title"><span class="num">11</span><h2>Open Items</h2></div>
+
+  <p>Disclosed because a whitepaper that hides these is worth less than the paper it is printed on. Each item is either dated or marked TBD, and closed items are recorded in Section 11.11.</p>
+
+  <table>
+    <thead>
+      <tr><th>#</th><th>Item</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>1</td>
+        <td>The Genesis mint has not happened. Zero of 1,024 are minted, and the price in ETH is TBD; the mint runs on OpenSea. The waitlist is open and stores both email and EVM address.</td>
+        <td><span class="tag tag-tbd">TBD</span></td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td>No audit, no multisig, no timelock. The owner is a single externally-owned wallet.</td>
+        <td><span class="tag tag-warn">Phase 3</span></td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td>Three-quarters of the supply sits in one wallet. Only the vault's 45% was required at construction; liquidity, treasury and marketing buckets are still in the deployer wallet pending custody setup.</td>
+        <td><span class="tag tag-warn">Open</span></td>
+      </tr>
+      <tr>
+        <td>4</td>
+        <td>The legacy contract is not paused. <code>DungeonKnightsGameV3-Simple</code> still exposes its unsigned claim path and holds 384 $DNG of the retired first token. Closing it is pause() plus a withdrawal.</td>
+        <td><span class="tag tag-danger">Open</span></td>
+      </tr>
+      <tr>
+        <td>5</td>
+        <td>The capsule-type split is TBD &mdash; how the 200 weekly capsules divide across the four types. Nothing in the model depends on it.</td>
+        <td><span class="tag tag-tbd">TBD</span></td>
+      </tr>
+      <tr>
+        <td>6</td>
+        <td><code>app.dungeonknights.io</code> does not resolve yet. The apex redirects game paths to it, so until the DNS record lands, the working address is <code>dungeon-knights.vercel.app</code>.</td>
+        <td><span class="tag tag-warn">Open</span></td>
+      </tr>
+      <tr>
+        <td>7</td>
+        <td>Follow and quote claims are reviewed, not instant. The review window (30&ndash;45 minutes) keeps a throwaway account from being paid on the spot. The X-API verification path exists but is not enabled in production.</td>
+        <td><span class="tag tag-written">Written</span></td>
+      </tr>
+      <tr>
+        <td>8</td>
+        <td>The reference population is a judgement call, published. 50 Genesis and 500 Knights active on a given day sets the budget. The mechanism does not depend on it being right: above the reference, one scale moves every number down together.</td>
+        <td><span class="tag tag-written">Published</span></td>
+      </tr>
+      <tr>
+        <td>9</td>
+        <td>Knights staking thins out as the collection grows. Both Knights lines are fixed shares of the budget, so a Knight's staking yield falls as the collection grows. This is intentional.</td>
+        <td><span class="tag tag-written">By design</span></td>
+      </tr>
+      <tr>
+        <td>10</td>
+        <td>The table's long-run funding depends on the mint. Capsule opens cover 5.2M of the 73.6M $DNG/year at reference; the remainder has to come from Genesis mint proceeds converted into the vault.</td>
+        <td><span class="tag tag-warn">Depends on mint</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <hr>
+
+  <!-- ====== SECTION 12 ====== -->
+  <div class="section-title"><span class="num">12</span><h2>Risks</h2></div>
+
+  <table>
+    <thead>
+      <tr><th>Risk</th><th>Mitigation</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Reward pool drain by scripted farming</strong></td>
+        <td>On-chain per-knight daily caps, signed runs, reward re-derived on chain, weekly budget with per-line ceilings. Bounded, not eliminated.</td>
+      </tr>
+      <tr>
+        <td><strong>Contract bug or exploit</strong></td>
+        <td>OpenZeppelin primitives, ReentrancyGuard, pause switch, check-before-transfer, separate owner and signer keys. <strong>Not audited.</strong> The V1 deployments were exploited once.</td>
+      </tr>
+      <tr>
+        <td><strong>Reward pool exhausted before the economy matures</strong></td>
+        <td>The vault cannot release a week that shortens its runway below 12 weeks, and the scale mechanism moves every payout together rather than breaking a promise.</td>
+      </tr>
+      <tr>
+        <td><strong>Signer key compromise</strong></td>
+        <td>Rotatable trustedSigner; a compromised signer cannot overpay past the on-chain table, and it holds no admin role.</td>
+      </tr>
+      <tr>
+        <td><strong>$DNG price volatility</strong></td>
+        <td>ROI is quoted in <strong>clears</strong>, never in USD, so a price move does not break a stated promise.</td>
+      </tr>
+      <tr>
+        <td><strong>Capsule faucet</strong></td>
+        <td>Extra knights split a fixed pot instead of creating new claims, the open price is never zero and rises with the collection, and from ~5,746 knights the weekly opens cover the Knights lines outright.</td>
+      </tr>
+      <tr>
+        <td><strong>The live legacy contract pays an older table</strong></td>
+        <td><strong>Recorded.</strong> DungeonKnightsGameV3-Simple pays 10/17/30/75/150 and is not what the site uses. V4 pays the published table.</td>
+      </tr>
+      <tr>
+        <td><strong>A points-to-$DNG conversion appears</strong></td>
+        <td>Unmitigated by design: there is no conversion, and the harness asserts none has appeared.</td>
+      </tr>
+      <tr>
+        <td><strong>Off-chain scoring trust (points)</strong></td>
+        <td>Server-issued nonces, HMAC sessions, once-per-wallet and once-per-account guards proven under concurrent load, permanent shared store.</td>
+      </tr>
+      <tr>
+        <td><strong>Thin liquidity at mainnet</strong></td>
+        <td>30% of supply reserved for liquidity with a 12-month lock, as a requirement rather than a hope.</td>
+      </tr>
+      <tr>
+        <td><strong>Wallets are free, so Sybils are cheap</strong></td>
+        <td>One X account binds to one wallet permanently, and the points paid per account are one-time. Points carry no conversion, so the incentive to Sybil is bounded by the leaderboard rather than by a payout.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <hr>
+
+  <!-- ====== SECTION 13 ====== -->
+  <div class="section-title"><span class="num">13</span><h2>Closing</h2></div>
+
+  <p>Most of the interesting work in this project is invisible when it is working. The dungeons render, the monsters swing back, the chests stay put, and the DNG arrives. None of that is the point. The point is that when the DNG arrives, a signature proves which run paid it, the contract proves the amount was the table's amount, the daily cap proves nobody exceeded their allowance, and the timestamps prove the run took at least as long as an honest one would.</p>
+
+  <p>Everything else, the vault, the raffle, the capsule odds, the points program, is designed to the same standard: <strong>publish the number, or say TBD, and let a harness fail if the two ever drift apart.</strong></p>
+
+  <!-- Footer -->
+  <div class="doc-footer">
+    <p class="brand">Dungeon Knights</p>
+    <p>Whitepaper v2.0 &middot; September 2026</p>
+    <p>Addresses and balances were read from the Robinhood Chain testnet on 22 September 2026.</p>
+    <p>This document is a description of software, not an offer, a solicitation, or financial advice. $DNG has no guaranteed value, no audited contract, and no mainnet deployment. Verify every address before interacting.</p>
+  </div>
+
+</div>
+
+<script>
+  function toggleToc() {
+    document.getElementById('toc').classList.toggle('open');
+  }
+
+  // Close TOC when a link is clicked
+  document.querySelectorAll('.toc-sidebar a').forEach(function(link) {
+    link.addEventListener('click', function() {
+      document.getElementById('toc').classList.remove('open');
+    });
+  });
+
+  // Close TOC when clicking outside
+  document.addEventListener('click', function(e) {
+    var toc = document.getElementById('toc');
+    var btn = document.querySelector('.toc-toggle');
+    if (!toc.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
+      toc.classList.remove('open');
+    }
+  });
+</script>
+
+</body>
+</html>

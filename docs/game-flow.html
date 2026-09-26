@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Dungeon Knights — how a run works, and why five is the limit</title>
+<style>
+    :root {
+        --bg: #0d0b09;
+        --panel: #161310;
+        --panel-2: #1d1915;
+        --line: #33291d;
+        --gold: #d4a843;
+        --gold-dim: #a8823a;
+        --text: #e8e2d7;
+        --muted: #8a8177;
+        --green: #10b981;
+        --red: #ef4444;
+        --amber: #f59e0b;
+    }
+    * { box-sizing: border-box; }
+    body {
+        margin: 0; padding: 40px 28px 64px;
+        background:
+            radial-gradient(ellipse at 50% -10%, rgba(212,168,67,0.09), rgba(0,0,0,0) 60%),
+            var(--bg);
+        color: var(--text);
+        font: 14px/1.6 "Segoe UI", system-ui, sans-serif;
+    }
+    .wrap { max-width: 1080px; margin: 0 auto; }
+    h1 {
+        font-size: 26px; letter-spacing: 2px; text-transform: uppercase;
+        color: var(--gold); margin: 0 0 6px;
+    }
+    .sub { color: var(--muted); font-size: 13px; margin: 0 0 34px; }
+    h2 {
+        font-size: 14px; letter-spacing: 2px; text-transform: uppercase;
+        color: var(--gold-dim); margin: 42px 0 14px;
+        border-bottom: 1px solid var(--line); padding-bottom: 8px;
+    }
+    p { margin: 0 0 12px; }
+    code, .mono { font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: var(--gold); }
+    .muted { color: var(--muted); }
+
+    .flow { display: block; width: 100%; height: auto; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+    th { color: var(--muted); font-weight: 600; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; }
+    td.num { font-family: ui-monospace, Consolas, monospace; }
+    .ok { color: var(--green); }
+    .no { color: var(--red); }
+    .warn { color: var(--amber); }
+
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(212px, 1fr)); gap: 12px; }
+    .card {
+        background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px;
+    }
+    .card h3 { margin: 0 0 6px; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: var(--gold); }
+    .card p { margin: 0; font-size: 12px; color: var(--muted); }
+    .card .where { display: block; margin-top: 8px; font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: var(--gold-dim); }
+
+    .formula {
+        background: var(--panel-2); border-left: 3px solid var(--gold);
+        padding: 12px 16px; margin: 14px 0; font-family: ui-monospace, Consolas, monospace; font-size: 13px;
+    }
+    .ladder { display: flex; align-items: flex-end; gap: 6px; margin-top: 10px; }
+    .rung { flex: 1; text-align: center; }
+    .rung .bar { border-radius: 3px 3px 0 0; background: linear-gradient(180deg, var(--gold), var(--gold-dim)); }
+    .rung .bar.used { background: linear-gradient(180deg, #4a3f2c, #2c2418); }
+    .rung .bar.refused { background: repeating-linear-gradient(45deg, #3a1414, #3a1414 4px, #2a0d0d 4px, #2a0d0d 8px); }
+    .rung span { display: block; font-size: 11px; color: var(--muted); margin-top: 6px; }
+    .gate-row { display: grid; grid-template-columns: 34px 1fr; gap: 12px; align-items: start; margin-bottom: 12px; }
+    .gate-n {
+        width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--gold-dim);
+        color: var(--gold); display: flex; align-items: center; justify-content: center;
+        font-size: 12px; font-family: ui-monospace, monospace;
+    }
+    .gate-row strong { color: var(--text); }
+    footer { margin-top: 46px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--line); padding-top: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+    <h1>How a run works</h1>
+    <p class="sub">The whole loop, the one screen that was missing from it, and the arithmetic that stops a sixth run on the same day. Everything here is read off the shipped code — nothing is aspirational.</p>
+
+    <h2>The loop</h2>
+    <svg class="flow" viewBox="0 0 1000 430" role="img" aria-label="Run loop from the Knights Hall through a dungeon to the next map">
+        <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#a8823a"></path>
+            </marker>
+            <style>
+                .box { fill: #161310; stroke: #33291d; stroke-width: 1.5; rx: 6; }
+                .box-gate { fill: #1d1915; stroke: #d4a843; stroke-width: 1.5; }
+                .t { fill: #e8e2d7; font: 600 13px "Segoe UI", sans-serif; }
+                .s { fill: #8a8177; font: 11px "Segoe UI", sans-serif; }
+                .g { fill: #d4a843; font: 600 11px "Segoe UI", sans-serif; letter-spacing: 1px; }
+                .l { stroke: #a8823a; stroke-width: 1.4; fill: none; marker-end: url(#arrow); }
+            </style>
+        </defs>
+
+        <!-- 1. the hall -->
+        <rect class="box" x="18" y="40" width="200" height="84"></rect>
+        <text class="g" x="34" y="62">1 · KNIGHTS HALL</text>
+        <text class="t" x="34" y="84">Pick up to 15 knights</text>
+        <text class="s" x="34" y="102">runs left is read from the chain,</text>
+        <text class="s" x="34" y="116">not from the card's own guess</text>
+
+        <!-- 2. the quest board -->
+        <rect class="box" x="268" y="40" width="200" height="84"></rect>
+        <text class="g" x="284" y="62">2 · QUEST BOARD</text>
+        <text class="t" x="284" y="84">Choose one of five maps</text>
+        <text class="s" x="284" y="102">a loading transition covers</text>
+        <text class="s" x="284" y="116">the hand-off into the dungeon</text>
+
+        <!-- 3. the gate (new) -->
+        <rect class="box-gate" x="518" y="40" width="200" height="84"></rect>
+        <text class="g" x="534" y="62">3 · MAP GATE</text>
+        <text class="t" x="534" y="84">Art arrives behind a gate</text>
+        <text class="s" x="534" y="102">floor, monsters, sprites, video;</text>
+        <text class="s" x="534" y="116">it lifts when they have settled</text>
+
+        <!-- 4. the run -->
+        <rect class="box" x="768" y="40" width="214" height="84"></rect>
+        <text class="g" x="784" y="62">4 · THE RUN</text>
+        <text class="t" x="784" y="84">Deploy → clear the loot</text>
+        <text class="s" x="784" y="102">every knight in the squad is</text>
+        <text class="s" x="784" y="116">one run each, spent at claim</text>
+
+        <!-- 5. cleared -->
+        <rect class="box" x="768" y="180" width="214" height="84"></rect>
+        <text class="g" x="784" y="202">5 · CLEARED</text>
+        <text class="t" x="784" y="224">Reward is priced and recorded</text>
+        <text class="s" x="784" y="242">server signs it when V4 is on;</text>
+        <text class="s" x="784" y="256">the modal counts down 60s</text>
+
+        <!-- 6. next map, behind the gate -->
+        <rect class="box-gate" x="432" y="180" width="286" height="84"></rect>
+        <text class="g" x="448" y="202">6 · THE NEXT MAP — GATED</text>
+        <text class="t" x="448" y="224">Auto-progress rebuilds the dungeon</text>
+        <text class="s" x="448" y="242">the same gate covers it, and the squad</text>
+        <text class="s" x="448" y="256">gets its run the moment the gate lifts</text>
+
+        <!-- 7. the budget gate -->
+        <rect class="box-gate" x="18" y="180" width="384" height="84"></rect>
+        <text class="g" x="34" y="202">BEFORE 4 AND BEFORE 6 · THE RUN BUDGET</text>
+        <text class="t" x="34" y="224">A squad enters only while every knight</text>
+        <text class="s" x="34" y="242">can still pay for the run. If one is spent, the squad</text>
+        <text class="s" x="34" y="256">rests instead of clearing a dungeon for nothing.</text>
+
+        <!-- 8. claim -->
+        <rect class="box" x="18" y="320" width="964" height="86"></rect>
+        <text class="g" x="34" y="342">7 · CLAIM — WHERE THE RUN IS ACTUALLY SPENT</text>
+        <text class="t" x="34" y="364">"Claim All" calls the game contract: <tspan class="mono" fill="#d4a843">claimSignedRuns</tspan> on V4, <tspan class="mono" fill="#d4a843">batchClaimRewards</tspan> on V3.</text>
+        <text class="s" x="34" y="382">It charges one run to every knight in the run and requires <tspan class="mono">runsUsed &lt; dailyCap[rarity]</tspan> — the sixth is refused here, on chain, whoever asks.</text>
+        <text class="s" x="34" y="398">The day rolls over at 12:00 UTC for every wallet: <tspan class="mono">currentDayIndex()</tspan>.</text>
+
+        <!-- arrows -->
+        <!-- the run of the loop, left to right and back again -->
+        <path class="l" d="M 218 82 L 264 82"></path>
+        <path class="l" d="M 468 82 L 514 82"></path>
+        <path class="l" d="M 718 82 L 764 82"></path>
+        <path class="l" d="M 875 124 L 875 176"></path>
+        <path class="l" d="M 768 222 L 722 222"></path>
+        <path class="l" d="M 432 222 L 406 222"></path>
+
+        <!-- a claim spends the run, which is what moves the roster's number -->
+        <path class="l" d="M 300 320 L 300 270"></path>
+        <text class="s" x="312" y="300">claiming spends the run</text>
+
+        <!-- and the loop starts again the next reset-day, routed outside every box -->
+        <path class="l" d="M 18 363 L 9 363 L 9 22 L 118 22 L 118 34"></path>
+        <text class="s" x="26" y="16">the next reset-day begins — every knight refreshes to its cap</text>
+
+        <!-- the budget gates the two places a run can start -->
+        <text class="s" x="34" y="278">gates 4 and 6, both of them</text>
+    </svg>
+
+    <h2>Why five is the limit — the arithmetic</h2>
+    <p>Two numbers decide whether a squad may enter, and they live in different places:</p>
+    <table>
+        <tr>
+            <th>Number</th><th>Where it comes from</th><th>What it means</th>
+        </tr>
+        <tr>
+            <td class="num">runsRemaining(id)</td>
+            <td>the game contract — <code>runsRemaining()</code></td>
+            <td>claims this knight still has in the current reset-day</td>
+        </tr>
+        <tr>
+            <td class="num">bankedToday(id)</td>
+            <td>this browser — the unclaimed runs it is holding</td>
+            <td>clears finished today that have not been claimed yet</td>
+        </tr>
+    </table>
+    <div class="formula">runs left today = runsRemaining − bankedToday, floored at 0</div>
+    <p>Claiming spends the claims <em>and</em> empties the queue in the same move, so the number does not move when a player claims — which is what makes it a fact about <strong>play</strong> rather than a guess about the payout. Without the subtraction, a player banks five clears, claims them, and the sixth is refused on chain after having been played.</p>
+
+    <h2>A common knight's day, run by run</h2>
+    <div class="ladder" aria-hidden="true">
+        <div class="rung"><div class="bar" style="height:22px"></div><span>1<br><span class="ok">5 left</span></span></div>
+        <div class="rung"><div class="bar" style="height:34px"></div><span>2<br><span class="ok">4 left</span></span></div>
+        <div class="rung"><div class="bar" style="height:46px"></div><span>3<br><span class="ok">3 left</span></span></div>
+        <div class="rung"><div class="bar" style="height:58px"></div><span>4<br><span class="ok">2 left</span></span></div>
+        <div class="rung"><div class="bar" style="height:70px"></div><span>5<br><span class="warn">1 left</span></span></div>
+        <div class="rung"><div class="bar used" style="height:82px"></div><span>5 claimed<br><span class="no">0 left</span></span></div>
+        <div class="rung"><div class="bar refused" style="height:94px"></div><span>6th clear<br><span class="no">refused</span></span></div>
+    </div>
+    <p class="muted" style="margin-top:14px">Common and Uncommon get 5, Rare 4, Epic 3, Legendary 4 — the contract's <code>dailyCap</code> ladder, mirrored in the page config and in <code>run-budget.js</code>. Genesis Knights are counted in their own space, a flat 4 a day.</p>
+
+    <h2>Five places that agree, in the order a player meets them</h2>
+    <div class="gate-row"><div class="gate-n">1</div><div><strong>The roster card.</strong> Prints the chain's answer minus what this browser has banked; it says "—" while the chain has not replied, instead of a full bar it cannot vouch for.<span class="where">public/menu.js · public/characters.js</span></div></div>
+    <div class="gate-row"><div class="gate-n">2</div><div><strong>The Play button.</strong> Re-reads the chain for the selected knights before leaving the hall, and refuses a squad with a spent knight — one tired knight means nobody in the run gets paid.<span class="where">public/menu.js</span></div></div>
+    <div class="gate-row"><div class="gate-n">3</div><div><strong>Deploy, and the auto-progress.</strong> Both ask for the squad's budget first. When the day is spent the squad rests, the countdown stops, and the modal says why.<span class="where">public/game.js</span></div></div>
+    <div class="gate-row"><div class="gate-n">4</div><div><strong>The server's signature.</strong> When V4 is configured, a run cannot be priced or signed unless every knight in it has a run left: <code>inspectSquad()</code> reads ownership and <code>runsRemaining</code> on chain and refuses the rest.<span class="where">lib/game-runs.js · app/api/game/complete/route.js</span></div></div>
+    <div class="gate-row"><div class="gate-n">5</div><div><strong>The contract.</strong> The last word, and the only one that cannot be edited from a browser: <code>require(ks.runsUsed &lt; dailyCap[rarity], "No runs left today")</code>.<span class="where">contracts/DungeonKnightsGameV4.sol · …V3-Simple.sol</span></div></div>
+    <p class="muted">The first three are the courtesy layer — they stop a player wasting a dungeon. The last two are the enforcement, and neither can be talked out of it by a page. Rungs 4 and 5 are switched on by different things: V4's signature path is fully written but inert until <code>GAME_CONTRACT_V4</code> is set, and until then the contract's own require is what protects the treasury.</p>
+
+    <h2>What changed on September 26</h2>
+    <div class="cards">
+        <div class="card">
+            <h3>Runs left is real now</h3>
+            <p>It used to return the <em>cap</em> — every card read 5/5 forever, and the exhausted-knight check could never fire.</p>
+            <span class="where">characters.js · dungeon-session.js</span>
+        </div>
+        <div class="card">
+            <h3>The map change is gated</h3>
+            <p>The sixty-second auto-progress rebuilt the dungeon under the player with no screen at all. It now uses the same gate as the first load.</p>
+            <span class="where">loading-gate.js · game.js</span>
+        </div>
+        <div class="card">
+            <h3>The run starts at the gate</h3>
+            <p>Nothing fights behind a loading screen: the squad is placed and its run opens as the gate lifts.</p>
+            <span class="where">MapGate.follow(game, onReady)</span>
+        </div>
+        <div class="card">
+            <h3>The sixth run is refused to its face</h3>
+            <p>Deploy and auto-progress both stop with a sentence, instead of after a clear nobody can be paid for.</p>
+            <span class="where">game.js · squadSpent()</span>
+        </div>
+    </div>
+
+    <footer>
+        Diagram of the shipped code, September 26 2026 · the arithmetic is proved by
+        <code>node tools/check-run-budget.js</code> (37 checks), which runs the same
+        <code>public/run-budget.js</code> the game loads, and the gate&rsquo;s wiring by
+        <code>node tools/check-map-gate.js</code> (17 checks).
+    </footer>
+</div>
+</body>
+</html>

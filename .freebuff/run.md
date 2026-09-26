@@ -4589,3 +4589,661 @@ Not touched, and known: `tools/check-kv-store.js` is red on the committed tree a
 is a live-KV harness whose child process fails against the configured store, unrelated to any of
 this.
 
+#### The claim files itself into the Google Form (September 26)
+
+**The owner's report:** *"yesterday 4 people have won capsule but nons wallet has been shared here"* —
+the form's responses tab was empty. Nothing was broken. The claim worked, the win was recorded, and
+the last mile was the player's: *claim → open the form → paste the address → tap "I submitted it"*,
+four steps asked of somebody who has already won, to produce a record the server was holding the
+whole time (the wallet that signed, and the day it won).
+
+So the last mile is gone. `lib/capsule-form.js` reads the form's own page — the `formResponse`
+action, the hidden fields, and the `FB_PUBLIC_LOAD_DATA_` blob that names each question and its
+`entry.<id>` — and a claim posts `wallet · day` into it as part of claiming. **Nothing is configured
+but the link**: which question takes which value is decided by title (`wallet`/`address`, then
+`date`/`day`), and a form with a single box gets one line, `0x… · 2026-09-25`, because a form with
+nowhere to put a date separately is still owed the date. The owner's form today is exactly that —
+one paragraph box called `knight capsule` — and it separates itself the day he adds two titled
+questions, with no deploy.
+
+**The claim never depends on it.** The record is written first, the form is posted second, and a form
+that times out, 500s, has been edited, or is unreachable writes `formError` on the win and changes
+nothing else — the harness proves a 500 and a dead port both leave a claimed capsule claimed. The
+card is written to match: while a win is waiting it says *"there is no form to fill in"* and offers
+only the address, and the form link appears on the other card, for the one state where it is the
+player's job again — a claimed win that never reached the form (`capsuleUnfiled`, `formVia`), which
+is also where a claim made before any of this lives.
+
+Two things were kept deliberately:
+
+- **`formSubmittedVia`** distinguishes the server's filing from a player's own "I submitted it". They
+  are different claims and the record keeps them apart, which is what the tool prints and what the
+  card's sentence turns on.
+- **`tools/points-capsules.js --push [--day] [--dry] [--force]`** runs the same filing in a loop, for
+  the wins the claim could not cover — yesterday's four, a day drawn before this existed, a form that
+  was down. It is idempotent (a filed win is skipped, `--force` re-files after a form swap) and
+  `--dry` prints the exact line each winner would put in the sheet. `--scan` composes with it, for a
+  win whose draw entry went missing.
+
+The form link shipped as the default in `lib/points-config.js` is the owner's new one
+(`forms.gle/sJk6MEta7BpEsTeY9`), and it is a *published* link, so nobody meets a Google sign-in.
+
+**Measured on the dev server** (`localhost:59077`, session for the test wallet minted with the dev
+secret, fixtures written through `Store.updateWallet`): a win waiting reads *"Claim it and we file
+your wallet and the day you won for you — there is no form to fill in"* with `COPY MY ADDRESS` and no
+form button (the sentence and the button were both replaced the next day — see *the card says when the
+capsule arrives* below); a claimed-and-unfiled win reads *"…has not reached the form, so that capsule has nowhere
+to go"* with the address, the copy button and `OPEN THE FORM`. The claim itself was not clicked in the
+browser — it needs a real signature — so the filing is evidenced by the harness's fake form instead
+(the two `POST` bodies, one per question, hidden fields included).
+
+**Seven mutations, each caught by name:**
+
+| mutation | what the run reported |
+|---|---|
+| the combined entry line loses the date | *"a one-question form gets one line…"* |
+| a non-2xx `formResponse` counts as delivered | *"a form that refuses the entry does not refuse the claim"* + *"…left looking unfiled…"* |
+| the day question is ignored (`dayField: null`) | *"a wallet question takes the address and a date question takes the day"* |
+| the filing runs before the claim is written | *"the claim is written first and filed second, never the other way round"* |
+| an already-filed win is filed again | *"filing the same win again is not a second entry"* |
+| the shipped form URL changed | *"…the shipped default is the owner's own form…"* |
+| the card drops `capsuleOpen.formError` | *"…the card only offers the form when the filing did not happen"* |
+
+`tools/check-capsule-claim.js` is 80 checks now. It runs **its own fake form** on `127.0.0.1` and
+points `CAPSULE_FORM_URL` at it before any module reads it, so no run of the suite can write a row
+into the owner's sheet — and the shipped default is checked where it lives, in the config's source.
+`check-points-guard` (30) and `check-follow-gate` (11) were run against the dev server, and the rest
+of the fleet is green: `check-draw` 65, `check-points-x` 194, `check-gate` 139, `check-one-time` 21,
+`check-copies` 2.
+
+**Still open, and the owner's call:** he asked for the claim to be a *transaction* ("they will have to
+sign a transaction"). There is no on-chain claim for the daily draw — `contracts/Capsules.sol` mints
+only for the weekly raffle, which is the right place for it to mint only for the draw it owns — so a
+winner-signed transaction could only be a 0-value self-send: gas, a hash on the explorer, and a
+wallet with no ETH unable to claim at all. The free signature is in place and the filing now happens
+automatically; the transaction is waiting on a decision rather than on code.
+
+### The card says when the capsule arrives (September 26)
+
+The owner rewrote the one sentence a winner reads before they sign, and asked for the copy button on
+that card to go. Both are in `app/points/client.js`:
+
+- **The promise.** *"Claim your capsule, and we will register your wallet. When the mainnet goes live
+  your knight capsule will be sent to you."* — his sentence, and the delivery half of it now lives in
+  `CAPSULE_DELIVERY` so the card's three states (waiting on the player, filed by the server, marked by
+  hand) cannot drift apart. All three used to end *"Capsules are sent by hand, so give it a little
+  time"*; the flash after a claim in `lib/points-capsules.js` says the new thing too.
+- **No copy button.** Both `COPY MY ADDRESS` buttons are gone — the one on the waiting card and the one
+  beside the address in the unfiled-win fallback — along with `handleCopyWallet` and the
+  `capsuleCopied` state that only they used. The waiting card no longer prints the address at all: the
+  server files it, and an address with nothing to do with it is furniture. The fallback card still
+  prints it, because that is the one place a form asks for it, and the row already selects whole on a
+  single click (`user-select: all`) — which is the copy, without the button. The form only appears
+  there when the filing was actually refused (`capsuleOpen.formError`).
+
+**The four winners from 2026-09-25 are in the owner's sheet.** Production data, then the same filing
+the claim itself runs:
+
+```
+npx vercel env pull /tmp/prod.env --environment=production --scope meglast320-1694 --yes
+node --env-file=/tmp/prod.env tools/points-capsules.js --push --dry          # 4 lines, nothing written
+node --env-file=/tmp/prod.env tools/points-capsules.js --push --day 2026-09-25
+```
+
+Read back off KV afterwards: `#1 @akashnilimgogo1 0x994e29…87a1d`, `#2 @iam_vikas_yadav 0x716956…61c9`,
+`#3 @singhganes71671 0x91f8a2…46f1`, `#4 @0xkygo 0xaad366…cc42` — each with a `formSubmittedAt` of
+`2026-09-26T05:59:5x` and `formSubmittedVia: 'server'`, and no `formError`. A second run prints *"Every
+win on 2026-09-25 is already in the form"*, which is the idempotence proof. Each entry is the one line
+the single-question form takes: `0x… · 2026-09-25`.
+
+**Measured on the dev server** (`localhost:59077`): the waiting card reads *"Claim your capsule, and we
+will register your wallet. When the mainnet goes live your knight capsule will be sent to you."* with
+one button on it (the claim) and no address row; a win already filed by the server reads *"Filed for
+you — your wallet went in with the day you won it, so there is nothing to paste. When the mainnet goes
+live…"*; the unfiled-win card reads *"…it asks for the wallet address printed below — select it and
+paste it in"* with the address box and `OPEN THE FORM`, and `Copy my address` appears nowhere on the
+page. The fixtures were changed for each read and restored byte for byte afterwards.
+
+**Three mutations, each caught by name:**
+
+| mutation | what the run reported |
+|---|---|
+| a copy-my-address button comes back | *"…and there is no copy-my-address option left on the card to ask for"* |
+| the filed branch stops promising the delivery | *"the claim card promises registration and a delivery with a date on it"* |
+| the waiting branch drops the owner's sentence | *"the claim card promises registration and a delivery with a date on it"* |
+
+`tools/check-capsule-claim.js` is 82 checks now. The fleet around it is green: `check-draw` 65,
+`check-points-x` 194, `check-styles` and `check-copies` exit 0, `check-points-guard` 30 and
+`check-follow-gate` 11 against the dev server.
+
+### The five runs, the gate between maps, and a dashboard (September 26)
+
+The owner asked two questions: is the "5/5 runs left" counter working, and can the map change
+after a clear get the loading screen the first load has. The counter was **not** working. Four
+findings, in the order they bite:
+
+1. **`Knight.getRemainingRuns()` returned the cap, not the remainder.**
+   `RARITY[tier].dailyRuns` — so every roster card read "5/5 runs today" all day, every day,
+   and `public/ui.js` printed the same constant in the dungeon's squad list.
+2. **The on-chain fallback under it was dead code.** `menu.js` only asked the chain
+   `if (!knight.getRemainingRuns)` — and the method always exists, so `dungeonSession`'s
+   `runsRemaining` call was never reached from the roster.
+3. **The exhausted-knight check could never fire.** It tested `remaining === 0`, which the cap
+   never returns, so the "no runs left today" alert was unreachable and `Knight.canDeploy()`
+   called a method (`dungeonSession.canDeploy`) that does not exist anywhere.
+4. **The cap is enforced at the *claim*, not at the door.** `runsRemaining` is spent by
+   `batchClaimRewards` (V3) / `claimSignedRuns` (V4): `require(ks.runsUsed < dailyCap[rarity],
+   "No runs left today")`. Nothing stopped a squad from *playing* a sixth run — and the 60-second
+   auto-progress walked them into one — so the refusal arrived after a whole dungeon had been
+   cleared for nothing. The server-side check (`inspectSquad`) is written but inert until
+   `GAME_CONTRACT_V4` is set.
+
+**`public/run-budget.js`** is the fix, and the point of it is that the game and the harness run
+the same arithmetic: `runs left = runsRemaining − bankedToday`, floored at 0, where *banked* is
+the clears this browser finished today and has not claimed. Claiming spends the claims and
+empties the queue together, so the number does not move when a player claims — that invariant is
+what makes it a cap on play rather than a guess about the payout. `null` is a real answer
+("the chain has not replied") and is never read as exhausted: the chain and the server are the
+gate, and a wallet whose RPC is down must not be locked out of its own game.
+
+It is wired in five places: the roster card and `characters.js` (the number, with "—" until the
+chain answers), the Play button (re-reads before leaving the hall), `startDungeon()` and
+`nextDungeon()` (deploy and auto-progress both ask; a spent squad rests and the modal says why),
+and `replayDungeon()` is gated the same way — a rebuild is a run. `dungeon-session.js` gained the
+batched, per-reset-day cached `readRunsRemaining()`, so the roster, the HUD and the two gates
+share one RPC pass a minute.
+
+**The map change is gated now.** `loading-gate.js` was a one-shot: it collected the first map's
+art, then `gate.remove()`d itself. It is now `window.MapGate` — `raise(name)` / `follow(game,
+onReady)` / `open()` / `isUp()` — with the element kept in the DOM (lifted = `is-open`), the
+counters and the failsafe re-armed per raising, a generation guard so an image that lands late
+cannot push the next map's progress, and the 500ms fade disabled for a raise so the gate does not
+fade *in* over the map it is covering. `game.js` raises it before `createDungeon()`, holds
+`isRunning = false` for the whole rebuild, and starts the run in the gate's ready callback — so
+nothing fights behind a loading screen and the run clock starts when the player can see.
+
+**Measured on the dev server** (`localhost:59077`, `/game`, one seeded knight):
+
+| sample | gate | `isRunning` | label |
+|---|---|---|---|
+| 200–800ms into `nextDungeon()` | covering | **false** | "Opening the gate…" |
+| 1000ms | open | **true** | "The gate is open." |
+
+and the squad card read `Runs: —/5` with no wallet connected (the honest unknown, where the old
+code showed a full 5/5), `Runs: 0/5` once the chain was told the knight was spent, and the
+completion modal's countdown was replaced by *"🛏️ Knight #1 has used every run for today — the
+squad rests until 12:00 UTC."* instead of a map change. The deploy path refused the same way:
+`Deploy` → `alert("🛏️ Knight #1 has no runs left today — the day resets at 12:00 UTC.")`, no
+knights deployed, `isRunning` false.
+
+> Running it in the browser caught a real bug that no static check would have: `failsafe` was a
+> `const`, so the second `raise()` threw `Assignment to constant variable` inside `MapGate.raise`.
+> The fix is the one the harness now pins — declared `let`, re-armed by `raise()`.
+
+**Two harnesses, six mutations, each caught by name:**
+
+| harness | checks | what it holds |
+|---|---|---|
+| `tools/check-run-budget.js` | 37 | the ladder read back out of **both** Solidity contracts, `config.js` and `characters.js`; the 12:00 UTC reset-day against the contract's own formula; a worked six-run day; claim-stability across every (remaining, banked) pair; and that game.js/menu.js actually call the module |
+| `tools/check-map-gate.js` | 17 | `MapGate` is an API and never removed; a re-raise resets and re-arms; the fade is disabled for a raise; the run starts in the ready callback; both map changes go through it; the served game route still paints the gate and loads `v=2` |
+
+| mutation | what the run reported |
+|---|---|
+| `playableFor` forgets the banked clears | *"claiming any number of banked runs does not move the count"* + 4 more |
+| the fallback ladder drifts from the contract (COMMON 6) | *"the fallback table in run-budget.js is the contract's own ladder"* + 5 more |
+| the roster returns the cap again (the original bug) | *"the roster reads its number from the module"* |
+| the auto-progress stops asking for the budget | *"…and the auto-progress answers to it too, not only the deploy button"* |
+| the run starts before the gate lifts | *"the squad gets its run when the gate lifts, not before"* |
+| the failsafe cannot be re-armed (a `const` timer) | *"…and re-arms the failsafe it just cancelled"* |
+
+Two of those mutations were only caught after the checks were tightened — a whole-file search for
+`await this.squadBudget(` passes while the copy inside `nextDungeon()` has been deleted, and the
+same for `failsafe = setTimeout(` matching the boot line after `raise()` stopped re-arming. Both
+harnesses now read *inside* the function, which is why `body()` exists in each.
+
+The walkthrough is **`docs/game-flow.html`** — the loop, the arithmetic, the worked day, the five
+places the cap is enforced, and what changed today. It is not deployed (`.vercelignore` carries
+`/docs/`); open it directly or through the Preview tab.
+
+**Still open, and the owner's call:** production runs V3, so `lib/game-runs.js`'s signed-run path
+(V4) is code that no player touches until `GAME_CONTRACT_V4` is set — and until then, rung 4 of
+that list is the one the diagram describes as written-but-inert. Nothing on a phone-sized layout
+has been looked at for the new squad-list "—" either.
+
+### The deck gets a way in, and the run budget as a slide (September 26)
+
+**The deck was unreachable.** `/pitch` is private by *absence*, which is the right way for it to be
+private and also meant nothing linked to it: the only way in was to type the URL after the password.
+The Kingdom Gate hub — the app host's front page, the same host the deck is served from, so the link
+can never point across the password — now carries a **Pitch Deck** card at the bottom of the
+Adventure panel: `#pitchBtn`, driven by `landing.js?v=5`, icon `assets/ui/sword-crest.png` (the same
+crest the deck's own cover draws). Its handler is the one guarded listener in `landing.js`, on
+purpose: this card is newer than the rest of the panel and a shell served without it must not take
+the other nine handlers down with it. `tools/check-pitch.js` asserts the card, the handler, the
+bumped script version — and, in the other direction, that the **public** coming-soon page does not
+carry it, where the click would be eaten by the gate.
+
+**The loop is now a slide, not only a page.** `docs/game-flow.html` argued the run budget well but
+lives outside the deployment (`.vercelignore` carries `/docs/`), so the reader the deck is for never
+saw it. The deck has a fifth slide, *A day at the gate* (04 · kickers renumbered 04–12, thirteen
+slides now): the loop as five numbered boxes with the stylesheet's arrows between them, then three
+figures — the cap ladder **5 / 5 / 4 / 3 / 4**, a Genesis Knight's own **4**, and the boundary
+**12:00 UTC**.
+
+* A new block kind, `flow` — `nodes` of `{step, title, text}` plus a `caption`, rendered by
+  `app/pitch/client.js` and styled by `.pitch-flow*` in `public/css/pitch.css?v=2`. Boxes rather
+  than an SVG: the row re-wraps into a column with down-arrows below 920px instead of shrinking to
+  illegibility. Measured at 1440×900: five boxes of 216×113 on one line, arrow `→` between each and
+  none after the last, 511px of content inside a 799px slide. At 884px: one per line, arrows `↓`.
+* **The reset hour is a constant now.** `GAME_RESET_HOUR_UTC` moved into `lib/reward-config.js`
+  (next to the caps it governs, in a module the deck already imports), so the slide prints the hour
+  the contracts' `currentDayIndex()` rolls over on rather than a clock typed into a caption.
+  `tools/check-run-budget.js` reads that hour out of **four** sources — `public/run-budget.js`, the
+  constant, and `RESET_HOUR_UTC` in V3-Simple and V4 — and fails if any of them disagrees; a browser
+  an hour out of step with the chain shows a full 5/5 exactly when every run is refused.
+
+| mutation | what the run reported |
+|---|---|
+| the deck caption drops the reset hour | *"…and the caption says where the day rolls over, in the contracts' own terms"* |
+| the claim node stops naming the cap (`dailyCap[rarity]` → `dailyCap`) | *"the flow on it is one numbered box per step, and the cap is named on the last one"* |
+| the hub card navigates to `/points` instead of `/pitch` | *"the hub carries a card for the deck"* + *"and its handler is the one that opens /pitch"* |
+| the browser reset hour drifts to 13:00 | *"the reset hour is the same number in the browser, the deck's config and both contracts"* (+ the day-index check) |
+| `landing.js?v=5` reverted to `v=4` | *"…with the script version bumped, so a browser holding the old shell still gets it"* |
+
+`check-pitch` is 43 checks, `check-run-budget` 39, `check-styles` sees `/pitch`'s 91 class tokens all
+styled, and gate 139, landing 31, arya 17, announce 27, logs 28, rarity 64, runs 16, map-gate 17,
+one-time 21, token-math 64, session 34, streak 19, copies 2, identifiers 4 all pass. Nothing is
+committed or deployed.
+
+### The knights' wheel (`/redeem`) — the first way to spend points (September 26)
+
+Three reels of knight PFPs, **1,000 points a spin**, a gift card one time in three. The page is new,
+but the interesting part is that it is the first feature in this project that *takes* points away —
+every previous path only ever added them.
+
+**The odds are a table, and the page prints them from it.** `lib/points-config.js` carries
+`REDEEM_WEIGHTS = { tryAgain: 4, amazon: 1, google: 1 }`, so a prize is 2/6 — exactly one in three —
+and the two cards are a coin flip. `redeemOdds()` derives the sentence the stage prints, so a weight
+change rewrites the copy in the same commit instead of leaving a page claiming odds the server does
+not honour. The server draws with `crypto.randomInt` (not `Math.random`) **before** answering, and
+the reels animate to that answer — a wheel that decided its own result could be edited with devtools.
+
+**A spend is not an earning, and the code knows the difference.** `spendPoints` in
+`lib/points-program.js` is the mirror of `credit()` with two deliberate differences: it pays nobody a
+commission, and it does **not** call `bumpDailyPoints`. The daily board is what the capsule draw
+ranks, and redeeming a balance must not cost a player their place in tonight's draw. The balance is
+checked *inside* the write, so the write itself cannot overdraw. Both directions write through one
+`logPoints` (`logEarn` / `logSpend`), which is what makes the Portfolio's list still add up — and
+that page printed `+{points} PTS` unconditionally, so a spend would have read `+-1000`; it now prints
+the sign it is given, with `.pf-act-reward.is-spend` muting it.
+
+**The codes never reach a browser, and a code leaves the pool once.** The pool is one document
+(`dk:points:redeem` = `{ amazon: [], google: [], given: [] }`) read and written by
+`lib/points-redeem.js`, loaded by `tools/redeem-codes.js` — never the repository, never a bundle.
+The order inside a win is: pop the code *and* write the ledger row in one pool write, then charge.
+A crash between the two can only lose a code, never hand the same one to two players.
+
+**Nothing is charged that was not paid for, and nothing is charged twice.** Refusals — too few
+points, a card out of stock, a session that expired — all happen before any money moves, and the
+wheel closes entirely when a card runs out rather than quietly converting wins into misses. A spin
+carries a browser-made `spinId`, and a second request with the same id is answered from the wallet's
+own record: the same code, no second charge.
+
+**The three sentences, in Arya's voice.** `REDEEM_OUTCOMES` holds one line per outcome, and the page
+renders it with `**bold**` *and* hands Arya a plain-text copy of the same string — so the card the
+middle reel stops on and the card she names cannot drift apart. Two new kinds in `public/arya.js`
+(`redeem_win` / `redeem_lose`) pick the pose, mood and sound; both reuse portraits she already had
+(`arya-clear.png`, `arya-alarm.png`), so dedicated happy/sad art is one filename each.
+
+**The instructions are four rows.** `REDEEM_HOWTO` in the config — Amazon Pay (account → gift cards →
+add to balance, or at checkout), Google Play (`play.google.com/redeem`), one use only, and who to ask
+when a code will not apply. A panel, not a page: the owner asked for it to stay small.
+
+**Wiring, all of it checked:** `/redeem` is in `APEX_PUBLIC` (a winner must reach it without the
+game's password) and gated on the app host like everything else; `/api/points/redeem` is public by
+inheriting `/api/points`; the back trail calls it "Redeem"; the sitemap lists it; and the Points
+Program's footer carries a **Redeem points** link, because a balance with no way to spend it is a
+dead end. `public/arya.js` moved to `?v=5` everywhere it is loaded, and its two new lines are
+asserted to have art on disk.
+
+**Measured in a browser, on the dev server**, with a fixture wallet and five dev codes:
+
+| what was done | what the page did |
+|---|---|
+| four spins, all misses | each charged exactly 1,000 (10,000 → 6,000), all three reels settled at index 7 (`miss`), Arya said the disappointed line, no code consumed — the pool stayed 3 / 2 |
+| a spin that won Google Play | reels settled at RARE / **Google Play** / EPIC (the middle reel is the card), the code `ZX12-YW34-VU56` appeared under the result, the balance fell 6,000 → 5,000, the pool went 2 → 1, and the row landed in *Your spins* |
+| the same HTTP spin sent twice | the first answered `{outcome:'amazon', code:'AB12-CD34-EF56', points:4000}`, the second answered the same code and outcome with `replay:true` and charged nothing |
+| a POST with no session | `401 not signed in` — and the GET payload was grepped for the four codes that wallet had *not* won: none of them in it |
+
+**Ten mutations, each caught by name:** the pool handed out by index (the same code won twice), a
+miss consuming a code, the spin id ignored, the weights drifting to 1 in 6, the view carrying the
+pool, a spend written onto the day's board, the route dropping its action check, `/redeem` falling
+out of `APEX_PUBLIC`, the page printing a literal `1000`, and the Portfolio assuming every row is a
+credit. The first one initially **escaped**: the check won amazon and then google, which take
+different arrays and cannot collide however the pool is read — the harness now wins the *same* card
+twice, which is the only shape in which a duplicate can appear.
+
+`tools/check-redeem.js` is 53 checks (100,000 real draws land within a percent of 1 in 3), and it
+refuses to run at all if `KV_REST_API_URL` is in the environment — the codes in production are real
+money and no test belongs near them. It backs up and restores `.data/points.json`. Fleet green:
+redeem 53, portfolio 68, gate 145, rarity 64, pitch 43, capsule-claim 82, draw 65, points-x 194,
+landing 31, arya 17, back 18, refs 49, referral-gate 29, token-math 64, session 34, streak 19, runs
+16, map-gate 17, announce 27, logs 28, one-time 21, points-guard 30, follow-gate 11, copies 2,
+identifiers 4, styles clean on `/redeem`'s 49 tokens.
+
+**What the owner still has to do:** paste the real codes. They go in through the tool, not the repo:
+
+    npx vercel env pull /tmp/prod.env --environment=production
+    node --env-file=/tmp/prod.env tools/redeem-codes.js --add amazon --from /tmp/amazon-codes.txt
+    node --env-file=/tmp/prod.env tools/redeem-codes.js --add google --from /tmp/google-codes.txt
+    node --env-file=/tmp/prod.env tools/redeem-codes.js --list
+
+Nothing is committed or deployed.
+
+#### Two things the first look at the page caught (September 26)
+
+The wheel passed 52 checks and still looked wrong in two ways that no assertion was asking about,
+which is the reason screenshots are part of every preview here rather than an extra:
+
+1. **The slot-window fade was eating the tile it had just settled on.** `.redeem-reel` carried a
+   mask that fades the top and bottom of the window — right while the reel is moving, wrong the
+   moment it stops, because then it fades the *only* thing the player is meant to read. The first
+   shot showed `Legendary` with its crown cut off and `Google Play` with half its name gone. The
+   fade now lives on `.redeem-reel.is-rolling` alone; a settled reel is unmasked.
+2. **Every resting reel was the same knight.** `settled ? transform : undefined` meant a reel that
+   had never spun sat at the strip's origin, so all three columns showed the first tile. The
+   transform is now `index >= 0 ? … : undefined`, where `index` is the drawn tile, `-1` while
+   rolling (the keyframes own the property) and the column's own idle face otherwise — `IDLE =
+   [1, 4, 2]`, epic / common / rare.
+
+And one more, found by measuring rather than looking: **the face box was not square.** A reel is
+`132 × 104` and the face was `68%` of *each* axis, so the box came out `90 × 71` and
+`object-fit: cover` shaved about nine pixels off the top and bottom of every face. The portraits in
+`public/assets/pfp` are all `512 × 512` — confirmed by reading the WebP frame headers, not assumed.
+The face is now `height: 74%` with `aspect-ratio: 1` and `width: auto`, measured in the browser at a
+square `77 × 77`.
+
+`check-redeem` gained a guard for the third one, and it is worth recording that **the guard was
+wrong before the fix was**: it tested `/width:\s*\d+%/` and `/height:\s*\d+%/` against the whole
+rule, and `max-width: 94%` contains `width: 94%` — so it failed on the *correct* CSS and would have
+passed on nothing at all. It now matches each declaration from the start of its line (`faceSays`),
+which is what makes `52/53 → FAILED the face box is square, so \`cover\` cannot crop the top off a
+knight` meaningful under the mutation back to `width: 68%; height: 68%`. `check-redeem` is 53 now.
+
+#### A slot machine pays on three of a kind (September 26)
+
+The wheel shipped with the arrangement backwards: a win showed the card **in the middle** with a
+knight on each side, and a loss showed three identical `TRY AGAIN` tiles. The owner's correction was
+exact — *"if all 3 are same then he won something but if any of 3 is different then try again"* — and
+it is the right rule for the genre as well as the clearer one, because "three of a kind" is a claim a
+player can read off the machine instead of having to be told.
+
+**The rule now has one home: `lib/points-redeem-reels.js`.** It is pure and React-free, which is the
+whole point — a rule that lives inside a client component can only be read by the harness as text,
+and this one needs to be *run* over every seed. `app/redeem/client.js` imports `LIST`, `STRIP`,
+`IDLE`, `indexOf`, `landedKeys` and `threeOfAKind` from it and keeps only the frame.
+
+    a win   ⇒ the same portrait in all three windows
+    a loss  ⇒ a pair of knights with the third reel odd — never three of a kind
+
+Both halves are load-bearing. **A loss can never be three of a kind**, because three matching
+knights on a spin that paid nothing is the page lying about a payout; the pair is a knight and the
+odd reel is forced to a *different* one (`1 + k` for `k` in `0 … n-2` is never a multiple of `n`),
+so the shape is total rather than likely. **A win is three of the same face**, and any of the five
+can be the one that lands three times, so no tier is a second-class symbol and none of them is a
+prediction about the prize. The arrangement is seeded from the spin's own `at` — the timestamp the
+server wrote when it charged — so a replay lands on the same tiles and two spins differ; two seeds
+in three put the odd reel last.
+
+The odds line grew a rule and kept its arithmetic: `1,000 points a spin · three of a kind wins a
+gift card · 1 in 3 spins`, with `1 in 3` still computed from `REDEEM_WEIGHTS` and only the shape of a
+win typed (as `REDEEM_RULE`, beside the table it describes).
+
+**The look, since "not looking good" was the other half of the ask.** The reels now sit in a cabinet
+— `border-box` glass sheen on each window, a frame with studs, and a **payline** across all three at
+the vertical centre with arrow heads at each end. The payline is a sibling of the reels rather than
+something each reel draws, because it is a claim about all three at once, and it is lit by
+`threeOfAKind(landed)` — read off the tiles, not off the answer that caused them, so if the reels and
+the outcome ever disagreed the lights would follow the reels. A win lights the payline, rings every
+reel in gold and pulses the faces; the cabinet hugs the reels instead of spanning the stage (a metre
+of empty felt on either side of the wheels is what made the first version read as an unfinished
+panel); the odds are a gold plate; the button is bigger; the code is a lit plate. Tile faces went
+`104 → 128` and the frame is `+ 2px` tall, because a 1px border on each side of a `border-box` reel
+was eating two pixels of the window and settling the tile one pixel low.
+
+#### … and then the cards came off the reels (September 26)
+
+The first cut of the new rule gave each reel a **card tile**, so a win spelled `GOOGLE PLAY` three
+times across the cabinet. It read badly — the owner's words were *"dont write google play it seems so
+bad but 3 same pfps would work"*, with a screenshot of the wall of identical card text — and it also
+handed the strip a second kind of symbol it had no use for. `LIST` is now `TIERS.map(knightTile)` and
+nothing else: **every symbol on every reel is one of the five portraits**, a win is the same face
+three times, and the card is named where a name belongs — in the sentence under the reels (`A Google
+Play gift card is yours…`) and on the code plate. Told by the faces is also the clearer read: three
+identical portraits say "three of a kind" without any copy at all, and the only thing the reels have
+to answer is *whether the three columns agree*.
+
+Eight mutations, each **caught by name**:
+
+| mutation | fails |
+| --- | --- |
+| a win drawn as a pair with a stranger in the middle | `a win lands the same portrait in all three columns` **and** `the marquee's promise is exactly what the wheel can produce` |
+| a win always landing the same tier, whatever was drawn | `the winning face is one of the five, not a symbol reserved for paying` |
+| a loss drawn as three matching knights | `a loss is never three of a kind`, `every loss is a pair with one odd reel` **and** the marquee check |
+| the odd reel allowed to equal the pair | same three |
+| a card tile put back on the strip | `no symbol on the strip names a card — the card is named under the reels` |
+| the machine idling on one face three times | `a machine at rest shows three different knights` |
+| the payline lit by the outcome instead of the tiles | `the payline is lit by the tiles, not by the answer that caused them` |
+| the marquee stops promising three of a kind | `the marquee's promise is exactly what the wheel can produce` |
+
+The never-three-of-a-kind guard is held over **806 seeds** — 600 real timestamps, 200 small
+integers, and `0 / -1 / NaN / undefined / null / 'x'` — because a seed that happens to be a multiple
+of something is exactly how that bug ships. `check-redeem` is **65** now; the fleet is green:
+portfolio 68, gate 145, pitch 43, capsule-claim 82, draw 65, points-x 194, arya 17, back 18, refs 49,
+rarity 64, token-math 64, session 34, copies 2, styles clean.
+
+A second substring-guard failure, same species as the `max-width` one above: *"the page never imports
+the server module"* tested `/points-redeem/` against the client, and the client now legitimately
+imports **`points-redeem-reels`**. It matches the specifier's end now. Two guards, two days, both
+certifying the bug they were written to catch — worth remembering that a regex over source is still
+code, and code gets tested.
+
+**And one thing the owner's own play found:** by the time the cards came off the reels the wallet on
+this dev server had been spun 15 times — 20,000 → 16,000 points, five cards won, one of them Google
+Play — and the Google pool was down to **1 code left**. That number is real: the dev server holds
+production KV credentials, so those spins and that pool are not a fixture. Amazon 4, Google 1.
+
+Seen in the browser at `localhost:3000/redeem`, not just asserted: idle `EPIC / COMMON / RARE`; a
+**win** stubbed through `window.fetch` (so no points were spent) settling `GOOGLE PLAY` ×3 with the
+payline lit, all three reels gold, and the code plate under it; a **near miss** settling
+`RARE / EPIC / RARE` with the payline dim. The preview is left unpatched, on the idle state.
+
+
+## 4. The board's own backdrop — the map clip behind the rankings pane
+
+The owner handed over a 10s 1280×720 clip (`Warrior studies map at table…`, h264, 24fps, 3.46MB)
+and asked for it as the background of **the blue-outlined region on `/points`** — which is the right
+pane, from under the `RANKINGS` header row down to the footer bar; not the page, not the left
+`POINTS VAULT` column, not the top nav.
+
+**Two files, on purpose.** `public/assets/points/board-map.mp4` is new. The vault mini-game already
+plays `background.mp4` (the torch-and-vine tiles), and painting that one here — or painting this one
+there — would mean a change to the panel silently rewrote the game. `app/points/dungeon.js` is
+untouched, and the harness asserts both halves of that.
+
+**The layer, and why the ordering is written out.** A video cannot be a `background-image`, so the
+clip is a positioned sibling inside the pane:
+
+```
+main.side-panel.board-map-panel            (position: relative — the containing block)
+├── div.board-map[aria-hidden]             (absolute, inset 0, z-index 0, pointer-events none)
+│   ├── video.board-map-video              (object-fit: cover)
+│   └── div.board-map-scrim                (0.55 → 0.88 of #0d0a08)
+├── .side-panel-header                     (position: relative, z-index 1)
+└── .side-panel-body                       (position: relative, z-index 1)
+```
+
+A positioned sibling paints *above* in-flow content, so the header and the body are both raised
+explicitly — without it the table sits under the clip and the page looks empty. `z-index: -1` is the
+other spelling and it is the wrong one: `.side-panel` creates no stacking context, so a negative
+layer would be painted behind the panel's own opaque background and the clip would simply not
+appear.
+
+**The scrim is measured, not guessed.** `ffmpeg signalstats` over the clip: mean luma **77 of 255**,
+flat across all 240 frames (76.2–77.8). The halls' existing recipe (`theme.css`, 0.45 → 0.82) was
+tuned against art at 51–74, so it is deepened here to **0.55 → 0.88**, and the two stops are parsed
+as numbers by the harness — top ≥ 0.5, bottom ≥ 0.8, bottom darker than top.
+
+Even that was not enough on the brightest part of the picture, so the surfaces that are
+background-less by design get a floor of their own: `.leaderboard-table` and `.referrals-list` at
+`rgba(13, 10, 8, 0.6)`, and the tray the one-time cards are laid out in (`.one-task-grid`) at
+`0.55`. Those three are transparent everywhere else on purpose — on a flat panel the page's own dark
+surface *is* their floor — and over a clip that floor is gone exactly where the art is brightest (the
+candle-lit map sits dead centre, behind the board's rows three to eight). Translucent rather than
+solid, because the map is the whole reason a pane has a backdrop.
+
+The floors hang off **`has-map`** and not off the pane, which is a correction rather than a detail:
+as first written they applied to the pane unconditionally, so every phone — which never gets a clip —
+paid a pointless darkening. `has-map` is worn from the same state the layer is mounted from
+(`boardMapOn`), so "the clip is up" and "the floors are on" cannot drift apart, and a device with no
+clip keeps exactly the flat look it had.
+
+**All four tabs keep the clip**, the tasks tab included. It briefly dropped it (`is-plain`) on the
+argument that a work surface wants no moving picture behind its small print; the owner's answer was
+the better one, and it is the same answer the board got — the tab did not need *less art*, it needed
+a floor. So the tray above went under the task grids, the cards keep their borders, their hover and
+their claimed/pending/refused tints on top of it, and nothing in the sheet has to know about those
+states.
+
+**`display: none` is not the same as not loading it.** The first version hid the layer at ≤860px and
+under `prefers-reduced-motion` from the sheet alone — and measured on this page it did not save the
+download: at 800px the layer was `display: none` while the video element reported `paused: false`
+with the whole 3.46MB behind it. So the element is **not rendered** unless the screen will show it:
+a `boardMapOn` state decided in an effect from `matchMedia('(min-width: 861px)')` and
+`matchMedia('(prefers-reduced-motion: reduce)')`, starting `false` so the server's paint and the
+first client paint agree. Verified both ways in the preview: at 800px **nothing in the DOM and
+nothing fetched**; at 1600px the layer mounts and the clip plays. 861/860 is deliberate — `min-width:
+861` is exactly *not* `max-width: 860`, so there is no band of widths where the clip is loaded and
+then hidden.
+
+The sheet is bumped to `points.css?v=18` (the rule for any sheet change on this site: an unversioned
+one is a change a returning player never receives).
+
+**`tools/check-board-map.js` — 43 checks, and every one of them falsified by mutation.** 48 mutations
+across five sweeps, each **caught by name**: the class dropped from the markup, the pane losing its
+class, a second layer in the left pane, `BOARD_MAP` pointed at the mini-game's clip, the clip deleted,
+the mini-game's clip overwritten by this one, a >6MB master in its place, the tag losing
+`muted`/`autoPlay`, the
+layer losing `aria-hidden`, the scrim lightened to the halls' 0.45 or reduced to one stop, `object-fit`
+dropped, the layer sent to `z-index: -1`, the content no longer raised, `.board-map-panel` losing
+`position`, the panel's own background removed, the header's opaque strip removed, the reduced-motion
+block deleted, the phone block deleted, a tab switching the clip off again, any floor removed /
+solidified / thinned / unscoped from `has-map`, `has-map` worn unconditionally, the sheet requested
+unversioned, and all five loading-gate mutations.
+
+Three of those mutations **found real bugs in the guards themselves**, which is the point of the
+sweep:
+
+- the guard that read the video tag with `/<video\b[\s\S]*?\/>/` matched the words "<video autoPlay>"
+  inside a *comment* added in the same change, and reported `muted`, `loop` and `playsInline` missing
+  from a tag that has all three. Anchored on `className="board-map-video"` instead.
+- the CSS reader split selector lists on `,` **before** stripping comments, so this file's own prose
+  ("Scoped to the pane, not the page") glued a paragraph onto the selector that followed and the
+  `position: relative` on `.board-map-panel` was reported as absent. Comments are stripped first now.
+- `CLIENT.indexOf('data-arya="board"')` found the walkthrough's *target selector* a thousand lines
+  earlier, so "the board pane" was a 196KB slice starting inside the tour config and the checks
+  scoped to it proved nothing about where the layer is. `lastIndexOf`, and `-1` is tested for before
+  it is used as an index — `slice(-1, x)` reads the last character of the file, which is how a
+  renamed marker passed silently.
+
+One more, non-blocking, also caught by the sweep: the `muted`/`loop`/`playsInline` guards for the
+first time proved they can fail at all.
+
+The fleet after this change: **board-map 43**, styles clean, announce 27, gate 145, one-time 21,
+draw 65, points-x 194, refs 49, runs 16, token-math 64, session 34, rarity 64, back 18, arya 17,
+copies 2, portfolio 68, capsule-claim 82, redeem 65, run-budget 39, map-gate 17.
+
+Seen in the browser at `localhost:3000/points` (1600×1000): the map playing behind the leaderboard
+and behind the one-time task list, both legible on their own floors, and at 800px nothing in the DOM,
+nothing fetched, and the pane wearing no `has-map` (grid background `rgba(0,0,0,0)`) — the phone view
+byte-for-byte what it was.
+
+
+## 5. Shipping it — everything except the wheel
+
+> "dont add /redeem for now and ship rest"
+
+Held back on purpose, not because it is unfinished: the wheel is the one place points are spent and
+the one place a real gift card leaves the building, and a card whose pool is empty is a prize that
+cannot be paid. So the release is the tree **minus** the wheel's surface, and the wheel itself waits.
+
+**One switch, four readers.** `REDEEM_LIVE` in `lib/points-config.js` is the whole decision, and the
+things that could each leak a half-published wheel read *it* rather than repeating it:
+
+| where | while `REDEEM_LIVE === false` |
+| --- | --- |
+| `app/points/client.js` | the footer link is not rendered — a link to a wheel with no cards is a worse dead end than no link |
+| `app/sitemap.js` | the entry is not emitted: a sitemap entry is a promise that a URL is public, and on the apex `/redeem` is a redirect while it is held |
+| `lib/app-routing.js` `APEX_PUBLIC` | `/redeem` is not listed, so it falls through to `other` and is answered like the rest of the unpublished game |
+| `lib/app-routing.js` `HELD_BACK` | `/api/points/redeem` is classified **before** the prefixes — `/api/points` is open on the apex so the program works without a password, and it therefore swallows its own spend endpoint |
+
+That last one is the reason `HELD_BACK` exists at all: "open except" cannot be expressed from the
+other side of a prefix list. The endpoint spends a balance and pops a real code; with no page and no
+cards, nothing should reach it.
+
+**And the hold is asserted, so it cannot rot.** `check-redeem` **66** now checks that the switch is
+off, that the tree answers the way it should while it is off, that each of the four readers reads the
+flag rather than repeating the decision — and that each one is a *switch* and not a deletion, i.e.
+the published branch is still written and flipping the flag publishes all four. `check-gate` **144**
+carries the apex side: `/redeem` and its endpoint must redirect to the gated host, and the day they
+stop doing so the check fails by name (`/redeem is held back on the apex while the wheel is
+unpublished`) instead of a stranger finding a redirect.
+
+Mutations: seven, each **caught by name** — flipping the switch, dropping `HELD_BACK`, ignoring it in
+`classify`, hardcoding `/redeem` back into the public list, making the sitemap entry unconditional,
+removing the footer link's condition, and deleting the link outright.
+
+**Two flaky guards surfaced while doing this, and both are fixed rather than re-run.** They are worth
+naming because a fleet that cries wolf is worse than a smaller one:
+
+- `check-redeem`'s "both cards drawn at the same rate" used a **3-sigma** band on the difference
+  between two 100,000-draw counts (sd 0.167% against a 0.5% limit) — it failed once, mid-sweep, on a
+  tree where nothing was wrong. Widened to 0.008, which is ~4.8 sigma and still catches the bug it
+  is for by two orders of magnitude.
+- `check-gate`'s "the token carries an expiry and a signature, and nothing else" scanned the token
+  for `0x|@|wallet` — the exact pattern the comment *directly below it* warns about, because `0x` is
+  two characters of base64url and turns up in a signature about 1% of the time. Now it asserts the
+  shape (two non-empty base64url halves around one dot).
+
+**The deploy.** `vercel --prod --yes --scope meglast320-1694` — build 52s, ~1m to Ready,
+deployment `dungeon-knights-mid2wg4p3-meglast320-1694`. `--prod` aliased only
+`dungeon-knights-meglast320-1694.vercel.app`, exactly as §3 warns, so the four live domains were
+aliased by hand in a second pass: **`dungeonknights.io`**, **`www.dungeonknights.io`**,
+**`app.dungeonknights.io`** and **`dungeon-knights.vercel.app`**.
+
+**Verified on the live host**, not on the deployment URL:
+
+```
+/                 200          /redeem              308 -> app.dungeonknights.io/redeem
+/points           200          /api/points/redeem   308 -> app.dungeonknights.io/api/points/redeem
+/genesis          200          /pitch               308 -> app.dungeonknights.io/pitch   (unchanged)
+/portfolio        200          /api/points/me       401  (open, unauthenticated)
+/sitemap.xml      200          3 entries: / , /points , /genesis   — no /redeem
+```
+
+`/points` serves `points.css?v=18` (and no longer `?v=17`), carries the board backdrop, and prints
+**no** `Redeem points` link. `/assets/points/board-map.mp4` answers `200` at **3,628,491 bytes** —
+the same file that was handed over. Read in the browser at `dungeonknights.io/points`, with a wallet
+connected but not signed in, 1600×1000: the map playing behind the leaderboard, the real board on top of it (13,200 / 12,889 /
+10,800 …), the table legible on its own floor, and the one-time tasks tab keeping the same backdrop
+behind its own tray — with `/redeem` now out of reach on the apex, which is what was asked for.
+
+**Still not shipped, and now the only unfinished thing on this list: the wheel.** `REDEEM_LIVE` is
+the release switch, and its precondition is not code — it is gift cards in the store the production
+deployment reads (`tools/redeem-codes.js --add`). Note that this worktree has **no KV credentials**
+(neither `.env.local` nor `.env.development.local` defines `KV_REST_API_*`/`UPSTASH_*`), so the
+dev server and `tools/redeem-codes.js` both run on `.data/points.json`; the pool counts seen here
+(Amazon 4, Google 1) are the local fixture, and production's own pool is whatever its store holds —
+which is not readable from this machine, and is the one number the release turns on. Also outstanding, and unrelated to this thread: `code.dungeonknights.io` still has no DNS
+record, and `docs/game-flow.html` stays out of the build by `.vercelignore` (`/docs/`).
+

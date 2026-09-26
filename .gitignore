@@ -57,6 +57,12 @@ out/
 .freebuff/*.pid
 .freebuff/*.env
 .freebuff/project-id
+# The dev server's own output and the machine-specific state a tool writes back: both are
+# rewritten on every run, so committing them would put a diff in every future release that
+# says nothing about the code. Named individually rather than as `*` — see above.
+.freebuff/dev.out
+.freebuff/dev.err
+.freebuff/discord-state.json
 
 # Temporary files
 *.tmp
