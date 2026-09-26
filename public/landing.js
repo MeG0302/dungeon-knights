@@ -30,6 +30,9 @@ class LandingPage {
         this.summonKnightBtn.addEventListener('mouseenter', startMusic, { once: true });
         this.marketplaceBtn.addEventListener('mouseenter', startMusic, { once: true });
         this.pointsBtn.addEventListener('mouseenter', startMusic, { once: true });
+        // Guarded, unlike its neighbours: this card is newer than the rest of the panel, and a
+        // shell served from a cache without it must not take every other handler down with it.
+        if (this.pitchBtn) this.pitchBtn.addEventListener('mouseenter', startMusic, { once: true });
         this.stakingBtn.addEventListener('mouseenter', startMusic, { once: true });
         this.economyBtn.addEventListener('mouseenter', startMusic, { once: true });
         this.leaderboardBtn.addEventListener('mouseenter', startMusic, { once: true });
@@ -43,6 +46,7 @@ class LandingPage {
         this.summonKnightBtn = document.getElementById('summonKnightBtn');
         this.marketplaceBtn = document.getElementById('marketplaceBtn');
         this.pointsBtn = document.getElementById('pointsBtn');
+        this.pitchBtn = document.getElementById('pitchBtn');
         this.stakingBtn = document.getElementById('stakingBtn');
         this.economyBtn = document.getElementById('economyBtn');
         this.leaderboardBtn = document.getElementById('leaderboardLandingBtn');
@@ -207,6 +211,17 @@ class LandingPage {
             }
             window.location.href = '/tokenomics';
         });
+
+        // The pitch deck — the loop, the gate and the economy, as slides. It is on this host
+        // behind the same password as this hub, which is the only place it is ever served from.
+        if (this.pitchBtn) {
+            this.pitchBtn.addEventListener('click', () => {
+                if (window.audioManager) {
+                    window.audioManager.play('button_click');
+                }
+                window.location.href = '/pitch';
+            });
+        }
 
         
         // Leaderboard - Show leaderboard modal

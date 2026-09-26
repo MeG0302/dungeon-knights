@@ -58,6 +58,8 @@ const Deck = await import(pathToFileURL(path.join(ROOT, 'lib', 'pitch-deck.js'))
 const Routing = await import(pathToFileURL(path.join(ROOT, 'lib', 'app-routing.js')).href);
 const Points = await import(pathToFileURL(path.join(ROOT, 'lib', 'points-config.js')).href);
 const Reward = await import(pathToFileURL(path.join(ROOT, 'lib', 'reward-config.js')).href);
+const Knights = await import(pathToFileURL(path.join(ROOT, 'lib', 'knights.js')).href);
+const Pages = await import(pathToFileURL(path.join(ROOT, 'lib', 'static-pages.js')).href);
 
 const { SLIDES, CONTRACTS, LINKS, MODEL } = Deck;
 
@@ -127,6 +129,27 @@ rec('an extensionless route, so it cannot fall through as a static file',
 rec('the page itself asks not to be indexed, the way the hub does',
     /robots:\s*\{\s*index:\s*false/.test(pageSource.replace(/\s+/g, ' ')),
     'the same product under two hostnames is not two search results');
+
+/* It has to be *reachable*, or it is a document nobody opens. The way in is a card on the Kingdom
+ * Gate hub — the gated host's front page, which is the same host the deck is served from, so the
+ * link can never point across the password. The public coming-soon page is checked in the other
+ * direction: a card there would send a stranger to a password prompt. */
+const hub = Pages.STATIC_PAGES.landing;
+const hubBody = hub.body;
+const landingScript = read('public/landing.js');
+rec('the hub carries a card for the deck, so nobody has to know the URL',
+    /id="pitchBtn"/.test(hubBody) && /\/pitch'/.test(landingScript),
+    'the Pitch Deck card is in the Adventure panel');
+rec('and its handler is the one that opens /pitch',
+    /this\.pitchBtn\.addEventListener\('click'[\s\S]{0,300}?window\.location\.href = '\/pitch'/.test(landingScript),
+    'a click handler, not a comment');
+rec('  \u2026 with the script version bumped, so a browser holding the old shell still gets it',
+    hub.scripts.some((src) => /^landing\.js\?v=(\d+)$/.test(src))
+        && /landing\.js\?v=(\d+)/.exec(hub.scripts.join(' '))[1] !== '4',
+    hub.scripts.find((src) => src.startsWith('landing.js')) || 'landing.js is not in the script list');
+rec('and the public page does not point at it — that page is where the password would eat the click',
+    !/pitchBtn/.test(Pages.STATIC_PAGES.home.body) && !/\/pitch/.test(Pages.STATIC_PAGES.home.body),
+    'the apex keeps its two buttons');
 
 // ---------------------------------------------------------------------- 2. the sheet and shell
 section('The shell');
@@ -248,6 +271,28 @@ rec('the growth slide still names the real prize and the real size of the draw',
         && growth.includes(Deck.fmt(Points.DRAW_SIZE))
         && growth.includes(Points.PROGRAM_DAY_ONE),
     `${Deck.fmt(Points.DRAW_SIZE)} × ${Points.DRAW_CAPSULE.name} since ${Points.PROGRAM_DAY_ONE}`);
+
+/* The loop slide is the one that has to stay in step with the game rather than with the economy:
+ * three of its figures are the caps the contracts enforce, and the boundary they roll over on. They
+ * are read back as the exact strings the slide prints, built here out of the same constants. */
+const dayBlocks = slideOf('day')?.blocks || [];
+const dayStats = (dayBlocks.find((block) => block.kind === 'stats')?.items || []).map((item) => item.value);
+const dayFlow = dayBlocks.find((block) => block.kind === 'flow');
+const capsLadder = Knights.KNIGHT_TIERS.map((key) => Knights.RARITY[key].dailyRuns).join(' / ');
+const resetClock = `${String(Reward.GAME_RESET_HOUR_UTC).padStart(2, '0')}:00 UTC`;
+rec('the loop slide\u2019s three figures are the code\u2019s: the cap ladder, the Genesis cap and the reset hour',
+    dayStats.includes(capsLadder)
+        && dayStats.includes(Deck.fmt(Reward.GENESIS_DAILY_RUNS))
+        && dayStats.includes(resetClock),
+    dayStats.join(' \u00b7 '));
+rec('the flow on it is one numbered box per step, and the cap is named on the last one',
+    dayFlow?.nodes?.length === 5
+        && dayFlow.nodes.map((node) => node.step).join('') === '0102030405'
+        && /runsUsed < dailyCap\[rarity\]/.test(dayFlow.nodes[4].text),
+    dayFlow ? `${dayFlow.nodes.length} nodes: ${dayFlow.nodes.map((node) => node.title).join(' \u2192 ')}` : 'no flow block');
+rec('  \u2026 and the caption says where the day rolls over, in the contracts\u2019 own terms',
+    dayFlow?.caption?.includes(resetClock) && dayFlow.caption.includes('currentDayIndex()'),
+    resetClock);
 
 const economy = stringsOf(slideOf('economy')?.blocks || []).join(' ');
 rec('the economy slide still prints the budget the vault releases, formatted as the page prints it',

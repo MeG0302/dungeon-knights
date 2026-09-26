@@ -12,7 +12,7 @@
  *   - **The animation cannot hide the content.** Every reveal lives behind `.pitch-deck.is-ready`,
  *     a class this component adds after it mounts. If the JavaScript never runs — a crawler, a
  *     reader with scripting off, a bundling mistake — the deck renders as a plain document with
- *     every slide visible, rather than as twelve blank panels.
+ *     every slide visible, rather than as a run of blank panels.
  *   - **Native scroll does the scrolling.** Slides are `scroll-snap-align` children of one overflow
  *     container, so touch, trackpad, keyboard and the arrow buttons all move the same thing, and
  *     mobile swipe works without a gesture library. What the component adds is the *reporting*: the
@@ -266,6 +266,25 @@ function Block({ block }) {
                     <pre className="pitch-code-pre">{block.lines.join('\n')}</pre>
                 </figure>
             );
+        case 'flow':
+            // A diagram, for the one thing on this deck that is a sequence rather than a
+            // number: the loop a player walks, and the two stages in it that can refuse them.
+            // A row of boxes with an arrow between each rather than an SVG, so it re-wraps on
+            // a phone instead of shrinking to illegibility — the arrows are the stylesheet's.
+            return (
+                <>
+                    <ol className="pitch-flow">
+                        {block.nodes.map((node) => (
+                            <li className="pitch-flow-node" key={node.title}>
+                                <span className="pitch-flow-step">{node.step}</span>
+                                <span className="pitch-flow-title">{node.title}</span>
+                                <span className="pitch-flow-text">{rich(node.text)}</span>
+                            </li>
+                        ))}
+                    </ol>
+                    {block.caption ? <p className="pitch-flow-caption">{rich(block.caption)}</p> : null}
+                </>
+            );
         case 'note':
             return <p className={`pitch-note ${block.isWarn ? 'is-warn' : ''}`}>{rich(block.text)}</p>;
         case 'live':
@@ -344,7 +363,7 @@ export default function PitchClient() {
     useEffect(() => {
         setReady(true);
         // Land on the slide the hash names, if it names one — instantly, because a smooth scroll
-        // across eleven slides reads as the page still loading.
+        // across the whole deck reads as the page still loading.
         const wanted = Number.parseInt(String(window.location.hash).replace('#', ''), 10);
         if (Number.isFinite(wanted) && wanted >= 1 && wanted <= total) {
             const deck = deckRef.current;
@@ -470,7 +489,7 @@ export default function PitchClient() {
                 live in it, and the wrong path 404s silently — the page still renders, with no colours
                 at all, and every DOM assertion still passes. */}
             <link rel="stylesheet" href="/theme.css?v=8" />
-            <link rel="stylesheet" href="/css/pitch.css?v=1" />
+            <link rel="stylesheet" href="/css/pitch.css?v=2" />
             {/* The header's wallet pill carries the same menu every other route's control has. */}
             <Script src="/wallet-source.js?v=3" strategy="afterInteractive" />
             <Script src="/wallet-menu.js?v=1" strategy="afterInteractive" />

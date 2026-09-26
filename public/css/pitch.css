@@ -639,6 +639,95 @@
 }
 
 /* ==========================================================================
+   FLOW
+   ========================================================================== */
+
+/* The loop a player walks: numbered boxes in a row, with the arrow between two of them drawn by
+   this sheet rather than typed into the copy — so it can become a down-arrow the moment the row
+   wraps, and so no slide has to carry a decorative character in its sentence. */
+.pitch-flow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 10px;
+  list-style: none;
+}
+
+.pitch-flow-node {
+  position: relative;
+  flex: 1 1 176px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 13px 12px;
+  background: linear-gradient(180deg, var(--bg-panel) 0%, var(--bg-dark) 100%);
+  border: 1px solid var(--border-base);
+  border-left: 2px solid var(--border-bronze);
+  border-radius: var(--radius-md);
+}
+
+.pitch-flow-step {
+  font-family: var(--font-heading);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--accent-gold-dim);
+}
+
+.pitch-flow-title {
+  font-family: var(--font-heading);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: var(--accent-gold);
+}
+
+.pitch-flow-text {
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+.pitch-flow-node:not(:last-child)::after {
+  content: '\2192';
+  position: absolute;
+  right: -9px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  line-height: 1;
+  color: var(--accent-gold-dim);
+  pointer-events: none;
+}
+
+.pitch-flow-caption {
+  margin-top: 9px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+/* Where the row wraps, the arrow has to point at the box below it instead of the one beside it. */
+@media (max-width: 920px) {
+  .pitch-flow {
+    flex-direction: column;
+  }
+
+  .pitch-flow-node {
+    flex: 1 1 auto;
+  }
+
+  .pitch-flow-node:not(:last-child)::after {
+    content: '\2193';
+    right: auto;
+    top: auto;
+    bottom: -13px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+}
+
+/* ==========================================================================
    TABLE
    ========================================================================== */
 
