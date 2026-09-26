@@ -5464,3 +5464,31 @@ holding.
 **Mutation sweep: 5/5 caught by name** — the pun back in the title, the adjective back in the nav,
 the count typed by hand, the tier dropped from the body, and the body drifting back to a bare capsule.
 The count-typed-by-hand one is the one worth keeping: it was caught only *after* claim 3 existed.
+
+**Shipped.** Committed `d0538a9` (*the documentation page, and the draw's prize is a Knight*) and
+pushed — `e49e304..d0538a9`, remote head matches local. Then
+`npx vercel --prod --yes --scope meglast320-1694`: build **~2m**, deployment
+`dungeon-knights-b8c7r1y75-meglast320-1694`. As §3 warns, `--prod` aliased **only**
+`dungeon-knights-meglast320-1694.vercel.app`, so the four live domains were aliased by hand in a
+second pass: **`dungeonknights.io`**, **`www.dungeonknights.io`**, **`app.dungeonknights.io`** and
+**`dungeon-knights.vercel.app`**.
+
+**Verified on the live host**, not on the deployment URL:
+
+```
+/                 200          /docs                200
+/points           200          /sitemap.xml         200   four entries: / , /points , /genesis , /docs
+/genesis          200          app.dungeonknights.io/docs   307 -> /gate?next=%2Fdocs
+/portfolio        200          dungeon-knights.vercel.app/docs   307
+```
+
+Read from the live DOM at 1600×1000 rather than from the response bytes: the ticker carries
+`… A KNIGHT A DAY …`, the highlight band reads **A KNIGHT A DAY · 10 Knight capsules — a Common
+Capsule each — every day, to the top 10 of that day's board, and opening one mints a Knight**, and
+the whole page returns **zero** hits on the build-vocabulary pattern, **zero** hits on `\bnight\w*`,
+**four** `TO BE ANNOUNCED` cards, and exactly one number of four digits or more — the chain ID
+`46,630`, which names a network rather than an economy. The gated host still asks for the password,
+so `/docs` is public on the apex and behind the gate on the app host: the same one page, two rules.
+
+**Production and git agree again**: this deploy was built from `d0538a9`, which is what `origin/main`
+carries. `/redeem` remains the one thing on the tree that is deliberately dark.
