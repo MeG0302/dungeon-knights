@@ -261,6 +261,14 @@ rec('and the log is written where points are paid, so a row and the balance agre
 rec('every credit path is logged, commissions included',
     (program.match(/logEarn\(/g) || []).length === 4,
     `${(program.match(/logEarn\(/g) || []).length} call sites (definition is separate)`);
+// The one direction the log did not have until `/redeem`: a spend. It goes through the same writer
+// (`logPoints`), so a redeemed card is a row on the same list the earnings are on — which is what
+// keeps a balance that fell explainable.
+rec('  … and the one path that spends writes a row of its own, negative',
+    /function logSpend\(w, points, reason\)/.test(program)
+    && /return logSpend\(w, value, reason\)/.test(program)
+    && /return logPoints\(w, points, reason\)/.test(program),
+    'logPoints is the writer, logEarn and logSpend are the two ways in');
 rec('the log is capped, because it is per wallet in a shared store',
     /ACTIVITY_LOG_LIMIT = \d+/.test(program) && /slice\(-ACTIVITY_LOG_LIMIT\)/.test(program),
     'bounded');

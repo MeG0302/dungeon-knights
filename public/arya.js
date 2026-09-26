@@ -110,6 +110,23 @@
             mood: 'Hold on',
             text: () => 'Hold on, champion — the map is still coming through the gate. The monsters are waking and your knights are taking their places.',
         },
+        // The wheel's two answers (app/redeem/client.js). The *page* passes the sentence, built
+        // from the same table the reels read, so the card the middle reel stops on and the card
+        // she names cannot drift apart; what these carry is the pose, the mood and the sound,
+        // which is the part that is hers. Both poses are portraits she already had — `clear` for
+        // a win, `alarm` for a miss — so dedicated happy/sad art is one filename each when it
+        // arrives, and nothing else has to change.
+        redeem_win: {
+            file: 'arya-clear.png',
+            mood: 'Winner',
+            sound: 'rare_drop',
+            text: () => 'That is a card, champion — your code is on the page. Redeem it well.',
+        },
+        redeem_lose: {
+            file: 'arya-alarm.png',
+            mood: 'No luck',
+            text: () => 'Not this time. The reels answer to no one — spin again when the vault has paid you.',
+        },
     };
 
     let root = null;

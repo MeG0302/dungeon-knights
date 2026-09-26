@@ -439,6 +439,12 @@
     white-space: nowrap;
 }
 
+/* The one row that is negative. Muted rather than gold: a spend is not a reward, and colouring it
+   like one would make a redeemed card read as an earning on the same list. */
+.pf-act-reward.is-spend {
+    color: var(--text-muted);
+}
+
 .pf-act-when {
     color: var(--text-muted);
     font-size: 10.5px;

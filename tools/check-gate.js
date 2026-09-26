@@ -121,8 +121,14 @@ function freshProcess(snippet, env = {}) {
     rec('a token it just issued reads back', read && read.expiresAt > now);
     rec('  … expiring a month out, not a year', read.expiresAt - now <= Gate.GATE_TTL + 5 && Gate.GATE_TTL === 30 * 24 * 60 * 60,
         `${Math.round((read.expiresAt - now) / 86400)} days`);
-    rec('the token carries an expiry and a signature, and nothing else', token.split('.').length === 2
-        && !/0x|@|wallet/i.test(token));
+    // Shape, not substrings. This check used to assert `!/0x|@|wallet/i.test(token)` — the exact
+    // pattern the comment below it warns about, which is why it failed once, on a tree where nothing
+    // was wrong: `0x` is two characters of base64url, so it appears in the signature about 1% of the
+    // time. A token is two base64url halves and one dot, and that is what is asserted now.
+    rec('the token carries an expiry and a signature, and nothing else',
+        token.split('.').length === 2
+        && token.split('.').every((half) => half.length > 0 && /^[A-Za-z0-9_-]+$/.test(half)),
+        `${token.split('.')[0].length}+${token.split('.')[1].length} characters`);
 
     // Not a regex over the token: it is random base64url, so `0x` or `wallet` can appear in it by
     // chance and a check like that fails roughly once in a few hundred runs. Decode the payload and
@@ -274,6 +280,24 @@ function freshProcess(snippet, env = {}) {
     ]) {
         rec(`${publicPath} is served on the apex`, apex(publicPath).action === 'next');
     }
+
+    // Redeeming is held back (see `REDEEM_LIVE`), and this is the consequence that has to be
+    // asserted rather than assumed: the apex must send `/redeem` to the gated host, not serve it.
+    //
+    // It is asserted in this direction *because* it is temporary. The day the wheel is published,
+    // the correct outcome flips — a winner has to be able to reach the page that pays them — and
+    // this check is the thing that will say so instead of a stranger discovering a redirect.
+    rec('/redeem is held back on the apex while the wheel is unpublished',
+        apex('/redeem').action === 'redirect' && /app\./.test(apex('/redeem').to || ''),
+        JSON.stringify(apex('/redeem')));
+    // The wheel's endpoint inherits `/api/points`, which is open so the whole program works without
+    // a password — so "held back" has to be said on its own, and checked. It spends a balance and
+    // pops a real gift code; with no page and no cards, nothing should be able to reach it.
+    rec('and its endpoint is held back with it, not inherited from the `/api/points` prefix',
+        apex('/api/points/redeem').action === 'redirect'
+        && Routing.classify('/api/points/redeem') === 'other',
+        JSON.stringify(apex('/api/points/redeem')));
+
     // The portfolio is where a Points player checks what a season of points produced, so the one
     // outcome that must never happen to it is the redirect that puts it behind the password. Named
     // on its own for the same reason `/genesis` is: it is a page the campaign sends strangers to,
@@ -321,7 +345,10 @@ function freshProcess(snippet, env = {}) {
             app(openPath, { allowed: false }).action === 'next');
     }
 
-    for (const gatedPath of ['/', '/menu', '/mint', '/dungeons', '/points', '/genesis', '/portfolio', '/landing.html']) {
+    // `/redeem` is public on the apex and private here, which is the same trick `/points` plays:
+    // the page a player is *sent to* is reachable, and the game it belongs to is not. Both halves
+    // are checked because only one of them is visible from either side.
+    for (const gatedPath of ['/', '/menu', '/mint', '/dungeons', '/points', '/genesis', '/portfolio', '/redeem', '/landing.html']) {
         const decision = app(gatedPath, { allowed: false });
         rec(`${gatedPath} asks for the password`,
             decision.action === 'gate' && decision.next === gatedPath,
@@ -354,6 +381,7 @@ function freshProcess(snippet, env = {}) {
         ['/', 'apex-public'],
         ['/points', 'apex-public'],
         ['/genesis', 'apex-public'],
+        ['/redeem', 'other'],
         ['/theme.css', 'static'],
         ['/gate', 'app-open'],
         ['/menu', 'other'],

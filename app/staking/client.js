@@ -730,7 +730,7 @@ export default function StakingClient() {
                 `parseEther` and `utils.parseEther` end up in one page. The write path checks for
                 the global before it sends anything and says so plainly when it is not there yet. */}
             <Script src="/ethers-5.7.2.umd.min.js" strategy="afterInteractive" />
-            <Script src="/arya.js?v=4" strategy="afterInteractive" />
+            <Script src="/arya.js?v=5" strategy="afterInteractive" />
             {/* The header's wallet pill gets the same menu every other page's control has. Attached
                 by hand in an effect below, because a script scanning the DOM at load would run
                 before this route has rendered anything. */}

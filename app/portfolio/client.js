@@ -342,7 +342,7 @@ export default function PortfolioClient() {
     const pageStyles = (
         <>
             <link rel="stylesheet" href="/theme.css?v=8" />
-            <link rel="stylesheet" href="/css/portfolio.css?v=3" />
+            <link rel="stylesheet" href="/css/portfolio.css?v=4" />
             {/* No ethers: every figure on this page is read by the server, so the page itself never
                 calls the chain. `wallet-source.js` is still here for the wallet's own session and
                 the menu, which is what connects and disconnects. */}
@@ -755,7 +755,12 @@ export default function PortfolioClient() {
                                         <li key={`${entry.at}-${entry.reason}`}>
                                             <span className="pf-act-when">{shortWhen(entry.at)}</span>
                                             <span className="pf-act-what">{describeEarn(entry.reason)}</span>
-                                            <span className="pf-act-reward">+{fmtInt(entry.points)} PTS</span>
+                                            {/* Signed, not assumed: the log carries the spend
+                                                as a negative row, and `+{-1000}` would read as a
+                                                typo rather than as a redemption. */}
+                                            <span className={`pf-act-reward${entry.points < 0 ? ' is-spend' : ''}`}>
+                                                {entry.points < 0 ? '\u2212' : '+'}{fmtInt(Math.abs(entry.points))} PTS
+                                            </span>
                                         </li>
                                     ))}
                                 </ul>
