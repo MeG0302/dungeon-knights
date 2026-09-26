@@ -193,7 +193,7 @@ export default function DocsClient() {
                 other one: an unversioned sheet is a CSS change that never reaches a returning
                 reader. */}
             <link rel="stylesheet" href="/theme.css?v=9" />
-            <link rel="stylesheet" href="/css/docs.css?v=1" />
+            <link rel="stylesheet" href="/css/docs.css?v=2" />
             {/* The header's wallet pill gets the menu every other route's control has. */}
             <Script src="/wallet-menu.js?v=1" strategy="afterInteractive" />
             {/* The wallets this page can read: it is a React route, so it has to pull the source in
@@ -414,34 +414,48 @@ export default function DocsClient() {
                         <Divider />
 
                         {/* ----------------------------------------------------------- contracts */}
+                        {/* Held back, on the owner's instruction: the addresses are not to be shown to
+                            anybody yet. So the list is blurred and made inert rather than removed —
+                            the section keeps its heading and its place in the nav, and says where the
+                            addresses will be — which is how the portfolio treats a panel that is not
+                            open. Three things make that real rather than decorative: `aria-hidden` on
+                            the body, because a screen reader would otherwise read out precisely what
+                            the blur is there to withhold; `pointer-events: none` in the sheet, so no
+                            explorer link behind it can be followed; and `user-select: none`, so the
+                            text cannot be copied out of the DOM. The rows stay in the file, so
+                            publishing is deleting two class names and one paragraph. */}
                         <section className="docs-section" id={CONTRACTS_SECTION.id}>
                             <div className="docs-wrap">
                                 <SectionHead title={CONTRACTS_SECTION.title} sub={CONTRACTS_SECTION.sub} />
-                                <ul className="docs-rows">
-                                    {CONTRACTS_SECTION.rows.map((row) => {
-                                        const address = CONTRACTS[row.key];
-                                        return (
-                                            <li className="docs-row" key={row.key}>
-                                                <span className="docs-row-name">
-                                                    <span className="docs-row-title">{row.name}</span>
-                                                    <span className="docs-row-role">{row.role}</span>
-                                                </span>
-                                                <a
-                                                    className="docs-row-address"
-                                                    href={`${CONTRACTS_SECTION.explorer}${address}`}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    title={`${address} on the explorer`}
-                                                >
-                                                    {address}
-                                                </a>
-                                            </li>
-                                        );
-                                    })}
-                                </ul>
-                                <p className="docs-note">
-                                    {CONTRACTS_SECTION.note} Chain ID {fmt(CHAIN.id)}, {CHAIN.name}.
-                                </p>
+                                <p className="docs-soon-chip">{CONTRACTS_SECTION.chip}</p>
+                                <div className="docs-soon-body" aria-hidden="true">
+                                    <ul className="docs-rows">
+                                        {CONTRACTS_SECTION.rows.map((row) => {
+                                            const address = CONTRACTS[row.key];
+                                            return (
+                                                <li className="docs-row" key={row.key}>
+                                                    <span className="docs-row-name">
+                                                        <span className="docs-row-title">{row.name}</span>
+                                                        <span className="docs-row-role">{row.role}</span>
+                                                    </span>
+                                                    <a
+                                                        className="docs-row-address"
+                                                        href={`${CONTRACTS_SECTION.explorer}${address}`}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        title={`${address} on the explorer`}
+                                                    >
+                                                        {address}
+                                                    </a>
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
+                                    <p className="docs-note">
+                                        {CONTRACTS_SECTION.note} Chain ID {fmt(CHAIN.id)}, {CHAIN.name}.
+                                    </p>
+                                </div>
+                                <p className="docs-soon-note">{CONTRACTS_SECTION.soon}</p>
                             </div>
                         </section>
 

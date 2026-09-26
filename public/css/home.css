@@ -35,8 +35,8 @@
        `safe-area-inset-bottom`; both older than that would drop the declaration, hence the plain
        value on the line before each use. */
     --home-foot-gap: max(18px, env(safe-area-inset-bottom, 0px));
-    padding: 32px 24px 72px;
-    padding: 32px 24px calc(54px + var(--home-foot-gap)) 24px;
+    padding: 32px 24px 84px;
+    padding: 32px 24px calc(84px + var(--home-foot-gap)) 24px;
 
     overflow: hidden;
     background: #12100E url('/assets/images/menu-background.webp') center / cover no-repeat;
@@ -220,6 +220,30 @@
     text-decoration: none;
 }
 
+/* The row of pages a stranger can open — the same list the /docs footer ends with, and the same look:
+ * uppercase, tracked out, bronze until it is hovered (the hover and focus rules below already cover
+ * it, because it is inside `.home-footer`). `flex-basis: 100%` gives it a line of its own at every
+ * width; left to flow it would sit beside the copyright on a laptop and above it on a phone, and the
+ * order of a footer is not something to make a reader re-find per screen. */
+.home-footer-nav {
+    flex-basis: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 6px 22px;
+    margin-bottom: 2px;
+}
+
+.home-footer-nav a {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #b3aa9c;
+    text-decoration: none;
+}
+
 /* A phone should not spend its data on a background loop, and neither should anyone who has asked
  * their system for less movement. Both get the poster image, which is already the page's background.
  * `display: none` is what actually saves the bytes: a media element that is not rendered never runs
@@ -281,8 +305,8 @@
 
 @media (max-width: 560px) {
     .home-page {
-        padding: 28px 18px 84px;
-        padding: 28px 18px calc(66px + var(--home-foot-gap)) 18px;
+        padding: 28px 18px 132px;
+        padding: 28px 18px calc(114px + var(--home-foot-gap)) 18px;
     }
     .home-title { letter-spacing: 2px; }
     .home-btn { min-width: 100%; }

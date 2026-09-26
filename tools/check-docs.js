@@ -339,6 +339,48 @@ for (const row of CONTRACTS_SECTION.rows) {
 rec('and the explorer link is absolute, so it works from the page',
     /^https:\/\//.test(CONTRACTS_SECTION.explorer));
 
+// The list is **withheld**, at the owner's instruction: the addresses are not to be shown to anybody
+// yet. The section keeps its heading and its place in the nav, and the nine rows are blurred, inert
+// and hidden from a screen reader rather than deleted — a blur alone is a picture of secrecy, and the
+// explorer links behind it would still open a tab. The rows stay in the client, so publishing is
+// deleting a wrapper and a paragraph rather than rebuilding the list.
+const contractBlock = (clientSource.match(/<section className="docs-section" id=\{CONTRACTS_SECTION\.id\}>[\s\S]*?<\/section>/) || [''])[0];
+rec('the contracts list is withheld while the deployment is not published',
+    /className="docs-soon-body" aria-hidden="true"/.test(contractBlock)
+    && contractBlock.indexOf('docs-soon-body') < contractBlock.indexOf('docs-rows')
+    && /docs-soon-chip/.test(contractBlock) && /docs-soon-note/.test(contractBlock),
+    contractBlock ? 'blurred body, hidden from a screen reader, with a sentence in its place' : 'no contracts section found');
+// Every touch of the address table, not just the one that looks like `CONTRACTS[row.key]`: the first
+// draft of this line counted `CONTRACTS[` and the mutation sweep walked straight past
+// `{CONTRACTS.token}` printed above the blur. The claim is positional now — with the import lines off
+// the top, the table may not be named *before* the blurred body opens, and must be named inside it.
+const noImports = clientSource.replace(/^import[^\n]*$/gm, '');
+const blurAt = noImports.indexOf('className="docs-soon-body"');
+rec('  \u2026 and no address is printed anywhere outside that blurred body',
+    blurAt > -1
+    && !/\bCONTRACTS\b/.test(noImports.slice(0, blurAt))
+    && /\bCONTRACTS\b/.test(noImports.slice(blurAt)),
+    blurAt > -1 ? `${(noImports.slice(0, blurAt).match(/\bCONTRACTS\b/g) || []).length} mention(s) of the table before the blur` : 'no blurred body found');
+rec('  \u2026 and the sheet blurs it and makes its controls inert',
+    /\.docs-soon-body\s*\{[^}]*filter:\s*blur\(/.test(sheet)
+    && /\.docs-soon-body\s*\{[^}]*pointer-events:\s*none/.test(sheet)
+    && /\.docs-soon-body\s*\{[^}]*user-select:\s*none/.test(sheet),
+    'blur + pointer-events: none + user-select: none');
+// `user-select` is the half that a screenshot cannot show: the text is in the DOM, so a reader who
+// drags across the blur would otherwise get the addresses into their clipboard and never notice.
+rec('  \u2026 and the heading stays, so the section a reader came for has not vanished',
+    /<SectionHead title=\{CONTRACTS_SECTION\.title\} sub=\{CONTRACTS_SECTION\.sub\} \/>/.test(contractBlock)
+    && /'contracts'/.test(contentSource));
+
+// The footer, minus its `Source` item: the owner asked that the repository not be shown on the pages
+// the public can open. The pitch deck still names it — that page is behind the password and its whole
+// job is to hand a reader something to read — so the claim here is about this list, not about the
+// project's links generally.
+rec('the footer names no repository, on the owner\u2019s instruction',
+    !FOOTER.links.some((link) => /github/i.test(link.href) || /source|github|repo/i.test(link.label))
+    && !/github/i.test(rendered),
+    FOOTER.links.map((link) => link.label).join(' \u00b7 '));
+
 // ================================================================================== 3. the art
 section('The art slots');
 

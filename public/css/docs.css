@@ -815,6 +815,49 @@
     max-width: 92ch;
 }
 
+/* ------------------------------------------------- a section that is not published yet
+   The contracts list, held back at the owner's request. Blurred rather than emptied, so the section
+   keeps the shape it will have and a reader can see that something lives here; `pointer-events: none`
+   because the rows are explorer links and an invisible link that still opens a tab is worse than no
+   list at all, and `user-select: none` because the text is in the DOM and could otherwise be copied
+   out of the blur. The body is `aria-hidden` in the markup as well — a screen reader is not fooled by
+   `filter`. */
+.docs-soon-body {
+    filter: blur(5px);
+    opacity: 0.5;
+    pointer-events: none;
+    user-select: none;
+    /* Nine rows is 1,122px on a 390-wide phone — two screens of grey smear, which reads as the page
+       having broken rather than as a list being closed. Cut to about a panel's height, the section
+       reads the way it is meant to: something is here, and it is not open. */
+    max-height: clamp(240px, 34vh, 380px);
+    overflow: hidden;
+}
+
+.docs-soon-chip {
+    display: inline-block;
+    margin-bottom: 22px;
+    font-family: var(--font-body);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent-gold);
+    background: rgba(212, 175, 55, 0.12);
+    border: 1px solid var(--border-gold, var(--border-base));
+    border-radius: 999px;
+    padding: 3px 10px;
+}
+
+.docs-soon-note {
+    font-family: var(--font-body);
+    font-size: 13.5px;
+    line-height: 1.7;
+    color: var(--text-muted);
+    max-width: 78ch;
+    margin-top: 18px;
+}
+
 /* ---------------------------------------------------------------- the footer */
 .docs-footer {
     padding: clamp(60px, 8vw, 96px) 0 64px;

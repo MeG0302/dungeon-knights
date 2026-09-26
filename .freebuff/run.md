@@ -5696,3 +5696,59 @@ knights`, Genesis's empty state, the inert `Knight's Hall`).
 
 The deploy was read on the **apex**, which serves the same route: the screenshot came from the gated
 `app.dungeonknights.io`, and this browser is still not signed in there. Nothing else is outstanding.
+
+## 10. No repository on the public pages, and the contracts held back
+
+> "dont add source here (our github should not be seen)" — with the `/docs` footer's link row in the
+> screenshot — "also add this section in main landing page aswell", and then "also blurr the contracts
+> from docs page as it is not to be shown to any".
+
+**The row was the docs footer**, `FOOTER.links` in `lib/docs-content.js`, rendered by
+`app/docs/client.js`: *Play · Points · Genesis · Portfolio · X · Discord · Source*, where the last item
+was `https://github.com/MeG0302/dungeon-knights`. The apex landing (`/` → `STATIC_PAGES.home`) had no
+such row at all — its footer was the copyright line and a *Follow @DNGrobinhood* link.
+
+**Three questions, asked before anything public was touched**, because the site is called Dungeon
+Knights and the answer to each changes what a stranger sees: the landing row would read **Points ·
+Genesis · Portfolio · X · Discord** (no *Play* — a landing page's PLAY is either a link to itself or a
+jump to the password gate); the row would go on **the landing page only**; and the GitHub link would
+come off the **public footer only**, leaving the pitch deck's own contact slide pointing at it — that
+page is behind the password and its job is to hand a reader something to read.
+
+**The landing footer, measured rather than guessed.** The row is `flex-basis: 100%`, so it takes its
+own line at every width and the order never changes per device. It made the footer taller — 50px
+before, **79px** on a laptop and **125px** at 390×844, where the nav wraps to two lines and the
+copyright and the follow link take one each — and the footer is absolutely positioned inside a column
+that *reserves* its height, so the reservation went from `54px` to **`84px`** (`114px` on a phone,
+where the plain numbers are `112px`/`132px`). The numbers come off a live render at 1440×900,
+1024×650, 760×900, 740×360, 390×844, 360×740 and 320×568, and `tools/check-landing.js` now asserts
+them as floors — a label that grows a line is what they are for.
+
+**The contracts section is emptied into a blur, on purpose built like the portfolio's closed panels:**
+`docs-soon-body` blurs it, `pointer-events: none` stops the nine explorer links behind it from being
+clickable at all, `user-select: none` stops the text being dragged into a clipboard, and
+`aria-hidden="true"` stops a screen reader reading out exactly what the blur withholds. Two extras
+this page needed: the section keeps its heading, its nav entry and a **Not published yet** chip with a
+sentence saying where the addresses will read (the section is not gone, it is closed), and the blurred
+block is **cut to a panel's height** (`clamp(240px, 34vh, 380px)`) — nine rows measure 1,122px at
+390 wide, and two screens of grey smear reads as a broken page rather than a closed list.
+
+**A blur is not secrecy, and the run doc should say so.** The nine addresses are still in the page's
+DOM, and — the part the blur does not touch at all — **`https://dungeonknights.io/contract-addresses.js`
+answers 200 to anybody**, listing every one of them; only the gated game page loads it, but static
+files are not gated. Blurring the docs hides the list from a reader, not from a view-source. If the
+addresses are not to be seen by anybody, the next step is behind the gate, not in a stylesheet.
+
+**Falsified before it was trusted.** Seven mutations — an address printed above the blur (as
+`CONTRACTS.token`, which the first draft of that guard walked straight past because it counted
+`CONTRACTS[`), the body no longer `aria-hidden`, `user-select` removed, *Source* restored to the
+docs footer, a GitHub link added to the landing page, a page dropped from the row, and the reservation
+shrunk back to `54px` — each failed by name, and the mutator was deleted.
+
+**Fleet after it:** `check-docs` **77/77** (was 72) · `check-landing` **36/36** (was 31) ·
+`check-styles` clean (*"every class each route uses is defined by a sheet that route loads"*) ·
+`check-portfolio` 72/72 · gate 150/150 · pitch 43/43 · copies 2/2. Sheets bumped:
+`docs.css?v=1`→`v=2`, `home.css?v=4`→`v=5`.
+
+**Not deployed.** Nothing is committed or pushed yet; the live hosts still carry the old footer and
+the printed addresses.
