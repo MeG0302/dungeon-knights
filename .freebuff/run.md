@@ -5673,5 +5673,26 @@ tag under the mutation, so the pattern is now `pf-card pf-soon">(?:(?!pf-card pf
 **Fleet after it:** `check-portfolio` **72/72** (was 68) · `check-docs` 72/72 · gate **150/150** ·
 `check-styles` clean (*"every class each route uses is defined by a sheet that route loads"*).
 
-**Not deployed.** Nothing is committed, pushed or aliased yet — the live host still shows the strip
-from `d1409ee`.
+**Shipped.** Committed `c73833f` (*/portfolio shows nothing about knights until the panel opens*),
+pushed — `50e0d65..c73833f` — then `npx vercel --prod --yes --scope meglast320-1694`: **Ready in 1m**,
+deployment `dungeon-knights-c44plmowk-meglast320-1694`, and `--prod` aliased only its own scoped URL
+(§3), so **`dungeonknights.io`**, **`www.dungeonknights.io`**, **`app.dungeonknights.io`** and
+**`dungeon-knights.vercel.app`** were pointed at it by hand in a second pass.
+
+```
+/                 200          /docs                200
+/points           200          /sitemap.xml         200
+/genesis          200          /staking             308  -> app.dungeonknights.io (gated)
+/portfolio        200          /mint                308  -> app.dungeonknights.io (gated)
+```
+
+The live sheet is `/css/portfolio.css?v=6`, **17,010 bytes**, with **zero** `pf-tier` rules in it. Read
+from the live DOM at `https://dungeonknights.io/portfolio` with a saved address in `localStorage` so the
+panels render: the six cards are `$DNG · KNIGHTS · GENESIS · POINTS · MY CAPSULES · RECENT ACTIVITY`,
+`KNIGHTS` is `pf-soon` with the chip and the note and holds **zero** `.nft-tier` and **zero** `.nft-card`
+elements, and `% roll` / `HP ·` / `% drop` appear **nowhere** in the page text. The four surviving
+mentions of the word are the title, the note, and text inside the blurred or hidden bodies (`Staked
+knights`, Genesis's empty state, the inert `Knight's Hall`).
+
+The deploy was read on the **apex**, which serves the same route: the screenshot came from the gated
+`app.dungeonknights.io`, and this browser is still not signed in there. Nothing else is outstanding.
