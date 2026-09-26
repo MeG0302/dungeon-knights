@@ -21,6 +21,7 @@
 
 const crypto = require('crypto');
 const fs = require('fs');
+const http = require('http');
 const os = require('os');
 const path = require('path');
 
@@ -28,6 +29,71 @@ const results = [];
 function rec(label, pass, detail) {
     results.push({ label, pass });
     console.log(`  ${pass ? 'ok  ' : 'FAIL'}  ${label}${detail ? `  — ${detail}` : ''}`);
+}
+
+/**
+ * A stand-in for the owner's Google Form.
+ *
+ * The filing path is a real POST to a real page, so the only honest way to check it is against one:
+ * this serves a page shaped the way Google's is — a `formResponse` action, the hidden fields a
+ * browser would post back, and the `FB_PUBLIC_LOAD_DATA_` blob that names the questions — and keeps
+ * every submission it receives.
+ *
+ * It is deliberately **not** docs.google.com. A harness that wrote a row into the owner's sheet every
+ * time it ran would be worse than no harness, so every claim in this file is pointed at one of these.
+ */
+function startForm({ questions = [
+    { title: 'Wallet address', entryId: 111 },
+    { title: 'Date won', entryId: 222 },
+], status = 200 } = {}) {
+    const state = { posts: [], gets: 0, url: null, close: null };
+    const load = [null, questions.map((q, index) => [100 + index, q.title, null, index === 0 ? 0 : 1, [[q.entryId, null, 0]]])];
+    const server = http.createServer((req, res) => {
+        if (req.method === 'POST') {
+            let body = '';
+            req.on('data', (chunk) => { body += chunk; });
+            req.on('end', () => {
+                state.posts.push(body);
+                res.writeHead(status, { 'content-type': 'text/html' });
+                res.end(`<html><title>${status === 200 ? 'Your response has been recorded' : 'Error'}</title></html>`);
+            });
+            return;
+        }
+        state.gets += 1;
+        res.writeHead(200, { 'content-type': 'text/html' });
+        res.end([
+            '<html><head><title>daily capsule winners </title></head><body>',
+            `<!-- a shape only a walk can read: the questions are nested arrays -->`,
+            `<form action="${state.url ? state.url.replace('/viewform', '/formResponse') : '/formResponse'}" method="POST" id="mG61Hd">`,
+            '<input type="hidden" name="fvv" value="1">',
+            '<input type="hidden" name="pageHistory" value="0">',
+            '<input type="hidden" name="fbzx" value="4321987650123456789">',
+            '</form>',
+            `<script>var FB_PUBLIC_LOAD_DATA_ = ${JSON.stringify(load)};</script>`,
+            '</body></html>',
+        ].join(''));
+    });
+    return new Promise((resolve) => {
+        server.listen(0, '127.0.0.1', () => {
+            const { port } = server.address();
+            state.url = `http://127.0.0.1:${port}/viewform`;
+            state.close = () => new Promise((done) => server.close(() => done()));
+            resolve(state);
+        });
+    });
+}
+
+/** An address nothing is listening on, for the "the form is a typo" case. */
+async function closedPort() {
+    const probe = await startForm();
+    const { port, hostname } = new URL(probe.url);
+    await probe.close();
+    return `http://${hostname}:${port}/viewform`;
+}
+
+/** One field out of a submission body, the way Google would read it. */
+function posted(body, entryId) {
+    return new URLSearchParams(body || '').get(`entry.${entryId}`);
 }
 
 // -------------------------------------------------------------- the sandbox, before imports
@@ -42,12 +108,18 @@ for (const key of ['KV_REST_API_URL', 'KV_REST_API_TOKEN', 'UPSTASH_REDIS_REST_U
     console.log('');
     console.log('Points Program — capsule registration and daily claims');
 
+    // Before any module reads it: a claim files its win, and no claim in this file may file into the
+    // owner's real sheet. The shipped default link is checked separately, by reading the config.
+    const form = await startForm();
+    process.env.CAPSULE_FORM_URL = form.url;
+
     const { Wallet } = await import('ethers');
     const Config = await import('../lib/points-config.js');
     const Store = await import('../lib/points-store.js');
     const Session = await import('../lib/points-session.js');
     const Claims = await import('../lib/capsule-claims.js');
     const Capsules = await import('../lib/points-capsules.js');
+    const Form = await import('../lib/capsule-form.js');
 
     /** A wallet that can really sign, and a record for it. */
     async function player() {
@@ -238,6 +310,148 @@ for (const key of ['KV_REST_API_URL', 'KV_REST_API_TOKEN', 'UPSTASH_REDIS_REST_U
         || (await Capsules.claimCapsule(bob.address, { day: today, message: Claims.challengeFor(bob.address, 'claim', today)?.message, signature: bobSig })).code === 'no-capsule',
         'no win, nothing to claim');
 
+    // --------------------------------------------------------------- the form the win is filed in
+    console.log('');
+    console.log('Filing the win into the form');
+
+    // Alice's claim above ran against the configured form, which is this fake one: the whole point is
+    // that nobody pastes anything any more, so the claim itself has to be the submission.
+    rec('a claim posts the winner\u2019s wallet and the day it won, with nobody opening a form',
+        posted(form.posts[0], 111) === alice.address && posted(form.posts[0], 222) === settledToday,
+        `${posted(form.posts[0], 111)} \u00b7 ${posted(form.posts[0], 222)}`);
+    rec('  \u2026 and it is a real form submission, hidden fields and all, not just the answers',
+        posted(form.posts[0], 111) !== null
+        && new URLSearchParams(form.posts[0] || '').get('fvv') === '1'
+        && new URLSearchParams(form.posts[0] || '').get('fbzx') === '4321987650123456789',
+        'fvv and the page marker ride along');
+    const aliceWin = (await Store.getWallet(alice.address)).capsules[settledToday];
+    rec('  \u2026 and the record says the *server* filed it, which is a different fact from \u201cthe player says so\u201d',
+        Boolean(aliceWin.formSubmittedAt) && aliceWin.formSubmittedVia === 'server'
+        && Capsules.capsuleView(aliceWin).formVia === 'server',
+        `via ${aliceWin.formSubmittedVia}`);
+    rec('  \u2026 and a win marked by hand still reads as the player\u2019s own word',
+        Capsules.capsuleView({ ...aliceWin, formSubmittedVia: null }).formVia === 'player',
+        'server and player are not the same claim');
+
+    rec('filing the same win again is not a second entry',
+        (await Capsules.fileCapsuleWin(alice.address, settledToday)).already === true
+        && form.posts.length === 1,
+        'idempotent, so a backfill run twice cannot double a day');
+    rec('and the form itself is read once, not once per claim',
+        form.gets === 1,
+        `${form.gets} page load(s) for ${form.posts.length} submission(s)`);
+
+    // The owner's form has a single paragraph box called `knight capsule`. The wallet and the date
+    // still have to reach him — dropping the date because there was no question for it would be the
+    // quiet kind of data loss.
+    const single = await startForm({ questions: [{ title: 'knight capsule', entryId: 663715722 }] });
+    Form.forgetCapsuleForms();
+    const erin = await player();
+    await winOn(erin.address, settledToday);
+    const erinMessage = Claims.challengeFor(erin.address, 'claim', settledToday).message;
+    const erinClaim = await Capsules.claimCapsule(erin.address, {
+        day: settledToday,
+        message: erinMessage,
+        signature: await erin.wallet.signMessage(erinMessage),
+        formUrl: single.url,
+    });
+    rec('a one-question form gets one line: the wallet and the date together, nothing dropped',
+        erinClaim.filed === true
+        && posted(single.posts[0], 663715722) === Form.capsuleEntryLine({ address: erin.address, day: settledToday })
+        && /\u00b7/.test(posted(single.posts[0], 663715722) || ''),
+        posted(single.posts[0], 663715722));
+
+    // A form that is down. The claim is the fact; the note about it is not allowed to be the reason a
+    // player loses a capsule.
+    const broken = await startForm({ status: 500 });
+    Form.forgetCapsuleForms();
+    const frank = await player();
+    await winOn(frank.address, settledToday);
+    const frankMessage = Claims.challengeFor(frank.address, 'claim', settledToday).message;
+    const frankClaim = await Capsules.claimCapsule(frank.address, {
+        day: settledToday,
+        message: frankMessage,
+        signature: await frank.wallet.signMessage(frankMessage),
+        formUrl: broken.url,
+    });
+    const frankWin = (await Store.getWallet(frank.address)).capsules[settledToday];
+    rec('a form that refuses the entry does not refuse the claim',
+        frankClaim.ok === true && frankClaim.filed === false && Boolean(frankWin.claimedAt),
+        'claimed either way');
+    rec('  \u2026 and the win is left looking unfiled, with the reason on it, so it can be retried',
+        !frankWin.formSubmittedAt && frankWin.formSubmittedVia === undefined
+        && typeof frankWin.formError === 'string' && frankWin.formError.length > 0,
+        frankWin.formError);
+    rec('  \u2026 and handing it over by hand still works, and reads as the player\u2019s word',
+        (await Capsules.markFormSubmitted(frank.address, settledToday)).ok === true
+        && (await Store.getWallet(frank.address)).capsules[settledToday].formSubmittedVia === 'player',
+        'the fallback the card offers');
+
+    // A form that is not there at all — a typo, or a link that was edited. Same shape of answer.
+    Form.forgetCapsuleForms();
+    const unreachable = await closedPort();
+    const grace = await player();
+    await winOn(grace.address, settledToday);
+    const graceMessage = Claims.challengeFor(grace.address, 'claim', settledToday).message;
+    const graceClaim = await Capsules.claimCapsule(grace.address, {
+        day: settledToday,
+        message: graceMessage,
+        signature: await grace.wallet.signMessage(graceMessage),
+        formUrl: unreachable,
+    });
+    rec('a form that cannot be reached at all gives the same answer \u2014 the claim stands, the entry does not',
+        graceClaim.ok === true && graceClaim.filed === false
+        && typeof graceClaim.filedError === 'string'
+        && /could not be reached|could not be read|did not answer/.test(graceClaim.filedError),
+        graceClaim.filedError);
+    rec('and a form link that is not a link is refused, never thrown on',
+        await (async () => {
+            try {
+                const result = await Form.submitCapsuleEntry({
+                    formUrl: 'not a url', address: alice.address, day: settledToday,
+                });
+                return result.ok === false && typeof result.error === 'string';
+            } catch {
+                return false;
+            }
+        })(), 'refusals, not exceptions');
+
+    // ----------------------------------------------------------- reading a form, without a network
+    console.log('');
+    console.log('Reading the form\u2019s own page');
+
+    const page = [
+        '<html><head><title>daily capsule winners </title></head><body>',
+        '<form action="/forms/d/e/ABC/formResponse" method="POST"><input type="hidden" name="fvv" value="1"></form>',
+        '<script>var FB_PUBLIC_LOAD_DATA_ = [null,[[1,"Wallet address",null,0,[[11,null,0]]],[2,"Date won",null,1,[[22,null,0]]]]];</script>',
+        '</body></html>',
+    ].join('');
+    const parsed = Form.parseCapsuleForm(page, 'https://docs.google.com/forms/d/e/ABC/viewform');
+    rec('the questions come out of the page\u2019s own data, titles and entry ids together',
+        parsed?.questions.length === 2 && parsed.questions[0].entryId === '11'
+        && parsed.questions[1].title === 'Date won' && parsed.questions[1].entryId === '22',
+        parsed?.questions.map((q) => `${q.title}\u2192${q.entryId}`).join(', '));
+    rec('  \u2026 and the POST target is resolved against the page it was found on',
+        parsed?.actionUrl === 'https://docs.google.com/forms/d/e/ABC/formResponse',
+        parsed?.actionUrl);
+    rec('  \u2026 with the hidden fields a browser would have sent back',
+        parsed?.hidden?.fvv === '1', 'the page marker is captured, not invented');
+    rec('a wallet question takes the address and a date question takes the day',
+        JSON.stringify(Form.capsuleEntryValues({ questions: parsed.questions, address: alice.address, day: settledToday }).values)
+        === JSON.stringify({ 'entry.11': alice.address, 'entry.22': settledToday }),
+        'typing the wallet into the date box is the bug this prevents');
+    rec('  \u2026 and a wallet question with no date question keeps both in one cell',
+        Form.capsuleEntryValues({
+            questions: [{ title: 'Wallet address', entryId: 7 }], address: alice.address, day: settledToday,
+        }).values['entry.7'] === Form.capsuleEntryLine({ address: alice.address, day: settledToday }),
+        'the date is never dropped');
+    rec('a form with nothing to fill is refused rather than posted into nothing',
+        Form.capsuleEntryValues({ questions: [], address: alice.address, day: settledToday }).error === 'the form asks for nothing',
+        'asks for nothing');
+    rec('and a page that is not a form is not mistaken for one',
+        Form.parseCapsuleForm('<html><body>hello</body></html>') === null
+        && Form.parseCapsuleForm('') === null, '');
+
     // ---------------------------------------------------------------------- the window
     console.log('');
     console.log('The window: submit it the day you won it');
@@ -294,11 +508,17 @@ for (const key of ['KV_REST_API_URL', 'KV_REST_API_TOKEN', 'UPSTASH_REDIS_REST_U
         && !/\bplayers\b|\btotal\b/i.test(JSON.stringify(view.mine)),
         'unranked today, one capsule');
     rec('and the form link it hands out is the configured one',
-        view.formUrl === Config.CAPSULE_FORM_URL && /^https:\/\/(forms\.gle|docs\.google\.com)/.test(view.formUrl),
-        view.formUrl.replace(/^https:\/\//, '').slice(0, 46) + '\u2026');
+        view.formUrl === Config.CAPSULE_FORM_URL,
+        view.formUrl.replace(/^https?:\/\//, '').slice(0, 46) + '\u2026');
+    // This file points the configured link at its own fake form, so the *shipped* default is checked
+    // where it actually lives — in the source — rather than where the harness made it point.
+    const configSource = fs.readFileSync(path.join(__dirname, '..', 'lib', 'points-config.js'), 'utf8');
+    rec('  \u2026 and the shipped default is the owner\u2019s own form, and a fill link at that',
+        /forms\.gle\/sJk6MEta7BpEsTeY9/.test(configSource)
+        && Config.capsuleFormNeedsSignIn('https://forms.gle/sJk6MEta7BpEsTeY9') === false,
+        'forms.gle/sJk6MEta7BpEsTeY9 \u2014 published, so nobody meets a sign-in');
     rec('  \u2026 and it is a *published* form, not the editor link only its owner can open',
-        Config.capsuleFormNeedsSignIn(view.formUrl) === false
-        && Config.capsuleFormNeedsSignIn('https://docs.google.com/forms/d/18i-Zn5UxiycTdTVak0H9U8p2H0TIm3fFftEwntkCbqs/edit') === true
+        Config.capsuleFormNeedsSignIn('https://docs.google.com/forms/d/18i-Zn5UxiycTdTVak0H9U8p2H0TIm3fFftEwntkCbqs/edit') === true
         && Config.capsuleFormNeedsSignIn('https://docs.google.com/forms/d/18i-Zn5UxiycTdTVak0H9U8p2H0TIm3fFftEwntkCbqs') === true
         && Config.capsuleFormNeedsSignIn('not a url') === true
         && Config.capsuleFormNeedsSignIn('') === true,
@@ -372,12 +592,24 @@ for (const key of ['KV_REST_API_URL', 'KV_REST_API_TOKEN', 'UPSTASH_REDIS_REST_U
         'the banner above the panels, naming the day in words');
     rec('  \u2026 and the card\u2019s sentence follows the link it is holding, rather than promising a sign-in',
         /giveaway.formNeedsSignIn/.test(panel)
-        && /it asks for the address above/.test(panel)
+        && /it asks for the wallet address printed below/.test(panel)
         && /may ask for a Google sign-in/.test(panel),
         'one sentence per kind of form');
-    rec('  \u2026 and the address it would copy is printed on the card',
-        /data-arya="claim-address"/.test(panel) && /state\?\.address \|\| address/.test(panel),
-        'the wallet that would be pasted into the form');
+    // The one sentence a winner reads before they sign. The claim registers the wallet and the capsule
+    // arrives when the chain does, and all three states of the card say it the same way — a promise
+    // that is true on the waiting branch and stale on the filed one is worse than no promise.
+    rec('the claim card promises registration and a delivery with a date on it',
+        /Claim your capsule, and we will register your wallet\./.test(panel)
+        && /When the mainnet goes live your knight capsule will be sent to you\./.test(panel)
+        && (panel.match(/\$\{CAPSULE_DELIVERY\}/g) || []).length === 3,
+        'the owner\u2019s sentence, said the same way in all three states');
+    rec('  \u2026 and there is no copy-my-address option left on the card to ask for',
+        !/Copy my address/i.test(panel) && !/handleCopyWallet/.test(panel) && !/capsuleCopied/.test(panel),
+        'nothing to copy, because the server files it and nothing is pasted');
+    rec('  \u2026 and the address is still printed on the card where a form has to ask for it',
+        /data-arya="claim-address"/.test(panel) && /state\?\.address \|\| address/.test(panel)
+        && /data-arya="capsule-unfiled-form"/.test(panel),
+        'the wallet that goes in by hand, on the unfiled-win card alone');
     rec('and the ledger gives the day it was won in words beside the date',
         /won \$\{row.when\}/.test(panel) && /title=\{row.day\}/.test(panel),
         'won yesterday, with the date in the tooltip');
@@ -406,7 +638,37 @@ for (const key of ['KV_REST_API_URL', 'KV_REST_API_TOKEN', 'UPSTASH_REDIS_REST_U
         /status: sent \? 'sent' : claimed \? 'claimed' : open \? 'won' : 'missed'/.test(lib),
         'won \u2192 claimed \u2192 sent, or missed');
 
+    // The filing is a network call, and the one way it could go wrong is by being part of the write:
+    // a store mutation that waits on Google is a claim that a slow form can lose.
+    const claimSource = lib.slice(lib.indexOf('export async function claimCapsule'), lib.indexOf('export async function fileCapsuleWin'));
+    rec('the claim is written first and filed second, never the other way round',
+        claimSource.indexOf('updateWallet(') > -1
+        && claimSource.indexOf('updateWallet(') < claimSource.indexOf('fileCapsuleWin('),
+        'the record is the claim; the form is a note about it');
+    rec('  \u2026 and the card only offers the form when the filing did not happen',
+        /formVia === 'server'/.test(panel) && /capsuleOpen\.formError/.test(panel)
+        && /data-arya="capsule-unfiled-form"/.test(panel),
+        'nothing to paste \u2014 with the link kept for the day it fails');
+    rec('  \u2026 and one filing function serves both the claim and the catch-up tool',
+        /from '\.\/capsule-form\.js'/.test(lib)
+        && /Capsules\.fileCapsuleWin\(/.test(fs.readFileSync(path.join(__dirname, '..', 'tools', 'points-capsules.js'), 'utf8')),
+        'the same code path, so the backfill cannot drift from the claim');
+    rec('and nothing here writes into the owner\u2019s real form: every claim is pointed at a fake',
+        form.url.startsWith('http://127.0.0.1:') && Config.CAPSULE_FORM_URL === form.url
+        && form.posts.length > 0,
+        `${form.posts.length} submission(s), all to ${form.url.replace(/\/viewform$/, '')}`);
+
     // ------------------------------------------------------------------------------ the tally
+    // The fake forms are real listeners, and an open one keeps Node alive for ever — the tally would
+    // never print. Nothing here asserts on them after this point.
+    for (const server of [form, single, broken]) {
+        try {
+            await server.close();
+        } catch {
+            // A socket left in the pool is not a reason to fail a check that already passed.
+        }
+    }
+
     try {
         process.chdir(origin);
         fs.rmSync(sandbox, { recursive: true, force: true });

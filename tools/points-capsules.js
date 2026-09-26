@@ -10,6 +10,8 @@
  *     node tools/points-capsules.js --send 2026-09-23 0xabc… --note "tx 0x…"
  *     node tools/points-capsules.js --scan                           # read the wallets, not the record
  *     node tools/points-capsules.js --draw 2026-09-23                # settle a day by hand
+ *     node tools/points-capsules.js --push --day 2026-09-25          # file a day's winners into the form
+ *     node tools/points-capsules.js --push --dry                     # show what would be filed, and file nothing
  *
  * WHY THIS EXISTS
  * ---------------
@@ -24,6 +26,17 @@
  * winner's wallet, which is where the claim and the sent marker live. `--send` is the only thing
  * here that writes, and it refuses a wallet nobody has claimed for unless `--force` says the team
  * decided otherwise by hand — the whole point of the signature is that it happens before the send.
+ *
+ * FILING THE FORM WITH `--push`
+ * -----------------------------
+ * A claim files itself now: signing for a capsule posts the winner's wallet and the day it won
+ * straight into the team's form (`lib/capsule-form.js`), so nothing is asked of the player past the
+ * signature. `--push` is that same filing, run in a loop, for the wins it could not cover — a day
+ * that was drawn before this existed, a form that was edited or down when a claim went through, or a
+ * winner who has not come back to claim at all. It is idempotent: a win already in the form is
+ * skipped, and `--force` is there for the day a form is replaced and every entry has to go again.
+ *
+ * Run it with `--dry` first. It prints the exact line each winner would put in the sheet.
  *
  * WHERE THE DATA LIVES
  * --------------------
@@ -62,6 +75,8 @@ function sendPair() {
 
 const send = sendPair();
 const sending = args.includes('--send');
+const pushing = args.includes('--push');
+const dry = args.includes('--dry');
 const csv = args.includes('--csv');
 const todo = args.includes('--todo');
 const scan = args.includes('--scan');
@@ -75,6 +90,7 @@ const drawArg = flag('draw', null);
     const Draw = await import('../lib/points-draw.js');
     const Capsules = await import('../lib/points-capsules.js');
     const Config = await import('../lib/points-config.js');
+    const Form = await import('../lib/capsule-form.js');
 
     const quiet = csv;
     const say = (...parts) => { if (!quiet) console.log(...parts); };
@@ -202,6 +218,10 @@ const drawArg = flag('draw', null);
             claimedAt: stored?.claimedAt || null,
             claimed: Boolean(stored?.claimedAt),
             formSubmittedAt: stored?.formSubmittedAt || null,
+            // Who wrote the entry: the claim files it itself now, so an unfiled win is a form that
+            // was down or a winner who never pressed the button.
+            formVia: stored?.formSubmittedVia || (stored?.formSubmittedAt ? 'player' : null),
+            formError: stored?.formError || null,
             sentAt: stored?.sentAt || null,
             sentNote: stored?.sentNote || null,
             status: view?.status || (stored ? 'won' : 'missing'),
@@ -242,6 +262,58 @@ const drawArg = flag('draw', null);
         }
     }
     rows.sort((a, b) => (a.day === b.day ? (a.rank ?? 0) - (b.rank ?? 0) : (a.day < b.day ? 1 : -1)));
+
+    // ------------------------------------------------------- filing the wins into the form
+    if (pushing) {
+        say('');
+        say(`Points capsules — form: ${Config.CAPSULE_FORM_URL}`);
+        say(`                store: ${Store.storageDescription()}`);
+        const targets = rows.filter((r) => forced || !r.formSubmittedAt);
+        if (!rows.length) {
+            // Nothing to file and nothing already filed are different sentences: "everything is
+            // already in the form" about a day nobody won anything on is the kind of reassurance that
+            // stops somebody looking any further.
+            say('');
+            say(day ? `${day} has no wins on record — nothing to file.` : 'No draw has been settled yet, so there is nothing to file.');
+            if (!scan) say('(--scan reads the wallets instead of the draw record, for a win whose entry went missing.)');
+        } else if (!targets.length) {
+            say('');
+            say(day ? `Every win on ${day} is already in the form.` : 'Every win on record is already in the form.');
+        }
+        let filed = 0;
+        const failures = [];
+        for (const r of targets) {
+            const line = Form.capsuleEntryLine({ address: r.address, day: r.day });
+            const who = `#${r.rank ?? '-'} @${r.handle || '(no handle)'}`;
+            if (dry) {
+                say(`  would file   ${line}   ${who}`);
+                continue;
+            }
+            const result = await Capsules.fileCapsuleWin(r.address, r.day, { force: forced });
+            if (result.ok) {
+                filed += 1;
+                say(`  filed        ${line}   ${who}`);
+            } else {
+                failures.push({ line, who, error: result.error });
+                say(`  FAILED       ${line}   ${who}  — ${result.error}`);
+            }
+        }
+        say('');
+        if (dry) {
+            say(`  ${targets.length} win(s) would be filed. Nothing was written — drop --dry to do it.`);
+        } else {
+            say(`  ${filed} win(s) filed${failures.length ? `  ·  ${failures.length} failed` : ''}`);
+        }
+        if (failures.length) {
+            say('');
+            say('  A failure leaves the win looking unfiled on purpose, so running this again retries it.');
+            say('  If every one of them failed, the form link itself is the likely reason — check it opens.');
+        }
+        // A push on its own is the filing and nothing else; a day or a listing flag on the same line
+        // means the operator also wants to see the list, which is what `--send` does too.
+        if (!day && !csv && !todo && !scan) return;
+        say('');
+    }
 
     // ------------------------------------------------------------------ the listing
     const list = todo ? rows.filter((r) => r.status !== 'sent') : rows;
@@ -292,7 +364,8 @@ const drawArg = flag('draw', null);
         say(`      earned         ${r.points.toLocaleString('en-US')} PTS`);
         say(`      wallet proved  ${r.registered ? `yes — registered ${r.registeredAt || '?'}` : 'NO — nobody has signed for this address'}`);
         say(`      claimed        ${r.claimed ? r.claimedAt : (r.status === 'missed' ? 'no — the window has closed' : 'no')}`);
-        say(`      form           ${r.formSubmittedAt ? `submitted ${r.formSubmittedAt}` : 'not marked submitted'}`);
+        say(`      form           ${r.formSubmittedAt ? `submitted ${r.formSubmittedAt}${r.formVia ? ` (by ${r.formVia === 'server' ? 'the claim' : 'the player'})` : ''}` : 'not in the form'}`);
+        if (r.formError) say(`      form refused   ${r.formError}`);
         say(`      capsule        ${r.status}${r.sentAt ? ` — sent ${r.sentAt}${r.sentNote ? ` (${r.sentNote})` : ''}` : ''}`);
         if (r.onRecordOnly) {
             say('      !! the draw record lists this win but the wallet does not hold it — the award did not land.');
@@ -319,7 +392,9 @@ const drawArg = flag('draw', null);
     say('  --todo                only the capsules still to send');
     say('  --csv                 the same list as CSV (for the form responses or a spreadsheet)');
     say('  --send <day> <addr>   mark one capsule sent (--note "tx 0x…" records the proof)');
-    say('  --force               send to a wallet nobody has claimed or registered for (the team decides)');
+    say('  --push                file the wins into the form (a claim files itself; this catches up the rest)');
+    say('  --dry                 with --push: print what would be filed, and file nothing');
+    say('  --force               with --send: send to an unclaimed wallet; with --push: re-file a day (the team decides)');
     say('  --scan                read the wallets rather than the draw record, to catch a lost record write');
     say('  --draw <YYYY-MM-DD>   settle a day by hand, e.g. if the cron never fired');
     say('');
