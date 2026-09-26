@@ -244,8 +244,16 @@ rec('the blur is inert as well as blurred, so nothing behind it can be clicked',
 rec('the tier tiles carry no reward or runs-per-day line',
     !/pf-tier-econ/.test(client) && !/[0-9]+ DNG · [0-9]+\/day/.test(client),
     'photo, name and count only');
+// A *price*, not the word `$DNG`. The needle here used to be `\$DNG\.` — a figure followed by a
+// full stop, which was a stand-in for "a sentence that quotes a price" and is really a stand-in for
+// "a sentence that mentions $DNG and then ends". The empty state the showcase cards added says
+// *"earn $DNG. Five tiers from Common to Legendary"*, which is the token's name in a sentence rather
+// than a figure, and it failed this check. The pattern is now what the sentence it was written for
+// actually contains: a number in front of the token, the same shape `tools/check-docs.js` uses for
+// the same reason.
+const prose = client.replace(/\/\*[\s\S]*?\*\//g, '');
 rec('and the knights panel does not advertise a price either',
-    !/forges one for 500 \$DNG/.test(client) && !/\$DNG\./.test(client.replace(/\/\*[\s\S]*?\*\//g, '')),
+    !/forges one for 500 \$DNG/.test(prose) && !/\d[\d,.]*\s*\$DNG\b/.test(prose),
     'no price tag on the panel');
 
 // -------------------------------------------------------- 11. recent activity is points now

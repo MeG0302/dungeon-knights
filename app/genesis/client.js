@@ -1,11 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import BackLink from '../back-link';
 import { GENESIS_PFP } from '../../lib/knights';
 import {
     CAPSULES_PER_WEEK, GENESIS_SUPPLY, HASH_POWER_BANDS, HASH_POWER_MAX, HASH_POWER_MIN,
-    TICKET_CAP_HOURS, ticketsPerHour,
+    TICKET_CAP_HOURS, ticketsPerHour, weekEnd,
 } from '../../lib/staking-config';
 
 /**
@@ -50,6 +50,17 @@ function rangeOf(band) {
     return `${fmtInt(band.lo)}–${fmtInt(band.hi)}`;
 }
 
+function fmtCountdown(ms) {
+    const total = Math.max(0, Math.floor(ms / 1000));
+    const days = Math.floor(total / 86400);
+    const hours = Math.floor((total % 86400) / 3600);
+    const mins = Math.floor((total % 3600) / 60);
+    const secs = total % 60;
+    if (days > 0) return `${days}d ${hours}h ${mins}m`;
+    if (hours > 0) return `${hours}h ${mins}m ${secs}s`;
+    return `${mins}m ${secs}s`;
+}
+
 export default function GenesisClient({ shots = [] }) {
     const [email, setEmail] = useState('');
     const [address, setAddress] = useState('');
@@ -57,6 +68,29 @@ export default function GenesisClient({ shots = [] }) {
     const [busy, setBusy] = useState(false);
     const [done, setDone] = useState(false);
     const [message, setMessage] = useState(null);
+    const [nowMs, setNowMs] = useState(() => Date.now());
+
+    // The clock behind the supply bar's countdown. A second is the resolution the bar prints, and a
+    // hidden tab stops paying for it — a background tab has no reader to keep current.
+    useEffect(() => {
+        const id = setInterval(() => {
+            if (typeof document !== 'undefined' && document.hidden) return;
+            setNowMs(Date.now());
+        }, 1000);
+        return () => clearInterval(id);
+    }, []);
+
+    /**
+     * No minted count is published yet, so the bar states the supply rather than a fraction of it.
+     *
+     * The portfolio reads a live `{ minted, max }` because it is already making a per-wallet
+     * holdings call and the supply comes back with the answer. This page has no wallet to ask
+     * about, and the one wallet-less endpoint — `/api/staking/config` — carries no minted count at
+     * all, so asking it would be a round trip whose answer is thrown away and cannot change what is
+     * on screen. `minted` is the single line that changes when a public supply read exists; the bar
+     * below already renders both states.
+     */
+    const minted = null;
 
     // No queue size is printed anywhere on this page, and no position either.
     //
@@ -125,7 +159,8 @@ export default function GenesisClient({ shots = [] }) {
             {/* Versioned like every other sheet: an unversioned `/theme.css` is a CSS change that
                 never reaches a returning player. */}
             <link rel="stylesheet" href="/theme.css?v=8" />
-            <link rel="stylesheet" href="/css/genesis.css?v=3" />
+            <link rel="stylesheet" href="/css/genesis.css?v=4" />
+            <link rel="stylesheet" href="/css/nft-ui.css?v=1" />
 
             <div className="page genesis-page">
                 {/* The loop behind everything. Decoration only — every figure above it is text, so
@@ -170,11 +205,11 @@ export default function GenesisClient({ shots = [] }) {
                         </div>
                         <div className="side-panel-body">
                             <div className="gn-crest">
-                                <img className="gn-crest-art" src={GENESIS_PFP} alt="A Genesis Knight" />
+                                <img className="gn-crest-art" src={GENESIS_PFP} alt="A Genesis Knight" loading="eager" decoding="async" width={168} height={168} fetchPriority="high" />
                                 <div className="gn-crest-facts">
-                                    <div className="gn-crest-name">Genesis Knights</div>
-                                    <div className="gn-crest-line">{fmtInt(GENESIS_SUPPLY)} supply, fixed at mint</div>
-                                    <div className="gn-crest-line">{fmtInt(HASH_POWER_MIN)}–{fmtInt(HASH_POWER_MAX)} hash power</div>
+                                    <div className="gn-crest-name nft-name">Genesis Knights</div>
+                                    <div className="gn-crest-line nft-num">{fmtInt(GENESIS_SUPPLY)} supply, fixed at mint</div>
+                                    <div className="gn-crest-line nft-num">{fmtInt(HASH_POWER_MIN)}–{fmtInt(HASH_POWER_MAX)} hash power</div>
                                 </div>
                             </div>
 
@@ -209,8 +244,24 @@ export default function GenesisClient({ shots = [] }) {
                         </div>
                         <div className="side-panel-body">
 
+                            <div className="gn-supplybar" role="status" aria-label="Genesis supply and next raffle">
+                                <span className="gn-supplybar-label">Genesis supply</span>
+                                <span className="gn-supplybar-numbers nft-num">
+                                    {minted != null ? `${fmtInt(minted)} / ${fmtInt(GENESIS_SUPPLY)}` : `${fmtInt(GENESIS_SUPPLY)} fixed`}
+                                </span>
+                                <span className="gn-supplybar-track" aria-hidden="true">
+                                    <span
+                                        className="gn-supplybar-fill"
+                                        style={{ width: minted != null && GENESIS_SUPPLY ? `${Math.min(100, (minted / GENESIS_SUPPLY) * 100)}%` : '100%' }}
+                                    />
+                                </span>
+                                <span className="gn-supplybar-countdown nft-num" aria-live="off">
+                                    Draw in <strong>{fmtCountdown(weekEnd(nowMs) - nowMs)}</strong> · {fmtInt(CAPSULES_PER_WEEK)} capsules
+                                </span>
+                            </div>
+
                             <div className="gn-hero">
-                                <h1 className="gn-hero-title">Only {fmtInt(GENESIS_SUPPLY)} will ever exist</h1>
+                                <h1 className="gn-hero-title nft-name">Only {fmtInt(GENESIS_SUPPLY)} will ever exist</h1>
                                 <p className="gn-hero-copy">
                                     Genesis Knights are the fixed side of the collection: {fmtInt(GENESIS_SUPPLY)} of them
                                     on Robinhood Chain, and no more can be created. What sets one apart is the hash
@@ -263,31 +314,44 @@ export default function GenesisClient({ shots = [] }) {
                                         </span>
                                     </div>
                                     <div className="gn-ladder-bars">
-                                        {HASH_POWER_BANDS.map((band) => (
-                                            <div className="gn-band" key={band.key} data-band={band.key}>
-                                                <span className="gn-band-count gn-num" aria-hidden="true">
-                                                    {fmtInt(band.count)}
-                                                </span>
-                                                <span className="gn-band-bar" aria-hidden="true">
-                                                    <span
-                                                        className="gn-band-fill"
-                                                        style={{ height: `${Math.round((band.count / LADDER_TOP) * 100)}%` }}
-                                                    />
-                                                </span>
-                                                <span className="gn-band-name" aria-hidden="true">
-                                                    {band.name.replace('Genesis ', '')}
-                                                </span>
-                                                <span className="gn-band-range gn-num" aria-hidden="true">
-                                                    {rangeOf(band)}
-                                                </span>
-                                            </div>
-                                        ))}
+                                        {HASH_POWER_BANDS.map((band) => {
+                                            const odds = ((band.count / GENESIS_SUPPLY) * 100).toFixed(1);
+                                            return (
+                                                <div
+                                                    className="gn-band"
+                                                    key={band.key}
+                                                    data-band={band.key}
+                                                    tabIndex={0}
+                                                    role="img"
+                                                    aria-label={`${band.name}: ${fmtInt(band.count)} of ${fmtInt(GENESIS_SUPPLY)} knights, ${odds} percent odds, ${rangeOf(band)} hash power`}
+                                                >
+                                                    <span className="gn-band-count gn-num" aria-hidden="true">
+                                                        {fmtInt(band.count)}
+                                                    </span>
+                                                    <span className="gn-band-bar" aria-hidden="true">
+                                                        <span
+                                                            className="gn-band-fill"
+                                                            style={{ height: `${Math.round((band.count / LADDER_TOP) * 100)}%` }}
+                                                        />
+                                                    </span>
+                                                    <span className="gn-band-name" aria-hidden="true">
+                                                        {band.name.replace('Genesis ', '')}
+                                                    </span>
+                                                    <span className="gn-band-range gn-num" aria-hidden="true">
+                                                        {rangeOf(band)}
+                                                    </span>
+                                                    <span className="gn-band-range gn-num" aria-hidden="true">
+                                                        {odds}% odds
+                                                    </span>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                                 <p className="gn-fine">
                                     Each bar is filled against the largest band. The number above each one is the
                                     count of knights in that band, so {fmtInt(HASH_POWER_BANDS[0].lo)} and{' '}
-                                    {fmtInt(HASH_POWER_BANDS[0].hi)} are equally likely for a Spark.
+                                    {fmtInt(HASH_POWER_BANDS[0].hi)} are equally likely for a Spark. Odds are count / {fmtInt(GENESIS_SUPPLY)}.
                                 </p>
                             </section>
 

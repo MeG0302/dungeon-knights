@@ -5492,3 +5492,90 @@ so `/docs` is public on the apex and behind the gate on the app host: the same o
 
 **Production and git agree again**: this deploy was built from `d0538a9`, which is what `origin/main`
 carries. `/redeem` remains the one thing on the tree that is deliberately dark.
+## 8. The showcase cards — ported from `3c3ae12`, in this site's colours
+
+> "optimize the whole site only from here
+> https://github.com/amardeepio/dungeon-knights/commit/3c3ae1240d51acf71237fe415f08fe71c640de5a
+> commit it but do remember that the colour should not be changed"
+
+That commit is upstream's **sibling of our own work**, not an ancestor: its parent is `e49e304`, which
+was this branch's head before `/docs`. So it is a port, not a merge — `git fetch` from
+`amardeepio/dungeon-knights`, then `git cherry-pick -n`, which applied without a single conflict
+because none of its nine files are files we have touched since.
+
+**What it is.** *"feat: shared NFT showcase cards, genesis supply bar, and mobile a11y pass"* —
+one shared `app/nft-card.js` replacing three pages' worth of hand-rolled tiles, a sticky Genesis supply
+bar with a live countdown, showcase grids and empty states on `/portfolio`, `% odds` labels on the
+Genesis ladder, `aria-live` on the two figures that change, and an `export const viewport` block plus
+44px touch targets and `focus-visible` rings on all four NFT routes.
+
+**What was not taken, and why.**
+
+| left behind | reason |
+| --- | --- |
+| `--nft-glow-soft/strong: rgba(0, 229, 138, …)` | a green glow; the site's accent is gold, so these are `rgba(212, 175, 55, …)` — `--accent-gold` at 12% and 22% |
+| `--rarity-genesis: #00E58A` | a second green, for a collection that is gold everywhere else. Now `var(--accent-gold)` |
+| `.nft-badge { color: #04120A }` | a green-black ink; now `var(--bg-void)` |
+| `.nft-card-id { background: rgba(4, 6, 7, 0.82) }` | a blue-black nothing else here uses; now `rgba(13, 10, 8, 0.82)`, which is `--bg-void` |
+| the `fetch('/api/staking/config')` in `app/genesis/client.js` | see below |
+| upstream's next commit, `615289d` | *"tailwind setup, terminal theme migration, privy gate…"* — a theme migration, and the one thing this task ruled out |
+
+The **rarity ramp was kept as it came** (`#9E9E9E · #4CAF50 · #2196F3 · #9C27B0 · #FFD700`), because it
+is not a palette change at all: those are the five colours `lib/knights.js#RARITY` has published all
+along, and `/portfolio` was already tinting its tier names with them inline. Restating them as custom
+properties is what lets a card's border, badge and glow agree with the tier name above it. The two
+remaining rgba values in the sheet were already this site's: `rgba(8, 7, 6, 0.92)` is the Genesis scrim
+(`genesis.css:591`) and `rgba(0, 0, 0, 0.28)` is the pitch deck's well (`pitch.css:956`).
+
+**The one call that was dropped rather than ported.** The commit ends its Genesis effects with a
+`fetch('/api/staking/config')` whose `.then()` calls `setMinted(null)` — a round trip that cannot
+change what is on screen, because that route carries no minted count at all (it serves the economy and
+whether the collections are deployed; the minted figure comes back from the per-wallet
+`/api/staking/holdings` read). Measuring it settled it: the same `null` either way, one wasted request
+and a `useState` setter nobody calls. It is now a commented `const minted = null` with the reason, and
+one line changes when a wallet-less supply read exists. Everything the bar *renders* is unchanged.
+
+**One guard tripped, and the guard was the wrong one.** `check-portfolio`'s *"the knights panel does
+not advertise a price either"* rejected the literal string `$DNG.` — a stand-in for "a sentence that
+quotes a price" that is really "a sentence that says $DNG and then ends". The new empty state says
+*"earn $DNG. Five tiers from Common to Legendary"*, which is the token's name in a sentence, so it
+failed a check about prices. The needle is now a figure in front of the token
+(`\d[\d,.]*\s*\$DNG\b`) — the same shape `check-docs` uses for the same claim. Falsified with **2/2
+price mutations caught by name** (the old sentence back; a price reworded as *"costs 250 $DNG"*) plus a
+negative control: naming the token in prose passes.
+
+**Verified in the DOM on the dev server**, since the screenshot path in this session produces no
+frames — measured instead of eyeballed:
+
+```
+/genesis     nft-ui.css?v=1 + genesis.css?v=4 + theme.css?v=8
+             bar: "GENESIS SUPPLY 1,024 fixed · Draw in 1d 10h 45m · 200 capsules"
+             shadow rgba(212,175,55,0.12) — gold · border #C9A84C · --rarity-genesis=#D4AF37
+             six bands, each now carrying its odds: "200 SPARK 300–424 19.5% odds" …
+/portfolio   5 tier cards LEGENDARY→COMMON with accents #FFD700 #9C27B0 #2196F3 #4CAF50 #9E9E9E
+             empty state + 4 CTAs (/mint, /genesis, /genesis, /staking)
+             at 420px: tier grid 2 columns, four .pf-link targets all exactly 44px, 0 elements past
+             the viewport
+/staking     nft-ui.css?v=1 + staking.css?v=10; .sv-tab × 3, each 44px
+/mint        themeColor #12100E (which is `--bg-dark`, already ours), no nft-* classes needed
+every route  viewport = width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover,
+             user-scalable=yes
+```
+
+The card component itself only renders for a wallet that holds knights, so it was measured by injecting
+the exact markup `app/nft-card.js` emits into the live `/portfolio` page and reading the computed
+styles back: square 204×204 media at `aspect-ratio: 1/1`, the raised→panel gradient, `--border-base`
+border at 6px, badge ink `rgb(13,10,8)` on the tier's own accent, the id chip at `rgba(13,10,8,0.82)`,
+and an HP fill running gold-dim → the tier accent. `--rarity-genesis` resolves to `#D4AF37`, which is
+the point of the exercise: the green is gone.
+
+**A loose end, left deliberately.** `portfolio.css` still defines `.pf-tier-strip`, `.pf-tier`,
+`.pf-tier-art`, `.pf-tier-name` and `.pf-tier-count` — the strip the showcase grid replaced — and
+`check-portfolio` asserts in so many words that `.pf-tier-strip` is defined by the sheet, so deleting
+the rules means rewriting that guard in the same commit. That is a cleanup and not a port, so it is
+named here instead of done quietly.
+
+**Fleet after the port:** `check-styles` clean · `check-portfolio` **68/68** · `check-docs` 72/72 ·
+gate 150/150 · pitch 43/43 · redeem 66/66 · draw 65/65 · capsule-claim 82/82 · points-x 194/194 ·
+token-math 64/64 · session 34/34 · rarity 64/64 · refs 49/49 · back 18/18 · arya 17/17 · run-budget
+39/39 · announce 27/27 · board-map 43/43 · wallet-menu 12/12 · copies 2/2.
