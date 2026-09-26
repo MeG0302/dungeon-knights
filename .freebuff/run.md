@@ -5247,3 +5247,220 @@ dev server and `tools/redeem-codes.js` both run on `.data/points.json`; the pool
 which is not readable from this machine, and is the one number the release turns on. Also outstanding, and unrelated to this thread: `code.dungeonknights.io` still has no DNS
 record, and `docs/game-flow.html` stays out of the build by `.vercelignore` (`/docs/`).
 
+## 6. `/docs` — the documentation page, in the shape of `cashcat.cc`
+
+Asked for as "make the docs pages like this in /docs", with the reference being a one-page site whose
+structure is the thing worth copying: a full-bleed band with a mono nav and the wordmark, a scrolling
+ticker under it, and sections that open with a loud uppercase heading in a 1500px column with 44px
+gutters. Three decisions were the user's, asked before anything was built:
+
+- **skin.** *"Our skin, their bones"* — that layout, in this project's charcoal stone, bronze and one
+gold accent, Cinzel for the headings, so `/docs` reads as the same product as `/points` and the deck.
+- **scope.** One long page, anchored nav, seven sections: what this is · how to play · the numbers ·
+the Points Program · the nightly draw · the contracts · FAQ.
+- **art.** The user asked for the list of pieces needed as *prompts* (below), rather than handing over
+  files, so the page was built against named slots.
+
+### The files
+
+| | what it is |
+|---|---|
+| `lib/docs-content.js` | the page as data. Every figure computed from `reward-config` / `points-config` / `staking-config` / `knights`; the nine addresses resolved through `lib/pitch-deck.js`, which already asserts them against `public/contract-addresses.js`. `ART` is the slot table. |
+| `app/docs/page.js` · `app/docs/client.js` | metadata (the unfurl card is a slot too) and the shell: band, ticker, seven sections, footer. |
+| `public/css/docs.css` | the gold band, the ticker, and the dark half. |
+| `tools/check-docs.js` | **61 checks**, plus the route registration below. |
+
+### Decisions inside it, and what forced them
+
+- **The nav sticks for the whole page, so it is the scroll box's own child.** Sticky is bounded by the
+  parent's box — parked inside the band it would unstick the moment the hero scrolled past, which is
+  exactly when a seven-section page wants it. The band colour lives on both.
+- **The painting behind the document is a fixed layer, not a background property.** `cover` on a
+  7,000px-tall element zooms the art ~6×, and the usual workaround (`background-attachment: fixed`) is
+  not supported on iOS. `inset: 0` on a fixed element is viewport-sized everywhere; the page sets the
+  URL as a custom property from the same art slot.
+- **A fragment link has to be re-applied.** The browser jumps to `#draw` before Cinzel has swapped in
+  from the fallback face, so it measures a shorter document and lands a section or two late (measured:
+  it landed on the contracts table). The client lands again once `document.fonts.ready` resolves — and
+  **not** if the reader has taken over, which is watched with four listeners.
+- **Two art slots are CSS-only layers over a drawn fallback** (`texture-stone`, `texture-parchment`),
+  and three more ride as an extra background layer over a gradient (`ornament-divider`, `ornament-faq`,
+  `ticker-glyphs`). A file that has not arrived is therefore *invisible* rather than a broken image, and
+  the slot's URL in the stylesheet is asserted so the layer cannot be quietly dropped.
+- **The draw band's stand-in was replaced.** The first pick was `genesis/capsules.webp`; opened in the
+  browser it turned out to be a *screenshot of the Summoning Chamber page*, with legible UI text behind
+  a headline. `hall/hall-of-fame.webp` is a painting, and the scrim went 0.72→0.84 at the centre.
+- **The lore panel's box is 4:3, not 4:5.** This project's paintings are 16:9; a portrait box cropped
+  Knight's Hall down to a doorway. The art decides the box.
+- **Hero mark, lore panel and how-to tile stand in with real repo art** (`ui/sword-crest.png`,
+  `hall/knight-hall.webp`, `hall/summon-hall.webp`), so the page was never a wireframe.
+
+### Route registration
+
+`/docs` joins `APEX_PUBLIC` in `lib/app-routing.js` (a document behind a password is a document nobody
+reads), the sitemap, and three lists in `tools/check-gate.js` — including a named check that it is
+served on the apex and one that the *game* host still asks for the password for it. `app/sitemap.js`
+gained explicit `.js` on its two imports so the harness can call the real function instead of reading
+its text. **check-gate 145 → 150.**
+
+### The mutation sweep
+
+**30 mutations, 25 caught by name on the first run.** The five gaps were the useful part:
+
+| gap | what it was |
+|---|---|
+| *point a row at the wrong contract* | **a real hole.** A row renamed to another contract's key passed its own address check, because both sides of that comparison use the same key. Fixed with "every contract appears exactly once" — nine keys, no repeats, none missing. |
+| *drop the room the sticky nav needs* | my regex was `/scroll-margin-top: \d+px/`, which accepts `0px` — the rule present and the behaviour absent. Tightened to `[1-9]\d+`. |
+| *render an answer without parsing its markers* | the guard only required `rich()` on fields whose copy carries a marker *today*; the FAQ has none, so removing its parser was invisible. Now all six copy fields are required unconditionally. |
+| *stop importing the module the figures come from* | the mutation was wrong, not the guard: a non-resolving import takes the harness down and proves nothing. Replaced with a hand-typed rarity ladder — the mistake the guard is named for. |
+| *take /docs off the apex's public list* | the mutation was right and the expectation was wrong: it named `check-gate`'s label, not this harness's. |
+
+Two more guards were added afterwards for the deep-link landing, and both were falsified the same way
+(**2/2**). The sweep script is not kept — the convention here is that the checks live in `tools/` and
+the mutations are recorded here.
+
+### Fleet
+
+`check-docs` **61/61** · `check-styles` clean (it reads the route list out of `app/`, so the new route
+is covered) · `check-wallet-menu` 12/12 · `check-copies` 2/2 · `check-gate` **150/150** · `check-pitch`
+43/43 · `check-portfolio` 68/68 · `check-redeem` 66/66 · `check-board-map` 43/43 · `check-announce`
+27/27 · `check-draw` 65/65 · `check-capsule-claim` 82/82.
+
+Seen in the browser at 1600×1000: the gold band with the crossed-swords mark, the ticker running
+under it, the lore panel beside Knight's Hall, the bordered how-to box with its four numbered steps,
+the four gold stat cards, the four programme cards, the reliquary band behind *A capsule a night*,
+the nine-address ledger, and the FAQ with its drawn `+` rotating to `×` on the open row. At 420px:
+the nav collapses to the wordmark, the hero stacks, nothing overflows.
+
+### The art still owed (12 slots, all named in `ART`)
+
+`hero-knight` · `wordmark-crest` · `hero-band` · `lore-scene` · `start-tile` · `draw-band` ·
+`texture-stone` · `texture-parchment` · `ornament-divider` · `ornament-faq` · `ticker-glyphs` ·
+`docs-og`. `tools/check-docs.js` prints the pending list every run and **fails** if a piece arrives and
+the page is still rendering its stand-in, so none of these can be forgotten. The prompts for them were
+sent to the user as a work order, in house style (dark stone, bronze and gold, torchlit, no text).
+
+**Nothing is committed and nothing is deployed** from this section.
+
+### 6b. Revision — plain language, and no tokenomics
+
+Two instructions arrived together: *"make it normal user friendly no code languages and also dont reveal
+supply and all including the summon price — just write to be announced later."*
+
+**The copy was rewritten**, not trimmed. What changed:
+
+- **Every token figure is gone** — the total supply, the vault balance, the weekly release, the summon
+  price, the reward per clear, the vault's 45%, the Genesis cap, the ticket cap. `NUMBERS` is now four
+  cards that answer the obvious questions with **To be announced**, each saying *when* it will be
+  answered; the FAQ gained *"How much does it cost?"* with the same answer; and the section's closing
+  line says in the page's own voice that nothing here quotes a supply, a price or a reward.
+- **No code in the reader's way.** `summon()`, `claimSignedRuns()`, `lib/`, the run-token and
+  HMAC explanation, the signature-shape code block, and the `320,339`-style recovered-funds
+  figure are all out. The contracts rows now say what each thing *is* (`Knights — the knights you summon`) rather
+  than what it holds, and the FAQ's "can the browser invent a run" answer is a sentence rather than a
+  mechanism. The `Read the source` pill became `Join the Discord`; the repo link stays in the footer.
+- **What is still stated is still derived**: the points ladder, the streak ladder, the referral shares,
+  the draw size, the rarity count and the reset hour. Those are campaign and game facts, already
+  public on `/points`.
+- **The pitch deck is untouched.** It carries the full tokenomics on the gated host, which is where
+  those figures belong until they are announced.
+
+**The harness was inverted rather than loosened.** Its first claim used to be "every figure is
+interpolated"; it is now *"the page quotes no tokenomics"*, asserted by **pattern** rather than by a
+list of forbidden words — no amount in `$DNG`, no `n% of` a supply, and no number of four digits or
+more other than a year — because the figure that leaks is the one whose spelling nobody predicted.
+It then checks the other half of a refusal: that each withheld figure has a *to be announced* home, so
+silence cannot read as forgetting. A new section, **Plain language**, fails on a surviving function
+call, a backticked snippet, a module path in the prose, or a word only a builder knows. **69 checks.**
+
+One real bug came out of the rewrite: the placeholder is four times the length of the figure its box
+was sized for, so `TO BE ANNOUNCED` at 42px was four lines in a box built for `1,415,120`. It wears a
+`docs-stat-value-tba` modifier now.
+
+**One more pass over the words.** `tokenomics` was still in the copy in three places — twice in FAQ
+answers and once in the numbers section's own sub-line — which is the vocabulary of a plan sitting
+on the page a stranger reads first: a figure correctly withheld, and the jargon leaking exactly
+where the refusal was. All three are plain now (`will be announced before launch`, *"how much $DNG
+exists, what a knight costs, what a capsule costs and what each dungeon pays"*), and so is the one
+meta sentence in the lore panel that described the page's method — *"every number on this page comes
+out of those rules rather than being typed in by hand"* instead of the old phrasing about figures
+being read rather than typed into a sentence. Two more sentences were rewritten because they were
+written from inside the build: step 3 said the game *"works out what the run earned and signs it"*,
+where `signs` is a thing a wallet does and not a thing a player reads (it now says the reward is
+checked against the rules, and that a run which does not check out pays nothing), and the how-to's
+opening line promised *"five screens, two of them there to stop a run rather than start one"*, which
+counts a thing the page never shows and explains nothing — it is *"two of its screens are there to
+keep a run honest rather than to start one"* now. The **summon price is still withheld** and the
+copy says only when it will be published.
+
+What keeps it that way is a fourth **Plain language** claim: *no word in the copy is one only a
+builder knows*, matched over `tokenomic*`, `api`, `json`, `yaml`, `cli`, `npm`, `backend`,
+`frontend`, `endpoint`, `webhook`, `graphql`, `regex` — read off the **rendered** copy rather than the
+source, so the module's own comments can go on saying "config" and "handler" all day. Unlike the
+figure guard, this one is a list rather than a pattern, and that is its known limit: it catches the
+words that actually leak, not every word that could. It is also not the page's only defence here —
+the existing snippet and file-path claims already cover the syntactic half of "code language".
+
+**Mutation sweep: 19/19 caught by name.** Two gaps, and both were mine rather than the code's:
+
+| gap | what it was |
+|---|---|
+| *show the reader a function signature* | the mutation put a backtick inside one of the copy's **template literals**, which closed the template and made the module unimportable — the harness went down with it and proved nothing. Re-run against a single-quoted string, where a bare `claimSignedRuns()` is enough to trip the guard. A mutation has to leave the page working to mean anything. |
+| *the placeholder's modifier* | the guard searched for the bare name, and passed on the **comment inside the JSX** that mentions it to explain itself. The needle carries its quotes now — the third time in this project's history a check has been fooled by prose instead of code. |
+
+The new claim was swept the same way, **3/3 caught by name**: `tokenomics` back in an FAQ answer,
+`api` in the ticker, `endpoint` in the lore panel — each failed its own sentence. Plus a **negative
+control**: the same vocabulary prepended to the content module as a *comment* passes, which is the
+proof that the guard reads the copy rather than the source. Without it, a guard that scanned the
+source would look green forever while failing on the prose that explains it.
+
+Fleet after the rewrite: `check-docs` **69/69** · styles clean · wallet-menu 12/12 · copies 2/2 · gate
+150/150 · pitch 43/43 · portfolio 68/68 · draw 65/65 · redeem 66/66 · board-map 43/43. Seen at
+1600×1000: four To-be-announced cards on the dark half, the smaller type setting on two lines. Read
+end to end in the browser as well as in the harness: zero hits on the vocabulary pattern, no backtick
+anywhere, and the only four-digit figure on the rendered page is **46,630** — the chain ID, which
+names a network rather than an economy, and which the copy labels as such.
+
+## 7. `/docs` ships — and the draw's prize is a Knight, not a night
+
+> "A capsule a night no its knight"
+
+The draw's copy had drifted from the program's own word for its prize. `drawCapsuleLabel()` in
+`lib/points-config.js` returns **"10 free Knight capsules"** verbatim, and the Points Program's own
+Arya line says *"each get a free Knight capsule"* — while `/docs` called it *"a capsule a night"*, and
+the pitch deck a *"capsule a night for ten players"*. That is a pun, and it puts a time of day where
+the product's noun belongs, on the page a stranger reads before they have played anything.
+
+Renamed everywhere the phrase appeared, and the adjective with it:
+
+| before | after |
+| --- | --- |
+| ticker: `A capsule a night` | `A Knight a day` |
+| section nav: `The nightly draw` | `The daily draw` |
+| section title: `A capsule a night` | `A Knight a day` |
+| body: `10 Common Capsules, every day…` | `10 Knight capsules — a Common Capsule each — every day…, and opening one mints a Knight` |
+| contracts role: `What the nightly draw awards` | `What the daily draw awards` |
+| pitch deck: `a capsule a night for ten players` | `a Knight a day for ten players` |
+
+The mechanics are untouched: the prize is still a `Common Capsule` drawn from the board, and the copy
+still names that tier — the *sentence* now says Knight first because that is what the player ends up
+holding.
+
+**Three claims, and one of them found a real hole.** `check-docs` **72** now also asserts:
+
+1. **the draw names its prize the way the program does** — `drawCapsuleLabel()` and the page's body
+   must both carry "Knight capsule", and the title must name a Knight at all. Tied to the config
+   rather than to a spelling, so renaming the prize renames the check's expectation with it.
+2. **nothing in the draw leans on "night" where a reader reads "Knight"** — `\bnight\w*` over the
+   nav, the title, the body and the whole ticker. `\w*` and not `\bnight\b` because the drift
+   included the adjective `nightly`, and a guard that missed the adverb would have passed on half the
+   problem it was written for. It does *not* match `midnight`, which is a real time of day and stays.
+3. **  … and the draw's count is interpolated rather than typed into the sentence** — added after a
+   mutation **passed**: replacing `${fmt(DRAW_SIZE)}` with a literal `10 Knight capsules` satisfied
+   every check in the file, because 10 *is* what the config says. A value comparison cannot see a
+   hand-typed number that happens to be right, so the count is now asserted against the source with
+   every `${…}` stripped out, the way the section-2 figures already were.
+
+**Mutation sweep: 5/5 caught by name** — the pun back in the title, the adjective back in the nav,
+the count typed by hand, the tier dropped from the body, and the body drifting back to a bare capsule.
+The count-typed-by-hand one is the one worth keeping: it was caught only *after* claim 3 existed.

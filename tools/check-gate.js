@@ -273,7 +273,7 @@ function freshProcess(snippet, env = {}) {
     });
 
     for (const publicPath of [
-        '/', '/points', '/genesis', '/portfolio',
+        '/', '/points', '/genesis', '/portfolio', '/docs',
         '/api/points/me', '/api/waitlist', '/api/wallet/balance',
         '/api/staking/holdings', '/api/game/history',
         '/theme.css', '/assets/ui/sword.png',
@@ -312,6 +312,18 @@ function freshProcess(snippet, env = {}) {
     rec('/genesis is not redirected to the gated host — it is a page strangers are sent to',
         apex('/genesis').action === 'next' && apex('/genesis').to === undefined,
         JSON.stringify(apex('/genesis')));
+    // The documentation is the one page that has to be reachable *before* anybody has heard of the
+    // project: a redirect here sends a reader to a password screen, which is the only failure on
+    // this list that the stranger themselves would never report.
+    rec('/docs is served on the apex — a document behind a password is a document nobody reads',
+        apex('/docs').action === 'next' && apex('/docs').to === undefined,
+        JSON.stringify(apex('/docs')));
+    // And it is gated on the *other* host, which is the same trick `/points` plays: this is the game
+    // host, nothing on it is meant to be reached without the password, and `/docs` is a page of the
+    // public site that happens to have a route here too.
+    rec('  … while the game host still asks for the password for it',
+        Routing.classify('/docs') === 'apex-public',
+        `${Routing.classify('/docs')} — not a new bucket, so the gate treats it like the four pages above it`);
     rec('/api/x/events is served on the apex too — it is signed, and it is what X calls',
         apex('/api/x/events').action === 'next');
 
@@ -348,7 +360,7 @@ function freshProcess(snippet, env = {}) {
     // `/redeem` is public on the apex and private here, which is the same trick `/points` plays:
     // the page a player is *sent to* is reachable, and the game it belongs to is not. Both halves
     // are checked because only one of them is visible from either side.
-    for (const gatedPath of ['/', '/menu', '/mint', '/dungeons', '/points', '/genesis', '/portfolio', '/redeem', '/landing.html']) {
+    for (const gatedPath of ['/', '/menu', '/mint', '/dungeons', '/points', '/genesis', '/portfolio', '/docs', '/redeem', '/landing.html']) {
         const decision = app(gatedPath, { allowed: false });
         rec(`${gatedPath} asks for the password`,
             decision.action === 'gate' && decision.next === gatedPath,
@@ -381,6 +393,7 @@ function freshProcess(snippet, env = {}) {
         ['/', 'apex-public'],
         ['/points', 'apex-public'],
         ['/genesis', 'apex-public'],
+        ['/docs', 'apex-public'],
         ['/redeem', 'other'],
         ['/theme.css', 'static'],
         ['/gate', 'app-open'],

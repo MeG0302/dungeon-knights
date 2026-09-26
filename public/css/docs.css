@@ -1,0 +1,960 @@
+/* ==========================================================
+   DOCS — one long read.
+
+   The layout follows a reference page (`cashcat.cc`) closely, because its structure is the thing
+   worth copying: a full-bleed coloured band with a mono nav and the wordmark, a scrolling ticker
+   under it, then sections that open with a loud uppercase heading inside a 1500px column with 44px
+   gutters. The *colours* are this project's — charcoal stone, bronze, and one gold accent — so the
+   page reads as the same product as /points and the pitch deck rather than as a token page bolted
+   on the side.
+
+   Three things worth knowing before editing:
+
+   - **The band is the accent at full strength.** Gold (#D4AF37) with near-black ink on it, the way
+     the reference puts its acid lime behind black type. It is the only place on the site a surface
+     is that bright, and that is intentional: it is the top of a document, not a panel in a game.
+   - **The shell is the game's.** `.page` is a fixed-height column with its own scrolling child, so
+     the game's header stays put and the *document* scrolls. `.docs-nav` sticks inside that scroll
+     box, which is the one thing a seven-section page needs and a nav inside the band cannot do —
+     sticky is bounded by the parent's box.
+   - **Two art slots are CSS-only.** `texture-stone` and `texture-parchment` are layered under or
+     over a drawn fallback, so a file that has not arrived yet is invisible rather than a broken
+     image. Their URLs are asserted by `tools/check-docs.js`.
+   ========================================================== */
+
+.docs-page {
+    background: var(--bg-void);
+}
+
+/* The painting behind the document, at a low opacity over near-black rather than behind a scrim —
+   one number to tune, and the text on top of it needs no knowing about it. `inset: 0` on a fixed
+   element is viewport-sized in every browser, including the ones that ignore a fixed background. */
+.docs-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    background-image: var(--docs-hall, none);
+    background-position: center top;
+    background-repeat: no-repeat;
+    background-size: cover;
+    opacity: 0.14;
+    pointer-events: none;
+}
+
+/* The scrolling element. `min-height: 0` because a flex child refuses to shrink below its content
+   by default, which would push the footer out of the viewport with no scrollbar anywhere. */
+.docs-scroll {
+    position: relative;
+    z-index: 1;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+}
+
+/* ---------------------------------------------------------------- the band */
+.docs-nav,
+.docs-hero {
+    background: var(--accent-gold);
+    color: var(--bg-void);
+}
+
+.docs-nav {
+    position: sticky;
+    top: 0;
+    z-index: 60;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 40px;
+    padding: 18px max(44px, calc((100% - 1500px) / 2));
+    border-bottom: 1px solid rgba(13, 10, 8, 0.18);
+}
+
+.docs-nav-links {
+    display: flex;
+    gap: 40px;
+    list-style: none;
+    font-family: var(--font-body);
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+.docs-nav-links-right {
+    justify-content: flex-end;
+}
+
+.docs-nav-links a {
+    color: inherit;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: opacity 0.15s;
+}
+
+.docs-nav-links a:hover {
+    opacity: 0.55;
+}
+
+.docs-wordmark {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--font-display);
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: inherit;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.docs-wordmark-mark {
+    width: 30px;
+    height: 30px;
+    object-fit: contain;
+}
+
+.docs-hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: clamp(30px, 4vw, 54px) 24px clamp(46px, 6vw, 78px);
+}
+
+.docs-hero-mark {
+    width: clamp(104px, 10vw, 152px);
+    height: auto;
+    object-fit: contain;
+    margin-bottom: 10px;
+}
+
+.docs-kicker {
+    font-family: var(--font-body);
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    opacity: 0.72;
+    margin-bottom: 14px;
+}
+
+/* The one place this page shouts, in the reference's two weights: a light lead and a heavy claim,
+   both at 100% of the measure. `clamp` rather than a media query, so the line breaks stay sane from
+   a phone to a desktop. */
+.docs-headline {
+    font-family: var(--font-heading);
+    font-weight: 400;
+    font-size: clamp(30px, 5.4vw, 72px);
+    line-height: 1;
+    letter-spacing: -0.02em;
+    margin: 0 0 22px;
+    max-width: 18ch;
+}
+
+.docs-headline-lead,
+.docs-headline-claim {
+    display: block;
+}
+
+.docs-headline-claim {
+    font-weight: 900;
+    color: var(--bg-void);
+}
+
+.docs-hero-sub {
+    font-size: clamp(15px, 1.15vw, 17.5px);
+    line-height: 1.65;
+    max-width: 62ch;
+    opacity: 0.82;
+    margin-bottom: 20px;
+}
+
+.docs-available {
+    font-family: var(--font-body);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    padding: 10px 20px;
+    border: 1px solid rgba(13, 10, 8, 0.35);
+    border-radius: 999px;
+}
+
+/* ---------------------------------------------------------------- the ticker */
+.docs-ticker {
+    background: var(--text-primary);
+    color: var(--bg-void);
+    overflow: hidden;
+    padding: 12px 0;
+    display: flex;
+    white-space: nowrap;
+}
+
+/* Two copies of the same run, translated by exactly half the track: the seam is off screen because
+   the track is at least twice the viewport wide (the component repeats the phrases four times). */
+.docs-ticker-track {
+    display: flex;
+    flex-shrink: 0;
+    animation: docs-marquee 90s linear infinite;
+}
+
+.docs-ticker-group {
+    display: flex;
+    flex-shrink: 0;
+}
+
+.docs-ticker-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 18px;
+    padding-right: 44px;
+}
+
+.docs-ticker-text {
+    font-family: var(--font-body);
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+/* The separator. Two gradients draw a small cross — the fallback — and the glyph sheet, when it
+   lands, paints over them: a background layer list, first on top.
+
+   The sheet is three glyphs evenly across one row, so it is scaled to the box's *height* and then
+   windowed by position: `left`, `center` and `right` show the first, second and third. That is why
+   the component numbers the spans — `data-glyph` is the window, not decoration. */
+.docs-ticker-glyph {
+    width: 12px;
+    height: 12px;
+    flex-shrink: 0;
+    background-image:
+        url('/assets/docs/ticker-glyphs.png'),
+        linear-gradient(45deg, transparent 42%, currentColor 42%, currentColor 58%, transparent 58%),
+        linear-gradient(-45deg, transparent 42%, currentColor 42%, currentColor 58%, transparent 58%);
+    background-repeat: no-repeat, no-repeat, no-repeat;
+    background-position: center, center, center;
+    background-size: auto 100%, 64% 64%, 64% 64%;
+    opacity: 0.7;
+}
+
+.docs-ticker-glyph[data-glyph='1'] {
+    background-position: left center, center, center;
+}
+
+.docs-ticker-glyph[data-glyph='3'] {
+    background-position: right center, center, center;
+}
+
+@keyframes docs-marquee {
+    from {
+        transform: translateX(0);
+    }
+    to {
+        transform: translateX(-50%);
+    }
+}
+
+/* ---------------------------------------------------------------- the dark half */
+.docs-dark {
+    position: relative;
+    /* A light scrim, not an opaque fill: the backdrop painting behind the page still reads through
+       it at a whisper, which is what keeps a 7,000px document from looking like a spreadsheet. */
+    background: linear-gradient(180deg, rgba(13, 10, 8, 0.72), rgba(13, 10, 8, 0.88));
+}
+
+.docs-wrap {
+    max-width: 1500px;
+    margin: 0 auto;
+    padding: 0 44px;
+}
+
+/* `scroll-margin-top` because the nav is sticky: without it an anchor jump puts the heading it was
+   asked for *behind* the bar, which looks like the link did nothing. */
+.docs-section {
+    padding: clamp(54px, 7vw, 104px) 0;
+    scroll-margin-top: 84px;
+}
+
+.docs-section:first-child {
+    padding-top: clamp(46px, 5vw, 76px);
+}
+
+.docs-h2 {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: clamp(28px, 3.8vw, 56px);
+    line-height: 1.04;
+    letter-spacing: 0.01em;
+    text-transform: uppercase;
+    color: var(--accent-gold);
+    margin: 0 0 26px;
+}
+
+.docs-h2-tight {
+    margin-bottom: 18px;
+}
+
+.docs-sub {
+    font-size: clamp(14.5px, 1.2vw, 17px);
+    line-height: 1.6;
+    color: var(--text-secondary);
+    max-width: 74ch;
+    margin: -14px 0 40px;
+}
+
+/* The columns themselves carry no styling of their own — but they are flex and grid children, and a
+   grid item's default `min-width: auto` refuses to shrink below its content. Without this a long
+   address or a wide word in the copy pushes the column past its track and the whole row scrolls
+   sideways. Three lines that are load-bearing rather than decorative. */
+.docs-copy,
+.docs-howto-copy,
+.docs-step-body {
+    min-width: 0;
+}
+
+.docs-p {
+    font-family: var(--font-body);
+    font-size: clamp(16px, 1.2vw, 18.5px);
+    line-height: 1.68;
+    color: var(--text-secondary);
+    max-width: 62ch;
+    margin: 0 0 20px;
+}
+
+.docs-p strong,
+.docs-card-text strong,
+.docs-step-text strong,
+.docs-faq-a strong {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.docs-p code,
+.docs-card-text code,
+.docs-step-text code,
+.docs-faq-a code,
+.docs-band-body code,
+.docs-band-note code {
+    font-family: var(--font-body);
+    font-size: 0.88em;
+    letter-spacing: 0.02em;
+    color: var(--accent-gold-light);
+    background: rgba(212, 175, 55, 0.08);
+    border: 1px solid rgba(212, 175, 55, 0.18);
+    border-radius: 3px;
+    padding: 1px 5px;
+}
+
+.docs-note {
+    font-family: var(--font-body);
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-muted);
+    max-width: 74ch;
+    margin-top: 18px;
+}
+
+/* A rule between sections: a bronze hairline drawn by `::after`, with the ornament slot as the
+   element's own background — so the flourish covers the line the moment the file lands, and its
+   absence leaves nothing but the line. */
+.docs-divider {
+    position: relative;
+    max-width: 1500px;
+    height: 22px;
+    margin: 0 auto;
+    background-image: url('/assets/docs/ornament-divider.png');
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: auto 100%;
+}
+
+.docs-divider::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 44px;
+    right: 44px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border-base) 18%, var(--border-base) 82%, transparent);
+}
+
+/* ---------------------------------------------------------------- lore */
+.docs-split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: clamp(36px, 5vw, 84px);
+    align-items: center;
+}
+
+.docs-pill {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: 6px;
+    padding: 13px 24px;
+    border: 1px solid var(--border-gold);
+    border-radius: 999px;
+    text-decoration: none;
+    color: var(--text-primary);
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.docs-pill:hover {
+    background: var(--accent-gold);
+    border-color: var(--accent-gold);
+    color: var(--bg-void);
+}
+
+.docs-pill-label {
+    font-family: var(--font-heading);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.docs-pill-sub {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.docs-pill:hover .docs-pill-sub {
+    color: rgba(13, 10, 8, 0.7);
+}
+
+.docs-frame {
+    margin: 0;
+}
+
+.docs-frame-art {
+    display: block;
+    width: 100%;
+    /* 4:3, not the 4:5 this panel started at. The paintings in this project are 16:9, and a portrait
+       box crops the sides off one so hard that a hall becomes a doorway — the art decides the box. */
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    border: 1px solid var(--border-base);
+    border-radius: var(--radius-sm);
+    background: var(--bg-panel);
+}
+
+.docs-frame-caption {
+    font-family: var(--font-body);
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-top: 12px;
+}
+
+/* ---------------------------------------------------------------- how to play */
+.docs-howto {
+    display: grid;
+    grid-template-columns: minmax(0, 0.66fr) minmax(0, 1fr);
+    gap: clamp(28px, 4.5vw, 68px);
+    align-items: center;
+    border: 1px solid var(--border-base);
+    border-radius: var(--radius-md);
+    padding: clamp(24px, 3vw, 44px);
+    background: rgba(26, 23, 20, 0.55);
+}
+
+.docs-tile {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    border-radius: var(--radius-sm);
+    background: var(--bg-input);
+}
+
+.docs-steps {
+    list-style: none;
+    display: grid;
+    gap: 22px;
+}
+
+.docs-step {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+}
+
+.docs-step-n {
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--accent-gold);
+    color: var(--bg-void);
+    font-family: var(--font-heading);
+    font-weight: 900;
+    font-size: 13.5px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: -3px;
+}
+
+.docs-step-title {
+    display: block;
+    font-family: var(--font-heading);
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.docs-step-text {
+    display: block;
+    font-family: var(--font-body);
+    font-size: clamp(14px, 1.05vw, 15.5px);
+    line-height: 1.6;
+    color: var(--text-secondary);
+}
+
+/* ---------------------------------------------------------------- the numbers */
+.docs-stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 18px;
+}
+
+/* The stone tile is the slot; the gradient under it is the fallback, so a card is a flat panel until
+   the texture lands and a grained one after, with no edit here. */
+.docs-stat {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 176px;
+    padding: clamp(22px, 2.4vw, 32px);
+    border: 1px solid var(--border-dim);
+    border-radius: var(--radius-md);
+    background-color: var(--bg-panel);
+    background-image: url('/assets/docs/texture-stone.webp'), linear-gradient(180deg, var(--bg-panel), var(--bg-dark));
+    background-size: 512px, cover;
+    background-repeat: repeat, no-repeat;
+}
+
+.docs-stat-value {
+    font-family: var(--font-heading);
+    font-weight: 900;
+    font-size: clamp(26px, 3vw, 42px);
+    line-height: 1;
+    letter-spacing: -0.01em;
+    color: var(--accent-gold);
+    margin-bottom: 14px;
+}
+
+/* A value that is a sentence rather than a figure — the placeholder the tokenomics section wears
+   until the numbers are settled. Cinzel at 42px makes "TO BE ANNOUNCED" four lines tall in a box
+   sized for "1,415,120", so it steps down and keeps its own line height. */
+.docs-stat-value-tba {
+    font-size: clamp(17px, 1.75vw, 24px);
+    line-height: 1.2;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.docs-stat-label {
+    font-family: var(--font-body);
+    font-size: clamp(13px, 1.05vw, 15px);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.docs-stat-sub {
+    font-size: clamp(12.5px, 1vw, 14px);
+    line-height: 1.55;
+    color: var(--text-muted);
+}
+
+/* ---------------------------------------------------------------- the points program */
+.docs-cards {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.docs-card {
+    padding: 24px 22px;
+    border: 1px solid var(--border-dim);
+    border-radius: var(--radius-sm);
+    background: var(--bg-panel);
+    transition: border-color 0.2s, transform 0.2s;
+}
+
+.docs-card:hover {
+    border-color: var(--border-gold);
+    transform: translateY(-3px);
+}
+
+.docs-card-title {
+    font-family: var(--font-heading);
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--accent-gold-light);
+    margin-bottom: 10px;
+}
+
+.docs-card-text {
+    font-family: var(--font-body);
+    font-size: 14.5px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+}
+
+.docs-cta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 28px;
+    padding: 18px 34px;
+    background: var(--accent-gold);
+    color: var(--bg-void);
+    font-family: var(--font-heading);
+    font-size: 13.5px;
+    font-weight: 900;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    text-decoration: none;
+    border-radius: var(--radius-sm);
+    transition: background 0.15s, transform 0.15s;
+}
+
+.docs-cta:hover {
+    background: var(--accent-gold-light);
+    transform: translateY(-2px);
+}
+
+/* ---------------------------------------------------------------- the nightly draw */
+.docs-band-card {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid var(--border-bronze);
+    border-radius: var(--radius-md);
+    /* A heavier scrim than the page's own: this band carries a headline and a paragraph, and it sits
+       over whatever the slot holds — which, until the art lands, is a painting chosen from the
+       repo's own set rather than anything with UI text in it. */
+    background-image:
+        radial-gradient(76% 88% at 50% 50%, rgba(13, 10, 8, 0.84), rgba(13, 10, 8, 0.97)),
+        var(--docs-band-art, none);
+    background-size: cover, cover;
+    background-position: center, center;
+}
+
+.docs-band-inner {
+    position: relative;
+    z-index: 1;
+    max-width: 76ch;
+    margin: 0 auto;
+    text-align: center;
+    padding: clamp(40px, 6vw, 86px) clamp(20px, 3vw, 40px);
+}
+
+.docs-band-body {
+    font-family: var(--font-body);
+    font-size: clamp(15px, 1.2vw, 17.5px);
+    line-height: 1.65;
+    color: var(--text-primary);
+    margin-bottom: 20px;
+}
+
+.docs-band-note {
+    font-family: var(--font-body);
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-muted);
+}
+
+/* ---------------------------------------------------------------- the contracts */
+.docs-rows {
+    list-style: none;
+    border: 1px solid var(--border-base);
+    border-radius: var(--radius-sm);
+    /* The leather tile is the slot; the gradient under it is the fallback. */
+    background-image: url('/assets/docs/texture-parchment.webp'), linear-gradient(180deg, rgba(26, 23, 20, 0.9), rgba(18, 16, 14, 0.92));
+    background-size: 512px, cover;
+    background-repeat: repeat, no-repeat;
+    overflow: hidden;
+}
+
+.docs-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 16px 22px;
+    border-bottom: 1px solid var(--border-dim);
+}
+
+.docs-row:last-child {
+    border-bottom: none;
+}
+
+.docs-row-name {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.docs-row-title {
+    font-family: var(--font-heading);
+    font-size: 15.5px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    color: var(--text-primary);
+}
+
+.docs-row-role {
+    font-family: var(--font-body);
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-muted);
+}
+
+.docs-row-address {
+    font-family: var(--font-body);
+    font-size: 12.5px;
+    letter-spacing: 0.02em;
+    color: var(--accent-gold);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    word-break: break-all;
+    text-align: right;
+    transition: border-color 0.15s, color 0.15s;
+}
+
+.docs-row-address:hover {
+    color: var(--accent-gold-light);
+    border-bottom-color: var(--accent-gold-light);
+}
+
+/* ---------------------------------------------------------------- the questions */
+.docs-faq {
+    display: grid;
+    gap: 12px;
+}
+
+.docs-faq-item {
+    border: 1px solid var(--border-dim);
+    border-radius: var(--radius-sm);
+    background: var(--bg-panel);
+    transition: border-color 0.2s;
+}
+
+.docs-faq-item[open] {
+    border-color: var(--border-gold);
+}
+
+.docs-faq-q {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 20px 24px;
+    cursor: pointer;
+    list-style: none;
+}
+
+.docs-faq-q::-webkit-details-marker {
+    display: none;
+}
+
+.docs-faq-text {
+    font-family: var(--font-heading);
+    font-size: clamp(15px, 1.25vw, 18px);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--accent-gold);
+}
+
+.docs-faq-item[open] .docs-faq-text {
+    color: var(--accent-gold-light);
+}
+
+/* The marker: two gradients draw a plus, and the ornament — when it lands — is the top layer, over
+   both. Opens to an × by rotating the whole box. */
+.docs-faq-mark {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    background-image:
+        url('/assets/docs/ornament-faq.png'),
+        linear-gradient(var(--accent-gold), var(--accent-gold)),
+        linear-gradient(var(--accent-gold), var(--accent-gold));
+    background-repeat: no-repeat, no-repeat, no-repeat;
+    background-position: center, center, center;
+    background-size: 100% 100%, 100% 2px, 2px 100%;
+    transition: transform 0.2s;
+}
+
+.docs-faq-item[open] .docs-faq-mark {
+    transform: rotate(45deg);
+}
+
+.docs-faq-a {
+    padding: 0 24px 22px;
+    font-family: var(--font-body);
+    font-size: 15.5px;
+    line-height: 1.7;
+    color: var(--text-secondary);
+    max-width: 92ch;
+}
+
+/* ---------------------------------------------------------------- the footer */
+.docs-footer {
+    padding: clamp(60px, 8vw, 96px) 0 64px;
+    border-top: 1px solid var(--border-dim);
+    background: var(--bg-void);
+}
+
+.docs-footer-word {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(44px, 9vw, 132px);
+    line-height: 0.9;
+    letter-spacing: -0.01em;
+    color: var(--accent-gold);
+    margin-bottom: 34px;
+}
+
+.docs-footer-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 28px;
+    list-style: none;
+    margin-bottom: 34px;
+}
+
+.docs-footer-links a {
+    font-family: var(--font-body);
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: color 0.15s;
+}
+
+.docs-footer-links a:hover {
+    color: var(--accent-gold);
+}
+
+.docs-footer-legal {
+    font-family: var(--font-body);
+    font-size: 12.5px;
+    line-height: 1.75;
+    color: var(--text-muted);
+    max-width: 78ch;
+}
+
+/* ==========================================================
+   A phone is not a squeezed desktop.
+   ========================================================== */
+@media (max-width: 1100px) {
+    .docs-nav-links {
+        gap: 22px;
+        font-size: 11.5px;
+    }
+
+    .docs-wordmark {
+        font-size: 20px;
+    }
+
+    .docs-stats,
+    .docs-cards {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 900px) {
+    .docs-nav {
+        display: flex;
+        justify-content: center;
+        padding: 14px 20px;
+    }
+
+    /* The links go, the wordmark stays: on a phone the nav is a masthead rather than a menu, and the
+       sections are reachable by scrolling one document. */
+    .docs-nav-links {
+        display: none;
+    }
+
+    .docs-wrap {
+        padding: 0 24px;
+    }
+
+    .docs-divider::after {
+        left: 24px;
+        right: 24px;
+    }
+
+    .docs-split,
+    .docs-howto {
+        grid-template-columns: 1fr;
+    }
+
+    .docs-hero-sub {
+        font-size: 15px;
+    }
+}
+
+@media (max-width: 700px) {
+    .docs-stats,
+    .docs-cards {
+        grid-template-columns: 1fr;
+    }
+
+    .docs-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .docs-row-address {
+        text-align: left;
+    }
+
+    .docs-stat {
+        min-height: 0;
+    }
+
+    .docs-cta {
+        width: 100%;
+    }
+}
+
+/* The ticker is decoration, so it is the first thing to stop — and a strip that keeps sliding under
+   a reader who has asked the browser for less motion is exactly the kind of "small" thing that is
+   not small. */
+@media (prefers-reduced-motion: reduce) {
+    .docs-scroll {
+        scroll-behavior: auto;
+    }
+
+    .docs-ticker-track {
+        animation: none;
+    }
+
+    .docs-card,
+    .docs-cta,
+    .docs-pill,
+    .docs-faq-mark {
+        transition: none;
+    }
+}

@@ -1,5 +1,9 @@
-import { SITE_URL } from '../lib/site';
-import { REDEEM_LIVE } from '../lib/points-config';
+// Explicit `.js` on both, so the offline harness can call this function directly. The bundler does
+// not need the extension; plain Node does, and `tools/check-docs.js` asserts that a page the sitemap
+// publishes is a page the apex actually serves — a comparison worth making against the real list
+// rather than against the text of it.
+import { SITE_URL } from '../lib/site.js';
+import { REDEEM_LIVE } from '../lib/points-config.js';
 
 /**
  * Only what the apex serves to the public.
@@ -20,6 +24,10 @@ export default function sitemap() {
     { path: '/', priority: 1.0, changeFrequency: 'weekly' },
     { path: '/points', priority: 0.9, changeFrequency: 'daily' },
     { path: '/genesis', priority: 0.9, changeFrequency: 'weekly' },
+    // A stranger's first stop, and the page a search for "how does the Points Program work" should
+    // land on. It is on the apex's public list for the same reason, and `tools/check-gate.js`
+    // asserts the two agree rather than assuming they do.
+    { path: '/docs', priority: 0.8, changeFrequency: 'weekly' },
     // On this list for the same reason `/points` is: a player who won something should be able to
     // find the page that pays it without knowing a URL.
     ...(REDEEM_LIVE ? [{ path: '/redeem', priority: 0.9, changeFrequency: 'weekly' }] : []),
