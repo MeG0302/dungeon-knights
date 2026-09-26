@@ -224,8 +224,129 @@ class Game {
         return ok;
     }
     
-    startDungeon() {
-        if (this.isRunning) return;
+    // ------------------------------------------------------------ the run budget
+    /**
+     * May this squad start a run?
+     *
+     * A run is paid for with one daily run from **every** knight in it, and the run is
+     * spent when its reward is claimed. `RunBudget` subtracts the clears this browser is
+     * still holding unclaimed, so five banked clears and five on the chain is a squad
+     * that has played its day — not a squad with five runs to spend (see
+     * `public/run-budget.js`, and the fifth-run proof in `tools/check-run-budget.js`).
+     *
+     * Answers `{ ok: true }` when nothing can be read: the chain and the server are the
+     * real gate, and an unreachable RPC must not lock a player out of their own game.
+     */
+    async squadBudget(knights) {
+        const session = window.dungeonSession;
+        if (!session || typeof session.runBudget !== 'function' || !window.RunBudget) {
+            return { ok: true, budget: null };
+        }
+        try {
+            const budget = await session.runBudget(knights || []);
+            if (!budget) return { ok: true, budget: null };
+            return { ok: budget.blocked.length === 0, budget };
+        } catch (error) {
+            console.warn('Could not read the squad\u2019s run budget:', error && error.message);
+            return { ok: true, budget: null };
+        }
+    }
+
+    /**
+     * The day is spent for at least one knight, so the squad stops here.
+     *
+     * This is where a sixth run used to be played: the auto-progress walked the squad
+     * into it, the clear was recorded, and the claim was refused on chain with "No runs
+     * left today" — a whole dungeon nobody was ever going to be paid for. Better to say
+     * so on the screen the player is already looking at.
+     */
+    squadSpent(budget) {
+        this.isRunning = false;
+        if (this.autoRestartTimer) {
+            clearTimeout(this.autoRestartTimer);
+            this.autoRestartTimer = null;
+        }
+        if (this.countdownInterval) {
+            clearInterval(this.countdownInterval);
+            this.countdownInterval = null;
+        }
+
+        const spent = (budget && budget.blocked) || [];
+        const who = spent.length === 1 ? `Knight #${spent[0]}` : `Knights #${spent.join(', #')}`;
+        const line = `\u{1F6CF}\u{FE0F} ${who} ${spent.length === 1 ? 'has' : 'have'} used every run for today \u2014 the squad rests until 12:00 UTC. Claim what they earned from the Unclaimed panel.`;
+
+        this.logMessage(line);
+        const countdown = document.getElementById('autoProgressCountdown');
+        if (countdown) countdown.textContent = line;
+        this.refreshSquadRuns();
+    }
+
+    /** Repaint the squad list's run counts from the chain, in the background. */
+    refreshSquadRuns() {
+        const session = window.dungeonSession;
+        if (!session || typeof session.readRunsRemaining !== 'function') return;
+        const ids = this.knightManager.knights.map(k => k.tokenId || k.id);
+        if (!ids.length) return;
+        session.readRunsRemaining(ids)
+            .then(() => { if (window.ui && typeof window.ui.updateSquadList === 'function') window.ui.updateSquadList(); })
+            .catch(() => {});
+    }
+
+    /**
+     * Change the map behind the gate: cover the screen, rebuild the dungeon, and hand the
+     * squad its next run only once the new map's art has arrived.
+     *
+     * `isRunning` is false for the whole rebuild, so nothing fights behind a loading
+     * screen and no reward is earned for the second the map was being drawn.
+     */
+    withMapGate(type, onReady) {
+        const gate = window.MapGate;
+        this.isRunning = false;
+        this.hideCompletionModal();
+
+        if (gate) gate.raise(type);
+        this.createDungeon(type);
+        this.logMessage(`\u{1F5FA}\u{FE0F} Moved to ${this.dungeon.config.name}!`);
+
+        const start = () => {
+            if (typeof onReady === 'function') onReady();
+            if (window.audioManager && !window.audioManager.isMusicPlaying) {
+                window.audioManager.startMusic();
+            }
+        };
+
+        // No gate on the page (an older cached bundle, or a stripped page): behave exactly
+        // as this did before it existed rather than stalling the run.
+        if (gate) gate.follow(this, start);
+        else start();
+    }
+
+    /** Put the same knights back on the new map, then open a run for them. */
+    moveSquad(deployedKnights) {
+        if (!deployedKnights || !deployedKnights.length) return;
+
+        const nextSpawns = [];
+        deployedKnights.forEach(knight => {
+            const spawnPoint = this.dungeon.getFreeSpawnPoint(nextSpawns);
+            nextSpawns.push(spawnPoint);
+            knight.position = { x: spawnPoint.x, y: spawnPoint.y };
+            knight.gridPosition = { x: spawnPoint.x, y: spawnPoint.y };
+            knight.state = 'idle';
+            knight.target = null;
+            knight.path = [];
+            knight.isDeployed = true;
+        });
+
+        this.isRunning = true;
+        this.beginRun(deployedKnights); // Start new session for the new map
+        this.logMessage(`\u2694\uFE0F ${deployedKnights.length} knight(s) automatically deployed!`);
+        this.refreshSquadRuns();
+    }
+
+    async startDungeon() {
+        // `deployPending` covers the read the gate below makes: without it a double click
+        // deploys the squad twice while the first click is still waiting for the chain.
+        if (this.isRunning || this.deployPending) return;
 
         const availableKnights = this.knightManager.getAvailableKnights();
         if (availableKnights.length === 0) {
@@ -235,6 +356,28 @@ class Game {
 
         // Deploy up to 15 knights
         const deployCount = Math.min(availableKnights.length, 15);
+        const squad = availableKnights.slice(0, deployCount);
+
+        // The door is the chain's to shut: a squad that has spent the day must not walk
+        // into a dungeon whose reward nobody will pay.
+        this.deployPending = true;
+        let ok = true;
+        let budget = null;
+        try {
+            ({ ok, budget } = await this.squadBudget(squad));
+        } finally {
+            this.deployPending = false;
+        }
+        if (!ok) {
+            const spent = budget.blocked;
+            const who = spent.length === 1 ? `Knight #${spent[0]}` : `Knights #${spent.join(', #')}`;
+            const line = `\u{1F6CF}\u{FE0F} ${who} ${spent.length === 1 ? 'has' : 'have'} no runs left today \u2014 the day resets at 12:00 UTC.`;
+            this.logMessage(line);
+            alert(`${line}\n\nEvery clear pays the whole squad, so one tired knight means nobody earns. Deselect them in the Hall of Knights, or claim the runs they already have waiting.`);
+            this.refreshSquadRuns();
+            return;
+        }
+
         const takenSpawns = [];
         for (let i = 0; i < deployCount; i++) {
             const knight = availableKnights[i];
@@ -332,6 +475,10 @@ class Game {
                             if (window.rewardClaimUI) {
                                 window.rewardClaimUI.updateDisplay();
                             }
+                            // This clear is now banked, and a banked clear spends one of
+                            // the day's runs the moment it is claimed — so the squad's
+                            // numbers have moved even though the chain's have not yet.
+                            this.refreshSquadRuns();
                         }
                     })
                     .catch(error => {
@@ -427,75 +574,41 @@ class Game {
         }
     }
     
-    nextDungeon() {
+    async nextDungeon() {
         const dungeonOrder = ['crypts', 'mines', 'temple', 'magma', 'void'];
         const currentIndex = dungeonOrder.indexOf(this.selectedDungeon);
         const nextIndex = (currentIndex + 1) % dungeonOrder.length;
-        
+
         // Remember which knights were deployed
         const deployedKnights = this.knightManager.getDeployedKnights();
-        
-        // Select next dungeon in order
-        this.selectedDungeon = dungeonOrder[nextIndex];
-        this.createDungeon(this.selectedDungeon);
-        this.hideCompletionModal();
-        this.logMessage(`🗺️ Moved to ${this.dungeon.config.name}!`);
-        
-        // Re-deploy the same knights at spawn points
-        if (deployedKnights.length > 0) {
-            const nextSpawns = [];
-            deployedKnights.forEach(knight => {
-                const spawnPoint = this.dungeon.getFreeSpawnPoint(nextSpawns);
-                nextSpawns.push(spawnPoint);
-                knight.position = { x: spawnPoint.x, y: spawnPoint.y };
-                knight.gridPosition = { x: spawnPoint.x, y: spawnPoint.y };
-                knight.state = 'idle';
-                knight.target = null;
-                knight.path = [];
-            });
-            
-            this.isRunning = true;
-            this.beginRun(deployedKnights); // Start new session for next dungeon
-            this.logMessage(`⚔️ ${deployedKnights.length} knight(s) automatically deployed!`);
-            
-            // Keep music playing
-            if (window.audioManager && !window.audioManager.isMusicPlaying) {
-                window.audioManager.startMusic();
-            }
+
+        // No sixth run. The auto-progress used to walk the squad straight into one, and
+        // the refusal only arrived at the claim — after a whole dungeon had been cleared
+        // for nothing.
+        const { ok, budget } = await this.squadBudget(deployedKnights);
+        if (!ok) {
+            this.squadSpent(budget);
+            return;
         }
+
+        // Select next dungeon in order, and let the gate cover the rebuild: this is the
+        // map change the player used to watch happen under their knights.
+        this.selectedDungeon = dungeonOrder[nextIndex];
+        this.withMapGate(this.selectedDungeon, () => this.moveSquad(deployedKnights));
     }
     
-    replayDungeon() {
+    /** Replay the same map. Gated like the map change, because it rebuilds one too. */
+    async replayDungeon() {
         // Remember which knights were deployed
         const deployedKnights = this.knightManager.getDeployedKnights();
-        
-        // Generate new instance of same dungeon
-        this.createDungeon(this.selectedDungeon);
-        this.hideCompletionModal();
-        this.logMessage(`🔄 New ${this.dungeon.config.name} generated!`);
-        
-        // Re-deploy the same knights at spawn points
-        if (deployedKnights.length > 0) {
-            const replaySpawns = [];
-            deployedKnights.forEach(knight => {
-                const spawnPoint = this.dungeon.getFreeSpawnPoint(replaySpawns);
-                replaySpawns.push(spawnPoint);
-                knight.position = { x: spawnPoint.x, y: spawnPoint.y };
-                knight.gridPosition = { x: spawnPoint.x, y: spawnPoint.y };
-                knight.state = 'idle';
-                knight.target = null;
-                knight.path = [];
-            });
-            
-            this.isRunning = true;
-            this.beginRun(deployedKnights); // Start new session for replay
-            this.logMessage(`⚔️ ${deployedKnights.length} knight(s) automatically deployed!`);
-            
-            // Keep music playing
-            if (window.audioManager && !window.audioManager.isMusicPlaying) {
-                window.audioManager.startMusic();
-            }
+
+        const { ok, budget } = await this.squadBudget(deployedKnights);
+        if (!ok) {
+            this.squadSpent(budget);
+            return;
         }
+
+        this.withMapGate(this.selectedDungeon, () => this.moveSquad(deployedKnights));
     }
     
     restAllHeroes() {

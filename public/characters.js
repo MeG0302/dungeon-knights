@@ -87,20 +87,43 @@ class Knight {
     }
     
     /**
-     * Get remaining daily runs for this knight
+     * Runs this knight can still start today, or **null** when nobody has answered yet.
+     *
+     * This used to return `RARITY[tier].dailyRuns` — the *cap* — which is why every card
+     * read "5/5 runs today" after five clears, why the deploy-time check for an exhausted
+     * knight could never fire (`remaining === 0` was unreachable), and why a sixth clear
+     * was played and then refused on chain with "No runs left today" with nothing on
+     * screen having warned anybody.
+     *
+     * The arithmetic is `RunBudget`'s, and the two inputs are the chain's `runsRemaining`
+     * and the unclaimed runs this browser is holding. Null is a real answer — it means the
+     * chain has not replied — and the screens print it as "—" rather than as a full bar.
      */
     getRemainingRuns() {
-        return RARITY[this.rarity.tier]?.dailyRuns || 5;
+        const session = window.dungeonSession;
+        if (!session || typeof session.cachedRunsRemaining !== 'function' || !window.RunBudget) return null;
+        const remaining = session.cachedRunsRemaining(this.tokenId);
+        if (remaining === null) return null;
+        return window.RunBudget.playableFor(remaining, session.bankedRunsFor(this.tokenId));
+    }
+
+    /** The daily cap for this knight's tier — the denominator on every "5/5" on the site. */
+    getDailyCap() {
+        if (window.RunBudget) return window.RunBudget.capFor(this.rarity && this.rarity.tier, window.RARITY);
+        return (RARITY[this.rarity.tier] && RARITY[this.rarity.tier].dailyRuns) || 5;
     }
     
     /**
-     * Check if knight can be deployed (has runs remaining)
+     * Check if knight can be deployed (has runs remaining).
+     *
+     * An unread knight is deployable: the chain is the gate, and a wallet whose RPC is
+     * down must not be locked out of its own game. A knight the chain has said is spent
+     * is not — a run pays for every knight in it, so one tired knight would mean nobody
+     * in the squad gets paid.
      */
     canDeploy() {
-        if (window.dungeonSession) {
-            return window.dungeonSession.canDeploy(this.tokenId, this.rarity.tier);
-        }
-        return true; // Default to true if session manager not available
+        const left = this.getRemainingRuns();
+        return left === null ? true : left > 0;
     }
 
     rollRarity() {

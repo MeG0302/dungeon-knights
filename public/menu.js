@@ -134,9 +134,29 @@ class MenuSystem {
             
             // Update display
             this.updateDisplay();
+
+            // Runs left is the chain's number minus the clears this browser has not
+            // claimed yet, so it can only be read from the chain — one pass for the whole
+            // roster, then repaint. The cards say "—" until it lands, which is the honest
+            // thing to say while nobody has answered.
+            this.refreshRuns();
             
         } catch (error) {
             console.error('❌ Failed to load knights from blockchain:', error);
+        }
+    }
+
+    /** Ask the chain what the roster has left today and paint the answer. */
+    async refreshRuns() {
+        const session = window.dungeonSession;
+        if (!session || typeof session.readRunsRemaining !== 'function') return;
+        const ids = this.knightManager.knights.map(k => k.tokenId || k.id);
+        if (!ids.length) return;
+        try {
+            await session.readRunsRemaining(ids);
+            this.updateDisplay();
+        } catch (error) {
+            console.warn('Could not read runs remaining:', error && error.message);
         }
     }
     
@@ -185,22 +205,38 @@ class MenuSystem {
     
     bindEvents() {
         // Play Game button
-        this.playBtn.addEventListener('click', () => {
+        this.playBtn.addEventListener('click', async () => {
             if (this.selectedKnights.size === 0) {
                 alert('⚠️ You must select at least one knight to enter the dungeon!');
                 return;
             }
-            
-            // Check if any selected knights have no runs left
+
             const selectedKnightIds = Array.from(this.selectedKnights);
             const selectedKnightObjects = this.knightManager.knights.filter(k => selectedKnightIds.includes(k.id));
-            const exhaustedKnights = selectedKnightObjects.filter(k => {
-                const remaining = k.getRemainingRuns ? k.getRemainingRuns() : 999;
-                return remaining === 0;
-            });
-            
+
+            // Ask the chain before the player leaves the roster. The card's number is at
+            // most a minute old, and a squad that is one knight over its daily budget
+            // clears a whole dungeon for nothing — the sixth run is refused where the money
+            // is, which is a bad place to find out.
+            if (window.dungeonSession && typeof window.dungeonSession.readRunsRemaining === 'function') {
+                this.playBtn.disabled = true;
+                try {
+                    await window.dungeonSession.readRunsRemaining(selectedKnightObjects.map(k => k.tokenId || k.id));
+                    this.updateDisplay();
+                } catch (error) {
+                    console.warn('Could not check runs before deploying:', error && error.message);
+                } finally {
+                    this.playBtn.disabled = false;
+                }
+            }
+
+            // A knight with nothing left is known from the chain. An unread knight is not
+            // counted as tired — the contract is the real gate, and a wallet whose RPC is
+            // down must not be locked out of its own game.
+            const exhaustedKnights = selectedKnightObjects.filter(k => k.getRemainingRuns && k.getRemainingRuns() === 0);
+
             if (exhaustedKnights.length > 0) {
-                alert(`⚠️ ${exhaustedKnights.length} knight(s) have no runs left today!\n\nThey need to rest until 12 PM UTC.\n\nPlease deselect them or choose other knights.`);
+                alert(`⚠️ ${exhaustedKnights.length} knight(s) have used all their runs for today!\n\nEvery clear pays the whole squad, so one tired knight means nobody earns. Their five — or three, or four — come back at 12:00 UTC, and any run they already cleared only needs claiming.\n\nPlease deselect them or choose other knights.`);
                 return;
             }
             
@@ -474,8 +510,10 @@ class MenuSystem {
                 card.classList.add('selected');
             }
             
-            const remainingRuns = knight.getRemainingRuns ? knight.getRemainingRuns() : (window.dungeonSession ? window.dungeonSession.getRemainingRuns(knight.id || knight.tokenId, knight.rarity.tier) : 5);
-            const maxRuns = RARITY[knight.rarity.tier]?.dailyRuns || 5;
+            // The chain's answer minus what this browser still holds unclaimed. Null until
+            // the chain replies — the card prints "—", which is not the same as a full bar.
+            const remainingRuns = typeof knight.getRemainingRuns === 'function' ? knight.getRemainingRuns() : null;
+            const maxRuns = typeof knight.getDailyCap === 'function' ? knight.getDailyCap() : 5;
             const hasNoRuns = remainingRuns === 0;
             
             if (knight.state === 'resting' || knight.stamina < knight.stats.maxStamina * 0.5 || hasNoRuns) {
@@ -490,7 +528,7 @@ class MenuSystem {
             
             // Calculate stamina percentage
             const staminaPercent = (knight.stamina / knight.stats.maxStamina) * 100;
-            const runsColor = remainingRuns === 0 ? '#ef4444' : remainingRuns <= 1 ? '#f59e0b' : '#10b981';
+            const runsColor = remainingRuns === null ? '#8a8177' : remainingRuns === 0 ? '#ef4444' : remainingRuns <= 1 ? '#f59e0b' : '#10b981';
             
             card.innerHTML = `
                 <div class="knight-avatar rarity-${knight.rarity.tier}" style="border-color: ${knight.rarity.color}; ${hasNoRuns ? 'opacity: 0.6;' : ''}">
@@ -519,7 +557,7 @@ class MenuSystem {
                     </div>
                     <div style="margin-top: 8px; padding: 4px 8px; background: ${hasNoRuns ? '#7f1d1d' : '#1f2937'}; border-radius: 4px; text-align: center;">
                         <span style="color: ${runsColor}; font-weight: bold; font-size: 12px;">
-                            🎯 ${remainingRuns}/${maxRuns} runs today
+                            🎯 ${remainingRuns === null ? '—' : remainingRuns}/${maxRuns} runs today
                         </span>
                     </div>
                 </div>

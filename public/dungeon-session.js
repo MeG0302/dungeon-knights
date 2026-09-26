@@ -34,6 +34,12 @@ const SESSION_KEY = 'dk_points_session';
 const PENDING_KEY = 'dungeonPendingRuns';
 const LEGACY_FLUSH_FLAG = 'dk_legacy_runs_flushed';
 
+// How long one `runsRemaining` read is trusted. The chain is the authority, but the roster
+// repaints on every filter change and the dungeon asks again on every deploy, and a read
+// per paint is an RPC bill for a number that moves once a clear. A minute is short enough
+// that a claim is reflected before the player can finish the next dungeon.
+const RUNS_CACHE_MS = 60000;
+
 class DungeonSessionManager {
     constructor() {
         this.currentSession = null;
@@ -62,6 +68,9 @@ class DungeonSessionManager {
             'event DungeonCompleted(address indexed player, uint256 indexed knightId, uint256 indexed dungeonId, uint8 rarity, uint256 reward, uint256 timestamp)',
             'event RewardsClaimed(address indexed player, uint256 amount, uint256 runsCount, uint256 knightCount)'
         ];
+
+        // Remaining runs, cached per reset-day: see cachedRunsRemaining().
+        this.runsCache = { day: null, byId: {} };
 
         this.loadFromLocalStorage();
         console.log('✅ DungeonSessionManager V4 initialized (server-signed runs)');
@@ -730,25 +739,130 @@ class DungeonSessionManager {
     }
 
     /**
-     * Get remaining runs for a knight (queries contract)
+     * Get remaining runs for a knight (queries contract).
+     *
+     * A failed read answers **null**, not zero: the old zero meant a wallet whose RPC
+     * hiccuped looked like a knight with nothing left, which is the one answer that stops
+     * play. Callers that want a display number use `cachedRunsRemaining()`.
      */
     async getRemainingRuns(knightId) {
         if (!window.walletManager || !window.walletManager.isConnected) {
-            return 0;
+            return null;
         }
 
+        try {
+            const read = await this.fetchRunsRemaining([Number(knightId)]);
+            const value = read[Number(knightId)];
+            return value === undefined ? null : value;
+        } catch (error) {
+            console.error('Failed to get remaining runs:', error);
+            return null;
+        }
+    }
+
+    // ------------------------------------------------------- the daily run budget
+    /**
+     * The chain's reset-day index, from the one module that also computes the arithmetic.
+     * Null when `run-budget.js` is not on the page, which every caller treats as "no
+     * budget available" rather than as a reason to stop playing.
+     */
+    dayIndex() {
+        return window.RunBudget ? window.RunBudget.dayIndexAt() : null;
+    }
+
+    /**
+     * The last answer the chain gave for a knight, or null when it has not answered —
+     * never a cached value from a previous reset-day, because the day roll turns every
+     * "0 left" into a lie and every "5 left" into an older one.
+     */
+    cachedRunsRemaining(knightId) {
+        const hit = this.runsCache.byId[Number(knightId)];
+        if (!hit) return null;
+        if (this.runsCache.day !== this.dayIndex()) return null;
+        if (Date.now() - hit.at > RUNS_CACHE_MS) return null;
+        return hit.value;
+    }
+
+    /** Runs finished today, by this knight, that are still waiting to be claimed. */
+    bankedRunsFor(knightId) {
+        if (!window.RunBudget) return 0;
+        return window.RunBudget.bankedFor(this.pendingRuns, knightId);
+    }
+
+    /**
+     * Remaining runs for a squad, in one pass, cached per reset-day.
+     * @returns {Object} id → number, or null for a knight the chain did not answer for
+     */
+    async readRunsRemaining(knightIds) {
+        const wanted = [...new Set((knightIds || []).map(Number).filter((n) => Number.isInteger(n) && n > 0))];
+        const answer = {};
+        const stale = [];
+
+        const day = this.dayIndex();
+        if (this.runsCache.day !== day) this.runsCache = { day, byId: {} };
+
+        wanted.forEach((id) => {
+            const cached = this.cachedRunsRemaining(id);
+            answer[id] = cached;
+            if (cached === null) stale.push(id);
+        });
+
+        if (!stale.length) return answer;
+        if (!window.walletManager || !window.walletManager.isConnected || !window.ethereum) return answer;
+
+        const fresh = await this.fetchRunsRemaining(stale);
+        stale.forEach((id) => {
+            const value = fresh[id] === undefined ? null : fresh[id];
+            answer[id] = value;
+            this.runsCache.byId[id] = { at: Date.now(), value };
+        });
+        return answer;
+    }
+
+    /** The raw eth_calls, one per knight. Never throws; a failed read answers null. */
+    async fetchRunsRemaining(ids) {
+        const out = {};
         try {
             const provider = new ethers.providers.Web3Provider(window.ethereum);
             const address = this.gameContractV4Address || this.gameContractAddress;
             const abi = this.gameContractV4Address ? this.gameContractV4ABI : this.gameContractABI;
             const gameContract = new ethers.Contract(address, abi, provider);
 
-            const remaining = await gameContract.runsRemaining(knightId);
-            return remaining;
+            await Promise.all(ids.map(async (id) => {
+                try {
+                    out[id] = Number(await gameContract.runsRemaining(id));
+                } catch (error) {
+                    console.warn(`[dungeon-session] runsRemaining(${id}) failed:`, error && error.message);
+                    out[id] = null;
+                }
+            }));
         } catch (error) {
-            console.error('Failed to get remaining runs:', error);
-            return 0;
+            console.warn('[dungeon-session] could not read runs remaining:', error && error.message);
         }
+        return out;
+    }
+
+    /**
+     * The squad's run budget: `RunBudget.planFor` over the chain's answers and this
+     * browser's unclaimed queue. Null when the module is not loaded, so a page missing it
+     * degrades to "play on" rather than to a locked dungeon.
+     */
+    async runBudget(knights) {
+        if (!window.RunBudget) return null;
+
+        const rows = (knights || []).map((knight) => ({
+            id: Number(knight.tokenId === undefined ? knight.id : knight.tokenId),
+            tier: (knight.rarity && knight.rarity.tier) || knight.tier || 'COMMON',
+            rarity: knight.rarity,
+        }));
+        const remainingById = await this.readRunsRemaining(rows.map((row) => row.id));
+
+        return window.RunBudget.planFor({
+            knights: rows,
+            table: window.RARITY,
+            runs: this.pendingRuns,
+            remainingById,
+        });
     }
 
     /**

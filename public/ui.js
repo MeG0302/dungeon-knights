@@ -361,8 +361,10 @@ class UI {
             card.className = 'knight-card';
             
             const staminaPercent = Math.floor((knight.stamina / knight.stats.maxStamina) * 100);
-            const remainingRuns = knight.getRemainingRuns ? knight.getRemainingRuns() : '?';
-            const maxRuns = RARITY[knight.rarity.tier]?.dailyRuns || 5;
+            // The chain's answer, minus the clears this browser has not claimed yet. Null
+            // until the chain replies; "—" is the honest thing to print meanwhile.
+            const remainingRuns = typeof knight.getRemainingRuns === 'function' ? knight.getRemainingRuns() : null;
+            const maxRuns = typeof knight.getDailyCap === 'function' ? knight.getDailyCap() : 5;
             
             card.innerHTML = `
                 <div class="knight-portrait" style="border-color: ${knight.rarity.color};">
@@ -376,7 +378,7 @@ class UI {
                         ${knight.rarity.name} • ${staminaPercent}% Stamina
                     </div>
                     <div class="knight-status">
-                        Runs: ${remainingRuns}/${maxRuns}
+                        Runs: ${remainingRuns === null ? '—' : remainingRuns}/${maxRuns}
                     </div>
                 </div>
             `;
