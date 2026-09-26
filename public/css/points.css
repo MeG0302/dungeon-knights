@@ -1630,6 +1630,113 @@ link, and X is asked about it before anything is paid.
     margin-inline: auto;
 }
 
+/* ================================================ the board's own backdrop
+ * The rankings pane plays the map the campaign is run on behind itself.
+ *
+ * Scoped to the pane, not the page. This is the one region of the Points Program that is a board
+ * someone reads rather than a stack of cards someone works through, and the art is the board's —
+ * the left pane's task cards sit over a flat panel for the reason that a moving picture behind
+ * three-line captions is a worse page, not a richer one.
+ *
+ * Painted on `.side-panel` for the reason the halls' art is (theme.css): the body is the scrolling
+ * element (`overflow-y: auto`), so a picture placed there would scroll away with the table and
+ * rescale as the table grew. On the panel it holds still while the rows move.
+ *
+ * Three layers, bottom to top: the video, a scrim, then the pane's own content. The scrim is not
+ * decoration — measured, this clip's mean luma is **77 of 255** and it barely varies (76.2–77.8
+ * across all 240 frames), which is a good deal brighter than the hall art (51–74) that the
+ * existing 0.45 → 0.82 recipe was tuned against. Ten leaderboard rows of muted 12px text over a
+ * candle-lit table need more than that, so the halls' gradient is deepened to 0.55 → 0.88.
+ *
+ * The video layer is a positioned sibling rather than a `background-image`, because a video cannot
+ * be one. That puts it in the paint order *above* the pane's in-flow content — the header and the
+ * table would have been painted under it — so both are raised explicitly here. `z-index: -1` is
+ * the other way to write it and it is the wrong one: `.side-panel` does not create a stacking
+ * context, so a negative layer would be painted behind the panel's own opaque background and the
+ * video would simply not appear.
+ */
+.points-page .board-map-panel {
+    position: relative;
+}
+
+.points-page .board-map {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    /* Decoration: it must never eat a click meant for a row. */
+    pointer-events: none;
+}
+
+.points-page .board-map-video {
+    display: block;
+    width: 100%;
+    height: 100%;
+    /* Cover, not contain: the clip is 1280x720 and the pane is tall and narrow, so it is
+       cropped rather than letterboxed — black bars behind a leaderboard read as a bug. */
+    object-fit: cover;
+}
+
+.points-page .board-map-scrim {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(13, 10, 8, 0.55) 0%, rgba(13, 10, 8, 0.88) 100%);
+}
+
+/*
+ * Every pane is a board, and every board keeps the clip — including the tasks tab, which is the one
+ * a player *uses* rather than reads. What a board full of small print needs over moving art is not
+ * less art but a floor: `.leaderboard-table`, `.referrals-list` and the task grid are all
+ * deliberately background-less (on the flat panel the page's own dark surface *is* their floor),
+ * and over the clip that floor is gone exactly where it matters — measured on the page, the muted
+ * handles and 10px captions were the first things to disappear, before any number did.
+ *
+ * `has-map` and not the pane itself, because these are the *backdrop's* floors: the class is worn
+ * only while the clip is actually rendered (it is the same fact the layer is mounted from), so a
+ * phone — which gets no clip — keeps the flat look it had rather than a pointless darkening.
+ *
+ * Translucent rather than solid. The map is the whole reason a pane has a backdrop, and a solid
+ * strip through the middle of it would hide precisely the part a player looks at.
+ */
+.points-page .board-map-panel.has-map .leaderboard-table,
+.points-page .board-map-panel.has-map .referrals-list {
+    background: rgba(13, 10, 8, 0.6);
+}
+
+/* The tasks tab's floor is the tray the two columns of cards sit in, not each card: a card floors
+   the gap between cards otherwise, and the grid is what reads as the panel the work is laid out
+   on. The cards keep their own borders, their own hover, and their claimed/pending/refused tints
+   on top of it, so nothing here has to know about those states. */
+.points-page .board-map-panel.has-map .one-task-grid {
+    background: rgba(13, 10, 8, 0.55);
+}
+
+/* The pane's own content, over the backdrop. The header's strip is opaque and would hide the
+   video anyway; the body is the layer that has to be said explicitly. */
+.points-page .board-map-panel > .side-panel-header,
+.points-page .board-map-panel > .side-panel-body {
+    position: relative;
+    z-index: 1;
+}
+
+/* A moving backdrop behind text is the exact motion this preference is about, and the fallback is
+   not a hole: the scrim is still there, over the flat panel the page had before. */
+@media (prefers-reduced-motion: reduce) {
+    .points-page .board-map-video {
+        display: none;
+    }
+}
+
+@media (max-width: 860px) {
+    /* Phones get the flat panel. A 3.5MB clip is the most expensive thing this page could load and
+       the least of it a phone would see: below this breakpoint the panes stack and the page scrolls,
+       so the board is a screenful down and the clip behind it would be sized to a panel several
+       viewports tall. Data is the point, not the layout. */
+    .points-page .board-map {
+        display: none;
+    }
+}
+
 /* ================================================================ the daily capsule draw
  *
  * Ten capsules a day, and the panel that runs it. Three things share this vocabulary and they
@@ -1811,9 +1918,10 @@ link, and X is asked about it before anything is paid.
     border-top: 1px solid var(--border-base);
 }
 
-/* The wallet that would be copied, on its own line and in the mono face the rest of the site uses for
-   addresses — selectable by hand, because copying is blocked in some browsers and a player has to be
-   able to read the thing off the screen. */
+/* The wallet the form asks for, on its own line and in the mono face the rest of the site uses for
+   addresses. There is no copy button beside it any more: the claim files the wallet itself, so the
+   only place this row still shows is the card for a win that did not reach the form — and there the
+   whole row selects on one click (`user-select: all`), which is the copy, without the button. */
 .draw-claim-addr {
     overflow-wrap: anywhere;
     padding: 6px 8px;

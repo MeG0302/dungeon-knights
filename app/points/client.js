@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 // itself — the shared gate-keeper popup used across the rest of the game.
 import Script from 'next/script';
 import BackLink from '../back-link';
-import { VAULT_LEVELS, VAULT_ENTRY_TOTAL, STREAK_BASE, STREAK_MAX_MULTIPLIER, DISCORD_INVITE } from '../../lib/points-config';
+import { VAULT_LEVELS, VAULT_ENTRY_TOTAL, STREAK_BASE, STREAK_MAX_MULTIPLIER, DISCORD_INVITE, REDEEM_LIVE } from '../../lib/points-config';
 import {
     attachRef, claimRef, clearSession, connectWallet, fetchGiveaway, fetchLeaderboard, fetchMe,
     fetchXStatus, forgetWallet, isAddress, markCapsuleForm, onAccountsChanged, pendingRef,
@@ -16,6 +16,12 @@ import {
 import PointsDungeon from './dungeon';
 
 const ASSETS = '/assets/points/';
+// The backdrop the rankings pane plays behind itself — the map the campaign is run on.
+//
+// A file of its own rather than the vault's own `background.mp4`: that one is the floor the
+// dummy knights fight across, and painting it here would mean a change to the panel's art
+// silently rewrote the mini-game, and the other way round. Two panels, two pictures.
+const BOARD_MAP = `${ASSETS}board-map.mp4`;
 // The board shows the leaders, not the whole field: ten is a board a player can read at a glance, and
 // while the program is young a longer list is mostly people with nothing on it. Anyone outside it
 // still sees their own row — the page appends it below with their real rank — so shrinking the list
@@ -49,6 +55,11 @@ const CAPSULE_WORDS = {
     sent: 'Sent',
     missed: 'Not claimed',
 };
+
+// The delivery promise, in one place. The claim card makes it in three states — waiting on the
+// player, filed by the server, marked by hand — and a copy change that reached two of them would
+// leave the third contradicting the others on the same card.
+const CAPSULE_DELIVERY = 'When the mainnet goes live your knight capsule will be sent to you.';
 
 /** Milliseconds until an instant, floored at zero. */
 function msUntil(iso) {
@@ -655,6 +666,19 @@ export default function PointsPage() {
     // — the button that was pressed is the one that has to say it worked.
     const [codeCopied, setCodeCopied] = useState(false);
     const [inDungeon, setInDungeon] = useState(false);
+    // Whether the board's backdrop clip is worth loading at all.
+    //
+    // The stylesheet also hides it on a phone and for anyone who asks for reduced motion, and that
+    // is not the same thing: a hidden video element with `autoPlay` in the DOM still downloads and
+    // still plays,
+    // and measured on this page it did — the layer was `display: none` at 800px while its element
+    // reported `paused: false` with the whole 3.5MB behind it. So the element is not rendered
+    // unless the screen is one that will show it.
+    //
+    // It starts `false` and is decided in an effect, because `matchMedia` does not exist while the
+    // page is being painted on the server — and `false` is the value the server and the first
+    // client paint can agree on, which is what keeps this from being a hydration mismatch.
+    const [boardMapOn, setBoardMapOn] = useState(false);
     const referralInput = useRef(null);
     // The add-a-code box: what has been typed, whether a claim is in flight, and the server's own
     // reason when it refuses — which is shown, because a refusal here is an answer, not a glitch.
@@ -672,6 +696,28 @@ export default function PointsPage() {
     // page — the bridge is a React component that mounts a moment after the page does, and
     // it announces itself with `privyBridgeReady`.
     const [walletKind, setWalletKind] = useState(null);
+
+    // Decided once, and re-decided when either answer changes: a window dragged past the breakpoint,
+    // or a system setting flipped mid-visit.
+    useEffect(() => {
+        if (typeof window === 'undefined' || !window.matchMedia) {
+            setBoardMapOn(true);   // an odd browser, not a phone: show it and let the sheet decide
+            return undefined;
+        }
+        const wide = window.matchMedia('(min-width: 861px)');
+        const still = window.matchMedia('(prefers-reduced-motion: reduce)');
+        const sync = () => setBoardMapOn(wide.matches && !still.matches);
+        sync();
+        // The modern listeners, with the legacy pair as a fallback: Safari only took `addEventListener`
+        // on a media query in 14, and one that predates it would otherwise never re-decide.
+        const watch = (mq) => {
+            if (mq.addEventListener) { mq.addEventListener('change', sync); return () => mq.removeEventListener('change', sync); }
+            mq.addListener(sync);
+            return () => mq.removeListener(sync);
+        };
+        const stop = [watch(wide), watch(still)];
+        return () => stop.forEach((off) => off());
+    }, []);
     // ------------------------------------------------------------------ earning on X
     // Which X thing is mid-flight ('bind' | 'campaign' | 'share'), whether this
     // deployment can *prove* a link, the handle a player typed, each task's own error line and
@@ -698,7 +744,6 @@ export default function PointsPage() {
     // when one is refused — shown, because arriving too late for a claim is an answer, not a glitch.
     const [capsuleBusy, setCapsuleBusy] = useState(null);
     const [capsuleError, setCapsuleError] = useState(null);
-    const [capsuleCopied, setCapsuleCopied] = useState(false);
     // Whether the capsule tab has been opened in this browser. Starts `true` so the badge only ever
     // appears once the effect below has proved it should.
     const [capsuleSeen, setCapsuleSeen] = useState(true);
@@ -769,6 +814,12 @@ export default function PointsPage() {
     const giveaway = (connected ? state?.giveaway : publicGiveaway) || null;
     // A capsule that is waiting on the player, which is what the tab's badge counts.
     const capsuleOpen = giveaway?.open || null;
+    // A win that reached "claimed" and never reached the form — the one thing left on this tab that
+    // is genuinely the player's to do, so the card names it rather than smiling past it. Claiming
+    // files the win itself now, so this is the shape of a form that was down, or of a win claimed
+    // before any of that existed.
+    const capsuleUnfiled = (giveaway?.capsules || [])
+        .find((row) => row.status === 'claimed' && !row.formSubmittedAt) || null;
     const live = () => liveRef.current;
 
     /** Open the announcements tab and let its badge go, for good. */
@@ -1489,20 +1540,6 @@ export default function PointsPage() {
         }
     }, [flash]);
 
-    /** The address to paste into the form, off the player's own clipboard. */
-    const handleCopyWallet = async () => {
-        const who = state?.address || address || '';
-        if (!who) return;
-        try {
-            await navigator.clipboard.writeText(who);
-            setCapsuleCopied(true);
-            setTimeout(() => setCapsuleCopied(false), 2000);
-            flash('Wallet address copied — paste it into the form.');
-        } catch {
-            flash('Copying is blocked here. Select the address on this card and copy it.');
-        }
-    };
-
     const handleEnterDungeon = () => {
         if (!connected || entryComplete || !bound) return;
         // The vault covers the page, so her walkthrough and its spotlight must not still
@@ -1694,9 +1731,9 @@ export default function PointsPage() {
             {/* Versioned like every other sheet: an unversioned `/theme.css` is a CSS change
                 that never reaches a returning player. */}
             <link rel="stylesheet" href="/theme.css?v=8" />
-            <link rel="stylesheet" href="/css/points.css?v=17" />
+            <link rel="stylesheet" href="/css/points.css?v=18" />
             <link rel="stylesheet" href="/css/arya.css?v=3" />
-            <Script src="/arya.js?v=4" strategy="afterInteractive" />
+            <Script src="/arya.js?v=5" strategy="afterInteractive" />
             {/* The header's wallet pill gets the same menu every other page's control has. It is
                 attached by hand below rather than by selector, because this route renders after
                 hydration and a script that scanned the DOM at load would find nothing. */}
@@ -2527,33 +2564,42 @@ export default function PointsPage() {
                                                         <img src={`${ASSETS}capsule-panel.png`} alt="" className="btn-icon-img" />
                                                         {capsuleBusy === 'claim' ? 'Waiting for your wallet…' : 'Claim it — sign to prove your wallet'}
                                                     </button>
+                                                    {/* ------------------------------------- the wallet on its way to us
+                                                        Claiming registers the wallet and files the day it won
+                                                        with the server, so the player's whole job is the signature.
+                                                        The words under the button are the promise they are claiming
+                                                        against, and it is the same promise in all three states —
+                                                        waiting, filed, marked — because a card that changes its
+                                                        story once the work is done is a card nobody trusts.
+
+                                                        The form is on this card only as the **fallback**, and only when
+                                                        the filing was refused: a link offered beside a sentence that
+                                                        promises a delivery is a card arguing with itself. The
+                                                        player who needs it is the one whose win is sitting unfiled, and
+                                                        they meet it on the card below. */}
                                                     <div className="draw-claim-form">
                                                         <span className="draw-claim-form-say">
                                                             {capsuleOpen.formSubmittedAt
-                                                                ? 'Marked as submitted. Capsules are sent by hand, so give it a little time.'
-                                                                : giveaway.formNeedsSignIn
-                                                                    ? 'Then hand your wallet over in the form. It is restricted for now and may ask for a Google sign-in — if it will not open, tell us on Discord and we will take it there.'
-                                                                    : 'Then hand your wallet over in the form: it asks for the address above, so copy it and paste it in. Capsules are sent by hand, so give it a little time.'}
+                                                                ? (capsuleOpen.formVia === 'server'
+                                                                    ? `Filed for you — your wallet went in with the day you won it, so there is nothing to paste. ${CAPSULE_DELIVERY}`
+                                                                    : `Marked as submitted. ${CAPSULE_DELIVERY}`)
+                                                                : capsuleOpen.formError
+                                                                    ? (giveaway.formNeedsSignIn
+                                                                        ? 'We could not file that for you. Hand your wallet over in the form instead: it is restricted for now and may ask for a Google sign-in — if it will not open, tell us on Discord and we will take it there.'
+                                                                        : 'We could not file that for you. Hand your wallet over in the form instead: it asks for your wallet address.')
+                                                                    : `Claim your capsule, and we will register your wallet. ${CAPSULE_DELIVERY}`}
                                                         </span>
-                                                        {/* The address itself, printed.
-
-                                                            "Copy my address" is a promise taken on trust, and a form
-                                                            that asks for an address is exactly where people paste the
-                                                            wrong one — a wallet they last used, or the one in the
-                                                            browser that is not connected here. The row shows what
-                                                            would be copied, so the player can see it is the wallet
-                                                            they are signed in with before the form asks for it. */}
-                                                        <span className="draw-claim-addr" data-arya="claim-address">
-                                                            {state?.address || address || '—'}
-                                                        </span>
-                                                        <div className="draw-claim-actions">
-                                                            <button type="button" className="btn btn-ghost btn-sm" onClick={handleCopyWallet}>
-                                                                {capsuleCopied ? 'Address copied' : 'Copy my address'}
-                                                            </button>
-                                                            <a className="btn btn-secondary btn-sm" href={giveaway.formUrl} target="_blank" rel="noreferrer">
-                                                                Open the form
-                                                            </a>
-                                                            {!capsuleOpen.formSubmittedAt && (
+                                                        {/* No printed address and no copy button on this card, on
+                                                            purpose: the server files the wallet itself, so there is
+                                                            nothing for the player to carry, and a button that only
+                                                            says "you could have done this by hand" invites them to
+                                                            think they must. The address is printed on the card below,
+                                                            which is the one place a form still asks for it. */}
+                                                        {capsuleOpen.formError && (
+                                                            <div className="draw-claim-actions">
+                                                                <a className="btn btn-secondary btn-sm" href={giveaway.formUrl} target="_blank" rel="noreferrer">
+                                                                    Open the form
+                                                                </a>
                                                                 <button
                                                                     type="button"
                                                                     className="btn btn-ghost btn-sm"
@@ -2562,11 +2608,13 @@ export default function PointsPage() {
                                                                 >
                                                                     {capsuleBusy === 'form' ? 'Saving…' : 'I submitted it'}
                                                                 </button>
-                                                            )}
-                                                        </div>
-                                                        <a className="draw-claim-help" href={DISCORD_INVITE} target="_blank" rel="noreferrer">
-                                                            Can&rsquo;t open the form? Ask in the Discord
-                                                        </a>
+                                                            </div>
+                                                        )}
+                                                        {capsuleOpen.formError && (
+                                                            <a className="draw-claim-help" href={DISCORD_INVITE} target="_blank" rel="noreferrer">
+                                                                Can&rsquo;t open the form? Ask in the Discord
+                                                            </a>
+                                                        )}
                                                     </div>
                                                 </>
                                             ) : (
@@ -2583,6 +2631,40 @@ export default function PointsPage() {
                                                             ? 'Anything you win from here can be sent to this wallet. Come back tonight to see how today’s board finished.'
                                                             : 'One free signature proves this wallet is yours, which is what lets a capsule you win be sent to it. No gas, nothing moves.'}
                                                     </p>
+                                                    {/* ------------------------- the win that did not reach the form
+                                                        The claim files a win by itself, so this is what a refusal looks
+                                                        like from the player's side: a capsule that is theirs, claimed,
+                                                        and going nowhere until somebody writes the address down. It is
+                                                        the only place in this tab where the form still has a job, so it
+                                                        is the only place the link is offered — with the address printed
+                                                        beside it, because the next thing they do is paste one. */}
+                                                    {capsuleUnfiled && (
+                                                        <div className="draw-claim-form">
+                                                            <span className="draw-claim-form-say">
+                                                                {`${capsuleUnfiled.label} was claimed but did not reach the form, so that capsule has nowhere to go. `}
+                                                                {giveaway.formNeedsSignIn
+                                                                    ? 'Hand it over in the form: it is restricted for now and may ask for a Google sign-in — if it will not open, tell us on Discord and we will take it there.'
+                                                                    : 'Hand it over in the form: it asks for the wallet address printed below — select it and paste it in.'}
+                                                            </span>
+                                                            <span className="draw-claim-addr" data-arya="claim-address">
+                                                                {state?.address || address || '—'}
+                                                            </span>
+                                                            <div className="draw-claim-actions">
+                                                                <a
+                                                                    className="btn btn-secondary btn-sm"
+                                                                    href={giveaway.formUrl}
+                                                                    target="_blank"
+                                                                    rel="noreferrer"
+                                                                    data-arya="capsule-unfiled-form"
+                                                                >
+                                                                    Open the form
+                                                                </a>
+                                                            </div>
+                                                            <a className="draw-claim-help" href={DISCORD_INVITE} target="_blank" rel="noreferrer">
+                                                                Can&rsquo;t open the form? Ask in the Discord
+                                                            </a>
+                                                        </div>
+                                                    )}
                                                     {!giveaway.registration && (
                                                         <button
                                                             type="button"
@@ -2766,7 +2848,45 @@ export default function PointsPage() {
                         link box, an ask and two buttons, and in a 400px column they were the reason
                         the tab read as cramped. The board is not lost — it is one tab away, and its
                         state (the rows, the referral list) is untouched while it is hidden. */}
-                    <main className="side-panel" data-arya="board" style={{ flex: 1, borderRight: 'none' }}>
+                    {/* `has-map` means the clip is actually behind this pane, and it is worn rather
+                        than assumed: the surfaces that need a floor to stay readable over art hang
+                        off it (see points.css). It is the same fact the layer above is rendered
+                        from, so the two can never disagree — and on a phone, where there is no clip,
+                        the pane keeps exactly the flat look it had. */}
+                    <main
+                        className={`side-panel board-map-panel${boardMapOn ? ' has-map' : ''}`}
+                        data-arya="board"
+                        style={{ flex: 1, borderRight: 'none' }}
+                    >
+                        {/* The board's backdrop. Scoped to this pane and not the page: the map is the
+                            board's own art — the left pane is a stack of cards a player works
+                            through, and a moving picture behind those is a moving picture behind
+                            small print.
+
+                            Decoration with no content, so it is `aria-hidden` and inert: nothing
+                            here is read out, clicked, or reachable by tab. It is muted as well as
+                            `autoPlay`-ed, which is the combination a browser will actually start
+                            without asking (an unprompted clip with sound is blocked, and a
+                            blocked clip is a black rectangle). The scrim over it is what keeps
+                            ten rows of figures legible on top — see the block in points.css.
+
+                            It is deliberately *not* the thing the pane is built around: a device
+                            that refuses to autoplay, a reader who asks for reduced motion, and
+                            every phone get the flat dark panel they had before, which is why
+                            this is a sibling layer rather than a background anyone depends on. */}
+                        {boardMapOn && (
+                            <div className="board-map" aria-hidden="true">
+                                <video
+                                    className="board-map-video"
+                                    src={BOARD_MAP}
+                                    autoPlay
+                                    muted
+                                    loop
+                                    playsInline
+                                />
+                                <div className="board-map-scrim" />
+                            </div>
+                        )}
                         <div className="side-panel-header" style={{ justifyContent: 'space-between' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <img src={`${ASSETS}${panel === 'capsule' ? 'capsule-panel.png' : 'Golden_trophy_pixel_art_icon_2K_20260919011419-autocrop-hair.png'}`} alt="" className="panel-header-icon points-icon" width={20} height={20} />
@@ -3213,6 +3333,20 @@ export default function PointsPage() {
                     <span style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: 0.5 }}>
                         Earn points by completing vault runs, sharing on X, and referring friends
                     </span>
+                    {/* The wheel, where points stop being a number and become something. One
+                        link, because the Points Program is where a balance is earned and
+                        `/redeem` is where it is spent — a player who never finds it has a
+                        balance they cannot use.
+
+                        Rendered only while the wheel is published (`REDEEM_LIVE`): the page is
+                        built and passing, but a link to a wheel with no cards in it is a worse
+                        dead end than no link at all. Everything the link needs is in the constant,
+                        so publishing it is not a change here. */}
+                    {REDEEM_LIVE && (
+                        <a className="btn btn-secondary btn-sm" href="/redeem" style={{ marginLeft: 'auto' }}>
+                            Redeem points
+                        </a>
+                    )}
                     {/* The walkthrough only auto-runs for a newcomer — this is how it is
                         asked for a second time. */}
                     <button
