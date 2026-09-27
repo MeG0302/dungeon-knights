@@ -269,12 +269,6 @@ class Dungeon {
             this.usePainted = false;
         }
 
-        // The designed layout, when this dungeon has one: which rooms are which,
-        // where the scenery goes, and every monster and chest the run will meet.
-        // Only the crypts has one so far (maps/map-layouts.js); without it the
-        // scatter below still runs exactly as it used to.
-        this.layout = (typeof MAP_LAYOUTS !== 'undefined' && MAP_LAYOUTS[type]) ? MAP_LAYOUTS[type] : null;
-
         // Ensure spawn corner is always walkable
         for (let y = 1; y < 5; y++) {
             for (let x = 1; x < 5; x++) {
@@ -283,9 +277,7 @@ class Dungeon {
             }
         }
 
-        if (this.layout) {
-            this.placeLayoutProps();
-        } else if (!this.usePainted) {
+        if (!this.usePainted) {
             this.generateDecorations();
         }
         this.generateLootNodes();
@@ -373,19 +365,6 @@ class Dungeon {
     }
 
     addObstacleDecoration(x, y) {
-        // The baked surfaces first: the same kit art at a size the map can draw,
-        // instead of a 2-3 MB original fetched for a single obstacle.
-        const surface = this.surface();
-        const baked = (surface && surface.props) ? Object.values(surface.props) : [];
-        if (baked.length) {
-            this.decorations.push({
-                x, y,
-                imagePath: baked[Math.floor(Math.random() * baked.length)],
-                layer: 'obstacle'
-            });
-            return;
-        }
-
         // NEW: Use actual obstacle images from assets folders
         const dungeonType = this.config.name;
         let imagePath;
@@ -584,73 +563,7 @@ class Dungeon {
         });
     }
 
-    // The baked surface art for this dungeon (tools/bake-map-surfaces.js), or null
-    // on a page that never loaded map-surfaces.js.
-    surface() {
-        if (typeof MAP_SURFACES === 'undefined') return null;
-        return MAP_SURFACES[this.type] || null;
-    }
-
-    // The designed run: every node where the map puts it. Same gold math as the
-    // scatter below (a full clear is worth ~12.5 DNG either way, which is what the
-    // run budget and the reward guards expect) and the same random pick of monster
-    // art, so what changes between two runs of the crypts is which monster stands
-    // where — not where anything stands at all.
-    spawnFromLayout(spawns) {
-        const totalGoldTarget = 10.0;
-        const avgGoldPerNode = totalGoldTarget / (spawns.length * 0.8);
-
-        spawns.forEach(spawn => {
-            const type = spawn.type === 'chest' ? 'chest' : 'monster';
-            const health = type === 'chest' ? this.config.chestHealth : this.config.monsterHealth;
-
-            const goldVariance = 0.5 + Math.random(); // 0.5x to 1.5x
-            const reward = Math.round((avgGoldPerNode * goldVariance) * 100) / 100;
-
-            let monsterImage = null;
-            if (type === 'monster' && this.config.monsters && this.config.monsters.length > 0) {
-                const pick = this.config.monsters[Math.floor(Math.random() * this.config.monsters.length)];
-                monsterImage = `monsters/${this.config.monsterFolder}/${pick}`;
-            }
-
-            this.lootNodes.push(new LootNode(spawn.x, spawn.y, type, health, reward, monsterImage));
-        });
-
-        const chests = spawns.filter(s => s.type === 'chest').length;
-        console.log(`📦 ${this.config.name}: ${this.lootNodes.length} nodes placed by the map ` +
-                    `(${chests} chests, avg ${avgGoldPerNode.toFixed(2)} gold each)`);
-    }
-
-    // Scenery the map names, dressed with the baked surfaces. The crypts has around 70
-    // of these — sconces either side of every doorway, stone caps on the pillars, carved
-    // corners at the mouth of the big rooms and bones along the walls.
-    placeLayoutProps() {
-        const surface = this.surface();
-        const art = (surface && surface.props) || {};
-        let missing = 0;
-
-        (this.layout.props || []).forEach(prop => {
-            const imagePath = art[prop.piece];
-            if (!imagePath) { missing += 1; return; }
-            this.decorations.push({
-                x: prop.x,
-                y: prop.y,
-                imagePath,
-                layer: prop.layer || 'floor',
-                piece: prop.piece
-            });
-        });
-
-        console.log(`🎨 ${this.decorations.length} props placed by the map` +
-                    (missing ? ` (${missing} had no art for this theme)` : ''));
-    }
-
     generateLootNodes() {
-        if (this.layout && this.layout.spawns && this.layout.spawns.length) {
-            this.spawnFromLayout(this.layout.spawns);
-            return;
-        }
-
         const nodeCount = 50 + Math.floor(Math.random() * 20); // 50-70 nodes for longer idle gameplay
         const spawnPoint = this.getRandomSpawnPoint();
         const totalGoldTarget = 10.0; // Higher target gold for longer dungeons
@@ -1064,25 +977,18 @@ class DungeonRenderer {
         this.ctx = canvas.getContext('2d');
         this.dungeon = dungeon;
         
-        // Fit the whole arena on screen and centre it. The canvas is 1140x600 and the
-        // map 1440x800, so a fit zoom of 0.75 leaves 30px either side — the old renderer
-        // left that 60px on the right edge alone, because it pinned the map to 0,0.
+        // Calculate zoom to FILL entire canvas (no padding)
         const mapWidth = dungeon.gridWidth * dungeon.config.tileSize;
         const mapHeight = dungeon.gridHeight * dungeon.config.tileSize;
         
+        // Fill canvas completely - no empty space
         const zoomX = canvas.width / mapWidth;
         const zoomY = canvas.height / mapHeight;
         this.zoom = Math.min(zoomX, zoomY); // Use smallest to ensure it fits
         
-        this.offsetX = Math.round((canvas.width - mapWidth * this.zoom) / 2);
-        this.offsetY = Math.round((canvas.height - mapHeight * this.zoom) / 2);
-
-        // The static map — floor, walls, pillars, the arena's rim and the scenery —
-        // baked once into an offscreen canvas (bakeMapLayer) and re-baked whenever a
-        // surface image lands, which is how the map fills itself in as it loads.
-        this.mapLayer = null;
-        this.layerDirty = true;
-        this.minimapLayer = null;
+        // No offset - map starts at 0,0 and fills canvas
+        this.offsetX = 0;
+        this.offsetY = 0;
 
         // Load decoration sprite sheets
         this.decorationSprites = {};
@@ -1111,68 +1017,48 @@ class DungeonRenderer {
             'void': 'assets/void/void-sheet.jpeg'
         };
 
-        // This theme's sheet only. All five used to be fetched on every load — the other
-        // four belong to maps this run can never show — and each is a couple of MB.
-        const sheetTheme = this.dungeon.type;
-        const sheetPath = sprites[sheetTheme];
-        if (sheetPath) {
+        Object.entries(sprites).forEach(([key, path]) => {
             const img = new Image();
             img.onload = () => {
-                console.log(`✅ Loaded ${sheetTheme} decoration sprites`);
+                console.log(`✅ Loaded ${key} decoration sprites`);
             };
             img.onerror = () => {
-                console.warn(`⚠️ Failed to load ${sheetTheme} decorations: ${sheetPath}`);
+                console.warn(`⚠️ Failed to load ${key} decorations: ${path}`);
             };
-            img.src = sheetPath;
-            this.decorationSprites[sheetTheme] = img;
-        }
+            img.src = path;
+            this.decorationSprites[key] = img;
+        });
         
-        // This dungeon's map surfaces, from the bake (tools/bake-map-surfaces.js).
-        // All five themes' floor tiles used to be fetched on every load — 12 MB of PNG
-        // to draw one map — and the source art was 1400-1800px for a 40px tile. The
-        // baked set is ~200 KB for the theme on screen, and only that theme is fetched.
-        // `floorTiles` stays as the alias loading-gate.js watches.
+        // Load floor tile images for each theme
         this.floorTiles = {};
-        this.surfaceImages = {};
-        const surface = this.dungeon.surface ? this.dungeon.surface() : null;
-        const watchSurface = (path) => {
+        const floorTileMap = {
+            'mines': 'assets/mines/floor-tile.png',
+            'magma': 'assets/magma/floor-tile.png',
+            'void': 'assets/void/floor-tile.png',
+            'temple': 'assets/temple/floor-tile.png',
+            'crypts': 'assets/crypts/floor-tile.png'
+        };
+        
+        Object.entries(floorTileMap).forEach(([key, path]) => {
             const img = new Image();
             img.onload = () => {
-                this.layerDirty = true;   // the map redraws itself with the real art
+                console.log(`✅ Loaded ${key} floor tile`);
             };
-            img.onerror = () => console.warn(`⚠️ Failed to load map surface: ${path}`);
+            img.onerror = () => {
+                console.warn(`⚠️ Failed to load ${key} floor tile: ${path}`);
+            };
             img.src = path;
-            return img;
-        };
-
-        if (surface) {
-            const images = {
-                floor: watchSurface(surface.floor),
-                rimH: watchSurface(surface.rimH),
-                rimV: watchSurface(surface.rimV),
-                corners: {},
-                props: {}
-            };
-            Object.entries(surface.corners || {}).forEach(([key, path]) => { images.corners[key] = watchSurface(path); });
-            Object.entries(surface.props || {}).forEach(([key, path]) => { images.props[key] = watchSurface(path); });
-            this.surfaceImages[this.dungeon.type] = images;
-            this.floorTiles[this.dungeon.type] = images.floor;
-        } else {
-            // A page running an older bundle, without map-surfaces.js: the theme's own
-            // art still gives the map a floor, just a heavy one.
-            this.floorTiles[this.dungeon.type] = watchSurface(`assets/${this.dungeon.type}/floor-tile.png`);
-            console.log('🎨 No baked map surfaces on this page — using the source art');
-        }
+            this.floorTiles[key] = img;
+        });
         
         // Load individual monster images
         this.monsterImages = {}; // Store loaded monster images by path
         this.monsterLoadStatus = {};
         
-        // This dungeon's bestiary only: it used to preload all five, ~20 MB of art no
-        // run on this map could ever draw.
-        const config = this.dungeon.config;
-        if (config.monsters && config.monsters.length > 0) {
-            config.monsters.forEach(monsterFile => {
+        // Preload all monster images from all dungeons
+        Object.entries(DUNGEONS).forEach(([dungeonKey, config]) => {
+            if (config.monsters && config.monsters.length > 0) {
+                config.monsters.forEach(monsterFile => {
                     const monsterPath = `monsters/${config.monsterFolder}/${monsterFile}`;
                     
                     if (!this.monsterImages[monsterPath]) {
@@ -1192,8 +1078,9 @@ class DungeonRenderer {
                         this.monsterImages[monsterPath] = img;
                         this.monsterLoadStatus[monsterPath] = 'loading';
                     }
-            });
-        }
+                });
+            }
+        });
         
         const totalMonsters = Object.keys(this.monsterImages).length;
         console.log(`🎨 Loading ${totalMonsters} unique monster images`);
@@ -1308,10 +1195,23 @@ class DungeonRenderer {
         this.frameDelta = this._lastFrameTime ? Math.min(0.1, (now - this._lastFrameTime) / 1000) : 1 / 60;
         this._lastFrameTime = now;
 
-        // The map itself: floor, walls, pillars, the arena rim and every prop, one
-        // baked bitmap (bakeMapLayer). None of it moves, and drawing 720 tiles a frame
-        // to stand still was most of the render cost.
-        this.drawMapLayer(ctx);
+        // Clear canvas (transparent — video background shows through)
+        ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+        // Render grid overlay tiles
+        for (let y = 0; y < dungeon.gridHeight; y++) {
+            for (let x = 0; x < dungeon.gridWidth; x++) {
+                const cell = dungeon.grid[y][x];
+                // When using painted maps, skip floor — video shows through
+                if (dungeon.usePainted && cell === 0) continue;
+
+                const screenPos = dungeon.gridToScreen(x, y);
+                const screenX = screenPos.x * this.zoom + this.offsetX;
+                const screenY = screenPos.y * this.zoom + this.offsetY;
+
+                this.renderTile(screenX, screenY, cell, x, y, tileSize);
+            }
+        }
 
         // Render glowing knight trails BEFORE knights
         knights.forEach(knight => {
@@ -1320,8 +1220,30 @@ class DungeonRenderer {
             }
         });
 
-        // Scenery (torches, stone caps, bones) is baked into the map layer, floor
-        // layer first so a sconce is never buried under a slab.
+        // Render floor decorations
+        dungeon.decorations.filter(d => d.layer === 'floor').forEach(dec => {
+            const screenPos = dungeon.gridToScreen(dec.x, dec.y);
+            const screenX = screenPos.x * this.zoom + this.offsetX;
+            const screenY = screenPos.y * this.zoom + this.offsetY;
+            this.renderDecoration(screenX, screenY, dec, tileSize);
+        });
+
+        // Render obstacle decorations (on type 2 tiles)
+        dungeon.decorations.filter(d => d.layer === 'obstacle').forEach(dec => {
+            const screenPos = dungeon.gridToScreen(dec.x, dec.y);
+            const screenX = screenPos.x * this.zoom + this.offsetX;
+            const screenY = screenPos.y * this.zoom + this.offsetY;
+            this.renderDecoration(screenX, screenY, dec, tileSize);
+        });
+
+        // Render wall decorations
+        dungeon.decorations.filter(d => d.layer === 'wall').forEach(dec => {
+            const screenPos = dungeon.gridToScreen(dec.x, dec.y);
+            const screenX = screenPos.x * this.zoom + this.offsetX;
+            const screenY = screenPos.y * this.zoom + this.offsetY;
+            this.renderDecoration(screenX, screenY, dec, tileSize);
+        });
+
         // Render loot nodes (interpolated so strolling monsters glide)
         dungeon.getActiveLootNodes().forEach(node => {
             const pos = this.getNodeRenderGrid(node);
@@ -1350,6 +1272,9 @@ class DungeonRenderer {
         // Render atmospheric text overlays
         this.renderAtmosphericText();
 
+        // Render decorative border frame (DISABLED - using CSS borders instead)
+        // this.renderBorderFrame();
+
         // Render minimap
         this.renderMinimap();
     }
@@ -1375,199 +1300,36 @@ class DungeonRenderer {
         this.camera.y += (targetY - this.camera.y) * 0.05;
     }
 
-    // One static tile, painted into a context at the map's own scale (tileSize here
-    // is the config pitch, 40px — the bake draws at 1:1 and the canvas scales the
-    // finished layer once).
-    //
-    // Nothing here is a no-op any more. It was four empty branches, because the map
-    // behind the canvas was a video: the floor art was downloaded and never drawn,
-    // and the walls and pillars had no art of their own at all.
-    paintTile(ctx, x, y, type, gridX, gridY, tileSize) {
-        const theme = this.dungeon.config.theme;
-
-        if (type === 1) {
-            // Wall: lit along the bottom edge (the face the room sees), with a thin
-            // highlight down the side when the tile is the end of a run.
-            const face = this.dungeon.isWalkable(gridX, gridY + 1);
-            const side = this.dungeon.isWalkable(gridX + 1, gridY) || this.dungeon.isWalkable(gridX - 1, gridY);
-            ctx.fillStyle = theme.wall;
-            ctx.fillRect(x, y, tileSize, tileSize);
-            ctx.fillStyle = theme.wallHighlight;
-            if (face) ctx.fillRect(x, y + tileSize - Math.max(2, tileSize * 0.16), tileSize, Math.max(2, tileSize * 0.16));
-            if (side) ctx.fillRect(x, y, Math.max(2, tileSize * 0.08), tileSize);
-            return;
-        }
-
-        if (type === 2) {
-            // Pillar: a stone block with a lit cap, read from above.
-            const inset = Math.max(2, Math.round(tileSize * 0.12));
-            ctx.fillStyle = theme.shadowColor;
-            ctx.fillRect(x, y, tileSize, tileSize);
-            ctx.fillStyle = theme.pillar;
-            ctx.fillRect(x + inset, y + inset, tileSize - inset * 2, tileSize - inset * 2);
-            ctx.fillStyle = theme.pillarTop;
-            ctx.fillRect(x + inset, y + inset, tileSize - inset * 2, Math.max(2, Math.round(tileSize * 0.14)));
-            ctx.fillRect(x + inset, y + inset, Math.max(2, Math.round(tileSize * 0.1)), tileSize - inset * 2);
-            return;
-        }
-
-        // Floor: the palette first, then the theme's baked tile over it, per cell so the
-        // surface never depends on a transform surviving between draws.
-        //
-        // The base coat is not decoration. The kit's floor art is not equally usable:
-        // crypts and mines are 90-95% opaque, but temple's tile is 43% and magma's and
-        // void's are transparent to the last pixel — they were lava and starfield
-        // *overlays* on the old looping mp4. With the video gone an unpainted tile is a
-        // hole onto the shadow behind the map, so the theme's own floor colour is laid
-        // down first and the surface is the texture on top of it.
-        ctx.fillStyle = type === 3 ? theme.floorAlt : theme.floor;
-        ctx.fillRect(x, y, tileSize, tileSize);
-        const floor = this.surfaceImage('floor');
-        if (floor && floor.complete && floor.naturalWidth > 0) {
-            ctx.drawImage(floor, x, y, tileSize, tileSize);
-        }
-    }
-
-    // The engine's public shape for painting one tile — into the live canvas.
     renderTile(x, y, type, gridX, gridY, tileSize) {
-        this.paintTile(this.ctx, x, y, type, gridX, gridY, tileSize);
-    }
-
-    // A piece of this dungeon's baked surface, or null on a page without one.
-    //   surfaceImage('floor')            the tiling floor texture
-    //   surfaceImage('corners', 'tl')    one of the four rim corners
-    //   surfaceImage('props', 'torch')   a named prop
-    surfaceImage(key, name) {
-        const images = this.surfaceImages ? this.surfaceImages[this.dungeon.type] : null;
-        if (!images) return null;
-        if (name === undefined) return images[key] || null;
-        return (images[key] || {})[name] || null;
-    }
-
-    /**
-     * Draw the map layer, scaled to sit centred in the canvas.
-     *
-     * The bake happens on the first frame (the palette alone is a complete map if no
-     * art has landed yet) and again every time a surface image finishes decoding, so
-     * what the gate lifts the screen onto is already the finished map.
-     */
-    drawMapLayer(ctx) {
-        if (this.layerDirty) this.bakeMapLayer();
-
-        const mapWidth = this.dungeon.gridWidth * this.dungeon.config.tileSize;
-        const mapHeight = this.dungeon.gridHeight * this.dungeon.config.tileSize;
-
-        // Behind the map: the theme's shadow, so a 36x20 arena reads as framed rather
-        // than cropped.
-        ctx.fillStyle = this.dungeon.config.theme.shadowColor;
-        ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-
-        if (this.mapLayer) {
-            ctx.drawImage(this.mapLayer, this.offsetX, this.offsetY,
-                          mapWidth * this.zoom, mapHeight * this.zoom);
+        const ctx = this.ctx;
+        const theme = this.dungeon.config.theme;
+        
+        if (type === 1) {
+            // Border walls - INVISIBLE (video background only)
+            // No walls rendered
+            
+        } else if (type === 2) {
+            // Permanent obstacles - INVISIBLE (video background only)
+            // No obstacles rendered
+            
+        } else if (type === 3) {
+            // Breakable obstacles - INVISIBLE (video background only)
+            // No breakable obstacles rendered
+            
+        } else {
+            // Floor tiles - COMPLETELY INVISIBLE (0% opacity, video only)
+            // No floor tiles rendered - video background shows through completely
         }
-    }
-
-    /**
-     * Bake the static map once: every tile, the arena's rim, then the scenery, into an
-     * offscreen canvas at the map's own 1440x800.
-     *
-     * 720 tiles a frame to stand still was most of the render cost, and the rim art —
-     * which is a piece per side and a piece per corner — cannot be cut per tile without
-     * seams. Baked, the whole thing is one scaled drawImage.
-     */
-    bakeMapLayer() {
-        const dungeon = this.dungeon;
-        const tileSize = dungeon.config.tileSize;
-        const width = dungeon.gridWidth * tileSize;
-        const height = dungeon.gridHeight * tileSize;
-
-        if (!this.mapLayer) this.mapLayer = document.createElement('canvas');
-        if (this.mapLayer.width !== width || this.mapLayer.height !== height) {
-            this.mapLayer.width = width;
-            this.mapLayer.height = height;
-        }
-
-        const layer = this.mapLayer.getContext('2d');
-        layer.clearRect(0, 0, width, height);
-
-        for (let y = 0; y < dungeon.gridHeight; y++) {
-            for (let x = 0; x < dungeon.gridWidth; x++) {
-                this.paintTile(layer, x * tileSize, y * tileSize, dungeon.grid[y][x], x, y, tileSize);
-            }
-        }
-
-        this.paintRim(layer, tileSize, width, height);
-        this.paintScenery(layer, tileSize);
-
-        this.layerDirty = false;
-        this.minimapLayer = null;
-    }
-
-    // The arena's edge, from the kit's border and corner pieces: the horizontal piece
-    // repeats along the top and bottom, the vertical one down the sides, a corner at
-    // each end. Drawn over the frame tiles that are already painted, so a missing or
-    // half-loaded piece just leaves lit stone.
-    paintRim(layer, tileSize, width, height) {
-        const ready = (img) => img && img.complete && img.naturalWidth > 0;
-        const rimH = this.surfaceImage('rimH');
-        const rimV = this.surfaceImage('rimV');
-
-        if (ready(rimH)) {
-            const scale = tileSize / rimH.naturalWidth;
-            layer.save();
-            layer.fillStyle = layer.createPattern(rimH, 'repeat');
-            layer.setTransform(scale, 0, 0, scale, 0, 0);
-            layer.fillRect(0, 0, width / scale, tileSize / scale);
-            layer.fillRect(0, (height - tileSize) / scale, width / scale, tileSize / scale);
-            layer.restore();
-        }
-
-        if (ready(rimV)) {
-            const scale = tileSize / rimV.naturalHeight;
-            layer.save();
-            layer.fillStyle = layer.createPattern(rimV, 'repeat');
-            layer.setTransform(scale, 0, 0, scale, 0, 0);
-            layer.fillRect(0, 0, tileSize / scale, height / scale);
-            layer.fillRect((width - tileSize) / scale, 0, tileSize / scale, height / scale);
-            layer.restore();
-        }
-
-        [['tl', 0, 0], ['tr', width - tileSize, 0],
-         ['bl', 0, height - tileSize], ['br', width - tileSize, height - tileSize]]
-            .forEach(([key, x, y]) => {
-                const img = this.surfaceImage('corners', key);
-                if (ready(img)) layer.drawImage(img, x, y, tileSize, tileSize);
-            });
-    }
-
-    // The scenery, floor layer first so a sconce is never buried under a slab, then the
-    // blocks standing on the pillars, then the torches on the walls.
-    paintScenery(layer, tileSize) {
-        const byLayer = { floor: [], obstacle: [], wall: [] };
-        this.dungeon.decorations.forEach(dec => {
-            (byLayer[dec.layer] || byLayer.floor).push(dec);
-        });
-
-        ['floor', 'obstacle', 'wall'].forEach(name => {
-            byLayer[name].forEach(dec => {
-                this.paintDecoration(layer, dec.x * tileSize, dec.y * tileSize, dec, tileSize);
-            });
-        });
     }
 
     renderDecoration(x, y, dec, tileSize) {
-        this.paintDecoration(this.ctx, x, y, dec, tileSize);
-    }
-
-    // One prop. Image props (the baked surfaces, and the layout's scenery) are drawn
-    // sized by layer: a sconce overhangs its wall tile, a floor bone sits inside it.
-    paintDecoration(ctx, x, y, dec, tileSize) {
-        const theme = this.dungeon.config.theme;
+        const ctx = this.ctx;
         const centerX = x + tileSize / 2;
         const centerY = y + tileSize / 2;
         
+        // NEW: Handle image-based decorations
         if (dec.imagePath) {
+            // Load image if not already loaded
             if (!this.obstacleImages) {
                 this.obstacleImages = {};
             }
@@ -1580,29 +1342,15 @@ class DungeonRenderer {
             const img = this.obstacleImages[dec.imagePath];
             
             if (img.complete && img.naturalWidth > 0) {
-                const size = dec.layer === 'wall' ? tileSize * 1.5
-                           : dec.layer === 'floor' ? tileSize * 0.9
-                           : tileSize;
                 ctx.save();
-                if (dec.layer === 'wall') {
-                    // Torches carry their own light, baked once with the map.
-                    const glow = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, tileSize * 1.4);
-                    glow.addColorStop(0, theme.glowColor + '55');
-                    glow.addColorStop(1, theme.glowColor + '00');
-                    ctx.fillStyle = glow;
-                    ctx.beginPath();
-                    ctx.arc(centerX, centerY, tileSize * 1.4, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-                ctx.imageSmoothingEnabled = true;
-                ctx.imageSmoothingQuality = 'high';
-                ctx.drawImage(img, centerX - size / 2, centerY - size / 2, size, size);
+                // Draw the obstacle image filling the tile
+                ctx.drawImage(img, x, y, tileSize, tileSize);
                 ctx.restore();
             }
             return;
         }
         
-        // Sprite-sheet decorations (the legacy scatter on the four un-designed maps)
+        // OLD: Handle sprite sheet-based decorations (legacy)
         const spriteSheet = this.decorationSprites[dec.spriteSheet];
         
         if (spriteSheet && spriteSheet.complete && spriteSheet.naturalWidth > 0) {
@@ -1616,7 +1364,7 @@ class DungeonRenderer {
         } else {
             // Fallback - draw visible colored shapes
             ctx.save();
-            ctx.fillStyle = theme.accent;
+            ctx.fillStyle = this.dungeon.config.theme.accent;
             ctx.fillRect(x + tileSize * 0.2, y + tileSize * 0.2, tileSize * 0.6, tileSize * 0.6);
             ctx.restore();
         }
@@ -2106,76 +1854,36 @@ class DungeonRenderer {
         ctx.strokeRect(centerX - barWidth / 2, barY, barWidth, barHeight);
     }
 
-    // The minimap: the arena's walls baked once, then whatever is live on top — gold
-    // for every node still standing, a glowing dot per deployed knight.
-    //
-    // It has never actually drawn on /game until now: two renderMinimap() methods lived
-    // in this class and the later one, which wanted a #minimapCanvas element the game
-    // page does not have, silently won. This is the one that survives.
     renderMinimap() {
         const ctx = this.ctx;
-        const size = 120;
-        const mapX = this.canvas.width - size - 10;
-        const mapY = 10;
-        const scale = this.minimapScale(size);
-        const theme = this.dungeon.config.theme;
-
-        if (!this.minimapLayer) this.bakeMinimap(size);
-
-        ctx.save();
-        ctx.globalAlpha = 0.88;
-        ctx.drawImage(this.minimapLayer, mapX, mapY);
-        ctx.globalAlpha = 1;
-
-        ctx.fillStyle = '#FFD700';
-        this.dungeon.getActiveLootNodes().forEach(node => {
-            const dot = Math.max(2, scale * 1.6);
-            ctx.fillRect(mapX + node.gridX * scale, mapY + node.gridY * scale, dot, dot);
-        });
-
-        const knights = (window.game && window.game.knightManager)
-            ? window.game.knightManager.getDeployedKnights() : [];
-        ctx.fillStyle = theme.glowColor;
-        knights.forEach(knight => {
-            if (!knight.gridPosition) return;
-            ctx.beginPath();
-            ctx.arc(mapX + knight.gridPosition.x * scale + scale / 2,
-                    mapY + knight.gridPosition.y * scale + scale / 2,
-                    Math.max(1.5, scale * 0.8), 0, Math.PI * 2);
-            ctx.fill();
-        });
-
-        ctx.strokeStyle = theme.accent;
-        ctx.lineWidth = 2;
-        ctx.strokeRect(mapX, mapY, size, size);
-        ctx.restore();
-    }
-
-    minimapScale(size) {
-        return size / Math.max(this.dungeon.gridWidth, this.dungeon.gridHeight);
-    }
-
-    // Bake the walls and floors once. 720 fillRects a frame for a picture that never
-    // changes, and the designed layout is the first map whose walls are worth reading.
-    bakeMinimap(size) {
-        const scale = this.minimapScale(size);
-        const theme = this.dungeon.config.theme;
-        const canvas = document.createElement('canvas');
-        canvas.width = size;
-        canvas.height = size;
-        const ctx = canvas.getContext('2d');
-
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.72)';
-        ctx.fillRect(0, 0, size, size);
+        const minimapSize = 120;
+        const minimapX = this.canvas.width - minimapSize - 10;
+        const minimapY = 10;
+        const tileScale = minimapSize / Math.max(this.dungeon.gridWidth, this.dungeon.gridHeight);
+        
+        // Minimap background
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(minimapX, minimapY, minimapSize, minimapSize);
+        
+        // Minimap tiles
         for (let y = 0; y < this.dungeon.gridHeight; y++) {
             for (let x = 0; x < this.dungeon.gridWidth; x++) {
-                const tile = this.dungeon.grid[y][x];
-                ctx.fillStyle = tile === 1 ? theme.wall : tile === 2 ? theme.pillar : theme.floor;
-                ctx.fillRect(x * scale, y * scale, Math.max(1, scale), Math.max(1, scale));
+                const px = minimapX + x * tileScale;
+                const py = minimapY + y * tileScale;
+                
+                if (this.dungeon.grid[y][x] === 1) {
+                    ctx.fillStyle = '#555555';
+                } else {
+                    ctx.fillStyle = '#222222';
+                }
+                ctx.fillRect(px, py, tileScale, tileScale);
             }
         }
-
-        this.minimapLayer = canvas;
+        
+        // Minimap border
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(minimapX, minimapY, minimapSize, minimapSize);
     }
 
     renderCombatEffects(effects, tileSize) {
@@ -2944,5 +2652,78 @@ class DungeonRenderer {
         ctx.fill();
     }
 
+    // Render minimap with decorative frame
+    renderMinimap() {
+        const minimapCanvas = document.getElementById('minimapCanvas');
+        if (!minimapCanvas) return;
+        
+        const ctx = minimapCanvas.getContext('2d');
+        const size = 150;
+        const theme = this.dungeon.config.theme;
+        const tileScale = (size - 20) / Math.max(this.dungeon.gridWidth, this.dungeon.gridHeight);
+        const offsetX = 10;
+        const offsetY = 10;
+        
+        // Clear
+        ctx.fillStyle = theme.shadowColor;
+        ctx.fillRect(0, 0, size, size);
+        
+        // Draw tiles
+        for (let y = 0; y < this.dungeon.gridHeight; y++) {
+            for (let x = 0; x < this.dungeon.gridWidth; x++) {
+                const px = offsetX + x * tileScale;
+                const py = offsetY + y * tileScale;
+                const tile = this.dungeon.grid[y][x];
+                
+                if (tile === 1) {
+                    ctx.fillStyle = theme.wall;
+                } else if (tile === 2) {
+                    ctx.fillStyle = theme.pillar;
+                } else if (tile === 3) {
+                    ctx.fillStyle = theme.wallHighlight;
+                } else {
+                    ctx.fillStyle = theme.floor;
+                }
+                ctx.fillRect(px, py, Math.max(1, tileScale), Math.max(1, tileScale));
+            }
+        }
+        
+        // Draw loot nodes
+        ctx.fillStyle = '#FFD700';
+        this.dungeon.getActiveLootNodes().forEach(node => {
+            const px = offsetX + node.gridX * tileScale;
+            const py = offsetY + node.gridY * tileScale;
+            ctx.fillRect(px, py, Math.max(2, tileScale * 1.5), Math.max(2, tileScale * 1.5));
+        });
+        
+        // Draw knights
+        if (window.game) {
+            const knights = window.game.knightManager.getDeployedKnights();
+            knights.forEach(knight => {
+                const px = offsetX + knight.gridPosition.x * tileScale;
+                const py = offsetY + knight.gridPosition.y * tileScale;
+                
+                ctx.fillStyle = theme.glowColor;
+                ctx.shadowColor = theme.glowColor;
+                ctx.shadowBlur = 3;
+                ctx.beginPath();
+                ctx.arc(px, py, Math.max(2, tileScale), 0, Math.PI * 2);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            });
+        }
+        
+        // Decorative border
+        ctx.strokeStyle = theme.accent;
+        ctx.lineWidth = 3;
+        ctx.strokeRect(2, 2, size - 4, size - 4);
+        
+        // Corner decorations
+        ctx.fillStyle = theme.glowColor;
+        ctx.fillRect(0, 0, 8, 8);
+        ctx.fillRect(size - 8, 0, 8, 8);
+        ctx.fillRect(0, size - 8, 8, 8);
+        ctx.fillRect(size - 8, size - 8, 8, 8);
+    }
 }
 

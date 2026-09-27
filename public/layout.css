@@ -58,19 +58,19 @@
   min-width: 0;
 }
 
-/* The .dungeon-video-bg rule went with the mp4 it sized: /game paints its own map inside
-   the canvas now. Nothing would have reported the leftover rule — check-styles.js flags
-   classes a route *emits* without a definition, not definitions nothing emits. */
+.dungeon-video-bg {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  z-index: 0;
+  opacity: 1;
+  pointer-events: none;
+  filter: brightness(1.15) contrast(1.1) saturate(1.1);
+}
+
 #gameCanvas {
   position: relative; z-index: 1;
   display: block;
-  /* The canvas is a fixed 1140x600 and the arena is fitted inside it, so on a narrow
-     screen it used to hang 375px off each side and the side panels' `overflow: hidden`
-     simply cut the outer rooms off — antechamber and flooded crypt included. Scaling the
-     element down keeps the whole arena on screen; the drawing buffer is untouched and
-     nothing hit-tests the canvas by mouse coordinates. */
-  max-width: 100%;
-  height: auto;
 }
 
 /* ---------- BOTTOM BAR ---------- */
