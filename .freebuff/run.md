@@ -6156,6 +6156,20 @@ apex keeps its own loop — which is exactly what it always asserted.
 fails · `check-refs` 49/49 · `check-styles` clean · `check-copies` 2/2 · `check-wallet-menu` 19/19 ·
 `check-pitch` 43/43 · `check-gate` 150/150 · `check-docs` 77/77.
 
-**Left uncommitted, and not deployed.** No commit, no `git push`, no `vercel --prod`: the owner has
-not asked for one, so `app.dungeonknights.io` still serves the previous build and this change lives in
-the working tree, next to the new binary.
+**Committed, pushed and deployed, at the owner's word.** `4adb7b5` (the swap) and `4b681e4` (this
+entry) were pushed as `6f8c83d..4b681e4` — seven commits, because the repository had been left
+ahead of `origin` since the last deploy; they include the designed-map build and the revert that
+undid it, and the tree they land on is the pre-rebuild one. Then
+`npx vercel --prod --yes --scope meglast320-1694` → `dungeon-knights-fmdsq6ogr-meglast320-1694`,
+**Ready in 1m**. `--prod` aliased only its own scoped URL as §3 warns, so all four hosts were
+re-pointed by hand: `dungeonknights.io`, `www.dungeonknights.io`, `app.dungeonknights.io`,
+`dungeon-knights.vercel.app`.
+
+**Read off the live hosts.** `/assets/hub-intro.mp4` answers `206` with
+`Content-Range: bytes 0-0/6995733` on all four of them — an asset that exists only in this build,
+so that is the proof they all carry it — while the old `/assets/intro.mp4` is now the 404 page
+(`X-Matched-Path: /404`) and `/assets/intro-web.mp4` is still 3,238,624 bytes, so the apex is
+untouched. `/`, `/points`, `/genesis` and `/portfolio` are `200`; `www` 308s to the apex; `app.`
+and the `.vercel.app` alias still 307 to `/gate`; and the live gated page — read signed in — plays
+`https://app.dungeonknights.io/assets/hub-intro.mp4`, `readyState 4`, `duration 63.71`, 1132×718,
+`currentTime` 12.50 → 14.00 over 1.5 s, muted and looping, with no console errors.
