@@ -5899,3 +5899,74 @@ three pre-existing fails from §11 (max hash power, run cap, ticket cap) and not
 whole wallet UI*), pushed, then `npx vercel --prod --yes --scope meglast320-1694`: deployment
 `dungeon-knights-1gns0yovk-meglast320-1694`, all four aliases re-pointed by hand (`dungeonknights.io`,
 `www.`, `app.`, `dungeon-knights.vercel.app`) — `--prod` aliases only its own scoped URL, as §3 warns.
+
+## 13. A Portfolio link on every page, not only a row inside the menu
+
+**The ask.** *"Remove that and place pf tab appropriately from all pages."* §12 removed the purple
+button the owner could still see — that was local, and the answer to *"I can still see it"* was a
+deploy, which is what §12 closes with.
+
+**Why the menu was not enough.** `9fed04d` shipped the wallet menu and the Portfolio row inside it,
+and it is on all fifteen routes — but a row inside a menu is a thing you have to *find*: a hover on a
+laptop, a tap on a phone, and either way the player has to suspect the panel is there. The owner
+asked for the page to be reachable from every screen, so the link is now visible in the header row
+itself.
+
+**One module inserts it, and that is the point.** `public/wallet-menu.js` already finds the wallet
+pill on every route — by DOM scan on the legacy pages, by hand on the React ones — so
+`ensurePortfolioLink` hangs the link off the same discovery: **"on every page" stays one claim
+checked once**, rather than fifteen headers where the next page forgets a line. The measurement that
+makes it worth doing here rather than in the markup: the guard already asserts every route carries
+the pill and loads this module, so a route that loses the link fails a check that already existed.
+
+**Placement, and why it looks like nothing new.** Inserted as the row's *first* child (`.header-actions`),
+so the wallet chrome — the address chip and the balance pill — stays grouped against the right edge
+where the pill has always been, and the link reads as navigation beside the cluster rather than as one
+more thing to click *in* it. That distinction is the whole of §12: the purple button was read as
+belonging to another product partly because it sat in the action slot. The chrome is the site's own
+`btn btn-ghost btn-sm` — the exact three classes the Kingdom Gate back-link wears in the same bar —
+so the only new sheet rules are what *being the door to that page* adds: it never shrinks away in a
+narrow row, and `aria-current="page"` marks `/portfolio` itself, one attribute rather than a second
+code path. `theme.css` goes **`v=8` → `v=9`** at all fourteen references, so a returning reader gets
+the new rules.
+
+**The phone was the real bug, and it was found by measuring.** At 390px the link came out **44px
+tall** beside a 28px pill and grew the bar from 45px to 61px: `menu-mobile.css` and `mint-mobile.css`
+hand *every* `.btn` a 44px touch target, which the header's own back-link is explicitly exempted from
+(`.header > .btn-ghost { min-height: 0 }`) and a link inside `.header-actions` was not. The 520px
+block in `theme.css` now sizes it at the pill's own scale — 26px, 11px type — and the bar measures
+**45px** again with `documentElement.scrollWidth` 390. On `/portfolio` the phone bar is 84px **with
+and without** the link, which is how that page's own wrapping header was ruled out of the change.
+
+**Falsified, and one of the four breaks was the guard's own.** A throwaway mutator broke the link four
+ways (call removed, insert moved inside the trigger, chrome renamed, `aria-current` deleted); the
+three source recs and both runtime recs failed by name, then passed after reverting. Two things came
+out of that run rather than being assumed:
+
+- The first draft of the `aria-current` rec matched **`/aria-current/` anywhere in the file**, and it
+  passed on the function's own doc comment after the line itself was deleted. It now matches the code
+  (`link.setAttribute('aria-current', 'page')`) — a guard that reads prose fails on its own
+  explanation.
+- A source check cannot tell a good module from a broken one: the mutator's *revert* replaced an
+  empty string and put that line at **position 0**, and `check-wallet-menu.js` reported **18/18**
+  while the browser got `ReferenceError: PORTFOLIO_HREF is not defined` and the page had no wallet UI
+  at all. So the module is now **compiled** — `new vm.Script(menu)` parses it without running it —
+  and that rec fails by name on a stray brace. Worth a line in the notes as well: undoing a mutation
+  with `git checkout -- <file>` on a file that carries uncommitted work discards the work; it did,
+  and it was re-applied from the same edits.
+
+**Fleet after it:** `check-wallet-menu` **19/19** · `check-wallet-source` 68/68 · `check-styles` clean ·
+`check-docs` 77/77 · `check-portfolio` 72/72 · `check-pitch` 43/43 · `check-landing` 36/36 ·
+`check-waitlist` 102/102 · `check-rarity` 64/64 · `check-run-budget` 39/39 · `check-map-gate` 17/17 ·
+`check-back` 18/18 · `check-copies` 2/2 · `check-identifiers` 4/4 · `check-genesis` 69/72, the same
+three pre-existing fails from §11.
+
+**Read off the deployed hosts.** `/mint` (live, 1440): header is `Kingdom Gate · SUMMONING CHAMBER ·
+Portfolio · 0 DNG ▾`, `theme.css?v=9`, no `shared-header` script, no `.shared-wallet-btn`.
+`/portfolio`: the link carries `aria-current="page"` with gold type (`rgb(212,175,55)`) and a gold
+border (`rgb(201,168,76)`) — the active state is a measured colour, not an intention. Phone, 390×844
+on `/menu`: `Portfolio` at 26px left of the pill, no overlap, no overflow.
+
+**Shipped.** Committed `1b3f0f7` (*every page shows a Portfolio link, not only a row inside the wallet
+menu*), pushed, then `npx vercel --prod --yes --scope meglast320-1694`: deployment
+`dungeon-knights-kgfjf9u9g-meglast320-1694`, all four aliases re-pointed by hand.
