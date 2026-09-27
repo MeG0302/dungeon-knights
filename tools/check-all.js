@@ -1896,6 +1896,18 @@
             !strayWalletBar,
             strayWalletBar ? strayWalletBar.textContent.trim() || 'an empty injected bar' : 'no injected bar');
 
+        // The way into `/portfolio` that does not need a hover. Measured as *rendered* and as
+        // outside the menu: a link that only exists once the panel is open is the thing this was
+        // added to stop being the only door, and a link nobody can see is the same as no link.
+        const portfolioLink = document.querySelector('.wallet-portfolio-link');
+        rec('the Portfolio is a link in the header, visible without opening anything',
+            !!portfolioLink && portfolioLink.getAttribute('href') === '/portfolio'
+            && portfolioLink.getClientRects().length > 0,
+            portfolioLink ? `${portfolioLink.textContent.trim()} -> ${portfolioLink.getAttribute('href')}` : 'no link');
+        rec('and it is outside the menu, so reaching it is one click and not two',
+            !!portfolioLink && !portfolioLink.closest('.wallet-menu'),
+            portfolioLink?.parentElement?.className || 'no link');
+
         // Opened the way a phone opens it — there is no hover on a phone, so a menu that needs
         // one is a menu half the players do not have.
         pill.dispatchEvent(new MouseEvent('click', { bubbles: true }));

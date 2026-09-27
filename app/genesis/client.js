@@ -158,7 +158,7 @@ export default function GenesisClient({ shots = [] }) {
         <>
             {/* Versioned like every other sheet: an unversioned `/theme.css` is a CSS change that
                 never reaches a returning player. */}
-            <link rel="stylesheet" href="/theme.css?v=8" />
+            <link rel="stylesheet" href="/theme.css?v=9" />
             <link rel="stylesheet" href="/css/genesis.css?v=4" />
             <link rel="stylesheet" href="/css/nft-ui.css?v=1" />
 

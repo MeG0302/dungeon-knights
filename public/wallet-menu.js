@@ -20,6 +20,16 @@
  * and a wallet that is not connected gets *Connect Wallet* instead, which is the landing page's
  * working entry point.
  *
+ * THE LINK BESIDE THE PILL
+ * ------------------------
+ * The menu is not the only way in any more, because a menu is a thing you have to find: it needs a
+ * hover on a laptop and a tap on a phone, and either way you have to know it is there. The owner
+ * asked for the portfolio to be reachable from every page *without* that step, so
+ * `ensurePortfolioLink` puts a visible `Portfolio` link in the same header row — the button chrome
+ * the pages already use for their Kingdom Gate back-link, so it needs no new look. It is inserted
+ * by this module rather than typed into 15 headers for the same reason the menu is: "on every page"
+ * is then one claim, checked once, instead of a line somebody forgets on the next page.
+ *
  * HOW IT ATTACHES
  * ---------------
  * By selector, and one module rather than four: the legacy pill ids, and any `.wallet-pill` a
@@ -47,6 +57,7 @@
     const ADDRESS_KEY = 'walletAddress';
 
     const PORTFOLIO_HREF = '/portfolio';
+    const PORTFOLIO_LABEL = 'Portfolio';
 
     const log = (...args) => console.log('[wallet-menu]', ...args);
 
@@ -214,6 +225,31 @@
         trigger.classList.add('wallet-menu-host');
     }
 
+    /**
+     * The visible way in, in the header row rather than behind the menu.
+     *
+     * First in the row on purpose: the wallet chrome stays grouped against the right edge, where
+     * the pill has always been, and the link reads as navigation beside it rather than as one more
+     * thing to click in the wallet cluster — which is what the purple `Connect Wallet` button this
+     * replaced looked like, and why it read as belonging to another product.
+     *
+     * `aria-current` rather than a special case: the link is on every page including `/portfolio`,
+     * and one attribute is how a nav says "this is where you are" without a second code path.
+     */
+    function ensurePortfolioLink(trigger) {
+        const row = trigger.parentElement;
+        if (!row || row.querySelector('.wallet-portfolio-link')) return null;
+
+        const link = document.createElement('a');
+        link.className = 'btn btn-ghost btn-sm wallet-portfolio-link';
+        link.href = PORTFOLIO_HREF;
+        link.textContent = PORTFOLIO_LABEL;
+        if (location.pathname.replace(/\/+$/, '') === PORTFOLIO_HREF) link.setAttribute('aria-current', 'page');
+
+        row.insertBefore(link, row.firstChild);
+        return link;
+    }
+
     function show(trigger) {
         const menu = trigger.__walletMenu;
         if (!menu) return;
@@ -246,6 +282,7 @@
         if (!trigger || trigger.__walletMenu) return null;
 
         ensureHost(trigger);
+        ensurePortfolioLink(trigger);
 
         const menu = buildMenu();
         menu.__walletMenuTrigger = trigger;

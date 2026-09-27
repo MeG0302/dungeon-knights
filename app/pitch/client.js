@@ -488,7 +488,7 @@ export default function PitchClient() {
             {/* `/theme.css` is the root sheet, not `/css/theme.css`: the tokens every rule below reads
                 live in it, and the wrong path 404s silently — the page still renders, with no colours
                 at all, and every DOM assertion still passes. */}
-            <link rel="stylesheet" href="/theme.css?v=8" />
+            <link rel="stylesheet" href="/theme.css?v=9" />
             <link rel="stylesheet" href="/css/pitch.css?v=2" />
             {/* The header's wallet pill carries the same menu every other route's control has. */}
             <Script src="/wallet-source.js?v=3" strategy="afterInteractive" />

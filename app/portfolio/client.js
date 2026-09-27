@@ -336,7 +336,7 @@ export default function PortfolioClient() {
     // ------------------------------------------------------------------------ render
     const pageStyles = (
         <>
-            <link rel="stylesheet" href="/theme.css?v=8" />
+            <link rel="stylesheet" href="/theme.css?v=9" />
             <link rel="stylesheet" href="/css/portfolio.css?v=6" />
             <link rel="stylesheet" href="/css/nft-ui.css?v=1" />
             {/* No ethers: every figure on this page is read by the server, so the page itself never

@@ -246,7 +246,7 @@ export default function TokenomicsClient() {
         <>
             {/* Versioned like every other sheet in the site: an unversioned `/theme.css` is a CSS
                 change that never reaches a returning player. */}
-            <link rel="stylesheet" href="/theme.css?v=8" />
+            <link rel="stylesheet" href="/theme.css?v=9" />
             <link rel="stylesheet" href="/css/tokenomics.css?v=2" />
             {/* The header's wallet pill carries the same menu every other route's control has.
                 No ethers: the balance on this page is a server read. */}

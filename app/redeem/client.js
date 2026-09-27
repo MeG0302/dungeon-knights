@@ -350,7 +350,7 @@ export default function RedeemClient() {
 
     const shell = (
         <>
-            <link rel="stylesheet" href="/theme.css?v=8" />
+            <link rel="stylesheet" href="/theme.css?v=9" />
             <link rel="stylesheet" href="/css/redeem.css?v=2" />
             <link rel="stylesheet" href="/css/arya.css?v=3" />
             <Script src="/arya.js?v=5" strategy="afterInteractive" />

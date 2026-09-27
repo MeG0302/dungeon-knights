@@ -14,7 +14,7 @@
  * The route list is therefore not typed in — it is read out of `app/`, which is what decides what
  * a route *is*. A new page fails this until it carries the control, which is the point.
  *
- * Five claims, none of which a screenshot can make:
+ * Six claims, none of which a screenshot can make:
  *
  *   1. Every route has a wallet control in its own markup.
  *   2. Every route loads the module that turns that control into a menu.
@@ -22,6 +22,8 @@
  *   4. The menu stays cheap: it reads nothing from the chain, and its Portfolio link resolves.
  *   5. That control is the *only* one in the header — the pill and its menu, which is the Points
  *      page's chrome, rather than a second injected button beside it in a colour of its own.
+ *   6. And the Portfolio hangs off that row as a *visible* link, not only as a row inside a menu
+ *      somebody has to know to hover — which is why the module inserts it, on every route.
  *
  * Two routes are exempt, in `tools/wallet-menu-allowlist.json`, and the exemption is printed with its
  * reason rather than applied silently: the public coming-soon page at the apex, which deliberately has
@@ -32,6 +34,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import vm from 'vm';
 import { fileURLToPath, pathToFileURL } from 'url';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -64,6 +67,23 @@ rec('the route list is read out of the app, not typed in', routes.length >= 9,
     routes.map((r) => r.route).join(' '));
 
 // --------------------------------------------------------------------------- the module
+// Every rec below reads this file as text, and text cannot fail: the module can be sliced into
+// something that throws on load — a line lifted out of its function, a stray brace — and a reader
+// that greps for patterns happily reports 18/18 while the browser gets a `ReferenceError` and the
+// page has no wallet control at all. That is not hypothetical: a throwaway mutator's revert moved
+// one line to the top of the file and this file passed while `public/wallet-menu.js` was dead on
+// every route. So it is compiled, not only read. `vm.Script` parses without running anything, which
+// is exactly the claim — running the module is the browser's half, in `tools/check-all.js`.
+let moduleParses = null;
+try {
+    new vm.Script(menu, { filename: 'public/wallet-menu.js' });
+} catch (error) {
+    moduleParses = error.message;
+}
+rec('and it is still a program a browser can parse, not just text that matches the recs below',
+    moduleParses === null,
+    moduleParses || `${menu.split('\n').length} lines compile`);
+
 rec('the module knows the pill wherever it is spelled', /'\.wallet-pill'/.test(menu));
 rec('and the legacy pill ids beside it',
     ['#walletWidget', '#walletWidgetMenu', '#walletWidgetGame'].every((id) => menu.includes(id)));
@@ -195,6 +215,31 @@ rec('and the file that injected it is not in the served tree, so a route this ch
 rec('no sheet still paints its off-palette button',
     !/shared-wallet-(?:btn|header)/.test(read('public/shared-wallet.css')),
     'the pill keeps its rules in that sheet; the purple button\'s are gone');
+
+// ------------------------------------------------------- and the menu is not the only way in
+//
+// The menu answers "where is the Portfolio", and a menu is a thing you have to find: it needs a
+// hover on a laptop, a tap on a phone, and either way the player has to suspect it is there. So the
+// module inserts a *link* into the same header row — which is the whole reason "on every page" is a
+// claim about one module rather than fifteen headers. Three halves again: the link exists and points
+// at the route, it is in the row rather than inside the panel (a link inside the menu is the thing
+// this exists to stop being the only door), and it wears the chrome the header already uses.
+rec('the Portfolio is a link in the header row, not only a row inside the menu',
+    /function ensurePortfolioLink/.test(menu)
+    && /link\.href = PORTFOLIO_HREF/.test(menu)
+    && /link\.textContent = PORTFOLIO_LABEL/.test(menu)
+    && /row\.insertBefore\(link, row\.firstChild\)/.test(menu),
+    'inserted into the trigger\'s own parent, so it is one click and not two');
+rec('and it wears the chrome the header already has rather than inventing another',
+    /'btn btn-ghost btn-sm wallet-portfolio-link'/.test(menu)
+    && Object.values(STATIC_PAGES).some((entry) => /class="btn btn-ghost btn-sm"/.test(entry.body || '')),
+    'the same three classes the Kingdom Gate back-link wears');
+// The mark is read as *code*, not as the word: the first draft of this rec matched `/aria-current/`
+// anywhere in the file and passed on the function's own doc comment after the line itself was
+// deleted. A guard that reads prose fails on its own explanation, which is a finding about the
+// guard rather than about the page.
+rec('and the link marks the page it points at, so it is not a dead one on its own page',
+    /link\.setAttribute\('aria-current', 'page'\)/.test(menu) && exists('app/portfolio/page.js'));
 
 // Printed, not silent. An exemption nobody can read is indistinguishable from a check that stopped
 // looking at a route.

@@ -721,7 +721,7 @@ export default function StakingClient() {
         <>
             {/* Versioned like every other sheet: an unversioned `/theme.css` is a CSS change
                 that never reaches a returning player. */}
-            <link rel="stylesheet" href="/theme.css?v=8" />
+            <link rel="stylesheet" href="/theme.css?v=9" />
             <link rel="stylesheet" href="/css/staking.css?v=10" />
             <link rel="stylesheet" href="/css/arya.css?v=3" />
             <link rel="stylesheet" href="/css/nft-ui.css?v=1" />

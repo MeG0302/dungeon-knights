@@ -238,6 +238,18 @@ body {
     padding: 5px 10px;
     font-size: 12px;
   }
+
+  /* The Portfolio link is a `.btn`, and the phone sheets hand every `.btn` a 44px touch target —
+     which, in this row, made the whole bar 61px tall beside a 28px pill. The bar is the one place
+     that trades the recommendation for something that fits, and it is the call the Kingdom Gate
+     back-link already makes in `menu-mobile.css` (`min-height: 0` on `.header > .btn-ghost`); this
+     reads at the pill's own size instead, on every route rather than only the two with a phone
+     sheet of their own. */
+  .header-actions .wallet-portfolio-link {
+    padding: 5px 10px;
+    font-size: 11px;
+    min-height: 26px;
+  }
 }
 
 .wallet-pill {
@@ -1175,6 +1187,27 @@ body {
 .wallet-chip {
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.5px;
+}
+
+/* ==========================================================
+   THE PORTFOLIO LINK — the visible way into `/portfolio`
+   ==========================================================
+   `public/wallet-menu.js` inserts this beside every wallet pill, because the menu's own
+   "My Portfolio" row needs a hover (or a tap) to find, and the owner asked for that page to be
+   reachable from every screen without one. The look is deliberately not new: it is the
+   `btn-ghost btn-sm` chrome the Kingdom Gate back-link already wears in the same header row.
+
+   What is left here is only what *being the door to that page* adds — it never shrinks away in a
+   narrow header, and where you already are says so.
+   ========================================================== */
+.wallet-portfolio-link {
+  flex-shrink: 0;
+  text-decoration: none;
+}
+
+.wallet-portfolio-link[aria-current="page"] {
+  color: var(--accent-gold);
+  border-color: var(--border-gold);
 }
 
 /* Rarity colors on knight cards */
