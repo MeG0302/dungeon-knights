@@ -6078,3 +6078,142 @@ host only*) carries the code and the guards, with this entry in the doc commit a
 `vercel --prod` were left alone at the owner's choice, so `app.dungeonknights.io/portfolio` still
 serves the build before this one and its Knights panel still reads **Coming soon**. The dev server on
 :3111 is where the squad is visible for now.
+
+---
+
+## 15. `/game` gets a map — the campaign's first hand-designed dungeon, painted instead of played
+
+The ask was to rebuild the `/game` map, and the four decisions that shaped it were: **one dungeon end
+to end** rather than five half-designed ones, **the whole arena visible in one screen**, **no mp4 on
+`/game`** (the files stay on disk for the menu and the intro), and **the map places the encounters**
+— replacing the 50-70 nodes the engine used to scatter at random.
+
+What was there: a looping 3-5.5 MB mp4 per theme behind a canvas that cleared to transparent, a
+collision grid `tools/author-map-grids.js` had *traced from the painting* (so walls only approximately
+matched), and loot placed by rejection sampling with a 3-tile minimum spacing. The renderer's tile
+function was four empty branches — the comment in it said so — which is why none of that had ever been
+visible as a bug: **the map was the video**.
+
+**The arena.** `tools/author-crypts-map.js` is now the source of truth. Ten named rooms on the same
+36×20 grid the engine has always used, each with a rect, a kind and a label:
+
+| zone | kind | label |
+| --- | --- | --- |
+| `antechamber` | muster | The Muster (spawn 2,2) |
+| `bells` | hall | Hall of Bells |
+| `gate-corridor` | corridor | The Long Walk |
+| `chokepoint` | gate | The Throat (tiles 25,4 + 25,5) |
+| `reliquary` | vault | The Reliquary |
+| `hall` | hall | Sarcophagus Hall |
+| `west-run` | corridor | The Long Stair |
+| `ossuary` | hall | Ossuary |
+| `under-passage` | corridor | The Crawl |
+| `flooded` | hall | The Flooded Crypt |
+
+370 of 720 tiles floor (51%), 17 pillars, a sealed frame, nothing unreachable from the spawn, 69 props
+and 64 nodes (51 monsters, 13 chests) at the same ~10 DNG a clear. The waves matter more than the
+count: the tool walks the map the way the knights do — strike tiles, node tiles blocking, the node
+dying and opening its tile — and the table clears **52 nodes on the first pass down to 12 on the last**,
+with the reliquary's 12 nodes opening only on wave 2 of 2 behind the two gate-corridor guards. A table
+with a monster walled in on both sides would be unkillable and the run would never end, so the tool
+**refuses to write** a map that fails any of this and prints the reason (`--dry` re-derives and
+re-checks without writing).
+
+**The surfaces are the kit's own art, baked.** No `ffmpeg-static` in this checkout (the empty
+`node_modules/ffmpeg-static` is why `derive-map-grid.js` cannot run here either), so `tools/png-tools.js`
+is a small pure-JS PNG codec — decode, encode, area-average resize with premultiplied alpha, contain-fit,
+LUT — colour type 2/6, depth 8, non-interlaced, which is all the kit ships. `tools/bake-map-surfaces.js`
+uses it to bake 51 pieces to `public/assets/<theme>/surface/`: floor at 192px, rim runs at 80px, corners
+at 80px, props at 96px, keyed by `public/maps/map-surfaces.js`. **88.06 MB of source art becomes 885 KB.**
+The crypts: floor 68 KB, rim-h 15, rim-v 14, corners 9-16, prop-torch 21, prop-block 12, prop-decor 15,
+prop-crypt 17. All five themes are baked because `/dungeon-select` still offers all five.
+
+**The layout is the contract between the tool and the engine.** `window.MAP_LAYOUTS.crypts` carries the
+zones, the props (`{x, y, piece, layer}`) and the spawn table (`{x, y, type, zone}`); the engine reads it
+if it is there and falls back to the old scatter if it is not, so the four undimmed themes keep working.
+Two things learned the hard way: zone ids with hyphens have to be **quoted** (the first generated file
+emitted a bare `gate-corridor:` and threw `SyntaxError: Unexpected token '-'` in the browser, where a
+source-level check would never have looked), and one prop per tile is a rule the *generator* must hold,
+because the torch/block/crypt/bones passes overlap deliberately.
+
+**The renderer.** `renderTile` now delegates to `paintTile`, and the whole static map — every tile, the
+rim from the kit's border and corner pieces, then the scenery in floor → obstacle → wall order — is
+baked **once** into a 1440×800 offscreen layer (`bakeMapLayer`), re-baked whenever a surface image lands
+so the gate lifts onto a finished map. The frame loop is one scaled `drawImage` where it used to be 720
+tiles (measured **4.75 ms/frame**). The map is centred at a fit zoom of 0.75 with `offsetX 30`, and only
+the theme on screen is fetched: the five-theme preload (~20 MB of sheets, chests and bestiaries) is gone.
+The decorative-frame `renderMinimap` that wanted a `#minimapCanvas` the page does not have was deleted
+— two methods of that name had lived in the class and the later one silently won — leaving the wall-bake
+plus live gold and knight dots.
+
+**Two real bugs the work turned up, both fixed.**
+
+- **The kit's floor art is not equally usable.** The source `floor-tile.png` is 91% opaque in the crypts
+  and 95% in the mines, but **43% in the temple and 0.1% / 0% in magma and void** — they were lava and
+  starfield *overlays* on the mp4, so with the video gone those three arenas painted a hole onto the
+  shadow behind the map (magma measured 150/720 tile centres opaque). `paintTile` now lays the theme's own
+  floor colour down first and the surface is the texture on top of it: all five themes measure **720/720**.
+  Three of five wear real texture; magma and void wear their palette colour, which is what their art is.
+- **The canvas was clipped.** It is a fixed 1140×600 inside `.canvas-area { overflow: hidden }`, and at
+  1440×900 the two 260px side panels leave the area **920px** wide — so 110px of each side was cut, which
+  is the antechamber on the west and the flooded crypt on the east, on every window narrower than 1440.
+  `#gameCanvas` now has `max-width: 100%; height: auto`. Nothing hit-tests the canvas by mouse
+  coordinates (checked), so scaling the element is free.
+
+**Guards.** `tools/check-map-design.js` is the new one (**48/48**) and it mostly *runs* the data: the three
+`maps/*.js` files load into a throwaway `vm` with a stub `window`, and it then checks the frame, the open
+spawn corner, reachability, non-overlapping and non-empty zones, every prop on the layer it claims with
+art behind it, every monster's left-or-right strike tile, the 50-70 node band, the clear-the-whole-table
+simulation, the vault wave, that every baked surface exists as a PNG under 200 KB and that the whole set
+weighs less than one theme of source art, and — on comment-stripped source — that the engine still wires
+it up. `check-map-gate` **21/21** and `gate-check` **24/24** were updated with it: the gate no longer waits
+on a video (it waits on the surfaces), the page has no `<video>`, the engine never switches one, and
+`watchVideo` is gone. Two of `gate-check`'s old assertions expected the gate to be *removed* after the
+fade; it is kept deliberately, so they now assert it lifts and stays.
+
+**Falsified by a throwaway, and it was worth it.** `tools/_mutate-map-design.js` broke one thing at a
+time — a monster parked in the throat, the throat walled shut, the vault guards deleted, a monster sealed
+in on both sides, a node off the floor, a prop with no art, the video back in the page, the CSS rule back
+in the sheet, the gate waiting on a video again, the mp4 back in the engine, the bake removed, the reward
+target halved, a surface deleted from disk — and demanded the specific FAILED line for each. It found two
+holes in the guard itself: `sizes` **crashed** (`statSync` on the deleted file) instead of reporting the
+missing surface, and the reward-math rec was satisfied by *either* of the two `totalGoldTarget = 10.0`
+assignments, so reverting the layout one alone stayed green. Both fixed, both re-falsified, all 13 cases
+caught, every file restored, harness deleted. `window.__check.mapSurface()` (**15/15**) is the runtime
+half: it forces the bake, samples every tile centre out of one `getImageData`, and checks the layout's
+node and prop counts against the map. Its first version asserted “more than 100 colours at the tile
+centres”, which was a mis-reading of a whole-canvas measurement — the tile centres of a tiled floor are
+*supposed* to be flat, and the assertion that replaced it (“every tile centre opaque”) is the one that
+caught the transparent-floor bug.
+
+**Read off the browser** (`localhost:3111`). Fresh load: booted with no console error, 64 nodes,
+`layerSize 1440x800`, minimap baked, `videoEl false`, and the gate lifted **on its own** (`is-open`,
+`The gate is open.`) rather than on its 15s failsafe. Deploy → knights walk the map's own monsters and the
+run **cleared 64/64 in one go**, the completion modal came up, and Next Dungeon raised the gate and
+rebuilt onto a fresh map through `withMapGate`. All five themes, constructed in isolation and awaited:
+720/720 tile centres opaque, palette 923-9321 colours, top row fully opaque, the baked layer matching its
+own composited floor tile pixel for pixel on every one. Phone **390×844**: canvas 390×205, fully inside
+the viewport, **0px** of horizontal overflow, whole arena on screen. A realistic 8-knight squad
+(one save per tier, `stats` included, as `menu.js` writes it) was needed for the squad panel — my first
+fixture had `{id, rarity}` only, and `ui.js` reads `knight.stats.maxStamina`, so it threw on every
+`updateDOM` tick; that was the fixture, not the change.
+
+**Fleet:** `check-map-design` 48/48 · `check-map-gate` 21/21 · `gate-check` 24/24 · `check-gate` 150/150 ·
+`check-run-budget` 39/39 · `check-rarity` 64/64 · `check-docs` 77/77 · `check-identifiers` 4/4 ·
+`check-copies` 2/2 · `check-back` 18/18 · `check-landing` 36/36 · `check-styles` clean ·
+`check-genesis` 69/72, the same three pre-existing fails. One of those runs is worth recording: dropping
+the battery into `public/_check.js` to import it in the browser **failed `check-rarity`**, because that
+guard sweeps every page script for `assets/pfp/` and the harness (which contains the Portfolio checks)
+is a page script while it is there. The copy was deleted; the guard was right.
+
+**One thing left as it was.** `nextDungeon()` still walks `['crypts','mines','temple','magma','void']`,
+because `/dungeon-select` offers all five and the four others now render from their traced grids, their
+baked surfaces and the scatter fallback. The crypts is the only one with a hand-designed layout, so a
+player who clears it and lets the 60s auto-progress take them lands on a map that is painted and playable
+but not designed. Making the crypts repeat instead is a one-line change if that is the intent.
+
+**Committed, not deployed.** `03022e9` (*the arena is a designed map the engine paints, not a video it
+plays*) carries the map, the bake, the engine, the guards and both fixes — 67 files, the 51 baked
+surfaces included — with this entry in the doc commit above it. `layout.css` went to `?v=2` and `dungeon.js`
+to `?v=1790810400` so a cached bundle picks the new map up. `git push` and `vercel --prod` were left alone,
+so the deployed `/game` is still the mp4 build.
