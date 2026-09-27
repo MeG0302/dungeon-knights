@@ -194,12 +194,19 @@ rec('and a phone still gets the room, from the small file',
 // from assistive tech, the buttons inside genuinely inert, and the label saying what is coming.
 //
 // The third is the Knights panel, and it is the harder case: the owner asked for nothing about
-// knights to be shown at all, so it is *emptied* rather than blurred — the rarity strip, the hash
-// power, the roll odds and the wallet's own tiles are out of the file, because a blurred strip is
-// still a strip and a blurred portrait is still a portrait. What has to hold there is the absence,
-// which is why the needles below are the import, the strip's class and the two figures it printed:
-// a leftover import is exactly how that markup comes back by accident.
-const SOON = ['$DNG', 'Genesis', 'Knights'];
+// knights to be shown to the **public**, so there it is *emptied* rather than blurred — the rarity
+// strip, the hash power, the roll odds and the wallet's own tiles are out of the render, because a
+// blurred strip is still a strip and a blurred portrait is still a portrait.
+//
+// It has since reopened on one side of the door, which is what makes this section two claims rather
+// than one absence. The panel has to be *built*, and it cannot be built against a wallet holding
+// nothing, so on the gated host it renders `sampleKnights()` — one knight of every tier, every
+// figure read out of the published table — while the public host renders none of it. So: the closure
+// is now a branch on the host rather than a deletion, and the fixture behind it cannot show a knight
+// that could never be minted. Both of those are readable in the source, and they are the last two
+// checks in this section. The browser's half — that the panel is open exactly where the host says it
+// is — cannot be read from any file and is `window.__check.portfolioSamples()` in `tools/check-all.js`.
+const SOON = ['$DNG', 'Genesis'];
 const BLURRED = ['$DNG', 'Genesis'];
 // Each name has to be found on **its own** card. The first version of this was a 400-character window
 // with no rule about what could sit inside it, and going to prove it caught the mutation by the
@@ -211,11 +218,14 @@ for (const name of SOON) {
         new RegExp(`pf-card pf-soon">(?:(?!pf-card pf-soon">)[\\s\\S]){0,600}?${name.replace('$', '\\$')}`).test(client),
         'pf-soon on that card, not on the one below it');
 }
+// Both counts are `SOON.length + 1`, and the extra one is the Knights card — whose chip and note sit
+// in the *closed* arm of the host branch, so they are still one each in the file. Written as a sum
+// rather than as three literals so that a fourth panel cannot be added and quietly skip the chip.
 rec('the panels that are closed carry the same chip',
-    (client.match(/pf-soon-chip/g) || []).length === SOON.length,
-    `${(client.match(/pf-soon-chip/g) || []).length} chips`);
+    (client.match(/pf-soon-chip/g) || []).length === SOON.length + 1,
+    `${(client.match(/pf-soon-chip/g) || []).length} chips — the two shut cards, plus the Knights card\'s`);
 rec('each says what will read there, rather than only "coming soon"',
-    (client.match(/pf-soon-note/g) || []).length === SOON.length,
+    (client.match(/pf-soon-note/g) || []).length === SOON.length + 1,
     `${(client.match(/pf-soon-note/g) || []).length} notes`);
 // ------------------------------------------------- 9. the wallet it boots from
 // A Points player who signed in with an email address has a wallet in the seam and nothing in
@@ -235,18 +245,37 @@ rec('the listeners are removed, and the read cannot land after unmount',
 rec('the blurred body is hidden from a screen reader, which would read it as figures',
     (client.match(/pf-soon-body" aria-hidden="true"/g) || []).length === BLURRED.length,
     `${(client.match(/pf-soon-body" aria-hidden="true"/g) || []).length} aria-hidden bodies`);
-// The panel the owner closed, checked as an absence. `lib/knights.js` still publishes the ramp and
-// `nft-ui.css` still styles the strip, so neither can be the guard: what must be true is that this
-// page renders none of it. `hashPower` is deliberately not a needle — the Genesis tiles print one.
-rec('nothing about knights is rendered while the panel is closed',
-    !/nft-tier|knightPfp|RARITY|dropRate|knightList|byTier/.test(body),
-    'no tier strip, no hash power, no roll odds, no owned tiles');
+// The panel the owner closed, now checked as a *branch*. `lib/knights.js` still publishes the ramp
+// and `nft-ui.css` still styles the strip, so neither can be the guard: what has to hold is that the
+// page renders none of it for the public and all of the fixture for the team, out of one card. The
+// first check is the shape that makes that possible — the class is computed from `gated`, so there is
+// one panel and one place on this page that asks which host it is on, rather than two panels that
+// could drift apart.
+rec('the Knights card is shut on the public host and open on the gated one',
+    /className=\{`pf-card\$\{gated \? '' : ' pf-soon'\}`\}/.test(body),
+    'one card, `pf-soon` as the branch\'s else arm');
+rec('  and the first paint is the public answer, never the fixture',
+    /const \[gated, setGated\] = useState\(false\)/.test(body),
+    'the server has no `location` to ask, so it renders shut and corrects itself after mount');
+rec('  and the fixture is the shared one knight per tier, called only where the host is gated',
+    /import \{[^}]*sampleKnights[^}]*\} from '\.\.\/\.\.\/lib\/knights'/.test(client)
+        && (body.match(/sampleKnights\(\)/g) || []).length === 1
+        && /gated \? sampleKnights\(\) : \[\]/.test(body),
+    'imported from lib/knights, and one call site, behind the host check');
+rec('  and the strip and the cards both print that squad, so an empty one renders nothing',
+    (body.match(/\bsample\.map\(/g) || []).length === 2
+        && /nft-tier-grid[\s\S]{0,600}?sample\.map\(/.test(body),
+    'the tier strip and the card grid map the same array');
+rec('  and it is labelled as a fixture where holdings would read, not left to be mistaken for one',
+    /className="pf-sample-chip"/.test(body) && /className="pf-sample-note"/.test(body)
+        && /not a wallet read/.test(client),
+    'a chip beside the title and a sentence above the cards');
 rec('  … not even as a count in the title, which is a figure in its own right',
     !/knights\.data\?\.balance/.test(body),
     'no owned count over the panel');
 rec('  and the panel still says what will read there, rather than only "coming soon"',
     /The knights in this wallet will read here when this panel opens/.test(client),
-    'the sentence is the panel for now');
+    'the sentence is the panel for the public host');
 rec('the stylesheet blurs it and makes its controls inert',
     /\.pf-soon-body[^{]*\{[^}]*filter:\s*blur\(/.test(css)
         && /\.pf-soon-body[^{]*\{[^}]*pointer-events:\s*none/.test(css),
@@ -317,9 +346,11 @@ rec('the panel says why it is empty when there is no session',
 rec('and the chip is styled, so it does not render as loose text',
     /\.pf-soon-chip\s*\{/.test(css) && /\.pf-soon-note\s*\{/.test(css));
 // The panels are marked, the other three are not — otherwise this could pass by blurring the page.
+// The Knights card is the third closure and is deliberately *not* in this count: its class is the
+// host branch above, so the literal `pf-card pf-soon` it would contribute is not in the file.
 rec('the panels that do work are not blurred',
     (client.match(/pf-card pf-soon/g) || []).length === SOON.length,
-    `${(client.match(/pf-card pf-soon/g) || []).length} marked cards`);
+    `${(client.match(/pf-card pf-soon/g) || []).length} marked cards, and the third is the host branch`);
 
 // --------------------------------------------------- 12. My capsules, and the turn itself
 // The one card on this page whose subject is a picture, and the only control here the reader
@@ -396,6 +427,89 @@ rec('and the section is styled, the frame included and no caption under it',
                 && Number.isFinite(out.frames) && out.frames >= 0;
         }),
         'NaN · undefined · null · 0 · -3 · 1e9');
+
+    // ------------------------------------- 13. the sample squad, evaluated rather than read
+    // §8 above reads the fixture out of the source, which cannot tell a real squad from a `map` over
+    // the wrong list. This block *runs* it — and running it is not ceremony: the first version of
+    // `sampleKnights` was declared above the list it reverses, a temporal-dead-zone throw that made
+    // every source check pass while the page itself failed to load. A check that only greps a file
+    // cannot see that. Everything asserted here is a property of the returned array, and each figure
+    // is compared with the published table rather than with a number typed into this harness, so a
+    // sample that showed a knight nobody could mint would fail rather than be copied down as truth.
+    const Knights = await import('../lib/knights.js');
+    const squad = Knights.sampleKnights();
+    rec('one knight of every tier, and no tier twice',
+        squad.length === Knights.KNIGHT_TIERS.length
+        && new Set(squad.map((k) => k.rarity)).size === Knights.KNIGHT_TIERS.length,
+        `${squad.length} samples over ${Knights.KNIGHT_TIERS.length} tiers`);
+    rec('  and every figure on one comes from the published table, so a sample cannot be impossible',
+        squad.every((k) => k.hashPower === Knights.RARITY[k.rarity.toUpperCase()].hashPower),
+        squad.map((k) => `${k.tierName} ${k.hashPower} HP`).join(' · '));
+    rec('  and the loudest tier is first, which is how a person reads a rarity ramp',
+        squad.map((k) => k.rarity).join() === Knights.TIER_DISPLAY_ORDER.map((t) => t.toLowerCase()).join(),
+        squad[0].tierName);
+    rec('  and the ids are positions in the list rather than anyone\'s tokens, and the squad never reshuffles',
+        squad.every((k, i) => k.tokenId === i + 1)
+        && JSON.stringify(Knights.sampleKnights()) === JSON.stringify(squad),
+        'no seed and no clock: a fixture that rearranged itself is a fixture nobody can judge');
+
+    // The page decides which side of the door it is on, and the middleware decides for the request.
+    // They have to agree: they are the same split of the same two hosts, and the failure is silent in
+    // both directions — a page that thinks it is public would print the fixture to a stranger, and one
+    // that thinks it is gated would show the closed panel to the team. They agree by reading one list
+    // (`lib/host-role.js`, which `lib/app-gate.js` imports), and this is what keeps it one list.
+    //
+    // So the hostnames fed in are **every name either module knows** — both host lists from both
+    // modules, so a name added to one and not the other is in the sample whether or not anyone
+    // thought of it — plus the names that exist to be wrong: a lookalike apex, the per-deployment
+    // `.vercel.app` hostnames production closes, and the `APP_HOSTS` env widening the gate supports.
+    //
+    // And each name is asked **twice**, in production and in development, because production cannot
+    // answer this question: its rule is "anything that is not the apex is the game", so a wrong
+    // named list is invisible there — every unknown host is gated either way. In development the
+    // named branch is what decides, which is where two lists that disagree by name show up. Proved
+    // by mutating `lib/app-gate.js` to read a list of its own: this fails on development only.
+    const Gate = await import('../lib/app-gate.js');
+    const Host = await import('../lib/host-role.js');
+    const probes = [
+        'dungeonknights.io', 'www.dungeonknights.io', 'app.dungeonknights.io',
+        'dungeon-knights.vercel.app', 'dungeon-knights-abc123-meglast320-1694.vercel.app',
+        'localhost', '127.0.0.1', 'dungeonknights.io.evil.com', 'APP.DungeonKnights.io:443',
+    ];
+    const names = [...new Set([
+        ...Gate.APP_HOSTS, ...Host.GATED_HOST_DEFAULTS,
+        ...Gate.APEX_HOSTS, ...Host.PUBLIC_HOST_DEFAULTS,
+        ...probes,
+    ])];
+    const envs = [{ isProduction: true }, { isProduction: false, devHostCookie: '0' }];
+    const disagree = [];
+    for (const host of names) {
+        for (const env of envs) {
+            if (Host.isGatedBrowser({ hostname: host, ...env }) !== Gate.isAppRequest({ host, ...env })) {
+                disagree.push(`${host}${env.isProduction ? '' : ' (dev)'}`);
+            }
+        }
+    }
+    rec('the page and the middleware agree on every hostname, in production and in development',
+        disagree.length === 0,
+        disagree.length ? `disagree on ${disagree.join(', ')}`
+            : `${names.length} hostnames × 2 environments, both modules`);
+    rec('  and in development both take the cookie, so one port can be both hosts',
+        [null, '0', '1'].every((devHostCookie) => Host.isGatedBrowser({ hostname: 'localhost', devHostCookie, isProduction: false })
+            === Gate.isAppRequest({ host: 'localhost', devHostCookie, isProduction: false })),
+        'null · 0 · 1 on a host neither list names');
+    rec('  and a name gated by the middleware is a name the page knows, and the other way round',
+        Gate.APP_HOSTS.every((h) => Host.isGatedBrowser({ hostname: h }) === true)
+        && Host.GATED_HOST_DEFAULTS.every((h) => Gate.isAppHost(h) === true),
+        `app: ${Gate.APP_HOSTS.join(',') || '—'} | page: ${Host.GATED_HOST_DEFAULTS.join(',') || '—'}`);
+    // The one case where they must differ, and the reason it is written down here rather than left as
+    // an inconsistency: a page rendered on the server has no hostname, and failing closed there would
+    // put the sample knights into the first paint for every visitor. A request whose `Host` is missing
+    // is the other way round — it is the game until proven otherwise.
+    rec('and a render with no hostname is the public answer here, while a request with none still fails closed',
+        Host.isGatedBrowser({}) === false && Host.isGatedBrowser({ hostname: '   ' }) === false
+        && Gate.isAppRequest({ host: '', isProduction: true }) === true,
+        'a page with no `location` renders shut; a request with no `Host` is the game');
 
     console.log('');
     const failed = results.filter((r) => !r.pass);

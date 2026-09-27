@@ -459,6 +459,33 @@
     color: var(--text-muted);
 }
 
+/* The sample squad's own label, and deliberately not `.pf-soon-chip` recoloured: that chip means
+   the panel is *shut*, and this one means the panel is open and what is in it is a fixture. Same
+   size, same corner, a dashed border and the muted end of the palette — provisional chrome should
+   read as provisional rather than as one more status. */
+.pf-sample-chip {
+    margin-left: auto;
+    font-family: var(--font-body);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px dashed var(--border-base);
+    border-radius: 999px;
+    padding: 2px 8px;
+    white-space: nowrap;
+}
+
+.pf-sample-note {
+    margin-bottom: 12px;
+    font-family: var(--font-body);
+    font-size: 11px;
+    line-height: 1.6;
+    color: var(--text-muted);
+}
+
 /* --------------------------------------------------------- notes, warnings and links */
 .pf-note {
     font-family: var(--font-body);

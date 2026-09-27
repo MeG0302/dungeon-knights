@@ -16,6 +16,9 @@
  *                                  through a wallet double, one transaction per knight
  *   window.__check.walletMenu()    the header wallet control and its menu, on the route you
  *                                  are on: attached, opens on tap, My Portfolio inside, Escape
+ *   window.__check.portfolioSamples() the Portfolio's Knights panel, run it on /portfolio with
+ *                                  and without the dev host cookie: the sample squad is on
+ *                                  screen exactly when this browser is the gated host
  *   window.__check.report()        { total, failed, failures[], results[] }
  *
  * It lives in tools/, which is not served, so to use it from the browser copy it to
@@ -1947,9 +1950,66 @@
         return results;
     }
 
+    /**
+     * The Portfolio's Knights panel, and which host it is allowed to be open on — run on
+     * `/portfolio`, once with the dev host cookie and once without.
+     *
+     * The panel renders a **fixture**: one knight of every tier, drawn by `sampleKnights()`, because
+     * the panel cannot be built against a wallet holding nothing. On the public apex a fixture sitting
+     * exactly where holdings go would be a claim about a wallet nobody made, so it is shown on the
+     * gated host only — and that is one claim in two directions, which is why this is an equality
+     * rather than "the samples are not here".
+     *
+     * The equality is with the dev host cookie, not with a hostname, and that is deliberate: a
+     * browser harness only ever runs on a development server (there is no `/_check.js` in
+     * production), and there the cookie *is* the host role — `?__app=1` is what makes one port able
+     * to be both hosts. The production direction is the two hostname lists, which is a source claim
+     * and lives in `tools/check-portfolio.js`. Falsified by making `gated` true unconditionally: the
+     * squad then appears with no cookie, and the first rec below fails naming the cookie.
+     */
+    async function portfolioSamples() {
+        await sleep(700);
+
+        const cookie = document.cookie.split(';').map((p) => p.trim())
+            .find((p) => p.startsWith('dk_app_host='));
+        const gated = (cookie || '').split('=')[1] === '1';
+
+        const strip = document.querySelector('.nft-tier-grid');
+        const chip = document.querySelector('.pf-sample-chip');
+        const note = document.querySelector('.pf-sample-note');
+        const tiles = document.querySelectorAll('.nft-tier-grid .nft-tier');
+        const cards = document.querySelectorAll('.pf-card .nft-grid .nft-card');
+        // The Knights card, found by its title. Not by `pf-soon`: two *other* cards on this page are
+        // shut on both hosts, so a selector for the class was satisfied by the Genesis chip and this
+        // rec passed on the gated host for the wrong panel — caught by running it there first.
+        const knightsCard = [...document.querySelectorAll('.pf-card')]
+            .find((card) => /knights/i.test(card.querySelector('.pf-card-title')?.textContent || ''));
+
+        rec('the sample squad is on screen exactly when this browser is the gated host',
+            !!strip === gated,
+            `strip=${!!strip} dk_app_host=${gated ? '1' : 'absent'}`);
+        rec('and a squad that is shown is labelled as a fixture, beside the cards',
+            !strip || (!!chip && !!note),
+            chip ? chip.textContent.trim() : 'no chip');
+        rec('and it is one card per tier, so the ramp has no hole in it',
+            !strip || (tiles.length > 0 && tiles.length === cards.length),
+            `${tiles.length} tiers, ${cards.length} cards`);
+        rec('and the Knights card is open exactly where the squad is, shut where it is not',
+            !!knightsCard && knightsCard.classList.contains('pf-soon') !== gated,
+            knightsCard
+                ? `card ${knightsCard.classList.contains('pf-soon') ? 'shut' : 'open'}, squad ${strip ? 'shown' : 'absent'}`
+                : 'no Knights card on this page');
+        rec('  and nothing overflows sideways because of it',
+            document.documentElement.scrollWidth <= window.innerWidth + 1,
+            `${document.documentElement.scrollWidth}px of content in ${window.innerWidth}px`);
+
+        return results;
+    }
+
     window.__check = {
         arya,
         assets,
+        portfolioSamples,
         engine,
         walletMenu,
         mint,

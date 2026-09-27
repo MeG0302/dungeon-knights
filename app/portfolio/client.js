@@ -11,7 +11,8 @@ import { describeEarn } from '../../lib/points-history';
 import {
     CAPSULE_FLING, CAPSULE_SPIN, capsuleFling, capsuleSpinFrame,
 } from '../../lib/points-config';
-import { GENESIS_PFP } from '../../lib/knights';
+import { GENESIS_PFP, RARITY, knightPfp, sampleKnights } from '../../lib/knights';
+import { DEV_HOST_COOKIE_NAME, isGatedBrowser } from '../../lib/host-role';
 import { bandFor } from '../../lib/staking-config';
 import { DEFAULT_CHAIN } from '../../lib/privy-chains';
 import NftCard from '../nft-card';
@@ -99,6 +100,37 @@ const shortWhen = (value) => {
 /** The empty read: `phase` is what the section renders from, `data` is what it shows. */
 const blank = { phase: 'idle', data: null, error: null };
 
+/**
+ * Is this browser on the gated host?
+ *
+ * The sample knights below are fixtures, and a page that printed them on the public apex would be
+ * making a claim about a wallet nobody made — which is what closing the Knights panel was for. So
+ * they are shown on the team's side of the password only, and this is the question that decides it.
+ *
+ * `lib/host-role.js` is deliberately not `lib/app-gate.js`: that module signs the gate cookie and
+ * must never reach a bundle, and the rule is written at the bottom of it. This reads the two facts
+ * the answer needs — the hostname, and the dev-only host cookie that stands in for it on localhost —
+ * and hands them to the shared rule, so the page and the middleware cannot disagree about which
+ * side of the door this is. `process.env.NODE_ENV` is inlined by the bundler, which is why the
+ * caller passes it rather than the module reading it.
+ */
+function gatedHere() {
+    let devCookie = null;
+    try {
+        for (const part of document.cookie.split(';')) {
+            const [name, ...rest] = part.trim().split('=');
+            if (name === DEV_HOST_COOKIE_NAME) devCookie = rest.join('=');
+        }
+    } catch {
+        // Private mode: no cookie jar, so no dev host — the answer stays "not gated".
+    }
+    return isGatedBrowser({
+        hostname: window.location.hostname,
+        devHostCookie: devCookie,
+        isProduction: process.env.NODE_ENV === 'production',
+    });
+}
+
 async function readJson(url, options) {
     const res = await fetch(url, { cache: 'no-store', ...(options || {}) });
     const body = await res.json().catch(() => null);
@@ -116,6 +148,12 @@ export default function PortfolioClient() {
     const [genesis, setGenesis] = useState(blank);
     const [points, setPoints] = useState(blank);
     const [history, setHistory] = useState(blank);
+
+    // Starts false — i.e. the public answer — and is corrected one tick after mount. That is not a
+    // compromise, it is the point: the page is server-rendered first, where there is no `location`
+    // to ask, and "yes, show the sample knights" is the one answer that must never be the default.
+    // The cost is that the team sees the closed panel for a frame on the gated host.
+    const [gated, setGated] = useState(false);
 
     const walletPill = useRef(null);
     const handleDisconnectRef = useRef(() => {});
@@ -158,6 +196,10 @@ export default function PortfolioClient() {
             window.removeEventListener('privyBridgeReady', read);
             offAccounts();
         };
+    }, []);
+
+    useEffect(() => {
+        setGated(gatedHere());
     }, []);
 
     const load = useCallback(async (who) => {
@@ -333,11 +375,24 @@ export default function PortfolioClient() {
         missed: countOf('missed'),
     };
 
+    // The sample squad, and only on the gated host: `sampleKnights()` is called here and nowhere
+    // else on this page, so there is one place to read and one place to check. One knight of every
+    // tier, which is the fixture the panel needs while there are no holders to draw from; every
+    // figure on each card is read out of `RARITY` rather than typed, so a sample cannot show a
+    // knight that could never be minted.
+    const sample = gated ? sampleKnights() : [];
+    // Counted, not typed: the tier strip prints how many of each tier are in the squad on screen, so
+    // it stays true if the fixture ever grows a second Epic.
+    const sampleByTier = sample.reduce((counts, knight) => {
+        counts[knight.rarity] = (counts[knight.rarity] || 0) + 1;
+        return counts;
+    }, {});
+
     // ------------------------------------------------------------------------ render
     const pageStyles = (
         <>
             <link rel="stylesheet" href="/theme.css?v=9" />
-            <link rel="stylesheet" href="/css/portfolio.css?v=6" />
+            <link rel="stylesheet" href="/css/portfolio.css?v=7" />
             <link rel="stylesheet" href="/css/nft-ui.css?v=1" />
             {/* No ethers: every figure on this page is read by the server, so the page itself never
                 calls the chain. `wallet-source.js` is still here for the wallet's own session and
@@ -467,39 +522,117 @@ export default function PortfolioClient() {
                         </section>
 
                         {/* ---------------------------------------------- Knights */}
-                        {/* Closed at the owner's instruction: for now this page says nothing about
-                            knights. The rarity strip, the hash power, the roll odds and the wallet's
-                            own tiles were printed here, and they are *gone* rather than dimmed — a
-                            blurred strip is still a strip and a blurred portrait is still a
-                            portrait, which is the hole `pf-soon` leaves for figures nobody can
-                            read yet. So the body went, and `RARITY`, `RARITY_ORDER`, `knightPfp`
-                            and the tier count went with it; `lib/knights.js` still publishes all of
-                            it, and `nft-ui.css` still styles the strip it will wear, so reopening
-                            this panel is restoring this one section — the last revision that
-                            rendered it is `50e0d65` — and nothing else. The panel itself stays,
-                            with its `$DNG` and Genesis neighbours, because a page that quietly
-                            lost a card is worse than one that says the card is not open. The chain
-                            read is untouched: `$DNG` prints staked knights and the claimable total
-                            from the same holdings call, which is blurred in its own panel. */}
-                        <section className="pf-card pf-soon">
+                        {/* Closed on the public host, open on the gated one, where it renders a
+                            sample squad instead of a wallet read.
+
+                            The closure is the owner's, and it stands: the rarity strip, the hash
+                            power, the roll odds and the wallet's own tiles are *gone* from the
+                            public page rather than dimmed — a blurred strip is still a strip and a
+                            blurred portrait is still a portrait, which is the hole `pf-soon` leaves
+                            for figures nobody can read yet. What changed is that the panel now has
+                            to be *built*, and it cannot be built against a wallet holding nothing:
+                            so `sampleKnights()` draws one knight per tier, every figure on it read
+                            out of `RARITY` rather than typed, and it is rendered only where `gated`
+                            is true — the team's side of the password, decided by
+                            `lib/host-role.js`. On the public apex nothing about knights is rendered
+                            at all, which is what `tools/check-portfolio.js` pins from the source
+                            and `tools/check-all.js` from the DOM, in both directions.
+
+                            The panel itself stays on both hosts, with its `$DNG` and Genesis
+                            neighbours, because a page that quietly lost a card is worse than one
+                            that says the card is not open. The chain read is untouched: `$DNG`
+                            prints staked knights and the claimable total from the same holdings
+                            call, which is blurred in its own panel. */}
+                        <section className={`pf-card${gated ? '' : ' pf-soon'}`}>
                             <h2 className="pf-card-title">
                                 <img src="/assets/ui/sword.png" alt="" className="pf-card-icon" /> Knights
-                                <span className="pf-soon-chip">Coming soon</span>
+                                {gated ? (
+                                    <span className="pf-sample-chip">Sample data</span>
+                                ) : (
+                                    <span className="pf-soon-chip">Coming soon</span>
+                                )}
                             </h2>
-                            {/* No count, either: `pf-card-count` used to print how many this wallet
-                                held, and a figure in the title is as much of an announcement as the
-                                strip was. */}
-                            <p className="pf-soon-note">
-                                The knights in this wallet will read here when this panel opens.
-                            </p>
-                            {/* Blurred with the rest of the gated half: both of these lead into the
-                                game, which on the public host is behind the password. A button that
-                                bounces a stranger to a password screen is worse than one that is
-                                visibly not for them yet. */}
-                            <div className="pf-actions pf-blur" aria-hidden="true">
-                                <a className="pf-link" href="/mint">Summoning Chamber</a>
-                                <a className="pf-link" href="/menu">Knight&rsquo;s Hall</a>
-                            </div>
+                            {/* No count either way: `pf-card-count` used to print how many this
+                                wallet held, and a figure in the title is as much of an announcement
+                                as the strip was. Five samples have nothing to say with it. */}
+                            {gated ? (
+                                <>
+                                    {/* Said out loud rather than left to the chip: a fixture
+                                        sitting exactly where holdings go is the one thing on this
+                                        page that could be mistaken for a chain read. */}
+                                    <p className="pf-sample-note">
+                                        One knight of every tier, drawn from the published table — the
+                                        panel&rsquo;s own design, not a wallet read. Shown on the app host
+                                        only.
+                                    </p>
+                                    <div className="nft-tier-grid" role="list" aria-label="Knights by rarity tier">
+                                        {sample.map((knight) => {
+                                            const meta = RARITY[knight.rarity.toUpperCase()];
+                                            return (
+                                                <div className={`nft-tier nft-rarity-${knight.rarity}`} role="listitem" key={knight.rarity}>
+                                                    <img
+                                                        src={knightPfp(knight.rarity)}
+                                                        alt={`${meta.name} knight portrait`}
+                                                        className="nft-tier-art"
+                                                        loading="lazy"
+                                                        decoding="async"
+                                                        width={128}
+                                                        height={128}
+                                                    />
+                                                    <span className="nft-tier-name" style={{ color: meta.color }}>
+                                                        {meta.name}
+                                                    </span>
+                                                    <span className="nft-tier-count nft-num">{fmtInt(sampleByTier[knight.rarity])}</span>
+                                                    <span className="nft-tier-odds nft-num">
+                                                        {meta.hashPower} HP · {Math.round(meta.dropRate * 100)}% roll
+                                                    </span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                    <div className="nft-grid" aria-label="Sample knights, one per tier">
+                                        {sample.map((knight) => {
+                                            const meta = RARITY[knight.rarity.toUpperCase()];
+                                            return (
+                                                <NftCard
+                                                    key={knight.tokenId}
+                                                    art={knightPfp(knight.rarity)}
+                                                    badge={meta.name}
+                                                    title={knight.name}
+                                                    tokenId={knight.tokenId}
+                                                    hp={knight.hashPower}
+                                                    hpMin={15}
+                                                    hpMax={100}
+                                                    rarity={knight.rarity}
+                                                    metaTop={`${meta.dungeonReward} DNG / run · ${meta.dailyRuns} runs`}
+                                                    metaBottom={`${Math.round(meta.dropRate * 100)}% drop`}
+                                                />
+                                            );
+                                        })}
+                                    </div>
+                                    {/* Not blurred on this host: both of these are one click
+                                        away here, which is the whole reason the public half
+                                        is blurred instead of deleted. */}
+                                    <div className="pf-actions">
+                                        <a className="pf-link" href="/mint">Summoning Chamber</a>
+                                        <a className="pf-link" href="/menu">Knight&rsquo;s Hall</a>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <p className="pf-soon-note">
+                                        The knights in this wallet will read here when this panel opens.
+                                    </p>
+                                    {/* Blurred with the rest of the gated half: both of these lead
+                                        into the game, which on the public host is behind the
+                                        password. A button that bounces a stranger to a password
+                                        screen is worse than one that is visibly not for them yet. */}
+                                    <div className="pf-actions pf-blur" aria-hidden="true">
+                                        <a className="pf-link" href="/mint">Summoning Chamber</a>
+                                        <a className="pf-link" href="/menu">Knight&rsquo;s Hall</a>
+                                    </div>
+                                </>
+                            )}
                         </section>
 
                         {/* ---------------------------------------------- Genesis */}
