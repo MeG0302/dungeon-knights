@@ -5780,3 +5780,58 @@ own scoped URL as §3 warns.
 `https://dungeonknights.io/contract-addresses.js` answers **200** and lists every address the docs
 page now blurs. The blur is a reader-level control; that file is the actual publication, and moving it
 behind the gate is a separate decision.
+
+## 11. Phones play the intro loop too
+
+**The ask, and what it undoes.** The phone block in `home.css` was a `display: none` on
+`.home-video`, with the argument written into the comment above it: a phone should not spend its data
+on a background loop. That was measured true — a media element that is never rendered never runs source
+selection, so the 3.2 MB `intro-web.mp4` was not requested at all on a 390-wide viewport — and it is
+why the page opened cheap on a phone. The owner asked for the footage on every screen. So the rule is
+gone: the phone block still swaps the art behind the element (`menu-background-mobile.webp`, 85 KB at
+900px, against 292 KB at 1920 for a screen that shows it under two gradients) and no longer hides
+anything. `prefers-reduced-motion` is now the **only** rule on any screen that removes the loop, which
+is what that setting is for.
+
+**The cost is stated, not hidden.** A phone now pays the same 3.2 MB a laptop pays, for the same 29
+seconds. That is the standing choice and the sheet's own comment says so, next to the fact that
+`display: none` really did save those bytes — so nobody later reads the old rule's absence as an
+oversight. Autoplay is not the sheet's doing either way: it is the `muted playsinline` on the element in
+`lib/static-pages.js`, which is what iOS requires before it plays anything untapped.
+
+**The guard was inverted, not deleted.** `tools/check-landing.js` used to pin the presence of that rule
+(*"phones never select a video source at all"*). It now asserts the **absence** of any `display: none`
+on `.home-video` inside the phone block, with the detail text saying why (one line re-added is all it
+would take to put a phone back on the poster); the small-background rec is re-worded (*"which is all
+the phone rule still does"*) and reduced motion now reads *"the only thing left that skips the loop"*.
+The sheet goes `home.css?v=5` → **`v=6`**. 36 checks.
+
+**Falsified before it was trusted.** Three mutations — re-adding the phone `display: none`, swapping the
+phone art back to the 1920 cut, and stripping the reduced-motion hide — each failed by name. The first
+run printed MISSED for all three because the mutator's own banner regex was case-sensitive against the
+guard's `FAILED:` line; that was the mutator's bug rather than a guard gap, and after fixing it the
+three were caught. Mutator deleted.
+
+**Read off the live apex at 390×844**, not the response bytes: the served sheet is `css/home.css?v=6`,
+the element computes `display: block` / `visibility: visible`, `currentSrc` is
+`/assets/intro-web.mp4` (1280×720, `readyState 4`, `paused false`), and it advanced **15.49s → 18.99s
+in 3.5s of wall clock**, buffered to 29s — the whole loop. The page background computes
+`menu-background-mobile.webp`, and the log shows `home.css?v=6 → 200` and `intro-web.mp4 → 206
+(Media)`. The same reading was taken on the dev server first (17.49s → 21.01s over 3.5s) so the live
+numbers are a confirmation and not the first test.
+
+**Footnote on the first source.** On the deployed host `/assets/landing-loop.mp4` answers with the
+site's own HTML not-found page — `content-type: text/html`, title *"404: This page could not be
+found."* — a plain GET reports 200 and a range request 206, and neither is a video, so the element
+settles on the second source exactly as §10 describes. Reserved name still reserved; nothing to do.
+
+**Fleet after it:** `check-landing` **36/36** · `check-styles` clean · `check-copies` 2/2 ·
+`check-docs` 77/77 · `check-portfolio` 72/72 · `check-pitch` 43/43 · gate 150/150 · `check-genesis`
+69/72 — the three genesis fails are pre-existing: they reproduce on a clean `HEAD` worktree and are
+somebody else's in-flight numbers (max hash power, run cap, ticket cap), not this change.
+
+**Shipped.** Committed `7b060e2` (*phones play the intro video too, at the same 3.2 MB a laptop
+pays*), pushed, then `npx vercel --prod --yes --scope meglast320-1694`: deployment
+`dungeon-knights-efunaf0ft-meglast320-1694`, with all four aliases (`dungeonknights.io`, `www.`,
+`app.`, `dungeon-knights.vercel.app`) re-pointed at it by hand, `--prod` having aliased only its own
+scoped URL as §3 warns.
