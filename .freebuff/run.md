@@ -5970,3 +5970,111 @@ on `/menu`: `Portfolio` at 26px left of the pill, no overlap, no overflow.
 **Shipped.** Committed `1b3f0f7` (*every page shows a Portfolio link, not only a row inside the wallet
 menu*), pushed, then `npx vercel --prod --yes --scope meglast320-1694`: deployment
 `dungeon-knights-kgfjf9u9g-meglast320-1694`, all four aliases re-pointed by hand.
+
+## 14. A sample squad, so the Knights panel can be built — on the gated host only
+
+The ask was "give some mock legendary nfts so we can proceed to next page for development". That
+lands on a decision the owner already ruled on in §9: the Knights panel is **closed**, and a guard
+(`tools/check-portfolio.js`) asserted the *absence* of the whole subject — `nft-tier`, `knightPfp`,
+`RARITY`, `dropRate`, `knightList`, `byTier`. Reopening it means deliberately inverting that rec, so
+it was worth doing deliberately rather than quietly.
+
+**The fixture.** `sampleKnights()` in `lib/knights.js` — one knight of every tier, loudest first:
+Legendary #1 (100 HP), Epic #2 (45), Rare #3 (36), Uncommon #4 (25), Common #5 (15), with the roll
+odds beside each (1% · 4% · 15% · 30% · 50%). Four choices in it:
+
+- **One of each tier, not a roll.** `lib/staking-source.js` already previews a *wallet's* knights by
+  drawing across the published odds, and that is the right shape for a preview and the wrong shape
+  for this: at a 1% Legendary, most wallets draw none, so the tier the panel exists to show is
+  usually missing. A fixture that guarantees the ramp is a different job from a simulation.
+- **Every figure comes from `RARITY`**, read at build time and never typed here — the same rule
+  `lib/staking-source.js` follows for the same reason. A sample knight carrying a number nobody could
+  mint would teach the wrong design to whoever builds against it.
+- **Deterministic: no seed, no clock.** The vault's preview is seeded from the wallet address so it
+  does not rearrange between renders; a fixed list satisfies that more simply.
+- **The ids are the tier's position** (`#1` is the Legendary), which is a statement about the array
+  and not about anyone's wallet.
+
+**The host split, and it is the whole reason this took two files.** `/portfolio` is public on the
+apex, and mock legendary holdings on a public page read as a claim about the wallet — the exact thing
+closing the panel was for. So the squad renders on the **gated** host only. That needs a page to ask
+which side of the door it is on, and `lib/app-gate.js` ends with an explicit rule that it must never
+reach a bundle (it signs the cookie, so it reads `APP_GATE_PASSWORD`). Hence `lib/host-role.js`: the
+secret-free half, holding the two hostname lists and `isGatedBrowser()`. `lib/app-gate.js` now imports
+`GATED_HOST_DEFAULTS` / `PUBLIC_HOST_DEFAULTS` / `normaliseHost` from it and re-exports the last two,
+so the middleware and the page read **one list one list** — two copies would drift, and the drift
+would be a page printing the fixture to a stranger or hiding the panel from the team.
+
+The card was not deleted and re-added: its class is `` `pf-card${gated ? '' : ' pf-soon'}` ``, one
+panel with the host as a branch. `useState(false)` starts it **closed**, because the page is
+server-rendered first where there is no `location` to ask, and "yes, show the samples" is the one
+answer that must never be the default. The cost is one frame of the closed panel on the team's host.
+
+**One case where the two modules deliberately differ.** With no hostname at all,
+`isGatedBrowser({})` answers `false` while `isAppRequest({ host: '' })` answers `true`. The middleware
+is looking at a real request whose `Host` is always set and failing closed is right there; a page has
+no hostname on the server and failing closed would put the samples in the first paint for everybody.
+Written down in the module doc and pinned by a rec, rather than left as an inconsistency to be
+"fixed" later.
+
+**Guards.** `check-portfolio.js` **72 → 83**. §8's Knights recs became branch claims — the class, the
+closed first paint, the single call site behind `gated`, both lists mapping the *same* array (so an
+empty one renders nothing), the chip and the note — and a new evaluated section runs
+`sampleKnights()` and the two host modules rather than reading them. `check-all.js` gained
+`window.__check.portfolioSamples()`: the browser-side equality, squad-on-screen **iff**
+`dk_app_host=1`, because no file can decide a runtime branch. Run it on `/portfolio` with `?__app=1`
+and `?__app=0`.
+
+**What falsification taught, which is most of the value:**
+
+- **A check that only reads cannot see a dead module.** The first `sampleKnights` was built with
+  `TIER_DISPLAY_ORDER` declared *above* the list it reverses — a temporal-dead-zone throw at import
+  time that took the whole page down while every source check passed. Running the function is
+  therefore part of the guard, and the mutator's TDZ case is required to produce **no summary at all**
+  rather than a named failure.
+- **One mutation was NOT caught, and the reason is the check's real shape.** Emptying
+  `GATED_HOST_DEFAULTS` changes both modules at once, so they still *agreed* — the agreement rec is
+  about two lists, not about a wrong one. It was caught by `check-gate` instead ("an empty list is the
+  default"), so the mutator now points that case at that guard. The rec was then strengthened to
+  compare **every name either module knows**, in production *and* development: production cannot
+  answer this question at all, because its rule is "anything that is not the apex is the game", so a
+  wrong named list is invisible there. In development the named branch decides. Dropping the second
+  list into `lib/app-gate.js` now fails it, in dev only, which is the honest statement of what it
+  covers.
+- **The harness passed on the gated host for the wrong panel.** The rec for "the shut arm is the one
+  that promises" selected `.pf-card.pf-soon .pf-soon-chip` — and two *other* cards on this page are
+  shut on both hosts, so the Genesis chip satisfied it. It is now found by the card's title, and the
+  lesson is ordered into the procedure: run the **gated** side of a host-split check first, because
+  the public side can pass for the wrong reason while the gated side cannot.
+- **A rec detail that describes the expectation instead of the observation is worse than no detail.**
+  The failure message printed `shut` from the harness's own `gated` variable while the DOM said the
+  card was open — backwards in the one case the check exists to catch. It now prints what was seen
+  (`card open, squad shown`).
+- Falsified by `tools/_mutate-samples.js`, 10 cases, each named: a figure typed instead of read
+  (`hashPower + 1`), the TDZ, a second hostname list, the empty list, the fixture deciding instead of
+  the host, the fixture unlabelled, a team-side first paint, the card grid priming its own list, an
+  inverted branch, and — in the browser — `setGated(true)` with no cookie, which failed naming
+  `dk_app_host=absent`. The file is deleted; both halves were reverted and re-verified green.
+
+**Read off the browser** (`localhost:3111`, dev host cookie as the switch). `?__app=0` → 5/5:
+`strip=false dk_app_host=absent`, no chip, no cards, `Coming soon` present. `?__app=1` → 5/5: strip
+present with `Sample data`, 5 tiers, 5 cards reading `Legendary Knight #1 … Common Knight #5`, and
+`nothing overflows sideways — 1247px of content in 1247px`. Phone, 390×844: the strip reflows to two
+columns over three rows (157px tiles from `nft-ui.css`'s own grid, no new CSS), cards 156px,
+`390px of content in 390px`, header 84px — the geometry is `card top 653 → title 668 with the chip
+right-aligned on the same line → note 706 → strip 781 → cards 1249 → actions 2010`, and the chip
+measures `rgb(168,154,134)` on a dashed `--border-base` border at the muted end of the palette. It
+is deliberately **not** `.pf-soon-chip` recoloured: that chip means the panel is shut, this one means
+the panel is open and what is in it is a fixture.
+
+**Fleet after it:** `check-portfolio` **83/83** · `check-gate` 150/150 · `check-wallet-menu` 19/19 ·
+`check-wallet-source` 68/68 · `check-docs` 77/77 · `check-waitlist` 102/102 · `check-rarity` 64/64 ·
+`check-pitch` 43/43 · `check-run-budget` 39/39 · `check-landing` 36/36 · `check-back` 18/18 ·
+`check-map-gate` 17/17 · `check-identifiers` 4/4 · `check-copies` 2/2 · `check-styles` clean ·
+`check-genesis` 69/72, the same three pre-existing fails.
+
+**Committed, not deployed.** `1937d3c` (*the Knights panel reopens with a sample squad, on the gated
+host only*) carries the code and the guards, with this entry in the doc commit above it. `git push` /
+`vercel --prod` were left alone at the owner's choice, so `app.dungeonknights.io/portfolio` still
+serves the build before this one and its Knights panel still reads **Coming soon**. The dev server on
+:3111 is where the squad is visible for now.
