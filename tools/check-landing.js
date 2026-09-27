@@ -85,10 +85,19 @@ function rec(label, pass, detail) {
         `${reservation}px on a laptop (+ the safe-area inset), ${phoneReservation}px on a phone — 79px and 125px measured`);
 
     // ------------------------------------------------------------------- the phone variant
+    // The phone block used to carry a `display: none` on `.home-video` — a phone requested no video at
+    // all, which saved 3.2 MB and is what this assertion used to pin. The owner asked for the footage on
+    // phones too, so the assertion is now the opposite one: the absence of that rule is what the check is
+    // for, and it is checked rather than assumed, because re-adding one line is all it would take to
+    // silently put a phone back on the poster. The block is still about the art behind the element, so
+    // the small background stays pinned here as well.
     const phoneBlock = (css.match(/@media \(max-width: 760px\) \{[\s\S]*?\n\}/) || [''])[0];
-    rec('phones never select a video source at all', /\.home-video\s*\{\s*display:\s*none/.test(phoneBlock));
-    rec('phones paint the small background', phoneBlock.includes('menu-background-mobile.webp'));
-    rec('reduced motion gets the same picture, without the phone rule',
+    rec('phones are not exempt from the video any more',
+        !/\.home-video\s*\{[^}]*display:\s*none/.test(phoneBlock),
+        'the phone block hides .home-video again, so a phone would load and play nothing — the owner asked for the opposite');
+    rec('phones paint the small background, which is all the phone rule still does',
+        phoneBlock.includes('menu-background-mobile.webp'));
+    rec('reduced motion is the only thing left that skips the loop',
         /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.home-video\s*\{\s*display:\s*none/.test(css));
 
     // ------------------------------------------------------------- thumb and keyboard quality
@@ -119,7 +128,9 @@ function rec(label, pass, detail) {
         && !body.includes('poster="/assets/images/menu-background.jpg"'));
     rec('the crest is its own 46px cut, not the 167 KB panel icon',
         body.includes('/assets/ui/sword-crest.png') && !body.includes('src="/assets/ui/sword.png"'));
-    rec('the video is muted, inline and looping (it autoplays nowhere otherwise)',
+    // Load-bearing on phones now rather than only on laptops: iOS plays nothing untapped unless the
+    // element is muted and inline, which is the whole reason the phone rule above can simply not hide it.
+    rec('the video is muted, inline and looping (a phone will not autoplay it otherwise)',
         /class="home-video"[^>]*autoplay[^>]*loop[^>]*muted[^>]*playsinline/.test(body)
         || /class="home-video"[^>]*autoplay[^>]*muted[^>]*playsinline[^>]*loop/.test(body));
 

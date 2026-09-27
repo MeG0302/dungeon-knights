@@ -244,22 +244,30 @@
     text-decoration: none;
 }
 
-/* A phone should not spend its data on a background loop, and neither should anyone who has asked
- * their system for less movement. Both get the poster image, which is already the page's background.
- * `display: none` is what actually saves the bytes: a media element that is not rendered never runs
- * source selection, so the 3.2 MB file is not requested at all — verified by watching the resource
- * timings on a 390-wide viewport, not by reading this rule.
+/* A phone plays the same loop a laptop does. This rule used to be a `display: none` on `.home-video`
+ * with the argument that a phone should not spend its data on a background loop; the owner asked for
+ * the footage on every screen instead, and that is the standing choice — one file for the whole site,
+ * paid for on the device that gets the same 29 seconds. `display: none` really did save the bytes (a
+ * media element that is not rendered never runs source selection, so the file was never requested),
+ * so this is a deliberate cost and not an oversight: 3.2 MB on a phone.
  *
- * The art behind it is trimmed for the same reason: 85 KB at 900px wide instead of 292 KB at 1920,
- * for a screen 390 points across that shows it under two gradients anyway. Only the image layer is
- * replaced, so the colour, the `cover` sizing and the position all carry over from the shorthand
- * above. The 965 KB JPEG both of these replaced is still on disk — `/hub`, the three game screens
- * and the social card all still ask for it by name. */
+ * What is left here is only the art behind the element: 85 KB at 900px wide instead of 292 KB at
+ * 1920, for a screen 390 points across that shows it under two gradients anyway, plus the paint for
+ * the moment before the first frame decodes and for a browser that plays no video at all, where the
+ * poster and this background are the whole page. Only the image layer is replaced, so the colour, the
+ * `cover` sizing and the position all carry over from the shorthand above. The 965 KB JPEG both of
+ * these replaced is still on disk — `/hub`, the three game screens and the social card all still ask
+ * for it by name.
+ *
+ * That a phone will autoplay at all is not this sheet's doing: it is the `muted playsinline` on the
+ * element in `lib/static-pages.js`, which is what iOS requires before it plays anything untapped. */
 @media (max-width: 760px) {
-    .home-video { display: none; }
     .home-page { background-image: url('/assets/images/menu-background-mobile.webp'); }
 }
 
+/* Motion is still a request, and a looping background video is exactly what that setting is for. This
+ * is now the only rule that removes the loop, on any screen: the phone rule above is about bytes and
+ * keeps the video, this one is about the visitor and has no substitute. */
 @media (prefers-reduced-motion: reduce) {
     .home-video { display: none; }
 }
