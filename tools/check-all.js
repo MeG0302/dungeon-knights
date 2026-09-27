@@ -1887,6 +1887,15 @@
         rec('and it is closed until asked for', menu.hidden === true);
         rec('the affordance is visible before anyone hovers', !!pill.querySelector('.wallet-menu-caret'));
 
+        // One wallet control in the header, not two. The app host used to inject a second — a purple
+        // `🔌 Connect Wallet` button in Arial, beside this pill — and a route that grows one back is
+        // a route where the pill quietly became the smaller half of its own header.
+        // `tools/check-wallet-menu.js` makes the same claim from the source.
+        const strayWalletBar = document.querySelector('.shared-wallet-header, .shared-wallet-btn');
+        rec('and it is the only wallet control in the header',
+            !strayWalletBar,
+            strayWalletBar ? strayWalletBar.textContent.trim() || 'an empty injected bar' : 'no injected bar');
+
         // Opened the way a phone opens it — there is no hover on a phone, so a menu that needs
         // one is a menu half the players do not have.
         pill.dispatchEvent(new MouseEvent('click', { bubbles: true }));

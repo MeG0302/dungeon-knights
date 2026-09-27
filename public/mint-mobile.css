@@ -106,23 +106,6 @@
     flex-shrink: 0;
   }
 
-  /* The shared connect button is injected by shared-header.js. */
-  .shared-wallet-header {
-    order: 3;
-    margin-left: auto;
-    padding: 0;
-    gap: 0;
-    flex-shrink: 0;
-  }
-
-  .shared-wallet-btn {
-    padding: 7px 11px;
-    font-size: 11px;
-    letter-spacing: 0.5px;
-    white-space: nowrap;
-    box-shadow: none;
-  }
-
   /* ---------- Stack the two panels ---------- */
   .page > div {
     flex-direction: column;

@@ -8,7 +8,8 @@
  * `#connectWalletBtn` that no page body defines — the landing header is only
  * `.wallet-pill#walletWidget > #dngBalanceHeader` — so a first-time visitor on `/` could not
  * connect a wallet anywhere on the page. On the other pages the pill was a readout and the
- * disconnect button lived beside it, or in the `shared-header.js` bar.
+ * disconnect button lived beside it, or in the `shared-header.js` bar — a second control that is
+ * gone now, so this pill and the menu behind it are the whole wallet UI on every page.
  *
  * So this adds the one thing that control was missing: a menu. Hovering it (or tapping it, which
  * is the only version that exists on a phone) offers

@@ -14,12 +14,14 @@
  * The route list is therefore not typed in — it is read out of `app/`, which is what decides what
  * a route *is*. A new page fails this until it carries the control, which is the point.
  *
- * Four claims, none of which a screenshot can make:
+ * Five claims, none of which a screenshot can make:
  *
  *   1. Every route has a wallet control in its own markup.
  *   2. Every route loads the module that turns that control into a menu.
  *   3. Each React route attaches it by hand — hydration beats the module's own DOM scan.
  *   4. The menu stays cheap: it reads nothing from the chain, and its Portfolio link resolves.
+ *   5. That control is the *only* one in the header — the pill and its menu, which is the Points
+ *      page's chrome, rather than a second injected button beside it in a colour of its own.
  *
  * Two routes are exempt, in `tools/wallet-menu-allowlist.json`, and the exemption is printed with its
  * reason rather than applied silently: the public coming-soon page at the apex, which deliberately has
@@ -162,6 +164,37 @@ rec('every route loads the module that turns that control into a menu',
 rec('each React route attaches the menu by hand, because hydration beats a DOM scan',
     manual.length === 0,
     manual.length ? manual.join(' ') : 'attach(el, { onDisconnect }) in all of them');
+
+// ---------------------------------------------------------------- one control, not two
+//
+// The pill is the whole control, and that is the Points page's chrome exactly: a bronze pill with
+// a caret, and the menu behind it. The app host used to carry a second one — `shared-header.js`
+// injected a purple `🔌 Connect Wallet` button in Arial into the header of `/menu`, `/mint` and
+// `/game`, beside a pill that already opened the menu. One job done twice, and the loud half
+// painted in a colour no other screen on the site uses. The injector is gone, and three separate
+// halves of that are checked, because each one alone can come back: no route asks for the module,
+// the module is not in `public/`, and no sheet still paints its button.
+const appClients = fs.readdirSync(path.join(ROOT, 'app'), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => `app/${entry.name}/client.js`)
+    .filter(exists)
+    .map(read);
+
+const wantsSecondBar = [
+    ...Object.entries(STATIC_PAGES).flatMap(([key, entry]) =>
+        (entry.scripts || []).filter((s) => s.startsWith('shared-header')).map((s) => `${key} loads ${s}`)),
+    ...appClients.filter((src) => /shared-header/.test(src)).map(() => 'an app client names it'),
+];
+
+rec('no route loads a second wallet bar beside the pill',
+    wantsSecondBar.length === 0,
+    wantsSecondBar.length ? wantsSecondBar.join('; ') : 'the pill and its menu are the whole control');
+rec('and the file that injected it is not in the served tree, so a route this check cannot see cannot bring it back',
+    !exists('public/shared-header.js'),
+    exists('public/shared-header.js') ? 'public/shared-header.js is back' : 'public/ has no shared-header.js');
+rec('no sheet still paints its off-palette button',
+    !/shared-wallet-(?:btn|header)/.test(read('public/shared-wallet.css')),
+    'the pill keeps its rules in that sheet; the purple button\'s are gone');
 
 // Printed, not silent. An exemption nobody can read is indistinguishable from a check that stopped
 // looking at a route.

@@ -16,7 +16,8 @@ class UI {
     }
 
     initElements() {
-        // Header elements (wallet handled by shared-header.js)
+        // Header elements. The wallet chrome is the pill itself: this file fills in the address and
+        // the disconnect button that live inside it, and `wallet-menu.js` hangs the menu off it.
         this.disconnectBtn = document.getElementById('disconnectBtn');
         
         // Decorative border elements

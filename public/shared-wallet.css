@@ -1,83 +1,12 @@
-/* Shared Wallet Header Styles - Dark Tactical Theme */
-
-.shared-wallet-header {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  padding: 10px;
-}
-
-.wallet-info {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-
-.wallet-info > div {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: rgba(139, 92, 246, 0.1);
-  border-radius: 8px;
-  border: 1px solid rgba(139, 92, 246, 0.3);
-}
-
-.wallet-label {
-  color: #888;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-weight: 600;
-}
-
-#wallet-address-text {
-  color: #8B5CF6;
-  font-weight: bold;
-  font-family: 'Courier New', monospace;
-  font-size: 13px;
-}
-
-#wallet-balance-text {
-  color: #FFD700;
-  font-weight: bold;
-  font-size: 16px;
-}
-
-.shared-wallet-btn {
-  padding: 10px 20px;
-  background: linear-gradient(135deg, #8B5CF6, #6D28D9);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-weight: bold;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
-}
-
-.shared-wallet-btn:hover {
-  background: linear-gradient(135deg, #7C3AED, #5B21B6);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(139, 92, 246, 0.5);
-}
-
-.shared-wallet-btn.connected {
-  background: linear-gradient(135deg, #EF4444, #DC2626);
-  box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
-}
-
-.shared-wallet-btn.connected:hover {
-  background: linear-gradient(135deg, #DC2626, #B91C1C);
-  box-shadow: 0 6px 20px rgba(239, 68, 68, 0.5);
-}
-
-.shared-wallet-btn:active {
-  transform: translateY(0);
-}
+/* The wallet chrome the legacy pages share: the pill every header carries, and the address and
+ * disconnect button that live *inside* it on `/game`.
+ *
+ * This file used to be twice this long, because `shared-header.js` injected a second wallet control
+ * into each header that loaded it — a purple `🔌 Connect Wallet` button in Arial, sitting beside a
+ * pill that already opened the wallet menu. That is one job done twice, and one of the two in a
+ * colour nothing else on the site uses. The injector is gone, so these are the rules for the
+ * control that is left; `tools/check-wallet-menu.js` fails if either half comes back.
+ */
 
 /* ==========================================================
    WALLET PILL - Dark Tactical Theme (landing + dungeon-select)
