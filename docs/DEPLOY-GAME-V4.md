@@ -136,7 +136,7 @@ curl -s https://dungeon-knights.vercel.app/api/game/config
 In Remix, on the deployed V4, call:
 
 ```
-claimSignedRuns([[ [1], 1, 1000000000000000000, 1, 9999999999, "0x11…(65 bytes)…11" ]])
+claimSignedRuns([[ [1], 1, 1000000000000000000, 1, 9999999999, 0, "0x11…(65 bytes)…11" ]])
 ```
 
 It must revert with **"Bad signature"**. That single call is the whole point of V4: a run

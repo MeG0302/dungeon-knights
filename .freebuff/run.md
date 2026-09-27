@@ -6173,3 +6173,152 @@ untouched. `/`, `/points`, `/genesis` and `/portfolio` are `200`; `www` 308s to 
 and the `.vercel.app` alias still 307 to `/gate`; and the live gated page — read signed in — plays
 `https://app.dungeonknights.io/assets/hub-intro.mp4`, `readyState 4`, `duration 63.71`, 1132×718,
 `currentTime` 12.50 → 14.00 over 1.5 s, muted and looping, with no console errors.
+
+## 16. Every page with sound gets the control that turns it off
+
+The ask: *"after pushing it to vercel you can add sound toggle in each pages"*. `audio.js` starts
+menu music on load and generates every effect procedurally — and **no page had any control over it**:
+`toggleMute()` and `toggleMusicMute()` were never called from anywhere, so the only way to silence
+the site was the browser's own tab mute. This section adds the missing control, not a new sound
+system.
+
+**Two decisions were taken before building, because each changes the work.** One: the toggle drives
+the page's music and effects, not the video loops — every loop on the site is silent by design, and
+§15 dropped the new capture's audio track on purpose. Two: it goes on every page that *has* sound,
+and none of the pages that do not.
+
+**The pieces.** `public/sound-toggle.js` mounts a speaker button into `.header-actions`, beside the
+wallet control, so it sits in each page's own chrome rather than floating over it (a page with no
+header gets a pinned fallback). It brings its own versioned sheet, `/css/sound-toggle.css?v=1`, the
+pattern Arya set in §11 — and `check-styles.js` follows that injected absolute path, so the rules
+stay accounted for on five routes that never list them. The choice is stored under `dk_sound`,
+namespaced like `dk_arya_*`, and applied *before* the page's controller asks for music because the
+script sits between `audio.js` and the controller in every list.
+
+**Three changes in `audio.js`, one of them a gap this work uncovered.** `setSoundEnabled(on)` is the
+one switch the button calls — effects plus both music tracks — and it records `wanted` ('menu' or
+'game') in `startMenuMusic()`/`startMusic()` so switching sound back on can resume the track the
+page asked for, *including* when the ask was refused while sound was off. `toggleMusicMute()` used
+to mute only `this.music`: a page playing menu music carried on playing while `isMusicMuted` said
+otherwise, which is a flag that is not the truth. Both tracks move together now.
+
+**The bug the browser battery caught, which is the argument for having it.** The click handler read
+`off = !audio.setSoundEnabled(!off)` — handing the manager the state the page is *already* in, so a
+click changed nothing but the stored value and the icon (a control that only records itself is worse
+than no control, because it says it worked). `__check.sound()` failed it by name — *one click turns
+the effects off* — on the first run, before anything was committed. The fix flips first and hands
+over the result.
+
+**Guards.** `tools/check-sound.js` (**29/29**) pins the set: every legacy route that loads
+`audio.js` also loads the control, straight after it; no route that has no sound loads it; every page
+that carries it has the header slot it mounts into; the manager keeps the contract the button needs;
+the control keeps its ARIA, its namespaced key, its two faces and its versioned sheet; and every page
+asks for a versioned `audio.js` now that the file changed (`?v=1790510504` — four of them were
+unversioned). It reads the router (`pageKey="…"`) rather than assuming every `STATIC_PAGES` key is a
+page, because `STATIC_PAGES.points` exists and lists `audio.js` while nothing serves it any more —
+the Points page is React and loads no audio — and it pins that fact so a future re-wiring fails the
+check instead of shipping a dead button. `tools/check-all.js` gained `__check.sound()` (**15 recs**,
+browser-side): the button, its ARIA against the manager, the stored choice, both tracks muted and
+the asked-for one playing again — then it puts the browser back the way it found it.
+
+**Measured on the five routes** — the Kingdom Gate (`/` on the app host), `/menu`, `/mint`,
+`/dungeons`, `/game`: one button each, inside `.header-actions`, `47×31` in the bar (at `l=1068` on
+the gate, `1052` on `/game` where the header is narrower), `elementFromPoint` at its centre resolving
+to itself on every one — nothing sits on top of it, Arya included. On `/mint` it lands between the
+back link and the wallet widget (`[btn, soundToggle, walletWidget]`). One honest note: on `/game` the
+header is behind the map gate while the map loads, like every other control on that overlay's
+screen; the toggle is there before and after.
+
+**And the walk a visitor makes.** Muted on the gate, then opened `/menu`: `isMuted` and
+`isMusicMuted` both true, the button already reading *Sound is off — turn it back on*, `menuMusic`
+at `paused` with `currentTime 0`, and **no `🎵 Menu music started` in the console** — the page asked
+for its music and was refused before a note was heard. Unmuting there brought it back playing, from
+the remembered `wanted: 'menu'`.
+
+**Fleet after it:** `check-sound` **29/29** · `check-styles` clean · `check-copies` 2/2 ·
+`check-rarity` 64/64 · `check-refs` 49/49 · `check-landing` 38/38 · `check-genesis` 69/72, the same
+three pre-existing fails · `check-docs` 77/77 · `check-wallet-menu` 19/19 · `check-gate` 150/150 ·
+`check-map-gate` 17/17 · `check-arya` 17/17 · `check-pitch` 43/43 · `check-portfolio` 83/83 ·
+`check-waitlist` 102/102 · `check-run-budget` 39/39 · `check-back` 18/18 · `check-logs` 28/28 ·
+`check-session` 34/34 · `check-runs` 16/16.
+
+**Left uncommitted, and not deployed — the owner's choice, asked and answered.** The control is
+finished and green in the working tree: three new files (`public/sound-toggle.js`,
+`public/css/sound-toggle.css`, `tools/check-sound.js`) and three edits (`public/audio.js`,
+`lib/static-pages.js`, `tools/check-all.js`). `4b681e4` is still the newest push and
+`app.dungeonknights.io` still serves §15's build, so nothing here is on the live site yet. Shipping
+it is the §15 shape — commit, push, `vercel --prod --scope meglast320-1694`, re-point the four hosts,
+then read the live asset bytes and the button back.
+
+## 17. The claim that could never be sent: V4's `knightType`
+
+**The symptom the owner reported.** Finish a dungeon on the live site and no transaction appears —
+no wallet prompt, nothing on the explorer. It was asked twice, so it was answered from the chain
+rather than from the code.
+
+**Half of it is by design.** `completeDungeon()` never sends a transaction: it asks the server to
+sign a receipt, stores the run in `localStorage`, and returns. The completion modal offers *Next
+Dungeon* and *Replay* only — the money moves when **Claim All** in the right-hand panel is pressed.
+So clearing a dungeon is not supposed to produce a txn; claiming one is.
+
+**The other half was a real bug, and it made every claim impossible.** The deployed V4's
+`claimSignedRuns` takes `((uint256[],uint256,uint256,uint256,uint256,uint8,bytes)[])` —
+`knightType` sits between the expiry and the signature, in the struct *and* in `receiptHash()`. No
+part of this repo knew the field existed (`grep knightType` over `lib/`, `public/`, `app/`, `tools/`
+returned nothing): `public/dungeon-session.js` declared the six-field tuple and `buildReceipt()`
+encoded eight ABI values instead of nine.
+
+**Measured, not inferred.** An `eth_call` to V4 with an empty batch reaches
+`require(runs.length > 0)` — *"No runs"* — for selector **`0x92f442bb`** (the seven-field tuple),
+and reverts with empty data for **`0xbb625c4e`** (the client's six-field tuple). The deployed
+contract is the one the repo's own `contracts/DungeonKnightsGameV4.sol` describes; the client was
+calling a function it does not have. Ethers estimates gas before prompting, so MetaMask never
+opened — the player saw nothing at all. Even with a corrected selector the signature would still
+have failed, because the digest's field list was the same wrong list.
+
+**Both guards shared the blind spot.** `tools/check-runs.js` recomputed the digest from
+`buildReceipt`'s own eight-type list, so it agreed with the bug; `tools/check-session.js` pinned the
+tuple at *"six fields, as SignedRun does"*. Both were green while no signed claim could land. The
+chain agrees: V4 has emitted **zero** `DungeonCompleted` and `RewardsClaimed` events since the
+address went into production, and has never received a DNG transfer — it pays from the reward vault
+(449.8M DNG, both dungeon lines authorised, `check-v4.js`), so its own zero balance was never the
+problem.
+
+**The fix — four files, no contract change.** `knightType` joins the receipt digest and the returned
+receipt (`lib/game-runs.js`, with `KNIGHT_TYPE = { SUMMONABLE: 0, GENESIS: 1 }`);
+`app/api/game/complete/route.js` passes `KNIGHT_TYPE.SUMMONABLE`; the client carries the field in
+both its ABI string and its payload (`public/dungeon-session.js`, defaulting old stored receipts to
+0). `tools/check-runs.js` now computes the claim selector and pins it to `0x92f442bb`, and
+`tools/check-session.js` asserts seven fields and that the type travels. The Remix example in
+`docs/DEPLOY-GAME-V4.md` gained the field too — it is the call that is supposed to revert *"Bad
+signature"* on a hand-made receipt, and without `knightType` it never reached the signature check.
+
+**Proved against the deployed contract.** A receipt built with the production signer key
+(`0x69EF5fF256051DE3edF1AA64Efe10eDD6C2d643C`, exactly what `trustedSigner()` returns) for knight #1
+(owner `0x27fB…a627`, rarity 0, 12 DNG), encoded through the client's new ABI and simulated with
+`eth_call` from the owner: **no revert** — signature, reward recomputation, ownership and the vault
+charge all passed. The same simulation with the old six-field tuple reverts with empty data.
+
+**Fleet after it:** `check-runs` **20/20** · `check-session` **35/35** · `check-run-budget` 39/39 ·
+`check-docs` 77/77 · `check-wallet-source` 68/68 · `check-identifiers` 4/4.
+
+**And the clear-time action the owner asked for.** Asked whether clearing a dungeon should prompt a
+wallet signature, the answer is no: the receipt is signed server-side (`trustedSigner()` *is* this
+server's key), so a player signature at the moment of clearing would prove nothing on chain — it
+would be a dismissable popup between the player and the dungeon. What was actually missing was the
+claim. `public/ui.js` now builds a **Claim now** button into the completion modal — the same
+`claimAllRewards()` the panel's *Claim All* runs, offered where the run ends — and `public/game.js`
+no longer says "Click widget to claim" (a widget that has not existed for some time) but names the
+button. It is built in `ui.js` rather than in the page's markup on purpose: `lib/static-pages.js`
+stays out of this change, so the still-uncommitted sound control of §16 is not dragged into the
+deploy, and nothing needs a `?v=` bump because `public/` is served `cache-control: public,
+max-age=0, must-revalidate` (measured on the live hosts) — the new `ui.js` is revalidated, not
+cached stale.
+
+**Verified in the browser** on the local server: `#claimNowBtn` exists inside `#completionModal`,
+`modal.contains(button)` true, sitting immediately before `.modal-actions`; with
+`claimAllRewards()` stubbed, one click called it exactly once and the button re-enabled itself — and
+the console showed no errors. `reward-claim-ui.js` still listens for
+`claimRewardsBtn`/`unclaimedAmount`/`completionCount`, ids the game page does not have; its
+`updateDisplay()` is inert, and `ui.js`'s `updateRewardsDisplay()` is what actually paints the
+panel — left alone rather than widened into this fix.

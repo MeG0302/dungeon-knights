@@ -23,6 +23,8 @@
  */
 
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const { ethers } = require('ethers');
 
 // Read by lib/game-runs.js at import time, so these must be set before it is loaded.
@@ -93,7 +95,7 @@ async function unit() {
     // Recompute the digest from scratch — the same numbers, the same ABI types, nothing
     // borrowed from the module under test beyond the returned nonce/expiry.
     const digest = ethers.utils.arrayify(ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(
-        ['address', 'bytes32', 'uint256', 'uint256', 'uint256', 'uint256', 'uint256', 'address'],
+        ['address', 'bytes32', 'uint256', 'uint256', 'uint256', 'uint256', 'uint8', 'uint256', 'address'],
         [
             address,
             ethers.utils.solidityKeccak256(['uint256[]'], [knightIds]),
@@ -101,6 +103,7 @@ async function unit() {
             reward,
             receipt.nonce,
             receipt.expiry,
+            receipt.knightType,
             runs.CHAIN.id,
             runs.ADDRESSES.gameV4,
         ]
@@ -122,6 +125,27 @@ async function unit() {
     rec('the nonce is 32 bytes', /^0x[0-9a-f]{64}$/.test(receipt.nonce));
     const other = await runs.buildReceipt({ address, knightIds, dungeonId, reward });
     rec('two receipts for the same run differ', other.nonce !== receipt.nonce);
+    rec('the receipt carries the summonable knight type', receipt.knightType === runs.KNIGHT_TYPE.SUMMONABLE,
+        `${receipt.knightType}`);
+
+    section('Claim ABI (the deployed V4 only knows the knightType tuple)');
+    // The contract's struct is (knightIds, dungeonId, reward, nonce, expiry, knightType,
+    // signature). A client ABI without `knightType` computes a **different selector**, and
+    // the deployed contract has no function for it: the call reverts before the signature
+    // is checked, so the player sees no wallet prompt and no transaction. The digest tests
+    // above cannot catch it — they never look at the ABI — which is why it is pinned here.
+    //
+    // Prefixes only (the ABI line continues `[] runs) external`), so this matches the
+    // declaration however the rest of the line is written.
+    const tupleTypes = '(uint256[],uint256,uint256,uint256,uint256,uint8,bytes)[]';
+    const oldTupleTypes = '(uint256[],uint256,uint256,uint256,uint256,bytes)[]';
+    const selector = ethers.utils.id(`claimSignedRuns(${tupleTypes})`).slice(0, 10);
+    const client = fs.readFileSync(path.join(__dirname, '..', 'public', 'dungeon-session.js'), 'utf8');
+    rec('the client ABI declares the knightType tuple', client.includes(`claimSignedRuns(${tupleTypes}`));
+    rec('the client ABI no longer declares the old tuple', !client.includes(`claimSignedRuns(${oldTupleTypes}`));
+
+    // Checked against the live contract with an eth_call: `No runs` means it was found.
+    rec('that selector is the one the deployed V4 accepts', selector === '0x92f442bb', selector);
 
     section('Degraded mode');
     const savedV4 = runs.ADDRESSES.gameV4;
@@ -259,7 +283,7 @@ async function live(base) {
         const receipt = done.data.receipt;
         const signer = new ethers.Wallet(process.env.GAME_SIGNER_PRIVATE_KEY).address;
         const digest = ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(
-            ['address', 'bytes32', 'uint256', 'uint256', 'uint256', 'uint256', 'uint256', 'address'],
+            ['address', 'bytes32', 'uint256', 'uint256', 'uint256', 'uint256', 'uint8', 'uint256', 'address'],
             [
                 owner.toLowerCase(),
                 ethers.utils.solidityKeccak256(['uint256[]'], [[knightId]]),
@@ -267,6 +291,7 @@ async function live(base) {
                 receipt.reward,
                 receipt.nonce,
                 receipt.expiry,
+                receipt.knightType,
                 Number(process.env.GAME_CHAIN_ID || 46630),
                 config.data.v4,
             ]
@@ -280,10 +305,19 @@ async function live(base) {
         rec('the live receipt is bound to the caller', recovered.toLowerCase() !== '0x0000000000000000000000000000000000000000');
 
         const rarity = (await nft.getKnightInfo(knightId))[1];
-        const table = [10, 17, 30, 75, 150];
+        // Priced against the contract that actually signed this receipt, not a hard-coded
+        // ladder: V4 pays the published table (12/20/36/60/100) and V3 the older one, so a
+        // fixed list is only ever right for one of the two paths.
+        const pricing = new ethers.Contract(
+            config.data.v4 || config.data.v3,
+            ['function rarityReward(uint256) view returns (uint256)'],
+            provider
+        );
+        const onChain = await pricing.rarityReward(rarity).catch(() => null);
         rec('the reward is priced from on-chain rarity',
-            Number(ethers.utils.formatEther(receipt.reward)) === table[Number(rarity)],
-            `${ethers.utils.formatEther(receipt.reward)} DNG for rarity ${rarity}`);
+            onChain !== null && receipt.reward.eq(onChain),
+            `${ethers.utils.formatEther(receipt.reward)} DNG for rarity ${rarity}`
+            + (onChain === null ? ' (the table could not be read)' : ` (the chain pays ${ethers.utils.formatEther(onChain)})`));
     }
 
     section('Live API — ownership');

@@ -78,7 +78,7 @@ function makeSandbox({ v4, session, configError, completeResponses }) {
             }
             return json({
                 receipt: {
-                    knightIds: [1], dungeonId: 1, reward: '10000000000000000000',
+                    knightIds: [1], dungeonId: 1, knightType: 0, reward: '10000000000000000000',
                     nonce: '0x' + '11'.repeat(32), expiry: Math.floor(Date.now() / 1000) + 900,
                     signature: '0x' + '22'.repeat(65),
                 },
@@ -188,12 +188,15 @@ const tick = (ms) => new Promise((r) => setTimeout(r, ms));
         rec('no V3 claim was sent', box.calls.claims.v3.length === 0);
         if (v4payload) {
             const tuple = v4payload[0];
-            rec('the tuple has six fields, as SignedRun does', tuple.length === 6, `length ${tuple.length}`);
+            // Seven, not six: the deployed V4's SignedRun carries `knightType` between the
+            // expiry and the signature, and the field count is what the selector is made of.
+            rec('the tuple has seven fields, as SignedRun does', tuple.length === 7, `length ${tuple.length}`);
             rec('knight ids travel as an array', Array.isArray(tuple[0]) && tuple[0][0] === 1);
             rec('dungeon id is carried', tuple[1] === 1);
             rec('the reward is the signed wei amount', String(tuple[2]) === '10000000000000000000', String(tuple[2]));
             rec('the nonce is carried', /^0x[0-9a-f]{64}$/.test(String(tuple[3])));
-            rec('the signature is carried', String(tuple[5]).startsWith('0x'));
+            rec('the knight type is carried', tuple[5] === 0, String(tuple[5]));
+            rec('the signature is carried', String(tuple[6]).startsWith('0x'));
         }
         rec('the claimed run is cleared from storage', box.session.pendingRuns.length === 0);
         // With no transaction modal on the page, alert() is how success is reported.

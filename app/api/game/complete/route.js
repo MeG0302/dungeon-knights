@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { sessionFromRequest } from '../../../../lib/points-session.js';
 import {
-    buildReceipt, inspectSquad, minSecondsFor, readRunToken, signingReady,
+    buildReceipt, inspectSquad, KNIGHT_TYPE, minSecondsFor, readRunToken, signingReady,
 } from '../../../../lib/game-runs.js';
 
 export const dynamic = 'force-dynamic';
@@ -93,6 +93,10 @@ export async function POST(request) {
         knightIds: run.knightIds,
         dungeonId: run.dungeonId,
         reward: squad.reward,
+        // Every run the game can start is summonable: the squad comes from the minted
+        // collection and `inspectSquad` refuses ids that collection does not know. A
+        // Genesis run would be a second squad source, not a different value here.
+        knightType: KNIGHT_TYPE.SUMMONABLE,
     });
     if (!receipt) {
         return NextResponse.json({ error: 'could not sign the run' }, { status: 500 });

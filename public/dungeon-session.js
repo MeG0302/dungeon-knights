@@ -60,8 +60,14 @@ class DungeonSessionManager {
         ];
 
         // V4 - signed runs only. There is no unsigned entry point on V4 by design.
+        //
+        // The tuple carries `knightType` (uint8) between the expiry and the signature, in
+        // the contract's own struct order. That field decides the function selector, so a
+        // version without it calls a function the deployed contract does not have — the
+        // transaction reverts before the signature is ever checked, and no wallet prompt
+        // ever appears. `tools/check-runs.js` pins the tuple for exactly that reason.
         this.gameContractV4ABI = [
-            'function claimSignedRuns((uint256[],uint256,uint256,uint256,uint256,bytes)[] runs) external',
+            'function claimSignedRuns((uint256[],uint256,uint256,uint256,uint256,uint8,bytes)[] runs) external',
             'function runsRemaining(uint256 knightId) view returns (uint8)',
             'function getKnightStats(uint256 knightId) view returns (uint256, uint8)',
             'function treasuryBalance() view returns (uint256)',
@@ -569,14 +575,17 @@ class DungeonSessionManager {
                 signer
             );
 
-            // Ethers v5 wants structs as arrays:
-            // [knightIds, dungeonId, reward, nonce, expiry, signature]
+            // Ethers v5 wants structs as arrays, in the contract's struct order:
+            // [knightIds, dungeonId, reward, nonce, expiry, knightType, signature]
             const payload = runs.map(run => [
                 run.receipt.knightIds,
                 run.receipt.dungeonId,
                 run.receipt.reward,
                 run.receipt.nonce,
                 run.receipt.expiry,
+                // Receipts written before the field existed default to SUMMONABLE — the
+                // only collection the game page can deploy today.
+                run.receipt.knightType || 0,
                 run.receipt.signature
             ]);
 

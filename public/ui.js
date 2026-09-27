@@ -178,7 +178,9 @@ class UI {
                 this.game.replayDungeon();
             });
         }
-        
+
+        this.addClaimNowButton();
+
         // Shortcuts overlay
         const shortcutsClose = document.getElementById('shortcutsClose');
         if (shortcutsClose) {
@@ -419,6 +421,48 @@ class UI {
             this.claimAllBtn.disabled = shouldDisable;
             console.log('  - Setting button disabled to:', shouldDisable);
         }
+    }
+
+    /**
+     * Put a real claim action on the completion modal.
+     *
+     * Clearing a dungeon only stores a pending run — the transaction happens when the player
+     * claims — and the claim control lived solely in the right-hand panel. So a player could
+     * clear dungeon after dungeon and never send a transaction, while the modal counted down
+     * into the next run. This is the same claim `claimAllBtn` runs, offered where the run
+     * actually ends.
+     *
+     * Built here rather than in the page's markup: the modal's HTML is served from
+     * `lib/static-pages.js`, and a button nobody wires up is worse than none. `ui.js` is only
+     * loaded where the modal is, and this is the file that already owns `claimAllBtn`.
+     */
+    addClaimNowButton() {
+        const actions = document.querySelector('#completionModal .modal-actions');
+        if (!actions || document.getElementById('claimNowBtn')) return;
+
+        const button = document.createElement('button');
+        button.id = 'claimNowBtn';
+        button.type = 'button';
+        button.className = 'btn btn-primary btn-md';
+        button.style.cssText = 'width:100%;margin-bottom:10px';
+        button.textContent = 'Claim now';
+
+        button.addEventListener('click', async () => {
+            if (!window.dungeonSession) return;
+            button.disabled = true;
+            this.animateChestClaim();
+            await new Promise((resolve) => setTimeout(resolve, 100));
+            try {
+                await window.dungeonSession.claimAllRewards();
+            } finally {
+                // Re-enabled even on a refusal: a rejected prompt is a decision, and the run
+                // stays claimable from the panel.
+                button.disabled = false;
+                this.updateRewardsDisplay();
+            }
+        });
+
+        actions.parentNode.insertBefore(button, actions);
     }
 
     animateChestClaim() {

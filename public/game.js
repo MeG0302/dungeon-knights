@@ -470,7 +470,7 @@ class Game {
                     .then(completion => {
                         if (completion) {
                             console.log(`💰 Earned ${completion.reward} $DNG (unclaimed)`);
-                            this.logMessage(`💰 Earned ${completion.reward} $DNG! Click widget to claim.`);
+                            this.logMessage(`💰 Earned ${completion.reward} $DNG! Press "Claim now" to send it to your wallet.`);
                             // Update reward UI
                             if (window.rewardClaimUI) {
                                 window.rewardClaimUI.updateDisplay();
