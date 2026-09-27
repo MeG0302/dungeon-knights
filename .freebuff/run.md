@@ -5835,3 +5835,67 @@ pays*), pushed, then `npx vercel --prod --yes --scope meglast320-1694`: deployme
 `dungeon-knights-efunaf0ft-meglast320-1694`, with all four aliases (`dungeonknights.io`, `www.`,
 `app.`, `dungeon-knights.vercel.app`) re-pointed at it by hand, `--prod` having aliased only its own
 scoped URL as §3 warns.
+
+## 12. One wallet control, on the app host as on the Points page
+
+**The ask.** *"Look at this connect wallet option — does it look good? It is the same in all pages in
+app.dungeonknights.io. Fix it and make it look like the points page, so we can access the portfolio
+page from any page."* The page in hand was `/mint`, and the answer was no.
+
+**What was actually on screen.** Two wallet controls in one header, and the loud one was the wrong
+one. `public/shared-header.js` — loaded by `/menu`, `/mint` and `/game` — injected a *second* control
+into `.header-actions`: a purple `#8B5CF6 → #6D28D9` gradient button reading *🔌 Connect Wallet*, in
+Arial, plus a pair of `rgba(139,92,246,0.1)` boxes for `Wallet:` and `Balance:` that appeared once a
+wallet connected. Beside it sat the real control, and it had been there for months: the bronze
+`.wallet-pill` (`0 DNG ▾`), hosted by `public/wallet-menu.js`, whose menu carries **My Portfolio →
+/portfolio** and the Connect/Disconnect action. So the injector was not an affordance the site
+lacked — it was a second one in a colour (`#8B5CF6`) that appears nowhere else in `theme.css`, which
+is why it read as belonging to another product on every page it touched. Measured on the deployed
+`/mint` before touching anything: `.shared-wallet-header` present, `.shared-wallet-btn` computing
+`Arial 14px 700`, and the pill already `wallet-menu-host` with its caret and a working menu.
+
+**The fix is a deletion, not a repaint.** The re-colour the owner forbade elsewhere would have kept
+both controls; what "look like the points page" means is *one* control, and the Points page already
+has it. So: `shared-header.js` dropped from the three route script lists in `lib/static-pages.js`, the
+file deleted from `public/`, and the rules that painted it taken out of `public/shared-wallet.css`
+(keeping `.wallet-pill`, `#walletAddressDisplay` and `.btn-disconnect`, which `/game`'s pill still
+fills in — `public/ui.js` writes the address and the button *inside* the pill, so nothing it needs
+moved), plus the phone blocks in `menu-mobile.css` and `mint-mobile.css` that positioned the bar.
+`56 insertions, 302 deletions` across nine files. Every app header now reads like the Points page's:
+`KINGDOM GATE │ SUMMONING CHAMBER │ 0 DNG ▾`.
+
+**Guarded from three sides, because one is not enough.** A second control can come back through a
+route script list, through a React client naming the module, or through the sheet that painted it —
+so `tools/check-wallet-menu.js` grows three recs (now **15/15**): *no route loads a second wallet bar
+beside the pill* (read out of `STATIC_PAGES` **and** every `app/*/client.js`), *the file that injected
+it is not in the served tree*, and *no sheet still paints its off-palette button*. `tools/check-all.js`
+adds the runtime half — *and it is the only wallet control in the header* — because a source check
+cannot see a bar some other script injects. Falsified before trusting: a throwaway mutator put all
+three halves back and **all three failed by name** (`menu loads shared-header.js`,
+`public/shared-header.js is back`, and the sheet rec), then passed 15/15 after reverting; the runtime
+rec was falsified in a live header by injecting a `.shared-wallet-btn` and watching it fail with the
+button's own text, then pass once removed. Both temp files deleted.
+
+**Read off the deployed hosts, not the dev server.** `/mint`, `/menu`, `/dungeons` and `/game` all
+serve markup with **zero** `shared-header` references and the pill present; the reloaded live `/mint`
+does not load the script, has no `.shared-wallet-header`, and the pill's menu still opens on
+*My Portfolio → /portfolio*. The phone header at 390×844 is `KINGDOM GATE` and `0 DNG ▾` with
+`documentElement.scrollWidth` 390 — no overflow, no wrap, and the phone rules that used to lay out
+three items are gone.
+
+**Left alone, deliberately.** `/menu`'s pill prints the *in-game* gold (`500`, no unit) because
+`menu.js` writes `this.goldBalance` into `#menuGold`; that is a game-economy question, not the wallet
+control's, and it is not this change. The unreachable root `menu.html` / `mint.html` / `index.html`
+still name the deleted script — `next.config.js` 301s every one of those paths, so nothing fetches
+them.
+
+**Fleet after it:** `check-wallet-menu` **15/15** · `check-wallet-source` 68/68 · `check-styles`
+clean · `check-docs` 77/77 · `check-portfolio` 72/72 · `check-pitch` 43/43 · `check-landing` 36/36 ·
+`check-waitlist` 102/102 · `check-rarity` 64/64 · `check-run-budget` 39/39 · `check-map-gate` 17/17 ·
+`check-back` 18/18 · `check-copies` 2/2 · `check-identifiers` 4/4 · `check-genesis` 69/72, the same
+three pre-existing fails from §11 (max hash power, run cap, ticket cap) and not this change.
+
+**Shipped.** Committed `2582d12` (*the app host loses its second wallet control, so the pill is the
+whole wallet UI*), pushed, then `npx vercel --prod --yes --scope meglast320-1694`: deployment
+`dungeon-knights-1gns0yovk-meglast320-1694`, all four aliases re-pointed by hand (`dungeonknights.io`,
+`www.`, `app.`, `dungeon-knights.vercel.app`) — `--prod` aliases only its own scoped URL, as §3 warns.
