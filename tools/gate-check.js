@@ -9,8 +9,8 @@
  * seconds, which is exactly the window it is hard to catch by hand. What matters is
  * the parts that are invisible when they work —
  *
- *   · it waits for the chosen dungeon's chest, monsters and squad tiers, and for the
- *     map video's first frame;
+ *   · it waits for the chosen dungeon's chest, monsters and squad tiers, and for every
+ *     image the baked map layer is made of (floor, rim, corners, props);
  *   · a failed or already-complete asset settles immediately (it can never hang);
  *   · it opens once, and only once;
  *   · a page with no gate is left alone entirely;
@@ -89,7 +89,11 @@ function fakeTimers() {
 // --------------------------------------------------------------- harness run
 /**
  * @param {{selected?: string, squad?: Array, gateInDom?: boolean, completeImages?: boolean,
- *          failImages?: boolean, engine?: boolean, videoReady?: number, arya?: boolean}} opts
+ *          failImages?: boolean, engine?: boolean, arya?: boolean}} opts
+ *
+ * There is no video double any more: the mp4s left /game, and the gate that still waited
+ * on one would have sat there until its failsafe on every load. Case 2 checks that the
+ * surfaces — not just the floor tile — are what a full count adds up to.
  */
 function run(opts = {}) {
     const timers = fakeTimers();
@@ -101,19 +105,26 @@ function run(opts = {}) {
     // Reset BEFORE the renderer is built — its images are what the gate has to wait for.
     FakeImage.made = [];
 
-    const video = fakeEl('dungeonBackground');
-    video.readyState = opts.videoReady === undefined ? 0 : opts.videoReady;
-
     const renderer = {
-        floorTiles: { void: gateImages(opts), crypts: gateImages(opts) },
-        decorationSprites: { void: gateImages(opts) },
-        chestImages: { void: gateImages(opts) },
-        monsterImages: { 'monsters/void rift/a.png': gateImages(opts), 'monsters/void rift/b.png': gateImages(opts) },
-        knightImages: { LEGENDARY: gateImages(opts), COMMON: gateImages(opts), MYTHIC: gateImages(opts) },
+        floorTiles: { void: gateImages(opts, 'assets/void/surface/floor.png'), crypts: gateImages(opts, 'assets/crypts/surface/floor.png') },
+        surfaceImages: {
+            void: {
+                floor: gateImages(opts, 'assets/void/surface/floor.png'),
+                rimH: gateImages(opts, 'assets/void/surface/rim-h.png'),
+                rimV: gateImages(opts, 'assets/void/surface/rim-v.png'),
+                corners: { tl: gateImages(opts, 'assets/void/surface/corner-tl.png'), br: gateImages(opts, 'assets/void/surface/corner-br.png') },
+                props: { torch: gateImages(opts, 'assets/void/surface/prop-torch.png'), decor: gateImages(opts, 'assets/void/surface/prop-decor.png') }
+            }
+        },
+        decorationSprites: { void: gateImages(opts, 'assets/void/void-sheet.jpeg') },
+        chestImages: { void: gateImages(opts, 'assets/void/chest.png') },
+        monsterImages: { 'monsters/void rift/a.png': gateImages(opts, 'monsters/void rift/a.png'), 'monsters/void rift/b.png': gateImages(opts, 'monsters/void rift/b.png') },
+        knightImages: { LEGENDARY: gateImages(opts, 'characters/legendary.png'), COMMON: gateImages(opts, 'characters/common.png'), MYTHIC: gateImages(opts, 'characters/mythic.png') },
     };
-    function gateImages(o) {
+    function gateImages(o, src) {
         const img = new FakeImage();
         img.isGateArt = true;
+        img.src = src || '';
         if (o.completeImages) img.complete = true;
         if (o.failImages) img.fail = true;
         return img;
@@ -121,7 +132,6 @@ function run(opts = {}) {
 
     const game = {
         selectedDungeon: 'void',
-        videoElement: video,
         dungeonRenderer: renderer,
         dungeon: {
             config: { name: 'Void Rift', monsterFolder: 'void rift', monsters: ['a.png', 'b.png'] },
@@ -147,10 +157,9 @@ function run(opts = {}) {
         (id) => timers.clear(id), (id) => timers.clear(id), { warn: () => {}, log: () => {} },
     );
 
-    // Finish everything the gate is waiting on: the map video's first frame, the art the
-    // renderer preloaded, and the obstacle images the module fetches for itself.
+    // Finish everything the gate is waiting on: the map surfaces and art the renderer
+    // preloaded, and the obstacle images the module fetches for itself.
     const settleAll = () => {
-        if (!video.complete) { video.readyState = 3; video.complete = true; video.fire('loadeddata'); }
         FakeImage.made.forEach((img) => { if (!img.complete) { img.complete = true; img.fire('load'); } });
     };
 
@@ -160,24 +169,26 @@ function run(opts = {}) {
         count: elements.mapGateCount.textContent,
         label: elements.mapGateLabel.textContent,
         bar: elements.mapGateBar.style.width,
-        videoReady: video.readyState,
         images: FakeImage.made.map((i) => (i.isGateArt ? 'art' : 'owned') + (i.complete ? ':done' : ':wait')),
     });
 
-    return { elements, video, renderer, game, aryaCalls, timers, win, settleAll, images: FakeImage.made, state };
+    return { elements, renderer, game, aryaCalls, timers, win, settleAll, images: FakeImage.made, state };
 }
 
 // ------------------------------------------------------------------- cases
 // 1. Every tag on the page: it opens as soon as the art is there, once.
 {
-    const h = run({ completeImages: true, videoReady: 3 });
+    const h = run({ completeImages: true });
     h.timers.advance(300);
     const gate = h.elements.mapLoadingGate;
     ok('complete art: gate still up while it holds the minimum', !gate.classList.contains('is-open'), JSON.stringify(h.state()));
     h.settleAll();
     h.timers.advance(2500);
     ok('complete art: gate opens', gate.classList.contains('is-open'), JSON.stringify(h.state()));
-    ok('complete art: it is removed after the fade', gate.removed, JSON.stringify(h.state()));
+    // The gate is markup the page keeps: it lifts with `is-open` and stays in the DOM,
+    // because the map change after a clear needs it again (check-map-gate.js pins that).
+    // The two `removed` assertions here were left over from the one-shot version.
+    ok('complete art: it lifts and stays in the page', gate.classList.contains('is-open') && !gate.removed, JSON.stringify(h.state()));
     ok('it asked Arya exactly once, with the hold line', h.aryaCalls.filter((c) => c.kind === 'hold').length === 1);
     ok('Arya is held, not timed out quickly', h.aryaCalls[0] && h.aryaCalls[0].o.duration > 15000);
     ok('she is taken down when the map arrives', h.aryaCalls.some((c) => c.kind === 'hide'));
@@ -198,9 +209,6 @@ function run(opts = {}) {
     // Everything but the last asset: still shut.
     const waiters = FakeImage.made.slice();
     waiters.slice(0, -1).forEach((img) => { img.complete = true; img.fire('load'); });
-    h.video.readyState = 3;
-    h.video.complete = true;
-    h.video.fire('loadeddata');
     h.timers.advance(300);
     ok('loading art: one asset left keeps it shut', !gate.classList.contains('is-open'));
 
@@ -209,12 +217,23 @@ function run(opts = {}) {
     last.fire('load');
     h.timers.advance(2600);
     ok('loading art: opens once the last asset settles', gate.classList.contains('is-open'), JSON.stringify(h.state()));
-    ok('loading art: and only then', gate.removed, JSON.stringify(h.state()));
+    ok('loading art: and only then', gate.classList.contains('is-open') && !gate.removed, JSON.stringify(h.state()));
 
     // The obstacle art the renderer used to allocate on its first frame is waited for
     // too, deduplicated, which is what stops it popping in after the map appears.
     const own = FakeImage.made.filter((i) => !i.isGateArt);
     ok('it fetches the obstacle art itself', own.length === 2, `${own.length} distinct obstacle images`);
+
+    // The whole baked surface, not just the floor tile: the rim and props are drawn by
+    // the same bake, and a gate that opened before them would lift onto half a map.
+    const sources = FakeImage.made.map((i) => i.src);
+    ok('it waits for the rim and the props, not only the floor',
+        sources.some((s) => /surface\/rim-h\.png/.test(s))
+        && sources.some((s) => /surface\/prop-torch\.png/.test(s)),
+        sources.filter((s) => /surface\//.test(s)).length + ' surface images');
+    ok('and it never waits on a map video',
+        !sources.some((s) => /\.mp4$/.test(s)),
+        'the mp4s left /game with the painted map');
 }
 
 // 3. Something that never loads must not trap the player.
@@ -228,9 +247,6 @@ function run(opts = {}) {
 {
     const h = run({});
     h.timers.advance(200);
-    h.video.readyState = 3;
-    h.video.complete = true;
-    h.video.fire('loadeddata');
     FakeImage.made.forEach((img) => { img.complete = true; img.fire('error'); });
     h.timers.advance(1600);
     ok('failed art does not hold the gate', h.elements.mapLoadingGate.classList.contains('is-open'), JSON.stringify(h.state()));
@@ -238,7 +254,7 @@ function run(opts = {}) {
 
 // 5. It waits for the squad's tiers — not all six, and never none of them.
 {
-    const h = run({ completeImages: true, videoReady: 3 });
+    const h = run({ completeImages: true });
     h.timers.advance(300);
     ok('it fetches art to wait on at all', FakeImage.made.length > 0);
     ok('it does not preload the tiers the squad is not bringing', !FakeImage.made.some((i) => /MYTHIC|RARE|UNCOMMON/.test(i.src)));

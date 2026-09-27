@@ -6,6 +6,8 @@
  *   window.__check.assets()        which portraits this page actually fetched
  *   window.__check.engine(secs)    main-engine sanity: runs, kills, chests static,
  *                                  monsters counter-attack inside their domain
+ *   window.__check.mapSurface()    the painted map: the bake, its pixels, the layout's
+ *                                  nodes and props, and no video element anywhere
  *   window.__check.clearWatch()    watch for a *natural* dungeon clear + Arya
  *   window.__check.vaultEntry(n)   play n whole vault entries, per-floor metrics
  *   window.__check.staking()       the Staking Vault page (run it on /staking): tabs,
@@ -296,6 +298,100 @@
         rec('every counter happens inside the monster domain', outOfDomain === 0,
             `${inDomain} in, ${outOfDomain} out (domain ${domain})`);
         return results.slice();
+    }
+
+    // ------------------------------------------------------------ the map surface
+    /**
+     * The map is painted now, not played.
+     *
+     * /game used to stand a looping mp4 behind a transparent canvas. The arena is a
+     * designed grid behind one baked layer of surfaces, and this reads both the real
+     * renderer and its real pixels: the bake is forced (the first frame does it anyway),
+     * then every tile centre is sampled out of a single getImageData — one read of a
+     * finished map rather than 720 of them.
+     */
+    function mapSurface() {
+        const g = window.game;
+        if (!g || !g.dungeon) return rec('game booted', false, 'window.game / dungeon missing');
+        const d = g.dungeon;
+        const r = g.dungeonRenderer;
+        if (!r) return rec('the game has a dungeon renderer', false, 'game.dungeonRenderer missing');
+
+        rec('no video element anywhere on the page', !document.querySelector('video'));
+        rec('  … and none hanging off the renderer', !r.videoElement);
+
+        const tile = d.config.tileSize;
+        const mapW = d.gridWidth * tile, mapH = d.gridHeight * tile;
+        r.layerDirty = true;                 // read a finished layer even if the loop has not run
+        r.bakeMapLayer();
+        rec('the whole arena is baked into one layer',
+            !!r.mapLayer && r.mapLayer.width === mapW && r.mapLayer.height === mapH,
+            r.mapLayer ? `${r.mapLayer.width}x${r.mapLayer.height} at ${tile}px a tile` : 'no layer');
+
+        const shot = r.mapLayer.getContext('2d').getImageData(0, 0, mapW, mapH);
+        const at = (x, y) => { const i = (y * shot.width + x) * 4; return [shot.data[i], shot.data[i + 1], shot.data[i + 2], shot.data[i + 3]]; };
+        const mid = (x, y) => at(x * tile + tile / 2, y * tile + tile / 2);
+
+        // The whole layer, sampled every fourth pixel: a handful of colours would mean
+        // the surfaces never landed and the palette alone painted the map.
+        const palette = new Set();
+        for (let i = 0; i < shot.data.length; i += 16) {
+            palette.add(`${shot.data[i]},${shot.data[i + 1]},${shot.data[i + 2]}`);
+        }
+
+        // Opaque at every tile centre, on *every* theme. This is the one that caught the
+        // real thing: the kit's floor art for magma and void is transparent to the last
+        // pixel, so once the mp4 behind the canvas was dropped those arenas painted a
+        // hole. The painter lays the theme's floor colour down first for exactly that.
+        let opaque = 0, floors = 0;
+        for (let y = 0; y < d.gridHeight; y++) for (let x = 0; x < d.gridWidth; x++) {
+            if (mid(x, y)[3] === 255) opaque += 1;
+            if (d.grid[y][x] === 0) floors += 1;
+        }
+        const total = d.gridWidth * d.gridHeight;
+        rec('every tile in the arena is painted', opaque === total, `${opaque}/${total} tile centres opaque`);
+        rec('  … and it is a picture, not a flat fill', palette.size > 200, `${palette.size} colours across the layer`);
+        rec('  … over an arena that is both floor and wall',
+            floors > 0 && floors < total, `${floors}/${total} floor tiles`);
+
+        // The rim art is drawn over the frame tiles, so the top row cannot look like the
+        // plain wall the palette paints a few rows in.
+        let inner = null;
+        for (let y = 2; y < d.gridHeight - 2 && !inner; y++)
+            for (let x = 2; x < d.gridWidth - 2 && !inner; x++) if (d.grid[y][x] === 1) inner = [x, y];
+        const rim = mid(Math.floor(d.gridWidth / 2), 0);
+        rec('the arena wears the kit’s rim, not bare stone',
+            !!inner && rim.join(',') !== mid(inner[0], inner[1]).join(','),
+            `top row ${rim.join(',')} against wall ${inner ? mid(inner[0], inner[1]).join(',') : '—'}`);
+
+        const loaded = (img) => !!(img && img.complete && img.naturalWidth > 0);
+        const s = (r.surfaceImages || {})[d.type] || null;
+        rec('this theme’s floor and rim are decoded',
+            !!s && loaded(s.floor) && loaded(s.rimH) && loaded(s.rimV),
+            s ? `floor ${s.floor && s.floor.naturalWidth}px, rim ${s.rimH && s.rimH.naturalWidth}px` : 'no surfaces for this theme');
+        rec('  … its four corners with them',
+            !!s && ['tl', 'tr', 'bl', 'br'].every((k) => loaded((s.corners || {})[k])),
+            s ? [...Object.keys(s.corners || {})].join(' ') : '—');
+        rec('  … and every prop the map names',
+            !!s && Object.keys(s.props || {}).every((k) => loaded(s.props[k])),
+            s ? Object.keys(s.props || {}).join(' ') : '—');
+
+        const layout = (window.MAP_LAYOUTS || {})[d.type] || null;
+        rec('the run is the map’s own encounter table',
+            !!layout && d.layout === layout && d.lootNodes.length === layout.spawns.length,
+            layout ? `${d.lootNodes.length} nodes of the table’s ${layout.spawns.length}` : `no layout for ${d.type}`);
+        rec('  … every node on a tile the map chose',
+            !!layout && d.lootNodes.every((n) => layout.spawns.some((t) => t.x === n.gridX && t.y === n.gridY && t.type === n.type)));
+        rec('  … and the scenery is the map’s too',
+            !!layout && d.decorations.length === layout.props.length,
+            layout ? `${d.decorations.length} props of ${layout.props.length}` : '—');
+
+        r.minimapLayer = null;
+        r.renderMinimap();
+        rec('the minimap bakes the walls it draws',
+            !!r.minimapLayer && r.minimapLayer.width === 120,
+            r.minimapLayer ? `${r.minimapLayer.width}x${r.minimapLayer.height}` : 'never baked');
+        return results;
     }
 
     // Watch for a clear that the engine itself produced (no manual call).
@@ -2011,6 +2107,7 @@
         assets,
         portfolioSamples,
         engine,
+        mapSurface,
         walletMenu,
         mint,
         staking,

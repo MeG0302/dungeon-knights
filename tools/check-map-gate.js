@@ -82,9 +82,29 @@ rec('  \u2026 and re-arms the failsafe it just cancelled',
     && /failsafe = setTimeout\(\(\) => open\('timeout'\), MAX_MS\)/.test(raiser)
     && !/const failsafe/.test(gate),
     'a `const` timer cannot be re-armed, which is exactly how this broke once');
+// Every watcher that increments the count must carry the generation guard, however many
+// of them there are. This used to assert exactly two — the image one and the video one —
+// and the video one went with the mp4s (the map is painted now). Counting `total += 1`
+// rather than `function watch*` is what keeps it honest: watchSurface() delegates to
+// watchImage() and counts nothing itself.
+const counters = (gate.match(/total \+= 1;/g) || []).length;
+const guarded = (gate.match(/if \(opened \|\| gen !== generation\) return;/g) || []).length;
 rec('an image that lands late cannot push the next map\u2019s counter',
-    (gate.match(/if \(opened \|\| gen !== generation\) return;/g) || []).length === 2,
-    'both watchers carry the generation guard');
+    counters >= 1 && guarded === counters,
+    `${guarded} of ${counters} watchers carry the generation guard`);
+rec('the gate no longer waits on a map video',
+    !/watchVideo/.test(gate) && !/videoElement/.test(gate),
+    'the mp4s left /game; a gate still waiting on one would sit there until the failsafe');
+rec('  \u2026 it waits on the baked map surfaces instead',
+    /surfaceImages/.test(gate) && /images\.floor/.test(gate)
+    && /images\.rimH/.test(gate) && /images\.props/.test(gate),
+    'floor, rim, corners and props — everything bakeMapLayer draws');
+rec('  \u2026 and the game page has no video element to wait for',
+    !/dungeonBackground/.test(pages),
+    'the canvas is the whole of the canvas area now');
+rec('  \u2026 and the engine no longer switches a background video',
+    !/switchDungeonVideo|initVideoBackground/.test(game),
+    'the map is painted by the renderer, not played');
 rec('the fade-in is switched off for a raise, then handed back',
     /gate\.style\.transition = 'none';[\s\S]*?gate\.classList\.remove\('is-open'\);[\s\S]*?void gate\.offsetHeight;[\s\S]*?gate\.style\.transition = '';/.test(gate),
     'otherwise the gate fades in over the map it is covering');
@@ -127,10 +147,10 @@ rec('the game route still paints the gate in its markup',
     && /id=\\"mapGateName\\"/.test(pages),
     'the gate is on screen from the first frame, not after the engine boots');
 rec('  \u2026 and the module loads before the engine that calls it',
-    before(pages, '"loading-gate.js?v=2"', '"game.js?v='),
+    before(pages, '"loading-gate.js?v=', '"game.js?v='),
     'loading-gate.js first in the game route\u2019s script list');
 rec('  \u2026 and it is versioned, so a browser cannot keep the one-shot copy',
-    /"loading-gate\.js\?v=2"/.test(pages),
+    /"loading-gate\.js\?v=\d+"/.test(pages),
     'the cached v=1 had no MapGate at all');
 rec('Arya has a line for the hold, which is what she says while it is up',
     /hold: \{/.test(arya) && /window\.Arya\.say\('hold'/.test(gate),

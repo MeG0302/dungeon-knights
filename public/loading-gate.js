@@ -14,13 +14,17 @@
    notice. That is the second caller of `raise()` below — the gate is one
    component with two entries now, not a one-shot page cover.
 
-   It collects what the chosen dungeon is about to draw — its floor tile,
-   decoration sheet and chest, every monster it can spawn, the knight sprites
-   for the rarities actually in the squad, the small obstacle art the renderer
-   fetches on its first frame, and the map video's first frame — and opens the
-   gate only once they have all settled. Arya stands on it and asks the player
-   to hold on for as long as that takes, which is the one moment in the game
-   where waiting is on purpose.
+   It collects what the chosen dungeon is about to draw — its baked map surfaces
+   (floor, rim, corners and props: tools/bake-map-surfaces.js), its decoration
+   sheet and chest, every monster it can spawn, the knight sprites for the
+   rarities actually in the squad, and the small obstacle art the renderer
+   fetches on its first frame — and opens the gate only once they have all
+   settled. Arya stands on it and asks the player to hold on for as long as that
+   takes, which is the one moment in the game where waiting is on purpose.
+
+   It used to wait on the map mp4's first frame as well. The mp4s are gone from
+   /game (the map is painted now), so waiting on one would have held the gate
+   until its 15s failsafe every single load.
 
    It cannot trap the player: a failed asset counts as settled (the engine
    degrades on its own), the engine is only waited for up to a cap, and the
@@ -89,16 +93,25 @@
         img.addEventListener('error', done, { once: true });
     }
 
-    function watchVideo(video) {
-        if (!video) return;
-        const gen = generation;
-        total += 1;
-        if (video.readyState >= 2) { settled += 1; return; }
-        const done = () => {
-            if (opened || gen !== generation) return;
-            settled += 1; paint(); checkDone();
-        };
-        ['loadeddata', 'canplay', 'error'].forEach((ev) => video.addEventListener(ev, done, { once: true }));
+    /**
+     * Every image the baked map layer is made of: the floor texture, the two rim runs,
+     * the four corners and the theme's props. All of them are drawn by the bake, which
+     * runs again each time one of them lands, so the gate lifts onto a finished map.
+     *
+     * A renderer without surfaces (an older bundle) still has `floorTiles`, which is
+     * the same floor image by another name.
+     */
+    function watchSurface(renderer, type) {
+        const images = renderer.surfaceImages ? renderer.surfaceImages[type] : null;
+        if (!images) {
+            if (renderer.floorTiles) watchImage(renderer.floorTiles[type]);
+            return;
+        }
+        watchImage(images.floor);
+        watchImage(images.rimH);
+        watchImage(images.rimV);
+        Object.keys(images.corners || {}).forEach((k) => watchImage(images.corners[k]));
+        Object.keys(images.props || {}).forEach((k) => watchImage(images.props[k]));
     }
 
     function squadRarities() {
@@ -122,7 +135,7 @@
         const type = game.selectedDungeon || 'crypts';
         if (nameEl) nameEl.textContent = config.name || NAMES[type] || 'your dungeon';
 
-        if (renderer.floorTiles) watchImage(renderer.floorTiles[type]);
+        watchSurface(renderer, type);
         if (renderer.decorationSprites) watchImage(renderer.decorationSprites[type]);
         if (renderer.chestImages) watchImage(renderer.chestImages[type]);
 
@@ -147,8 +160,6 @@
             img.src = dec.imagePath;
             watchImage(img);
         });
-
-        watchVideo(game.videoElement);
 
         total = Math.max(total, 1);
         paint();
@@ -262,7 +273,7 @@
     poll = setInterval(() => {
         if (!asked) askArya();
         const game = window.game;
-        if (!game || !game.dungeon || !game.dungeonRenderer || !game.videoElement) return;
+        if (!game || !game.dungeon || !game.dungeonRenderer) return;
         clearInterval(poll);
         poll = null;
         askArya();
