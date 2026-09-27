@@ -6322,3 +6322,28 @@ the console showed no errors. `reward-claim-ui.js` still listens for
 `claimRewardsBtn`/`unclaimedAmount`/`completionCount`, ids the game page does not have; its
 `updateDisplay()` is inert, and `ui.js`'s `updateRewardsDisplay()` is what actually paints the
 panel — left alone rather than widened into this fix.
+
+**Shipped.** `d4605cd` on `main`, pushed as `00d5889..d4605cd`, then
+`npx vercel --prod --yes --scope meglast320-1694` → `dungeon-knights-5v6hmxxmx-meglast320-1694`,
+**Ready in 2m**. `--prod` aliased only its own scoped URL again (§3), so all four hosts were
+re-pointed by hand: `dungeonknights.io`, `www.dungeonknights.io`, `app.dungeonknights.io`,
+`dungeon-knights.vercel.app`.
+
+**Read back off the live hosts.** `/ui.js` on the apex, the app host and the `.vercel.app` alias — and
+on `www` once its 308 to the apex is followed — carries `addClaimNowButton` **twice** (definition and
+call) and the label `Claim now`; `/game.js` carries `Press "Claim now" to send it to your wallet.`;
+`/dungeon-session.js` carries `uint256,uint8,bytes` **once** and the old six-field tuple **zero**
+times; `/`, `/points`, `/genesis` and `/portfolio` are `200` and `app.dungeonknights.io/game` still
+`307`s to `/gate`. The deployed game page's own console, read signed in, logs `🔐 Signed-run claims
+enabled via V4 0xD60F…d8a8` with no error before it. The live page's main thread would not accept a
+DOM evaluation in this session (the engine saturates it), so the button's *behaviour* — one click,
+one `claimAllRewards()` call, re-enabled — is the local read above, on the identical file; a real
+end-to-end claim still wants a funded wallet in a browser, and the receipt half of it is already
+proved against the deployed contract by `eth_call`.
+
+**What this deploy does *not* carry: the sound control of §16.** It is still uncommitted, and that
+was the reason the Claim-now button was built in `ui.js` rather than in the page markup — the modal
+lives in `lib/static-pages.js`, which also holds §16's script tags, so a markup edit would have
+shipped a button and a 404'd `sound-toggle.js` together. Shipping §16 is the same §15 shape, just
+with `public/sound-toggle.js`, `public/css/sound-toggle.css`, `tools/check-sound.js`,
+`lib/static-pages.js`, `public/audio.js` and `tools/check-all.js`.
