@@ -25,9 +25,12 @@ A fresh checkout needs these local-only pieces before it will run:
   switch the landing page's background too — which the owner had just asked to revert.
   So there are two independent switches, each one file:
   - **`/genesis`:** already on (`public/assets/genesis-loop.mp4` present).
-  - **the apex landing page:** still `intro.mp4` (1920×1080, 29 s, 37 MB). When it should wear the
-    footage too, `cp "landing page/landing.MP4" public/assets/landing-loop.mp4` — no code change, the
-    first `<source>` already points at that name, and removing the file again is the whole revert.
+  - **the apex landing page:** still the old footage, as `/assets/intro-web.mp4` (1280×720, 29 s,
+    3.2 MB). It was `intro.mp4` here until §15 deleted the 37 MB master behind it, which leaves this
+    re-encode the only copy of that footage still served — and that is deliberate, because the two
+    pages have been independent switches since this section. When it should wear the *landing* footage
+    too, `cp "landing page/landing.MP4" public/assets/landing-loop.mp4` — no code change, the first
+    `<source>` already points at that name, and removing the file again is the whole revert.
   A video is fetched by URL, so if a cached copy ever gets in the way the replacement needs a
   different filename rather than a `?v=`. Phones and `prefers-reduced-motion` load no video on either
   page — see the `@media` blocks in `public/css/home.css` and `public/css/genesis.css` — and both
@@ -35,9 +38,11 @@ A fresh checkout needs these local-only pieces before it will run:
   `node tools/check-genesis.js` asserts all of it: the copy exists and matches the capture, and the
   landing page's reserved name does **not** exist.
 - **The landing page's four files, and one command that rebuilds each.** The apex plays the *same
-  footage* as `intro.mp4` but deliberately not the same file: `/assets/intro-web.mp4` is that master
-  re-encoded for the web, and the 10 Mbps original stays on disk because `/hub`, behind the gate,
-  plays it large. `ffmpeg` is on this machine at `…/WinGet/Packages/Gyan.FFmpeg…/ffmpeg.exe`:
+  footage* as the old `intro.mp4` master but deliberately not the same file: `/assets/intro-web.mp4`
+  is that master re-encoded for the web. The master itself is gone as of §15 — `/hub`, behind the
+  gate, plays the owner's newer capture as `/assets/hub-intro.mp4` now — so the first line below needs
+  a new source before it can be re-run. `ffmpeg` is on this machine at
+  `…/WinGet/Packages/Gyan.FFmpeg…/ffmpeg.exe`:
 
   ```bash
   # the desktop loop — 37 MB / 1920×1080 / 10.2 Mbps  →  3.2 MB / 1280×720 / 24 fps
@@ -55,7 +60,7 @@ A fresh checkout needs these local-only pieces before it will run:
   pass described under *The landing page, on the devices it actually gets opened on*.
 - **`public/assets/genesis-loop.mp4`** — the loop the collection page plays, and the one binary this
   work added (4.1 MB). It is a copy of `landing page/landing.MP4` (a drop folder at the repo root,
-  untracked). Without it the page falls through to `/assets/intro.mp4` and still reads correctly —
+  untracked). Without it the page falls through to `/assets/hub-intro.mp4` and still reads correctly —
   the video is decoration — but the intended footage is this file:
   `cp "landing page/landing.MP4" public/assets/genesis-loop.mp4`
 - **Dependencies** — npm project (`package-lock.json` present): `npm ci` (or `npm install`).
@@ -6078,3 +6083,79 @@ host only*) carries the code and the guards, with this entry in the doc commit a
 `vercel --prod` were left alone at the owner's choice, so `app.dungeonknights.io/portfolio` still
 serves the build before this one and its Knights panel still reads **Coming soon**. The dev server on
 :3111 is where the squad is visible for now.
+
+## 15. The gate's intro video is the owner's new capture, re-encoded before it was adopted
+
+The ask: *"make this as a intro page new vide (remove the last one) for our app.dungeonknights.io page
+but before that make sure to compress it for the optimization because its a big video"*. Two
+instructions in one line — the video behind the Kingdom Gate changes, and the file it replaces goes
+away — and one condition on the first: it is compressed before it is adopted.
+
+**What arrived.** `main intro page fix.MP4` off Telegram Desktop: 57.7 MB — **HEVC** (Main), 1132×718,
+24 fps, 63.7 s, **7.5 Mbps**, with a 59 kbps HE-AAC stereo track, tagged full-range bt709. HEVC is the
+wrong codec for a page a phone opens and 7.5 Mbps is the wrong bitrate for a background, so the file
+was re-encoded before it was wired in, the same way `/assets/intro-web.mp4` was:
+
+```bash
+# 57.7 MB / HEVC / 1132×718 / 7.5 Mbps   →   6.7 MB / H.264 High / 1132×718 / 0.88 Mbps, no audio
+ffmpeg -y -i "main intro page fix.MP4" -map_metadata -1 \
+  -vf "scale=in_range=pc:out_range=tv,format=yuv420p" \
+  -c:v libx264 -preset slow -crf 29 -profile:v high -an \
+  -color_range tv -color_primaries bt709 -color_trc bt709 -colorspace bt709 \
+  -movflags +faststart public/assets/hub-intro.mp4
+```
+
+**Four choices in that line, each measured rather than assumed.**
+
+- **CRF 29, preset slow.** The curve was sampled before the full run — 12 s at CRF 26 / 29 / 32 gave
+  1,441,829 / 1,029,928 / 740,356 bytes, projecting 7.3 / 5.2 / 3.7 MB for the whole minute — and the
+  full 63.7 s came out at 6.67 MB. That is 8.6× smaller than the capture and 5.3× smaller than the
+  master it replaced, for art that plays under `rgba(0, 0, 0, 0.55)`.
+- **Limited range, converted — not re-tagged.** The capture is genuinely full-range (`YMIN 0`,
+  `YMAX 255` across the whole clip, not merely tagged `pc`), so the numbers are rescaled to 16–235 and
+  the file is tagged `tv`. Checked rather than hoped: the frame at 10 s decodes to `YAVG 40.477` in
+  the capture and `50.7697` in the encode, and `16 + 0.859 × 40.477 = 50.77`. Tagging the same numbers
+  `tv` without rescaling would play crushed on a player that trusts the tag; leaving them `pc` plays
+  wrong on one that ignores it.
+- **No audio track.** `-an`: every element that plays this file is `muted` — it has to be, to autoplay
+  — so an AAC stream would have been about 0.5 MB nobody can hear.
+- **1132×718 kept.** It is neither 16:9 nor 720p, but it is what the capture is, both dimensions are
+  even (which libx264 requires), and upscaling a background to a round number is a larger file for no
+  more picture.
+
+**A new filename rather than a `?v=`.** It lives at `public/assets/hub-intro.mp4`, and that is the rule
+§1 already records: a video is fetched by URL, and a browser holding the first cached range of
+`/assets/intro.mp4` will serve those bytes back whatever query string is attached. The new name is
+also the honest one — this is a different capture, not the old file with new contents.
+
+**The old file is deleted, not left on disk.** `public/assets/intro.mp4` (37 MB, 1920×1080,
+10.2 Mbps) existed for one reason — `/hub` sits behind a password and was allowed to play it large —
+and `/hub` now plays a 6.7 MB file. It is still in git history at `94f50fd`: `git checkout HEAD --
+public/assets/intro.mp4` brings it back. The apex page is deliberately untouched: it plays its own
+`/assets/intro-web.mp4`, which is now the only copy of that older footage still served.
+
+**One thing had to move with it.** `/genesis` keeps a second `<source>` so a missing
+`genesis-loop.mp4` falls through rather than leaving a hole, and that fallback *was*
+`/assets/intro.mp4`. It points at `/assets/hub-intro.mp4` now. The page plays its own capture either
+way; the fallback is decoration.
+
+**Guards.** `check-landing.js` **36 → 38**: the rec that pinned *"the 37 MB master is still on disk
+for /hub"* became three — the gate's body points at `assets/hub-intro.mp4`, that file is under 10 MB
+(6,832 KB today), and `public/assets/intro.mp4` is gone (an existence test, because `statSync` on a
+deleted file throws rather than answering). `check-genesis.js` keeps its count at 69/72: the fallback
+rec reads the new name, and the rec that said *"the landing page still plays intro.mp4"* now says the
+apex keeps its own loop — which is exactly what it always asserted.
+
+**And in the browser.** On `localhost:3111/?__app=1` — the dev stand-in for the app host — the gate's
+`<video>` settles on `/assets/hub-intro.mp4`, `readyState 4`, `duration 63.71`, 1132×718, not paused,
+`currentTime` 49.36 → 50.96 over 1.6 s, the whole clip buffered, and its resource entry reports
+**6,995,733** bytes where the same element used to fetch 37,070,568. `?__app=0` still plays
+`/assets/intro-web.mp4` (3,238,624 bytes, 1280×720, 29.04 s). No console errors on either.
+
+**Fleet after it:** `check-landing` **38/38** · `check-genesis` 69/72, the same three pre-existing
+fails · `check-refs` 49/49 · `check-styles` clean · `check-copies` 2/2 · `check-wallet-menu` 19/19 ·
+`check-pitch` 43/43 · `check-gate` 150/150 · `check-docs` 77/77.
+
+**Left uncommitted, and not deployed.** No commit, no `git push`, no `vercel --prod`: the owner has
+not asked for one, so `app.dungeonknights.io` still serves the previous build and this change lives in
+the working tree, next to the new binary.
