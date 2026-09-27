@@ -255,9 +255,9 @@ rec('  … and the file is really there, byte-identical to the capture it came f
     exists(LOOP) && (!exists(SOURCE_FOOTAGE) || sha1(LOOP) === sha1(SOURCE_FOOTAGE)),
     exists(SOURCE_FOOTAGE) ? 'compared against landing page/landing.MP4' : 'source folder not present — size checked only');
 rec('  … and a video that will not load still leaves the page readable', /poster="\/assets\/images\/menu-background\.jpg"/.test(clientSource));
-rec('  … and intro.mp4 is behind it, so a missing copy falls through rather than leaving a hole',
-    /\/assets\/intro\.mp4/.test(clientSource));
-rec('the landing page is untouched by this — it still plays intro.mp4',
+rec('  … and the hub loop stays behind it, so a missing copy falls through rather than leaving a hole',
+    /\/assets\/hub-intro\.mp4/.test(clientSource));
+rec('the apex landing is untouched by this — it still plays its own loop',
     !exists(LANDING_RESERVED),
     'the reserved name landing-loop.mp4 is absent, so the apex landing keeps its own loop');
 rec('and a phone does not download it at all',

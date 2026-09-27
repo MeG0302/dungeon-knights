@@ -44,6 +44,7 @@ function rec(label, pass, detail) {
 (async () => {
     const { STATIC_PAGES } = await import('../lib/static-pages.js');
     const home = STATIC_PAGES.home;
+    const hub = STATIC_PAGES.landing;
     const body = home.body;
     const css = read('public/css/home.css');
     const theme = read('public/theme.css');
@@ -186,9 +187,19 @@ function rec(label, pass, detail) {
     const desk = size('public/assets/images/menu-background.webp');
     const mob = size('public/assets/images/menu-background-mobile.webp');
     rec('the phone background is genuinely the smaller one', mob < desk, `${kb(mob)} < ${kb(desk)}`);
-    rec('the 37 MB master is still on disk for /hub, just not on this page',
-        size('public/assets/intro.mp4') > 30 * 1024 * 1024 && !/\/assets\/intro\.mp4/.test(body),
-        `${kb(size('public/assets/intro.mp4'))}`);
+    // The gate's own loop, and the master it replaced. `/hub` used to play `intro.mp4` — 1920×1080,
+    // 10 Mbps, 37 MB — the one heavy file on the site, kept only because that page sits behind a
+    // password. The owner's newer capture arrived at 57.7 MB (HEVC, 1132×718, 63.7 s), so it was
+    // re-encoded before it was adopted: 6.7 MB under a name nobody has cached, and the master was
+    // deleted in the same breath, because nothing plays it any more. The apex's job is that a
+    // stranger on a train is not handed the heavy file; the gate was the one place one was allowed,
+    // and it does not need one now.
+    rec('the gate plays the re-encoded capture, under its own name',
+        /<source src="assets\/hub-intro\.mp4" type="video\/mp4">/.test(hub.body), 'assets/hub-intro.mp4');
+    rec('  … and that capture is web-sized rather than a camera file',
+        size('public/assets/hub-intro.mp4') <= 10 * 1024 * 1024, kb(size('public/assets/hub-intro.mp4')));
+    rec('  … and the 37 MB master it replaced is gone, so nothing can fall back to it',
+        !fs.existsSync(path.join(ROOT, 'public/assets/intro.mp4')));
 
     console.log('');
     const failed = results.filter((r) => !r.pass);

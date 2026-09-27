@@ -166,7 +166,7 @@ export default function GenesisClient({ shots = [] }) {
                 {/* The loop behind everything. Decoration only — every figure above it is text, so
                     the page reads correctly with the video missing, blocked or still loading, and
                     a phone or a reduced-motion visitor never fetches it at all (see genesis.css).
-                    The first source is the capture from `landing page/landing.MP4`; `intro.mp4`
+                    The first source is the capture from `landing page/landing.MP4`; the gate's loop
                     stays behind it so a missing copy falls through rather than leaving a hole. */}
                 <video
                     className="gn-video"
@@ -178,7 +178,7 @@ export default function GenesisClient({ shots = [] }) {
                     poster="/assets/images/menu-background.jpg"
                 >
                     <source src="/assets/genesis-loop.mp4" type="video/mp4" />
-                    <source src="/assets/intro.mp4" type="video/mp4" />
+                    <source src="/assets/hub-intro.mp4" type="video/mp4" />
                 </video>
                 <div className="gn-scrim" />
 
