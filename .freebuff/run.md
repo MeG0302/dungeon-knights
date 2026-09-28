@@ -7449,4 +7449,15 @@ green; `npx next build` compiles with `/genesis` at 4.92 kB and `/collab` at 8.3
 print 200 capsules a week for the same raffle, because they quote the vault's own config against its
 own math. If the count is genuinely unannounced, those are the next three places it is still public.
 
+**Deployed**, as the owner asked: `9e1c191` → `dungeon-knights-5dmnqybgq-meglast320-1694`, aliased
+across `dungeonknights.io`, `www.dungeonknights.io`, `app.dungeonknights.io` and
+`dungeon-knights.vercel.app`. Read back from the live host, not the deployment URL: `/genesis` shows
+`GENESIS SUPPLY 1,024 fixed · Next draw TBA`, the tile `CAPSULES A WEEK TBA`, the draw box
+`TBA CAPSULES / WEEK`, no countdown and a description that says *a weekly Knight-capsule raffle*; the
+only `200`s left on the page are band counts (200 Spark, 200 Radiant). `/collab` reads *the weekly
+Knight-capsule raffle goes to staked Genesis knights*, states no capsule count in any rendered line,
+and its tab carries `Free Knight capsules + Genesis NFT whitelist`. `/collab/review` still scrolls
+inside its box (`overflow-y: auto`, document clipped to the viewport), so §29's fix is on the same
+deployment.
+
 
