@@ -6347,3 +6347,986 @@ lives in `lib/static-pages.js`, which also holds §16's script tags, so a markup
 shipped a button and a 404'd `sound-toggle.js` together. Shipping §16 is the same §15 shape, just
 with `public/sound-toggle.js`, `public/css/sound-toggle.css`, `tools/check-sound.js`,
 `lib/static-pages.js`, `public/audio.js` and `tools/check-all.js`.
+
+## 18. The verification sweep: two harness bugs, one page bug, one on-chain item
+
+**The ask.** *"I want every function to work perfectly before we move forward."* So the whole fleet
+ran — all 49 `tools/check-*.js`, plus the browser battery (`tools/check-all.js` copied to
+`public/_check.js`, run route by route, then deleted) — rather than only the harnesses a change
+touched. Four things were wrong, and three of them were in the tools that are supposed to say so.
+
+**`check-genesis` was red on a page that is right.** Its rule — a published figure must not appear
+as a literal in the page — was matched by `Math.floor(ms / 1000)` (the **maximum hash power**,
+1,000), `width={168}` (the **ticket cap**, 168 hours) and `/css/genesis.css?v=4` (the **run cap**,
+4). The page reads every one of those from `lib/staking-config.js` / `lib/reward-config.js`. The
+rule now searches the page's *text*: JSX attribute values, URL versions and millisecond arithmetic
+are read out of the way, everything else stays. Mutation-tested — typing `up to 1,000` into the
+crest line still fails it, and the mutation was reverted. **72/72**.
+
+**`check-kv-store` could not speak to its own fake.** The harness runs the real library in two child
+processes against a fake Upstash REST store, and the library had grown `SCAN` (the day boards,
+`dailyKeys()`) — so the children died on a 400 and the harness reported the *library* as broken. The
+fake now speaks the whole dialect the store uses (`SCAN`, `ZSCORE`, `ZREM`, `ZREVRANGE … WITHSCORES`,
+`SADD`/`SREM`/`SMEMBERS`, `HSET`/`HDEL`/`HEXISTS`/`HGETALL`, `EXPIRE`), and `ZREVRANGE` answers
+`WITHSCORES` as a flat list because the board pairs the reply as `[member, score, …]`. **6/6**, and
+its second phase still documents the shape production was in without Redis.
+
+**`check-v4` blamed the contract for its own stale default.** `DNG_TOKEN` defaulted to `0xA8D54F…`,
+the *first* token, which nothing has paid in since Phase 2, so a run without the environment loaded
+reported the deployed V4's `0x3D94…` wiring as a mismatch. The default now follows
+`lib/game-runs.js`'s `ADDRESSES.dngToken`. **1 fail left, on chain not in code:** "V3 is paused" —
+the migration order is *pause V3, `withdrawAllTokens`, fund V4 with the sweep*, and that needs the
+owner's key. Until then the unsigned/legacy path stays open on V3 with its 384 DNG, which is safe
+but not the intended end state.
+
+**One real page bug, and it was the sound control's.** On `/dungeons` the audio initialised **twice**:
+`public/dungeon-select.js` ended with `if (typeof AudioManager !== 'undefined') window.audioManager =
+new AudioManager();` — a *second* manager, constructed after `sound-toggle.js` had already muted the
+first one. So the visitor chose silence, the button said silence, and a fresh unmuted manager played
+anyway. The page now reuses the manager `audio.js` built and, if it ever has to build one, honours
+`dk_sound` first. Found by the browser battery, not the node fleet: no static harness could see it.
+
+**The browser battery, route by route** (all on `http://localhost:3111`, then the copy deleted):
+`/game` engine **7/7**, Arya **34/34**, wallet menu **12/12**, sound **15/15** · `/mint` mint **7/7**,
+wallet menu **12/12**, sound **15/15** · `/staking` vault **81/81**, writes (approve/stake/unstake/
+claim decoded through a wallet double) **19/19** · `/portfolio` wallet menu **12/12**, samples **5/5** ·
+`/menu` **12/12** + **15/15** · `/dungeons` **12/12** + **15/15** (after the fix above) ·
+`/tokenomics` **23/23**. Two harness bugs had to be fixed for that to mean anything: `__check.sound()`
+hardcoded "one click turns the effects off" from a browser that may have been muted (it now normalises
+the start and restores the *button* as well as the stored value), and `__check.staking()` demanded a
+bulk raffle entry the page deliberately replaces with "Entered by staking" when entries are automatic.
+
+**The node fleet after all of it: 49 harnesses, 48 green** — the only red is the V3 pause above.
+`check-genesis` 72/72 · `check-kv-store` 6/6 · `check-runs` 20/20 · `check-session` 35/35 ·
+`check-staking` 195/195 · `check-points-x` 194/194 · `check-gate` 150/150 · `check-discord` 134/134 ·
+`check-waitlist` 102/102 · `check-staking-writes` 72/72 · `check-capsule-claim` 82/82 ·
+`check-portfolio` 83/83 · `check-docs` 77/77 · `check-v4` 1 ops fail · `check-points-guard` 30/30 and
+`check-follow-gate` 11/11 against the dev server (`check-follow-gate` defaults to port 3000, which is
+why a bare run says "nothing was checked").
+
+**Uncommitted at the end of it:** §16's sound control (`lib/static-pages.js`, `public/audio.js`,
+`tools/check-all.js`, the three new files) and these four fixes (`public/dungeon-select.js`,
+`tools/check-genesis.js`, `tools/check-kv-store.js`, `tools/check-v4.js`). Production still carries
+the `/dungeons` double-manager until they are shipped.
+
+## 19. The Battle Kit — three powers the player fires into a live run
+
+**The ask.** *"Develop more about the game."* Asked which depth to build first, the answer was the
+kit: the one thing a run did not have was an **input after Deploy**. The squad pathed, attacked and
+cleared `50–70` nodes on its own while the player watched a map finish itself. Three buttons on a
+cooldown are the cheapest honest fix that does not touch the economy.
+
+**The powers, in `public/battle-kit.js` — one table, because the HUD, the keyboard, the multipliers
+and the banner all have to agree about the same three things:**
+
+| key | power | effect | cooldown |
+|---|---|---|---|
+| 1 | **Rally** | damage ×1.5 and swings every 0.7s instead of 1.0s, for 10s | 45s |
+| 2 | **Midas** | every kill pays double gold, for 15s | 60s |
+| 3 | **Second Wind** | the whole squad back to full stamina at once, exhausted knights awake | 90s |
+
+**Where it reaches into the engine — three seams, one line each, every one guarded so a page without
+the kit behaves exactly as it did:** `Knight.attack()` reads the damage and the swing cooldown
+(`public/characters.js`), `CombatSystem.handleLootDrop()` reads the gold multiplier
+(`public/combat.js`), and `renderKnight()` draws a gold ring under a knight while Rally burns
+(`public/dungeon.js`) so the buff is something you can *see* on the squad and not only on a button.
+`Knight.revive()` is new: it is the only way to un-exhaust a knight mid-run, since the engine's own
+recovery is the trickle in `update()`.
+
+**What it deliberately cannot reach, and why that is asserted as an absence.** A run's `$DNG` is
+computed server-side from the signed receipt, so a power-up must never be able to inflate a claim.
+The gold Midas doubles is the browser's own counter — the number the completion modal prints and
+recruiting spends. `tools/check-battle-kit.js` fails if `public/battle-kit.js` ever mentions
+`localStorage`, `fetch(`, `walletManager`, `dungeonSession` or anything ethers-shaped, and the same
+file never writes into `window.game`.
+
+**Decisions inside it.** A **deploy is a fresh kit** — the moment `game.isRunning` rises the
+cooldowns refill, so no dungeon is entered on an old cooldown; the rising edge only counts when the
+kit *watched* the run stop, so a page opened into a run already going does not wipe a power fired in
+its first second. Cooldowns **freeze while the squad is out of the dungeon** (recalled, or between
+maps in the 60s auto-progress), which also means the clock only does work while there is a fight.
+A press that cannot land is **refused out loud** rather than silently ignored — the button shakes,
+`data-denied` sets for 420ms, and the banner says *"Rally is recharging — 33s"* or *"Deploy the
+squad first — the kit fights with them."* Every button carries `aria-pressed` and `aria-disabled`
+(never `disabled`, so a keyboard user still gets the refusal) with the countdown as its own text
+node. Keys are `1`/`2`/`3` — checked against the page's existing Space/Esc/H. The bar and the banner
+are **built at runtime** and the sheet is injected as `/css/battle-kit.css?v=1`, the way `arya.js`
+brings hers, so `lib/static-pages.js` needed one line (the script tag) and the shortcuts overlay
+gains its three rows from the script that owns them. Three new procedural sounds (`rally`, `midas`,
+`second_wind`) join `audio.js` — zzfx, like every other effect, so no audio files.
+
+**Three real bugs the guards caught before the page did.** `activate()` called `this.announce()`,
+which is a module function and not a kit method — every power threw on its first press.
+`secondWind` played a sound named `secondWind` while the table's key is `second_wind`, so the one
+power a player needs most in a hurry would have been silent. And the first clock tick treated "a run
+is already going" as "a new run", which wiped a power fired in the same second — the fix is the
+`sawStop` edge above.
+
+**Verified.** `tools/check-battle-kit.js` **33/33** in a `vm` sandbox with `characters.js`,
+`combat.js` and the kit loaded together — no DOM at all, because the manager has to work without
+one. In the browser, `__check.battleKit()` (**21 recs**, `tools/check-all.js`) on the local `/game`:
+the bar is in the control bar beside Deploy/Recall, the sheet arrived, a press with nobody deployed
+is refused with the hint banner, and then in a live run — Rally's swing measured **294 damage against
+196 power** and **0.7s** cooldown, the *combat loop's* own `executeAttack()` landing the same 294
+hp on a real monster, `ON 10s → ON 9s` in the button, a key-fired Midas paying **+2.00** on a 1-gold
+kill, Second Wind putting a knight at 0 stamina and `exhausted` back at the top of its bar
+(`8/8` topped up, banner *"1 knight back on their feet"*), Rally expiring into a cooling button that
+refuses with *"recharging — 33s"*, and a new run refilling all three. The engine battery (7 recs)
+and `__check.sound()` (15 recs) still pass in the same tab, and the page's console is clean. The gold
+ring is not assumed: `CanvasRenderingContext2D.prototype.stroke` was instrumented for `#ffd700`
+(a colour no other effect uses — the coin is `#FFD700`/`#DAA520`), which counted **720** strokes
+during 600ms of Rally and **0** in the same window without it. On `/menu` there is no bar, no
+`window.BattleKit` and no sheet, and the sound battery is still 15/15 — the kit is confined to the
+page that has the engine.
+
+**Fleet.** 48 node harnesses green, including `check-styles` (every `bk-` class is defined by the
+sheet the script injects), `check-copies` 2/2, `check-rarity` 64/64, `check-sound` 29/29,
+`check-run-budget` 39/39, `check-session` 35/35, `check-runs` 20/20, `check-gate` 150/150,
+`check-map-gate` 17/17, `check-points-guard` 30/30 and `check-follow-gate` 11/11 against the dev
+server on `:3111`. `check-v4` still wants an address argument; its one ops item (V3 is not paused)
+is §18's, and still the owner's key to turn.
+
+**Uncommitted, and not deployed.** This rides the same working tree as §16 and §18 — eight modified
+files and six new ones. `lib/static-pages.js` is where §16 already lives, so shipping the kit ships
+the sound control with it; production carries neither yet.
+
+## 20. Every dungeon ends at a guarded den — the boss the run was actually for
+
+**The ask.** *"Give every dungeon a guarded boss encounter that ends the run with a climax and a
+large payout, and guard it with a harness."* The engine's shape up to now was flat: `50–70`
+identical nodes, no destination, and a run that ended when a knight finally swept the last stray
+chest out of a corner. Nothing in it was worth walking across the map for.
+
+**What a den is.** One boss per map, placed on the **farthest floor tile from the squad's spawn
+corner**, ringed by elite guards that **ward** it. No blow lands on a boss while one of its guards
+stands, and a warded boss is not offered to the squad as a target at all — so the payout at the far
+end of a map can never be taken by whoever happened to walk past first, and no knight is ever sent to
+hack at a locked door. The last guard falling shatters the ward; the boss falling ends the run.
+
+| | boss | guard | ordinary node |
+|---|---|---|---|
+| health | 2 500 (×5) | 1 000 (×2) | 500 |
+| gold | **5.00** | ~0.42 | ~0.18 |
+| behaviour | holds the den, counters | holds the ring, counters | strolls ±2 tiles |
+
+**The ward is a lock, and it is read live.** `LootNode.warded` is a getter over the boss's own guard
+list, not a cached flag, so a guard destroyed anywhere — by combat, by a harness, by the console —
+lifts the ward on the next read and nothing is ever fought on a stale answer. `takeDamage()` returns
+`false` for a warded boss, so combat cannot pay for a kill that did not happen, and
+`Dungeon.getActiveLootNodes()` filters warded bosses out entirely. That single filter does three
+jobs at once: the target finder in `pathfinding.js` never chooses the boss, the on-screen loot count
+never reaches zero while the ring stands (so a run cannot be "cleared" by walking away from an
+untouched den), and the boss is handed to the squad the moment the last guard dies — which is also
+the only moment it *can* be, so the den is the last fight by construction.
+
+**The den goes down first.** `generateLootNodes()` places the boss and its ring *before* the ordinary
+scatter, precisely so the scatter's existing 3-tile spacing rule keeps a clear ring around every
+guard. That is what keeps each guard's strike tiles open, and it is the anti-soft-lock property the
+harness leans on hardest: monsters are struck from the side only, so a sealed guard would be a ward
+that never lifts and a run that never ends. 600 generated maps (5 themes × 12 seeds, twice over)
+produced a full ring of four with every guard reachable, every time.
+
+**Two beats, not one.** The last guard's fall is its own announcement — a white ripple off the den,
+`boss_awaken`, and *"THE WARD BREAKS"* over the canvas — and the boss's death is the bigger one: a
+gold shockwave with a white core flash, `boss_slain`, *"DEN CLEARED"*, the purse, and the end of the
+run. Both sounds are zzfx like every other effect, so the den added no audio files; both were added
+to `audio.js` and are asserted to exist by name.
+
+**The run now ends on the boss, not on the last chest.** `game.update()` fires the completion on
+`bossDown || activeLoot.length === 0`, so the climax *is* the ending rather than something that
+happens forty kills before the modal. The receipt path is untouched: `runMetrics` is still derived
+from the loot nodes, a boss is simply a kill, and the purse is paid through the same
+`handleLootDrop()` as every other kill — into the browser's own gold counter, which is the number
+the completion modal prints. `tools/check-boss.js` scans the den's own code (twelve method bodies,
+~11 kB) and fails if any of it ever mentions a session, storage, a wallet, ethers or the network.
+
+**Presentation is canvas-only on purpose.** The den gets a floor rune with one notch per living guard
+(dimmed to *"THE DEN"* once it breaks), a name plate with a ward count across the top of the canvas,
+a banner for the two beats, and a marker on the minimap that is gold while warded and red once open.
+All of it is drawn by `DungeonRenderer`, so `lib/static-pages.js` needed **nothing** for this — which
+also keeps the den independent of §16 and §19 at ship time.
+
+**One real bug the browser found.** The rune was first drawn at the sprite's feet, which is fine
+mid-map and wrong exactly where dens live: the farthest tile is usually in the last row, and there the
+sigil and its guard count were pushed off the bottom of the canvas (the sprite's feet already sit
+~6px past it). The rune is now drawn on the tile the boss stands on — where a floor marking belongs —
+and the label flips above the rune when it would fall past the bottom edge. Measured on the live map:
+**70** gold pixels in a 120×90 box around the den against **3** in the same-width band 200px north of
+it, which is the rune, not ambient gold.
+
+**Verified.** `tools/check-boss.js` is **37/37**: `map-grids.js`, `dungeon.js`, `pathfinding.js` and
+`combat.js` loaded into one `vm` context with no DOM at all, so the ward, the ring and the payout are
+checked as code rather than as pixels. It covers 60 generated maps (exactly one den each, always the
+farthest node, a full ring in the 2–4 band, every guard elite and reachable), the live ward under
+direct `isDestroyed` flips, both beats driven through the real `CombatSystem.executeAttack()`, the
+purse landing as exactly **5.00** in `game.goldBalance`, the run over with **49** nodes still on the
+floor, and 45 simulated seconds in which the den holds its tiles while the ordinary monsters stroll.
+The last of the 37 is the page: exactly one route loads `dungeon.js`, and it is the route with a
+canvas — the same rule that keeps the Battle Kit off the menu pages, applied to the engine itself.
+In the browser, `__check.boss()` is **13 recs** on the local `/game`: *The Ashen Wyrm* at `(34, 18)`
+with 4 guards, **52 of 53** nodes on offer and the boss not one of them, its plate costing **2 782**
+gold pixels on a real canvas, then a synthetic dungeon driving the whole chain — 2 500 hp unchanged
+by a warded swing, one ward break, **+5.00** gold, the run over with 46 nodes left, the *DEN
+CLEARED* banner — and finally the run-end rule on the live engine itself: one real tick with the boss
+marked dead and a stubbed `handleDungeonCleared` fired **exactly once** with **52** nodes still on
+the map, on a borrowed deploy that was recalled, so nothing was banked and the page was left as
+found. The engine battery (7/7), the Battle Kit battery (21/21) and the sound battery (15/15) still
+pass in the same tab, and `check-rarity` (64/64) and `check-styles` are clean after the `_check.js`
+copy was deleted.
+
+**Fleet.** 47 of the 51 node harnesses are green. The four red are the four that cannot run offline:
+`check-all.js` is the browser battery, `check-follow-gate` and `check-points-guard` want the dev
+server on `:3111` (`fetch failed`, `ECONNREFUSED`), and `check-v4` wants an address argument — its one
+open item (V3 is still not paused) remains §18's, and still the owner's key to turn. Five files
+changed for this: `public/dungeon.js`, `public/combat.js`, `public/game.js`, `public/audio.js` and
+`tools/check-all.js`, plus the new `tools/check-boss.js`.
+
+**Uncommitted, and not deployed.** This rides the same working tree as §16, §18 and §19. Unlike the
+Battle Kit it needed no route, no script tag and no stylesheet — `lib/static-pages.js` is untouched
+by §20 — so the den is a self-contained change that can ship on its own, once someone decides to.
+
+## 21. The den gets a real fight, a boss sprite of its own, and a way out
+
+Three things, one theme: §20 made the den the point of a run, and this section makes it behave like
+one. Every map's master now wears art of its own, it fights back with a telegraphed slam, the squad
+is told what it has walked into, and — the rule change — a run no longer ends when the boss falls.
+It ends when the floor is empty, and the squad leaves by breaking through it.
+
+**Five bosses, five sprites.** The owner handed over five 2K sprites (`D:\dungeon knights robinhood\
+monsters\BOSS MONSTER`), which were downscaled with `ffmpeg` before adoption — `scale=500:500`
+`force_original_aspect_ratio=decrease` plus a transparent pad, onto the same canvas as every other
+monster in the game — because a 3.4 MB PNG drawn at 136 px is 3.4 MB of download for nothing. They
+landed at 278–354 kB each (existing monsters are 162 kB), in both copies the repo keeps: `monsters/`
+as the source of truth and `public/monsters/` as the one the browser actually fetches.
+
+| map | boss | new sprite | why that one |
+| --- | --- | --- | --- |
+| Forgotten Crypts | The Bone Sovereign | `Undead_sorcerer_holding_bone_staff_…` | a bone-staffed undead lord |
+| Goblin Mines | The Deepdweller | `Pixel_art_character_standing_pose_…` | an armoured delving juggernaut |
+| Overgrown Temple | The Rootbound Colossus | `Pixel_art_stone_guardian_standing_…` | a stone guardian gone over with vines |
+| Magma Chambers | The Ashen Wyrm | `Pixel_art_lava_monster_standing_…` | a molten brute |
+| Void Rift | The Rift Herald | `Pixel_art_character_sprite_standing_…` | a spiked spectral horror |
+
+The mapping was made by eye rather than by filename — the five were served on a scratch page and
+looked at — because two of the five filenames say nothing about what is in them. `bossMonster` is now
+a file that is deliberately **not** in the map's `monsters` list: that list is what spawns as ordinary
+nodes, and a boss must never come out of one. The preload loop in `loadImages()` was taught to add
+`config.bossMonster` for exactly that reason — otherwise the master of the map would be the one reach
+that never loads — and `tools/check-boss.js` now asserts both copies of all five files exist on disk.
+
+**The slam.** Once the ward is down the boss is a fighter, not a prize on a shelf. It picks the
+nearest knight inside six tiles, marks **that tile** — `BOSS_SLAM_WINDUP` 1.0 s — and then comes down
+on it: the mark never moves, and the blow catches the marked tile plus its four neighbours
+(`BOSS_SLAM_REACH` 1). A knight that walks out of the mark is missed; that is the contract the
+telegraph makes. What it takes is **stamina**, a quarter of the knight's maximum
+(`BOSS_SLAM_STAMINA` 0.25) — knights have no hit points, so stamina is the only thing a den can take
+from a squad, and it is the sharpest one: a caught knight loses a quarter of its run in one blow and
+Second Wind is the way back. `BOSS_SLAM_COOLDOWN` 2.4 s measured from the impact, so the boss cannot
+chain slams, and a warded boss never swings at all — it drops any mark it was holding, because a
+telegraph on a dungeon where nothing can be hit is a lie.
+
+The mark is drawn on the floor with the fill deepening and the ring closing as the clock runs out, the reach tiles faintly outlined, and the boss's body coiling up through the wind-up
+and driving down as it lands. The impact is the heaviest thing in the dungeon: cracks, a dust ring, ten pieces of
+debris and a white flash, plus *SLAMMED* on the tile it caught. Sounds are zzfx like the rest —
+`boss_slam` (short, low, percussive) and `ward_enter` (two rising notes) — so no audio files were
+added.
+
+**The cue.** The first time a knight crosses inside the ring (`BOSS_WARD_RADIUS` = the ring's own
+4 tiles) the run says so, once ever: `onWardEntered()` logs it, `announceBoss('THE WARD HOLDS',
+'4 GUARDS WATCH …')` puts it over the canvas, and the renderer lights the den's own sigil — one notch
+per living guard — with two gold rings running off it for 2.6 s. That sigil needed a new pass on
+purpose: a warded boss is withheld from the loot-node pass (`getActiveLootNodes()` excludes it), so
+this is the one moment the dungeon shows the squad where its locked door is while it is still locked.
+
+**The run ends on an empty floor, not on a dead boss — this supersedes §20's rule.** §20 ended the run
+on `bossDown || activeLoot.length === 0`, on the reasoning that the boss *was* the objective and
+sweeping a stray chest afterwards was anticlimactic. The owner has called it the other way: the squad
+is done when nothing is left standing anywhere — every monster, every chest and the den's master with
+them — and it does not walk back to the entrance to say so. The moment the last node falls,
+`beginEscape()` starts a 2.4 s breakout: the floor gives way under each knight in turn
+(`ESCAPE_STAGGER` 0.12 s apart, 0.9 s each), the hole opens with cracks and dust, the knight sinks
+1.7 tiles and fades into it, and the near lip of the hole is drawn back **over** the falling sprite so
+the floor visibly swallows the squad instead of them sliding down the canvas. `floor_break` plays,
+*THE FLOOR BREAKS / THE SQUAD GETS OUT — N GOLD* goes up, and `handleDungeonCleared()` is called on
+the frame the clock reaches zero — never before, so the modal cannot land on a squad still standing
+around in a quiet room. A map with no den at all (an older cached bundle) ends on the same empty
+floor, the same way. The boss's death is still the loudest beat of a run: banner, gold shockwave,
+`boss_slain`, the whole 5.00 purse. It is just no longer the end of it.
+
+**Breaking the floor takes somebody with something left to swing.** A squad that is *entirely*
+exhausted cannot open it, and the run waits: `update()` only calls `beginEscape()` when
+`deployedKnights.some(knight => knight.state !== 'exhausted')`, and otherwise calls `holdEscape()`,
+which says so — a log line, *THE SQUAD IS SPENT / N KNIGHTS MUST RECOVER OR BE WOKEN* over the
+canvas, and `squad_spent` — once on the first held frame and again every `ESCAPE_HELD_REMIND` (8 s)
+while it lasts, never once a frame. The wait is finite by the engine's own rules and all three ways
+out are the player's: an exhausted knight recovers stamina at twice the normal rate and wakes at a
+full tank (**10.8 s** for the common the harness rolls), a manual wake is allowed from half
+(**~5 s** in), and a Battle Kit Second Wind puts one back on its feet immediately. A recall or a new
+dungeon clears the hold. Nothing about it touches the payout: the floor is already clear of loot
+when it fires, so a held run is a run with nothing left to earn.
+
+**And the panel hands the player the way out.** An explanation with no control behind it was the
+weakest part of the hold, so `public/ui.js` now puts the control on the card: every spent knight gets
+a `⚡ Wake` button, enabled under the engine's own rule (`canManualWake()` — half a tank or better) and
+otherwise *disabled* with the number it is waiting for printed on it (`Wake at 50% (23% now)`), which
+is the difference between a button that refuses and a button that does nothing. Above the cards, a
+*THE FLOOR WAITS* notice appears while `game.escapeHeld` \u2014 the map is clear, the squad is not on its
+feet. Clicking a wake button calls `manualWake()` \u2014 the engine's rule, not a second copy of it \u2014
+plays the new `wake` zzfx, logs the knight's stamina, and refreshes the panel at once rather than at
+the next one-second tick, so the floor breaks on the following frame. The styling lives in
+`public/layout.css` beside the squad card's own rules, because `tools/check-styles.js` caught the
+first cut of this: the classes were written by the script and defined by no sheet. That harness's own
+words are the reason the markup has no inline styles left in it: *"a class name nobody styles is a
+screen nobody has looked at"*.
+
+**A bug the player found that the battery had missed: the den was invisible.** Reported as *"I don't
+see a boss coming out after the knights clear the whole map"*, and it was exactly true — for the whole
+ward. The renderer drew its loot from `getActiveLootNodes()`, the list of things the *squad* may
+attack, and a warded boss is deliberately not on it; so the master of the map was never painted: not
+the sprite, not the notched floor rune §20 wrote for precisely that state (its `GUARDS` branch had
+never once been seen, because the boss only became drawable on the frame the rune stopped saying it),
+and the den appeared out of nowhere on the last guard's death. Measured on the live page by
+instrumenting the draw call itself: **12 nodes drawn with the ward standing, the boss not among
+them**; **9 drawn with the ward down, the boss included**. Being withheld as a target is now a
+different question from being on the map: `Dungeon.getVisibleLootNodes()` answers the second and the
+render pass asks that one, while targeting and the run-end rule keep asking the first. Pinned at both
+levels — a fresh crypts draws 52 targets of 53 bodies and three corpses leave the map either way, and
+on the live page, through the real render pass with the loop's own node draw instrumented, the boss is
+drawn **while `warded` is true** and still not offered as a target. The same measurement found a
+second, smaller thing: the ward's flare skipped drawing at progress 0, so the cue's first frame was a
+frame of nothing; the rings now start on screen instead of growing out of it.
+
+**Verified.** `tools/check-boss.js` is **68/68** (it was 37). It pins the art in both folders, the slam
+as engine behaviour in a DOM-free `vm`: a warded boss never marks a tile in **20 simulated seconds**
+beside a knight (and fires the cue exactly **once** in that time, with `ward_enter` heard once and
+`boss_slam` never), the ring falls, one tick locks the mark onto the knight's own tile
+(`(35, 18)` = the tile it stands on), the mark holds without moving for `1.01 s` of a declared 1 s
+wind-up, the knight on it goes **300 → 225** stamina while one across the map stays at 300, the blow
+catches the marked tile and one neighbour and stops at the reach it declares (225/225/300), the mark
+clears with the crater and the cooldown outlasts it (`0` early marks, then a second one), a knight
+that walks out of the mark is missed, and a boss with nobody inside six tiles marks nothing at all.
+It also plays out the new ending — the sandbox now loads `characters.js` too, so the hold is tested
+against the real `Knight`: killing the guards and the boss of a 53-node map leaves **48** nodes
+standing, the count reaches **0** on the very last node and not one earlier, a map whose only
+survivors are the ring cannot end on a warded den, an exhausted knight left alone **wakes** (with the
+half-tank mark crossed on the way, which is what a manual wake needs), and a Second Wind stands one up
+at once. In the browser, `__check.boss()` is **21 recs** on
+the local `/game` — *The Rootbound Colossus* at `(34, 18)`, 4 guards, and its new sprite confirmed
+**loaded** (`naturalWidth > 0`) rather than merely named — through the ward cue (*THE WARD HOLDS — 4
+GUARDS WATCH THE ROOTBOUND COLOSSUS*), a slam on the knight's own tile (**75** stamina gone), the
+telegraph painting a tile that deepens its opacity as the wind-up runs out, the crater and the flare
+leaving pixels, and the ending driven on the live engine: a dead boss leaves **49** nodes standing
+and ends **nothing**, an emptied map starts the breakout (`started && fired === 0`), the modal lands
+**exactly once** after the clock (*landed*), the breakout paints holes on a scratch canvas (*painted*),
+and all **49** nodes are put back in a `finally` — the run is never banked and the page is left as
+found. The hold gets a rec of its own in that same borrowed run, driven the way a player drives it:
+floor emptied, every knight knocked flat for one tick, and the breakout does **not** start —
+`escapeHeld` set, *THE SQUAD IS SPENT* on the canvas, `squad_spent` played, the *THE FLOOR WAITS*
+notice in the panel and the wake button **disabled, saying why** (`Wake at 50% (0% now)`). One knight
+is then given 60% stamina, the panel refreshed, and the button **really clicked**: the knight is up,
+`wake` was played, and the very next tick breaks the floor. Knights are restored field by field
+(state, stamina, target, path, deployed) in a `finally`, and the page is left idle with no hold and no
+run.
+
+**Two harness bugs, both from the same mistake.** The telegraph check first asserted that the late
+telegraph paints *more* pixels than the early one, which is false: the ring is a stroke, it *shrinks*
+over the wind-up, so total pixel energy goes **down** (710 878 → 526 657) even though the mark is
+getting brighter. What actually deepens is the tile's own fill, and the honest place to read that is
+the tile's centre — where only the fill lands, never the ring. The second: the browser battery passed
+its labels in `label` where `rec()` stores `name`, which is why a failing rec printed as `null` until
+`__check.report()` was read instead. Both are fixed, and the assertion now reads alpha at the centre.
+
+**Fleet.** 47 of the 51 node harnesses are green (`check-rarity` **64/64** once the `_check.js` copy
+is deleted — it sweeps `public/*.js`, so the copy is a red it causes itself). The four red are the
+four that cannot run offline: `check-all.js` is the browser battery, `check-follow-gate` and
+`check-points-guard` want a dev server, and `check-v4` wants an address argument — its open item (V3
+still not paused) remains §18's, and still the owner's key to turn. Changed this time:
+`public/dungeon.js`, `public/game.js`, `public/audio.js`, `lib/static-pages.js` (the `?v=` stamps on
+`audio.js`, `dungeon.js`, `game.js`, `ui.js` and `layout.css` moved to `1790532428`, since a deploy
+must not hand returning players the old engine), `tools/check-boss.js` and `tools/check-all.js`.
+Added: ten sprite files (five in `monsters/`, five in `public/monsters/`).
+
+**Uncommitted, and not deployed.** Same working tree as §16, §18, §19 and §20. Nothing here touches a
+receipt: the slam pays no gold at all — it takes stamina — and the breakout banner prints the same
+browser counter the completion modal prints.
+
+## 22. The den moves to the middle of the floor, and stays sealed until the map is quiet
+
+**The report, in play:** *"I don't see a boss coming out after knights clear the whole map — why?"*
+Two answers, and the second one was the request. The rendering answer was §21's (a warded boss was
+drawn from the list of *targets*, so it was invisible for the whole ward). The design answer is this
+section: the den stood on **the farthest floor tile from the spawn corner** — a back room the squad
+only ever saw at the end of a run, if it went there at all — and it was standing there from the first
+frame, so there was nothing to "come out" after a clear. It now goes down in **the middle of the map**
+and is **sealed** until the rest of the floor is dead. Clearing a dungeon now ends in the fight it was
+for: the master of the map breaks up through the middle of it, with its ring, and then the floor opens
+and the squad drops out.
+
+**The seal is one flag, and the whole engine reads it.** `LootNode.sealed = isBoss || isGuard` — the
+whole den, not just the master: a ring of elites standing in the open is a fight the squad picks up on
+the way past, and then the finale would be one warded boss with no ward. While it is set the den is off
+`getActiveLootNodes()` (never a target), off `getVisibleLootNodes()` (never drawn — a sealed den really
+is not on the floor, which is the opposite question from the one §21 fixed), off the boss bar, and off
+the minimap mark. The only thing still ticking is the den's own clock: `updateDenFight()` asks
+`floorCleared()` (everything on the map except the den is destroyed) and calls `openDen()`, which
+lifts the seal on the master and every guard, sets `riseTime`, plays the new **`den_open`** zzfx, and
+hands the master to **`game.onDenOpen()`** — a log line and *THE DEN OPENS / <MASTER> RISES — 4 GUARDS
+WATCH* over the canvas. On screen the eruption is its own pass, `renderDenRise()`: a white flash, three
+ring waves running off the tile, fourteen chunks of debris arcing up and back down, all drawn *under*
+the sprite while the body climbs out of the floor it broke (`riseLift` from `DEN_RISE_TIME`, with the
+shake), so the finale arrives instead of having stood there all run.
+
+**One rule had to move with it, and it is the one that makes the seal safe.** `game.update()` ends a run
+when `getActiveLootNodes()` is empty. A sealed den is *not on that list*, so the frame the last ordinary
+node dies — the den opens on the tick after, because `updateLootNodes` runs before combat in the same
+frame — the list is empty, the den is still shut, and an unguarded rule would drop the squad out of a
+dungeon that still has its boss in it. The exit now also asks `!dungeon.denSealed()`, and the harness
+pins both halves: an empty list with a sealed den is not a finished map, and the tick opens the den
+instead.
+
+**Placement.** `denCentre()` is the middle tile; `placeBossDen()` picks the most central walkable tile
+that has an approach (tie-break noise smaller than one tile, so the integer distance is always the grid's
+minimum), and the guard ring is still built at 2–4 tiles around it with a lateral strike tile each. The
+den still goes down *first*, so the ordinary 3-tile spacing keeps a clear ring around it.
+
+**Verified.** `tools/check-boss.js` is **84/84** (was 82): every generated map of the 12-seed sweep now
+has to sit on the grid's own minimum centre distance and open with `offered === bodies - 1 - guards`, the
+den must not stir for half a floor of kills nor for a map with one node left, it opens on **the tick
+after** the last ordinary kill (announced once, to the game, with `den_open` exactly once, guards unsealed
+with it, and the next tick changing nothing), and a freshly closed den on an otherwise empty map is a
+`0`-target list the run must not treat as finished. The ward fixtures had to be refitted for it —
+the ward is only reachable after a clear now, so the harness clears the floor the way a run does
+(`__clearFloor`) or takes its own shortcut (`__openFight`) — and the two run-end recs moved with the new
+rule. The browser battery (`__check.boss()`) is **26 recs**, green: the live den sealed with nothing
+drawn for it and nothing offered, no plate on the canvas, the middle of the map, then the **live engine**
+opening it on an emptied floor (eruption running, banner up, `den_open` heard, **plate painted**), the
+ward/cue/break/slam/purse chain unchanged behind it, and the eruption measured on a scratch canvas
+(0 pixels with the clock at zero, the burst at 15% and a fading tail at 85%). Engine 7/7, Battle Kit
+21/21, sound 15/15, `__check.report()` **43 recs, 0 failures** on the dev server at `:3111`; node fleet
+**47/51** (the four offline reds), `check-rarity` **64/64** once the `_check.js` copy is deleted.
+
+**One harness bug, the same shape as §21's.** The eruption's pixel rec first asserted the *early* frame
+paints more than the late one and was written the wrong way round: `riseTime` counts **down**, so a full
+clock is the frame the floor lets go (big flash, debris in the air) and zero is the eruption over (alpha
+0, nothing at all). Fixed by comparing against the right end of the clock. And the live sealed rec
+counts against bodies **standing**, not against the whole node list, because this battery can be run on
+a page that is already part-way through a run — a corpse is off both lists whatever the seal says.
+
+**Uncommitted, and not deployed.** Changed: `public/dungeon.js` (the seal, `denCentre()` placement,
+`floorCleared()`/`denSealed()`/`openDen()`, `renderDenRise()`, the bar and the minimap), `public/game.js`
+(the exit gate and `onDenOpen()`), `public/audio.js` (`den_open`), `lib/static-pages.js` (the `?v=` stamps
+moved to `1790536694` so a deploy cannot hand returning players the old engine), `tools/check-boss.js`,
+`tools/check-all.js`. Nothing here touches a receipt: the den opening is a turn in the run, not a reward,
+and the gold it pays is still the browser's own counter.
+
+---
+
+## 23. A collab page: the terms, and a tab that registers a wallet per project
+
+**What it is.** `/collab` is the page a partner is sent to: "What we offer your community" (free Knight
+capsules, Genesis NFT whitelist places), "What these NFTs are used for" (the two collections, and what
+each is actually for), "What we ask of you" (a collab post on their X, which we share from
+@DNGrobinhood), the five steps a collab runs through, and — at the bottom, where a form belongs when
+somebody has to read the reason to press it first — a **project tab** that connects a wallet and
+registers it for one project's giveaway. Fabled Chronicle is the first project; the next one is one
+object in a list.
+
+**It is a React route, not a legacy page.** `app/collab/page.js` (metadata, `alternates.canonical:
+'/collab'`) renders `app/collab/client.js`, and the sheet is `public/css/collab.css` — the same shape
+as `/docs`, `/genesis` and `/portfolio`. That matters for the wallet control: the route carries the
+`wallet-pill` and loads `/wallet-menu.js`, so `tools/check-wallet-menu.js` sees it as a normal route
+(**16 routes, no exemption needed** — the allowlist is still only `/`, `/gate`, `/genesis`).
+`/collab` and `/api/collab` are on `APEX_PUBLIC` in `lib/app-routing.js`, and `/collab` is on
+`app/sitemap.js`, because a page a partner cannot open outside the password is a page that does not
+exist. Both lists agree, and the harness asserts it.
+
+**The copy types no numbers.** `lib/collab-content.js` holds the offer, the NFT utility, the partner
+terms, the steps and the project list, and every figure in it is imported: the capsule odds are
+`CAPSULE_TYPES[0].odds` (rendered as `60% Common · 25% Uncommon · 10% Rare · 4% Epic · 1% Legendary`),
+the open price is `capsuleOpenPrice(0)` → `capsuleOpenPrice(KNIGHTS_REFERENCE_SIZE)` (500 → 5,000
+$DNG), the supply and hash power and the weekly raffle come from `staking-config.js` (1,024 / 300–1,000
+/ 200 a week), the ticket clock is `TICKET_CAP_HOURS / 24` (7 days), and the reward ladder is read out
+of `RARITY`. Two things are stated because hiding them would mislead a winner: **the capsule is free,
+opening it is not** (the winner pays the open price), and a whitelist place is a guaranteed mint, not
+a free one.
+
+**A registration is proven, not typed.** This is the difference between this tab and the Genesis
+waitlist form. `POST /api/collab` takes the address **only** from the Points Program's own signed
+session (`lib/points-session.js#sessionFromRequest` — the page calls `connectWallet()` then
+`signIn()`, no gas, no transaction), and never from the request body; the route runs on the Node
+runtime because that MAC needs `Buffer`. So nobody can enter a wallet they do not hold. The store is
+`lib/collab-store.js`, with the same driver bargain as the waitlist and the points store (KV/Upstash
+in production, a file in development, memory as a last resort, loudly warned about), and it is a
+**separate** store rather than another prefix in the waitlist's: the two hold different things.
+
+**The key is `(project, wallet)`, and that is the point of the tab.** One partner's giveaway is its
+own guest list — registering for Fabled Chronicle must not put a wallet in the running for the next
+project that arrives — so the entry key is `dk:collab:entry:<slug>:<sha256(address)[0:24]>`, with a
+`count` and a `seq` per project. An entry is a **public wallet address** and nothing else (the
+optional X handle is dropped unless it is a real handle); no email, no IP — the rate limit keeps a
+counter keyed by a hash of the IP for a minute, six attempts, the same bargain the waitlist makes.
+Idempotent per key, `SET NX` on Redis so two simultaneous registrations cannot both create one, and a
+position that never moves once given. **No page prints a running total** — the same rule the landing
+page and the waitlist follow — so `/api/collab` answers a count for the tooling and the page shows a
+wallet only its own state (`registered`, and whether it was already in).
+
+**The partner's profile picture is ours, not a hotlink.** `public/assets/collab/fabled-chronicle.png`
+is the account's real X profile image, downloaded from `pbs.twimg.com` (resolved through
+`unavatar.io/x/FabledChronicle?json`; the served file is 87×87 PNG) — fetching it from X at render
+time would be a third-party request on the page of somebody we are asking for a wallet signature, and
+it would break when the account changes it. Adding the next project is an object in `COLLAB_PROJECTS`
+plus its file in `public/assets/collab/`; the harness fails if a listed avatar is not on disk.
+
+**Verified.** New `tools/check-collab.js` is **85/85**: the slug rules and the address rules, the key
+shape (project in the key, address *not* in it, case-spelling normalised), registering, the duplicate
+that returns the first position, the refusal of an unknown project and a bad address, the listing, the
+limit of six attempts per connection per minute with the window rolling over, the purge that takes the
+project's count with it, and the driver chosen from the environment in a fresh process — then the
+route's own source (session, never the body, no address in any response, `runtime = 'nodejs'`), the
+copy against the tables it came from, the avatar on disk, and the routing/sitemap agreement.
+The repo's existing checks: `check-styles` **`/collab` 73 tokens, 0 unstyled** in 3 sheets;
+`check-wallet-menu` **19/19**; `check-docs` **77/77** (it reads the sitemap); `check-gate` **150/150**
+(the middleware and the routing lists, which this change edits). In the browser on `:3111` (`npx next dev -p 3111`,
+pid 7104 — it compiles `/collab` in ~16 s on this machine): the page serves **200**, the wallet menu
+attaches to the pill (`[wallet-menu] ready — 1 wallet control(s)`), and the whole write path was
+exercised with a **minted dev session** for a throwaway address — `POST` 200 `position: 1`, `GET` with
+the same token `registered: true`, a duplicate `POST` `alreadyRegistered: true` with the count still
+1, then `purgeRegistration` returning the count to 0 (the local `.data/collab.json` is a throwaway and
+`.data/` is gitignored). Unsigned `POST` → **401 `signed-out`**; unknown project → **400
+`unknown-project`**; the profile picture → 200 `image/png`; `/css/collab.css?v=1` → 200. The no-wallet
+failure path is graceful: with a saved address but no provider, pressing the button shows the shared
+"No wallet found…" banner instead of throwing.
+
+**Open, and deliberately so.** (1) There is no `__check.collab()` battery: `tools/check-all.js` is the
+legacy game page's own battery and `/collab` is a React route, so the node harness is the check — if
+this page grows interactive state worth driving in a browser, that is the moment to give it one.
+(2) A registration sends no Discord notice, unlike a waitlist signup; `lib/discord-notify.js` is
+where that would go. (3) The "no wallet found" sentence is the shared points-client copy and names
+the vault, which reads slightly off on `/collab` ("…to enter the vault") — changing it changes it on
+every page that can show it. (4) The owner still has to send the next project's handle, prize and
+profile picture before it can be added.
+
+**Uncommitted, and not deployed.** Added: `lib/collab-content.js`, `lib/collab-store.js`,
+`app/api/collab/route.js`, `app/collab/page.js`, `app/collab/client.js`,
+`public/css/collab.css`, `public/assets/collab/fabled-chronicle.png`, `tools/check-collab.js`.
+Changed: `lib/app-routing.js` (`/collab`, `/api/collab` on `APEX_PUBLIC`), `app/sitemap.js`,
+`.freebuff/run.md`. No new `?v=` stamp was needed (`collab.css?v=1` is a file that did not exist
+before), and nothing in the payout path was touched.
+
+---
+
+## 24. The other direction: a project asks *us*, and the announcement card makes itself
+
+**What it is.** `/collab#submit` is a request form — project name, the X handle they post from, the
+giveaway they want, dates, a note — and a project's own state for it: pending, approved, or turned
+down. Nothing on the site can approve anything. The owner approves with `tools/collab-requests.js`,
+and **approval is what unlocks the picture**: the project then uploads the profile picture it posts
+from, and the announcement card — their picture and ours as two equal medallions, the banner, their
+handle and the prize line — is drawn for them to download in **16:9 (1600×900)** and **1:1
+(1080×1080)** and post.
+
+**A request is keyed by the wallet, not by the handle.** That is the one design decision everything
+else follows from. A handle is a claim — anybody can type `@somebody` into a form — so keying by it
+would let a stranger overwrite the real project's request. Keyed by the wallet (`sha256(address)`,
+the same shape as a registration), two people claiming one handle are two rows the owner can read and
+merge, nothing anybody types can move somebody else's row, and every verb is the caller's own row and
+nothing else: there is no id in the URL, no listing and no way to read another wallet's request. The
+address comes out of the signed session (`lib/points-session.js#sessionFromRequest`) on all four
+endpoints, exactly as registration does — `POST`/`DELETE /api/collab/submission` and
+`POST /api/collab/submission/photo`, all three under the `/api/collab` prefix that is already public
+on the apex.
+
+**There is no route that can move a status, and that is the point.** `putRequest` refuses to rewrite
+an **approved** request (the card and the giveaway are made from it, so the browser must not be able
+to change what was agreed afterwards), a pending one can be edited, and a rejected one can be
+resubmitted — rejection is not terminal, which is the whole reason it is worth being honest in the
+copy. `setRequestStatus` is called by the tool and nothing else; the harness asserts that no route
+mentions it and that the submission route does not contain the word `'approved'` at all.
+
+**The picture is a `data:` URL on the request, capped and checked.** The store's three drivers are
+one Redis key, one JSON file and one in-memory map, and a second storage system for pictures would be
+a second thing to configure, back up and secure — so the picture travels as base64 (there is no
+multipart parser anywhere in this project) and is capped at **256 KB of decoded bytes**. The bytes
+are checked against the declared type by magic number (`readPhotoDataUrl`), because a file that only
+*says* `image/png` is the one case that matters: the bytes are what a browser is later asked to
+decode. On the page the chosen file is centre-cropped to 512px and re-encoded to JPEG before it is
+sent, at 0.92 → 0.82 → 0.72 until it is under the cap — which is also what keeps a phone photo
+acceptable, and which **drops the EXIF** a phone picture carries (including where it was taken).
+
+**The card is drawn in the browser, on a canvas, and the layout is a pure function.** Server-side
+rendering would need an image library the project does not have or a headless browser, and either way
+the text is the problem: an SVG rasterised on a host has no access to the site's faces, so the card
+would come out in whatever generic serif the container has. In the page, Cinzel is already loaded, so
+`lib/collab-card.js` draws the real typeface and `canvas.toBlob` gives a real PNG. `cardLayout(size)`
+returns plain numbers — no measuring, no DOM, and no randomness (the embers come from a seeded
+generator), so the same call gives the same card and the offline harness can assert the geometry.
+The two medallions are solved in one inequality against the card's **width** (they have to sit side by
+side) and sized from the short side otherwise, inside an 8.2% safe margin. And **the type is fitted,
+never truncated**: `drawCard` measures with the real context and steps a font down until the line
+fits, so a fifteen-character handle shrinks rather than being cut off — a card that silently cropped
+`@kingdomofnothing` would be a card posted with the wrong name on it.
+
+**Our own profile picture is a file.** `public/assets/collab/dungeon-knights.jpg` is the real
+@DNGrobinhood avatar, fetched once from `pbs.twimg.com` (400×400) and kept in `public/` — and here the
+argument is stronger than for the partner avatars on the page: a canvas that has drawn a cross-origin
+image is **tainted**, and a tainted canvas cannot be turned into a PNG at all, so a hotlink would not
+be cosmetic, it would be a download button that does nothing.
+
+**One tool found a real gap in another.** `tools/check-styles.js` read a React route's `client.js` and
+its `lib/` imports, but not its **siblings** — so `app/points/dungeon.js` was never swept, and
+`/collab`'s new `submission.js` was invisible the moment it was written (73 class tokens before, 105
+after it started being read). That is now fixed by following a one-level relative import in the
+route's own folder, and it immediately surfaced one unstyled class: `dungeon-final` on the Points
+vault's last-floor panel. It is a **marker rather than a look** — `.dungeon-complete` carries the
+styling and the variant lives in its children (`.dungeon-final-note`, `.dungeon-final-btns`, both
+styled) — so it goes in `tools/style-allowlist.json` under `/points` with that reason rather than a
+rule nobody meant.
+
+**Verified.** `tools/check-collab.js` is now **192/192** (was 85). New: the request's whole lifecycle
+(each refusal with its own reason, an edit keeping its place in the queue, approval minting the slug,
+the locked-after-approval rules, withdrawal, rejection-then-resubmission, the listing and its filter),
+the picture (PNG/JPEG/WebP headers, a file that only claims to be a PNG, the empty one, the oversized
+one naming the cap, and a bad upload leaving the good picture alone), the two routes' sources (session
+only, never the body, no approve path, its own size cap, Node runtime), the copy, and the card:
+determinism, equal medallions inside the margin on both crops, nothing below the floor of the frame,
+palette, filenames, and a **recording context** that proves both pictures are drawn, each clipped to
+its own circle at the one radius, that the banner, wordmark, handle and prize line are all on it, that
+the designed size survives — and that a full-length handle on the square crop steps the type down
+(8px of a designed 16) instead of truncating it. Repo-wide: `check-styles` green with **`/collab`
+105 tokens, 0 unstyled**; `check-wallet-menu` 19/19 (still 16 routes, no exemption);
+`check-identifiers` 4/4 (every name in every module resolves, which is what would catch a bad import
+in the new files); `check-gate` 150/150; `check-docs` 77/77; `check-kv-store` 6/6;
+`check-waitlist` 102/102.
+
+**And driven by hand in a browser**, on `:3111`, because the card is the one thing no node harness can
+actually draw. With a dev session minted for a throwaway wallet: the form was filled and submitted
+through the real inputs → the pending panel and its summary; `tools/collab-requests.js` listed it
+(which is also proof the browser's write reached the store) → `--approve @FabledChronicle` printed the
+paste-ready `COLLAB_PROJECTS` object; the page reloaded into the approved state; and the picture was
+uploaded **through the file input** (`DataTransfer` + a real `File`, 17.7 KB of JPEG) which the page
+shrank to 13 KB and stored. The card then drew at **1600×900**, and the pixels were read back: the
+corner exactly `13,10,8` (the stone), both medallion centres a picture rather than stone, the plaque
+`22,19,16`, and **7,223 gold pixels** across the banner band — the type is really on it. Switched to
+1:1 through the ratio control, redrew at **1080×1080**, and the download button rendered and saved a
+PNG with no error. Then the test request was purged (store back to 0 entries, 0 requests) and the
+injected session cleared, so the dev browser is back to `CONNECT` / "Connect wallet & send request".
+
+**Open, and deliberately so.** (1) A new request sends no Discord notice — the owner finds it with the
+tool, and `lib/discord-notify.js` is where a new event would go (it needs a slot, a payload and its
+own harness fixtures). (2) An approved project still has to be pasted into `COLLAB_PROJECTS` by hand
+to appear in the registration tab; the tool prints the exact object, with the slug already minted, and
+making the tab read the store instead would be the next real change. (3) The card's typefaces come
+from the page, so a visitor whose browser blocks Google Fonts gets the fallback serif on their
+download. (4) Nothing inspects a picture beyond its header — no dimensions, no re-encode server-side;
+the 512px JPEG the page sends is the only normalisation there is.
+
+**Uncommitted, and not deployed.** Added: `app/collab/submission.js`,
+`app/api/collab/submission/route.js`, `app/api/collab/submission/photo/route.js`,
+`lib/collab-card.js`, `lib/collab-session.js`, `tools/collab-requests.js`,
+`public/assets/collab/dungeon-knights.jpg`. Changed: `lib/collab-store.js` (the requests half),
+`lib/collab-content.js` (the submission copy, `OUR_PFP`, the form's field list),
+`app/collab/client.js` (the section, and the sign-in dance moved to the shared helper),
+`public/css/collab.css` (`?v=2`), `tools/check-collab.js`, `tools/check-styles.js`,`tools/style-allowlist.json`, `.freebuff/run.md`.
+
+## 25. The card *is* the owner's artwork — the painted portraits are what get replaced
+
+The owner supplied a painting: 2752×1536, one image, with its own composition — a title across the
+top, two circular portraits (a knight on the left, a lion on the right), a plate below them, and a
+quiet band along the floor. Asked to "use the photo instead, just remove the lion circle and put new
+pfps there", the honest reading is that the drawing this module used to do on top of the artwork was
+wrong: it washed the painting down to 55% opacity, laid a 94%-opaque plaque over its lettering and
+drew its own medallions, chain and banner. The painting already had all of it.
+
+**So the module stopped drawing a card and started replacing two portraits.** `lib/collab-card.js`
+now: fills the ground with stone (so a missing file is still a card), draws the painting covered onto
+the canvas, lays a gradient scrim in the bottom band, punches our profile picture into the knight's
+painted circle and the partner's into the lion's, and sets two lines of type — the prize line from the
+request, then `DUNGEON KNIGHTS · @handle` under it. The wash, the radial glow, the chain, the corners,
+the opaque plate, the embers and the medallion rings are gone.
+
+**The geometry is measured, not chosen** — and this is the part that took the work, because I cannot
+see an image. The paintings' rims were found by sweeping a Hough fit for a bright closed curve in each
+half of the frame, then reading each rim's outer edge and the dark seam just inside it off a radial
+brightness profile of the original. What that bought: the two portraits are **not** the same size and
+their rims are **not** the same thickness, so `PAINTED_PORTRAITS` carries four numbers per circle —
+`u`, `v`, `r` (the rim's outer edge, as fractions of the painting's width and height) and `fill`, the
+fraction of that radius the picture covers. The first cut used one shared `fill` of 0.9, and the
+browser pass caught it: the lion's rim begins 14px further out than the knight's, so a shared fraction
+left an 11px crescent of the painted lion on the card. Each picture now fills to its own seam
+(0.874 / 0.919), which is 23px and 15px of painted rim left showing.
+
+**One crop, not two.** The painting is 1.79:1; a 1:1 card would have to cut one or both portraits, and
+the square file that existed was made by a different pipeline and did not agree with the post crop
+under any scale or offset I could fit to it. Both old files are deleted; there is now a single
+`collab-card-art.webp` — the 5.6 MB original at 1600×893, 174 KB — and `CARD_SIZES` has one key, so
+the ratio tabs, the `.collab-ratios`/`.collab-ratio` rules and the size argument on `cardFilename`
+went with it.
+
+**Verified.** `tools/check-collab.js` **211/211**, with the card half rewritten around the new facts:
+the layout is recomputed in the harness from `PAINTING` and `PAINTED_PORTRAITS` and asserted against
+what `cardLayout()` returns, so a card that put a portrait anywhere else fails; the art file is
+checked to be the painting's own proportion, because that proportion is what places both portraits.
+`check-styles` (the route now sweeps `submission.js` too), `check-wallet-menu` 19/19, `check-docs`
+77/77, `check-gate` 150/150, `check-identifiers` 4/4 — all green.
+
+Then the browser pass, on the real page with a real approved request: **the card differs from the
+painting by 0 everywhere nothing is drawn** (so the artwork really is the card, pixel for pixel), by
+**0 across both rims** (so no ring was painted over), and by 34–60 inside both circles out to the seam
+(so both faces really were replaced). The type measured back out of the pixels: the prize line at
+y 818–844, 1032px wide, and the signature at y 858–878, 712px wide, both centred to within 4px, both
+well inside the band — and nothing above y 797, so the painting's own lettering is untouched.
+
+**Still true, and worth knowing.** (1) The painting's own words — its title and the plate below the
+portraits — are kept as they are; only the two bands of type at the floor are ours. Putting our words
+over the painting's lettering would need the artist's plate blanked first, which is a different card.
+(2) A 1:1 crop can be added, but not by cutting the painting: it would need bars or a blurred
+fill. (3) The partner's X avatar is genuinely 87×87 (both `_400x400` and unavatar return the same 823
+bytes), so their picture in a 342px circle is soft — the upload path is the fix, and an approved
+project can replace it with a real 512px one. (4) The local test request (`@FabledChronicle`, wallet
+`0x7a5e…c0de`) is left in `.data/collab.json` so the card is visible in the preview;
+`node tools/collab-requests.js --remove @FabledChronicle` takes it out.
+
+**Uncommitted, and not deployed.** Changed: `lib/collab-card.js` (rewritten around the artwork),
+`app/collab/submission.js` (one size, no ratio tabs), `public/css/collab.css` (`collab-card-note` in,
+the ratio rules out), `tools/check-collab.js`, `.freebuff/run.md`. Added:
+`public/assets/collab/collab-card-art.webp`. Deleted: `public/assets/collab/collab-card-post.webp`,
+`public/assets/collab/collab-card-square.webp` (both generated in §24, never deployed).
+
+
+## 26. The giveaway tab reads the store — approving a project is the whole of adding one
+
+The ask was one sentence: make the registration tab read the approved projects out of the store, so
+an approved project appears on `/collab` without anybody pasting its object into `COLLAB_PROJECTS` by
+hand. What stood in the way is that `COLLAB_PROJECTS` was not only the tab's list, it was also the
+store's **permission list**: `isProjectSlug` checked the constant, so a slug nobody had pasted in
+could not be registered for at all. And approval ended with the owner's tool printing an object to
+paste *and* a reminder to drop the project's picture into `public/assets/collab/` — three steps and a
+deploy.
+
+**The store is the list now.** `lib/collab-store.js#listedProjects` returns the pinned projects plus
+every `approved` request, and `app/collab/page.js` reads it and hands it to the client as a prop. The
+page is a server component with `force-dynamic`, the same bargain `/genesis` makes for one `readdir`:
+a prerendered tab would freeze the list at whatever the store held when the deploy was made.
+`app/collab/client.js` renders the list it is given, and no longer imports `COLLAB_PROJECTS` at all.
+
+**Two sources, one tab — and they collided.** An approved row mints its slug from the handle
+(`FabledChronicle` → `fabledchronicle`) while the hand-written pinned entry says `fabled-chronicle`,
+which is two tabs for one X account and two namespaces for one giveaway. `composeProjects` therefore
+matches on the **handle** as well as on the slug, and an approved request **wins**: the tab shows the
+store's prize, the store's dates, the store's picture, under the slug the store files entries under.
+With the pinned Fabled Chronicle and the approved row for the same account, the tab is one project —
+the live one, wearing the 700×700 picture the project actually uploaded rather than the 87×87 X
+avatar §25 had to live with. Nothing was lost in the move: the store had zero entries under
+`fabled-chronicle`. A project that already had entries under a pinned slug would need them migrated
+before its store row could win — that is a store question, not a code one, and it is the one thing to
+check before moving an entry that is already live.
+
+**A picture cannot be a constant, and it cannot be base64 in the page either.** The store holds an
+upload as a `data:` URL, so a store project's `avatar` is
+`/api/collab/photo?project=<slug>&v=<upload time>` — a new public route that looks the picture up on
+the **approved** row, re-checks the bytes against the type they claim, and returns them with
+`immutable` caching. The version in the query is what makes that honest: replacing the picture
+changes the URL. Approval is also what publishes it — a pending row's picture, a rejected one's, and
+a slug with no approved row behind it are all the same 404. A project that is approved but has not
+uploaded yet has `avatar: null`, and the tab draws the first letter of its name in a bronze circle:
+falling back to a stock face, or to ours, would put somebody else's picture on their giveaway.
+
+**The permission followed the list.** `isProjectSlug` is async now and asks the store (`knownProject`:
+pinned first, with no I/O, then the approved rows), the registration route gates on it on both verbs,
+and `entryKey` is a **shape rather than a permission** — it builds a key for any slug it is handed,
+because *is this a project* is no longer a question a constant can answer. `listedProjects` never
+throws: a store that cannot be reached leaves the pinned list, so the page a partner's community
+lands on is the last thing to fail closed.
+
+**The owner's tool ends where it should.** `tools/collab-requests.js --approve` no longer prints an
+object to paste; it prints the slug the project took and says the tab already shows it. `--projects`
+prints what the tab would render, pinned and approved together, with whether each one has a picture
+yet — the check that the two halves meet.
+
+**Verified.** `tools/check-collab.js` **245/245**, up from 211. The new section approves a request in
+the sandbox store and asserts that a pending row is *not* on the tab, that an approved one is, that a
+rejected or removed one leaves, that one handle collapses to one tab, that the picture URL is the
+route with the upload time on it, and that emptying the store falls back to the pinned list with its
+file avatar. The route gate is asserted on source (`await knownProject(` on both verbs, no
+`isProjectSlug` left in `app/api/collab/route.js`), and the picture route on its own terms (approved
+rows only, bytes re-checked, `immutable`, Node runtime). Also green: `check-styles` (`/collab` 108
+class tokens, 0 unstyled), `check-gate` 150/150, `check-docs` 77/77, `check-identifiers` 4/4,
+`check-wallet-menu` 19/19. `npx next build` succeeds and lists `/collab` as `ƒ` — dynamic,
+server-rendered on demand, which is the flag the whole section depends on.
+
+Then the browser pass, on `:3111` against the real `.data/collab.json`: one tab, `Fabled Chronicle
+@FabledChronicle`, with the prize and the blurb taken from the approved request (`3 Knight capsules +
+2 Genesis whitelist spots`, `Open until Early October, one week.`), and both the chip and the panel
+wearing `/api/collab/photo?project=fabledchronicle&v=1790557142933` and decoding to a 700×700 image.
+`GET /api/collab/photo?project=fabledchronicle` → 200, `image/jpeg`, 18,045 bytes,
+`public, max-age=31536000, immutable`; the same route for a slug that is not a project → 404.
+`POST /api/collab` with a signed session: `fabledchronicle` → 200 with the name read out of the store
+(`Fabled Chronicle`), `nope` → 400 `unknown-project`. The probe entry was purged afterwards, so the
+store is back to zero entries and one approved request.
+
+**Still true, and worth knowing.** (1) The pinned list is now only for projects that did not come
+through the form — a collab agreed in a DM. Both places are read, so neither is wrong, but a new
+collaboration should go through the form. (2) In production the driver is the KV one; with no KV
+configured it is per-instance memory, and the tab would show the pinned list on every cold start —
+which is exactly what that floor is for. (3) The test request (`@FabledChronicle`, wallet
+`0x7a5e…c0de`) is still in `.data/collab.json` so the tab has something on it in the preview;
+`node tools/collab-requests.js --remove @FabledChronicle` takes it out, and removing it takes the
+project off the tab on the next load.
+
+**Uncommitted, and not deployed.** Changed: `lib/collab-content.js` (the pinned list,
+`projectFromRequest`, `projectPhotoUrl`, `composeProjects`, `PROJECTS_EMPTY`), `lib/collab-store.js`
+(`listedProjects`, `knownProject`, `approvedRequestForSlug`, async `isProjectSlug`, `entryKey` as a
+shape, and the bytes `readPhotoDataUrl` hands back), `app/collab/page.js` (server component,
+`force-dynamic`), `app/collab/client.js` (renders its prop, initials for a project with no picture),
+`app/api/collab/route.js` (gates on `knownProject`), `public/css/collab.css` (`?v=3`),
+`tools/collab-requests.js`, `tools/check-collab.js`, `.freebuff/run.md`. Added:
+`app/api/collab/photo/route.js`.
+
+
+## 27. The owner's half in a browser — `/collab/review`, and a wallet list instead of a password
+
+The ask was the next obvious step after §26: approving a request still meant a terminal. `--approve`
+is fine for an owner with a shell open, and it is the wrong shape for reading four requests and
+deciding, so this turn built the same job as a page — `/collab/review`, backed by
+`app/api/collab/review` — and the authorization is the part worth writing down.
+
+**A signed wallet on a list, and nothing else gates it.** The page is on the open host and its HTML
+says nothing, so all of its authority is `lib/collab-owners.js`: `COLLAB_OWNERS`, a comma-separated
+list of 0x addresses in the environment. It is parsed rather than trusted — separators are tolerated,
+a checksummed address and a lower-cased one are the same wallet, and junk is dropped instead of taking
+the addresses around it with it. **Unset means nobody**, which is the only safe default: a missing
+variable must not mean *everyone*, and it must not mean *the first person to sign in* either. The
+route answers **401** unsigned and **403** to a signed-in stranger, and the 403 carries the number of
+configured owners — because an empty list and a wallet that is simply not on it look identical from
+the outside, and the first one is a one-line fix.
+
+**The interesting inversion is the address.** `/api/collab` files an entry for whoever signed, so it
+reads the address out of the session and ignores the body entirely. The review route is the opposite:
+the **wallet in the body is the subject** — somebody else's request — and the **session is the
+authority**, checked against the owner list. Neither half can stand in for the other, and the route
+can do nothing but move a status: no editing a request's words, no attaching a picture, no deleting a
+row (`--remove` stays in the CLI on purpose — a browser button that erases somebody's request is a
+button worth not building), no way to set `pending`, and no way to change who is an owner.
+
+**The list never carries a picture's bytes.** The store holds an upload as a `data:` URL and up to
+256 KB of it, so `reviewRow` drops the bytes and hands back `hasPhoto`, the size, the upload time,
+and — only for a row the picture route would actually serve — a `photoUrl` on that route. A rejected
+row keeps its picture in the store and gets no URL; the owner still sees that it exists and how big
+it is. Ten requests therefore cost ten thumbnails, not ten base64 portraits.
+
+**It piggybacks on what `/collab` already had.** `/collab/review` is `apex-public` for free — the
+routing list matches on path segments, so the entry for `/collab` covers it — and the page reuses the
+route family's chrome: the panel, the banners, the summary list, the wallet pill with the menu
+attached by hand. What is new in the sheet is the bar of counts, the request rows and the one input a
+decision writes. It is `noindex`, it is **not** in the sitemap (that list is what the site is
+*offering*), and it is **not** linked from the partner-facing page: the people who need it are the
+people holding the wallet, and the CLI and this document are where they find it.
+
+**Two harnesses learned about nested routes.** `check-styles` and `check-wallet-menu` both read their
+route list as `app/<dir>/client.js` and `app/<dir>/page.js`, so a page under another page was a page
+nothing looked at — and "all styled" and "19/19" would have been said about it without being true. Both
+now read one level deeper, which is what makes `/collab/review` the first route in the project that is
+checked for its classes and for the wallet menu it carries. `tools/check-collab.js`'s `freshProcess`
+grew the same way: it can now load any module in a child process, which is how `COLLAB_OWNERS` is
+tested without mutating this process's environment.
+
+**Verified.** `tools/check-collab.js` **278/278**, up from 245: a new section covers the allowlist
+(dedup, case, junk, fail-closed, and a child process with the variable set), the route's two refusals,
+the subject/authority split, the decisions list that cannot contain `pending`, the row that carries no
+bytes, and the page's four states — with the owner-list check reading the client as *code*, so the
+client's own comment about not importing it cannot fail the guard. `check-styles` reports
+`/collab/review` at 46 class tokens and 0 unstyled; `check-wallet-menu` 19/19 with `/collab/review` in
+its route list; `check-gate` 150/150, `check-docs` 77/77, `check-identifiers` 4/4. `npx next build`
+compiles and lists `/collab/review` as `○` (a static shell — the dynamic half is the endpoint) and
+`ƒ /api/collab/review`.
+
+Then the browser pass, and the two servers it needed are worth explaining: changing an environment
+variable means restarting the server, and **the dev server on `:3111` was left alone** — two
+`next start` servers were run from the production build instead, on `:3112` (owner configured) and
+`:3113` (no `COLLAB_OWNERS`), with `POINTS_SESSION_SECRET` set to the dev fallback so the browser's
+existing token was valid. Both were killed and both tabs closed afterwards, so the only listener left
+is the owner's `:3111`. Measured: on `:3113` a signed wallet gets 403 and the page says *Not the owner
+wallet* with `0 wallets on COLLAB_OWNERS` and no rows. On `:3112` the same wallet gets the list, the
+counts, and the buttons — the Approve click was driven with a note typed in first, the notice came
+back (*… is on the giveaway tab now*), the counts moved pending 1 → 0 and approved 0 → 1, the row left
+the pending tab with the decision recorded, and **`/collab` on the same server grew a second chip**
+with the project's name and prize — approval → the tab, in one process, with no file edited. Reject
+moved it the other way. `status: 'pending'` → 400 `bad-status`, a bad wallet → 400 `bad-wallet`, a
+500-character note → 400 `bad-note`. (Those two servers ran the memory driver — `NODE_ENV=production`
+with no KV — which is why the rows they decided on were the ones they created.)
+
+**One thing to do before using it.** `COLLAB_OWNERS` has to be set on the deployment, or the page is
+closed to everybody — which is the intended default, not a bug, and the page says so in words. The
+`next build` output says it too: *COLLAB_OWNERS is not set — nobody can review a collab request.*
+
+**Uncommitted, and not deployed.** Added: `lib/collab-owners.js`, `app/api/collab/review/route.js`,
+`app/collab/review/page.js`, `app/collab/review/client.js`. Changed: `lib/collab-store.js` (`reviewRow`,
+and the two comments that claimed no route could approve), `lib/collab-content.js` (`REVIEW`),
+`app/collab/client.js` (the sheet's `?v=4`) and `public/css/collab.css` (the review rules),
+`app/collab/submission.js` and `app/api/collab/submission/route.js` (the comments that said approval
+only happened in a terminal), `tools/collab-requests.js` (the review URL, and `--remove` confirmed as
+the browser's missing verb), `tools/check-styles.js`, `tools/check-wallet-menu.js`,
+`tools/check-collab.js`, `.freebuff/run.md`.
+
+
+## 28. The collab feature ships — `ac8be8d`, and the four hosts re-pointed
+
+**Committed, pushed and deployed, at the owner's word.** `ac8be8d` (the collab page, the request flow,
+and the owner's review page — 25 files, 6,478 insertions) pushed as `41fda82..ac8be8d`. The commit
+holds **the collab work only**: the working tree still carries another thread's uncommitted game work
+(`public/dungeon.js`, `combat.js`, `characters.js`, `ui.js`, `dungeon-select.js`, `audio.js`,
+`layout.css`, `lib/static-pages.js`, the battle kit and sound toggle, and five new monster sprites),
+and staging that would have said something about it that is not true yet.
+
+**The deploy uploaded the whole tree, not the commit.** That is how the CLI works and it was the one
+thing worth deciding before running it — so it was asked, and the answer was to ship. What it means in
+practice: the *gated* game host now serves that other work too, while the apex is the commit. The two
+are one deployment, so there is no skew to reason about; the tree that was deployed is `ac8be8d` plus
+those uncommitted edits, and the only pages that can see the difference are behind the password.
+
+**The owner list was set before the build**, because `lib/collab-owners.js` reads its variable when the
+module loads: `printf '<the 0x address>' | npx vercel env add COLLAB_OWNERS production --force`. It is
+stored as a Vercel *Secret* (the CLI's default), which is fine for a runtime read and means it cannot be
+pulled back with `vercel env pull` — the value lives in the deployment, not in this repository.
+
+```bash
+npx vercel --prod --yes --scope meglast320-1694      # → dungeon-knights-j5hrv6mss-meglast320-1694
+npx vercel alias set <it> dungeonknights.io --scope meglast320-1694          # and www, and app.
+npx vercel alias set <it> www.dungeonknights.io --scope meglast320-1694
+npx vercel alias set <it> app.dungeonknights.io --scope meglast320-1694
+npx vercel alias set <it> dungeon-knights.vercel.app --scope meglast320-1694
+```
+
+**Ready in 1m.** `--prod` aliased only its own scoped URL, as §3 warns, so all four hosts were
+re-pointed by hand — `vercel alias ls` had every one of them still pinned to
+`dungeon-knights-5v6hmxxmx-…` from a week earlier, which is exactly the trap this document keeps
+warning about, and it was read *before* re-aliasing rather than assumed: the first live probes
+answered **308 → `app.dungeonknights.io/gate`** for `/collab/review`, which is what a deployment
+without `/collab` in `APEX_PUBLIC` looks like.
+
+**Read off the live host** (`dungeonknights.io`, not the deployment URL): `/`, `/points`, `/genesis`,
+`/portfolio`, `/docs`, `/collab` and `/collab/review` are all **200**; `/collab/nope-404` is a **404**
+(so the apex-public prefix really is a prefix, and an unknown page below `/collab` does not fall
+through to the gate); `www` 308s to the apex; `app.` and the `.vercel.app` alias still 307 to `/gate`.
+
+**The two new endpoints, measured.** `GET /api/collab/review` with no token is **401**
+(`signed-out`) — the owner list is not a public read. `GET /api/collab?project=fabled-chronicle`
+answers **200** with `storage: Upstash/Vercel KV (REST)` and `count: 0`, so the live store is the real
+one and nothing is registered yet. `GET /api/collab/photo?project=fabled-chronicle` is **404**: the
+approved row with the 700×700 picture exists only in this checkout's `.data/collab.json`, so the live
+tab shows the **pinned** project alone — one chip, `Fabled Chronicle @FabledChronicle` — with
+`/css/collab.css?v=4` and the submission form below it. The picture route, which only an approved
+project can fill, is therefore unproven on live until a real request is approved there; everything
+before that point is not.
+
+**And the gate itself, on the real host.** Opened in a browser rather than curled: the page renders
+`noindex, nofollow`, the header pill, and *Not the owner wallet* — because the wallet this browser is
+signed in as on `dungeonknights.io` (`0x0Bbc3651e84957Df94a7073755248AA02a2df74D`) is not the address
+on `COLLAB_OWNERS`. Calling the API with that session's token answers
+`{ code: 'not-an-owner', owners: 1 }`, which is the proof that the variable reached the runtime *and*
+that the refusal is the wallet rather than the configuration. **One thing to settle with the owner:
+the address on the list is `0x038d75aDb74d8e5Db82E6c6797f90dCdF82ef4C9`, and that is not the wallet
+this browser is signed in with.** If the second one is the owner's real wallet, it has to be added to
+`COLLAB_OWNERS` (comma-separated) or the page will keep refusing them.
+
+
