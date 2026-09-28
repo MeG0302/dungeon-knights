@@ -241,7 +241,7 @@ export default function CollabReviewClient() {
     return (
         <>
             <link rel="stylesheet" href="/theme.css?v=9" />
-            <link rel="stylesheet" href="/css/collab.css?v=4" />
+            <link rel="stylesheet" href="/css/collab.css?v=5" />
             {/* The wallets this page can connect, and the menu module that turns the header pill
                 into the menu every other route has. */}
             <Script src="/wallet-menu.js?v=1" strategy="afterInteractive" />
@@ -274,235 +274,239 @@ export default function CollabReviewClient() {
                     </div>
                 )}
 
-                <main className="collab-main">
-                    <section className="collab-section">
-                        <div className="collab-section-head">
-                            <p className="collab-eyebrow">{REVIEW.eyebrow}</p>
-                            <h2 className="collab-section-title">{REVIEW.title}</h2>
-                            <p className="collab-section-sub">{REVIEW.sub}</p>
-                        </div>
+                {/* The same scroll box `/collab` uses, and for the same reason — see `.collab-scroll`
+                    in the sheet. A list of requests is as long as the requests are. */}
+                <div className="collab-scroll">
+                    <main className="collab-main">
+                        <section className="collab-section">
+                            <div className="collab-section-head">
+                                <p className="collab-eyebrow">{REVIEW.eyebrow}</p>
+                                <h2 className="collab-section-title">{REVIEW.title}</h2>
+                                <p className="collab-section-sub">{REVIEW.sub}</p>
+                            </div>
 
-                        <div className="collab-panel">
-                            {view === 'loading' && <p className="collab-submit-intro">Reading the request list…</p>}
+                            <div className="collab-panel">
+                                {view === 'loading' && <p className="collab-submit-intro">Reading the request list…</p>}
 
-                            {view === 'signed-out' && (
-                                <div className="collab-state">
-                                    <h3 className="collab-state-title">{REVIEW.needsWalletTitle}</h3>
-                                    <p className="collab-state-copy">{REVIEW.needsWallet}</p>
-                                    <div className="collab-actions">
-                                        <button type="button" className="btn btn-primary btn-md" onClick={connect} disabled={!!step}>
-                                            {step === 'connect' ? 'Connecting…' : step === 'sign' ? 'Waiting for signature…' : 'Connect owner wallet'}
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-
-                            {view === 'not-owner' && (
-                                <div className="collab-state">
-                                    <h3 className="collab-state-title">{REVIEW.notOwnerTitle}</h3>
-                                    <p className="collab-state-copy">{REVIEW.notOwner}</p>
-                                    <dl className="collab-summary">
-                                        <div className="collab-summary-row">
-                                            <dt>Signed in as</dt>
-                                            <dd>{shortWallet(address)}</dd>
-                                        </div>
-                                        <div className="collab-summary-row">
-                                            <dt>Owner list</dt>
-                                            <dd>{REVIEW.ownerList(owners)}</dd>
-                                        </div>
-                                    </dl>
-                                    <div className="collab-actions">
-                                        <button type="button" className="btn btn-ghost btn-md" onClick={connect} disabled={!!step}>
-                                            {REVIEW.reconnect}
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-
-                            {view === 'error' && (
-                                <div className="collab-state">
-                                    <h3 className="collab-state-title">{REVIEW.errorTitle}</h3>
-                                    <p className="collab-state-copy">{REVIEW.errorBody}</p>
-                                    <div className="collab-actions">
-                                        <button type="button" className="btn btn-ghost btn-md" onClick={connect} disabled={!!step}>
-                                            {REVIEW.reconnect}
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-
-                            {view === 'ready' && (
-                                <>
-                                    <div className="collab-review-bar">
-                                        <div className="collab-review-stats">
-                                            {STATES.map((status) => (
-                                                <button
-                                                    key={status}
-                                                    type="button"
-                                                    className={`collab-review-stat${active === status ? ' is-active' : ''}`}
-                                                    onClick={() => setFilter(status)}
-                                                    aria-pressed={active === status}
-                                                >
-                                                    <span className="collab-review-stat-n">{counts[status]}</span>
-                                                    <span className="collab-review-stat-label">{status}</span>
-                                                </button>
-                                            ))}
-                                            <button
-                                                type="button"
-                                                className={`collab-review-stat${active === 'all' ? ' is-active' : ''}`}
-                                                onClick={() => setFilter('all')}
-                                                aria-pressed={active === 'all'}
-                                            >
-                                                <span className="collab-review-stat-n">{rows.length}</span>
-                                                <span className="collab-review-stat-label">all</span>
+                                {view === 'signed-out' && (
+                                    <div className="collab-state">
+                                        <h3 className="collab-state-title">{REVIEW.needsWalletTitle}</h3>
+                                        <p className="collab-state-copy">{REVIEW.needsWallet}</p>
+                                        <div className="collab-actions">
+                                            <button type="button" className="btn btn-primary btn-md" onClick={connect} disabled={!!step}>
+                                                {step === 'connect' ? 'Connecting…' : step === 'sign' ? 'Waiting for signature…' : 'Connect owner wallet'}
                                             </button>
                                         </div>
-                                        <button
-                                            type="button"
-                                            className="btn btn-ghost btn-sm"
-                                            onClick={() => read()}
-                                            disabled={!!busy || !!step}
-                                        >
-                                            {REVIEW.refresh}
-                                        </button>
                                     </div>
+                                )}
 
-                                    <p className="collab-review-you">
-                                        Signed in as {shortWallet(address)} — {REVIEW.ownerList(owners)}.
-                                        {storage ? ` Reading ${storage}.` : ''}
-                                    </p>
-
-                                    {!rows.length && (
-                                        <div className="collab-state">
-                                            <p className="collab-state-copy">{REVIEW.empty}</p>
+                                {view === 'not-owner' && (
+                                    <div className="collab-state">
+                                        <h3 className="collab-state-title">{REVIEW.notOwnerTitle}</h3>
+                                        <p className="collab-state-copy">{REVIEW.notOwner}</p>
+                                        <dl className="collab-summary">
+                                            <div className="collab-summary-row">
+                                                <dt>Signed in as</dt>
+                                                <dd>{shortWallet(address)}</dd>
+                                            </div>
+                                            <div className="collab-summary-row">
+                                                <dt>Owner list</dt>
+                                                <dd>{REVIEW.ownerList(owners)}</dd>
+                                            </div>
+                                        </dl>
+                                        <div className="collab-actions">
+                                            <button type="button" className="btn btn-ghost btn-md" onClick={connect} disabled={!!step}>
+                                                {REVIEW.reconnect}
+                                            </button>
                                         </div>
-                                    )}
+                                    </div>
+                                )}
 
-                                    {!!rows.length && !shown.length && (
-                                        <div className="collab-state">
-                                            <p className="collab-state-copy">{REVIEW.noneOfThatState}</p>
+                                {view === 'error' && (
+                                    <div className="collab-state">
+                                        <h3 className="collab-state-title">{REVIEW.errorTitle}</h3>
+                                        <p className="collab-state-copy">{REVIEW.errorBody}</p>
+                                        <div className="collab-actions">
+                                            <button type="button" className="btn btn-ghost btn-md" onClick={connect} disabled={!!step}>
+                                                {REVIEW.reconnect}
+                                            </button>
                                         </div>
-                                    )}
+                                    </div>
+                                )}
 
-                                    <div className="collab-review-list">
-                                        {shown.map((row) => (
-                                            <article
-                                                key={row.wallet}
-                                                className={`collab-review-row${row.status === 'approved' ? ' is-approved' : row.status === 'rejected' ? ' is-rejected' : ' is-pending'}`}
+                                {view === 'ready' && (
+                                    <>
+                                        <div className="collab-review-bar">
+                                            <div className="collab-review-stats">
+                                                {STATES.map((status) => (
+                                                    <button
+                                                        key={status}
+                                                        type="button"
+                                                        className={`collab-review-stat${active === status ? ' is-active' : ''}`}
+                                                        onClick={() => setFilter(status)}
+                                                        aria-pressed={active === status}
+                                                    >
+                                                        <span className="collab-review-stat-n">{counts[status]}</span>
+                                                        <span className="collab-review-stat-label">{status}</span>
+                                                    </button>
+                                                ))}
+                                                <button
+                                                    type="button"
+                                                    className={`collab-review-stat${active === 'all' ? ' is-active' : ''}`}
+                                                    onClick={() => setFilter('all')}
+                                                    aria-pressed={active === 'all'}
+                                                >
+                                                    <span className="collab-review-stat-n">{rows.length}</span>
+                                                    <span className="collab-review-stat-label">all</span>
+                                                </button>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                className="btn btn-ghost btn-sm"
+                                                onClick={() => read()}
+                                                disabled={!!busy || !!step}
                                             >
-                                                <div className="collab-review-head">
-                                                    {row.photoUrl ? (
-                                                        <img className="collab-review-thumb" src={row.photoUrl} alt="" width={56} height={56} loading="lazy" />
+                                                {REVIEW.refresh}
+                                            </button>
+                                        </div>
+
+                                        <p className="collab-review-you">
+                                            Signed in as {shortWallet(address)} — {REVIEW.ownerList(owners)}.
+                                            {storage ? ` Reading ${storage}.` : ''}
+                                        </p>
+
+                                        {!rows.length && (
+                                            <div className="collab-state">
+                                                <p className="collab-state-copy">{REVIEW.empty}</p>
+                                            </div>
+                                        )}
+
+                                        {!!rows.length && !shown.length && (
+                                            <div className="collab-state">
+                                                <p className="collab-state-copy">{REVIEW.noneOfThatState}</p>
+                                            </div>
+                                        )}
+
+                                        <div className="collab-review-list">
+                                            {shown.map((row) => (
+                                                <article
+                                                    key={row.wallet}
+                                                    className={`collab-review-row${row.status === 'approved' ? ' is-approved' : row.status === 'rejected' ? ' is-rejected' : ' is-pending'}`}
+                                                >
+                                                    <div className="collab-review-head">
+                                                        {row.photoUrl ? (
+                                                            <img className="collab-review-thumb" src={row.photoUrl} alt="" width={56} height={56} loading="lazy" />
+                                                        ) : (
+                                                            <span className="collab-review-thumb-empty" aria-hidden="true">
+                                                                {String(row.name || '?').trim().charAt(0).toUpperCase() || '?'}
+                                                            </span>
+                                                        )}
+                                                        <div className="collab-review-who">
+                                                            <h3 className="collab-review-name">{row.name}</h3>
+                                                            <a
+                                                                className="collab-review-handle"
+                                                                href={`https://x.com/${row.handle}`}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                            >
+                                                                @{row.handle}
+                                                            </a>
+                                                        </div>
+                                                        <span className={statusClass(row.status)}>{row.status}</span>
+                                                    </div>
+
+                                                    <dl className="collab-summary">
+                                                        <div className="collab-summary-row">
+                                                            <dt>Giveaway</dt>
+                                                            <dd>{row.prize}</dd>
+                                                        </div>
+                                                        {row.dates && (
+                                                            <div className="collab-summary-row">
+                                                                <dt>Dates</dt>
+                                                                <dd>{row.dates}</dd>
+                                                            </div>
+                                                        )}
+                                                        {row.note && (
+                                                            <div className="collab-summary-row">
+                                                                <dt>Their note</dt>
+                                                                <dd>{row.note}</dd>
+                                                            </div>
+                                                        )}
+                                                        <div className="collab-summary-row">
+                                                            <dt>Wallet</dt>
+                                                            <dd>{shortWallet(row.wallet)}</dd>
+                                                        </div>
+                                                        <div className="collab-summary-row">
+                                                            <dt>Sent</dt>
+                                                            <dd>
+                                                                {when(row.at)}
+                                                                {row.revisions > 1 ? ` · ${row.revisions} revisions` : ''}
+                                                                {row.slug ? ` · slug ${row.slug}` : ''}
+                                                            </dd>
+                                                        </div>
+                                                        <div className="collab-summary-row">
+                                                            <dt>Picture</dt>
+                                                            <dd>
+                                                                {row.hasPhoto
+                                                                    ? `${Math.round((row.photoBytes || 0) / 1024)} KB${row.photoUrl ? `, uploaded ${when(row.photoAt)}` : ' — kept, but only an approved project’s picture is served'}`
+                                                                    : 'none yet'}
+                                                            </dd>
+                                                        </div>
+                                                        {row.decidedAt && (
+                                                            <div className="collab-summary-row">
+                                                                <dt>Decided</dt>
+                                                                <dd>{when(row.decidedAt)}{row.decidedNote ? ` — ${row.decidedNote}` : ''}</dd>
+                                                            </div>
+                                                        )}
+                                                    </dl>
+
+                                                    {row.status === 'pending' ? (
+                                                        <div className="collab-actions">
+                                                            <input
+                                                                className="collab-review-note"
+                                                                type="text"
+                                                                maxLength={REVIEW.noteLimit}
+                                                                placeholder={REVIEW.notePlaceholder}
+                                                                aria-label={`Note for ${row.name}`}
+                                                                value={notes[row.wallet] || ''}
+                                                                onChange={(event) => setNotes((prev) => ({ ...prev, [row.wallet]: event.target.value }))}
+                                                                disabled={!!busy}
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                className="btn btn-primary btn-md"
+                                                                onClick={() => decide(row.wallet, 'approved')}
+                                                                disabled={!!busy}
+                                                            >
+                                                                {busy === row.wallet ? REVIEW.deciding : REVIEW.approve}
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                className="btn btn-ghost btn-md collab-danger"
+                                                                onClick={() => decide(row.wallet, 'rejected')}
+                                                                disabled={!!busy}
+                                                            >
+                                                                {REVIEW.reject}
+                                                            </button>
+                                                        </div>
                                                     ) : (
-                                                        <span className="collab-review-thumb-empty" aria-hidden="true">
-                                                            {String(row.name || '?').trim().charAt(0).toUpperCase() || '?'}
-                                                        </span>
+                                                        <p className="collab-review-hint">
+                                                            {row.status === 'approved' ? REVIEW.approvedRow : REVIEW.rejectedRow}
+                                                        </p>
                                                     )}
-                                                    <div className="collab-review-who">
-                                                        <h3 className="collab-review-name">{row.name}</h3>
-                                                        <a
-                                                            className="collab-review-handle"
-                                                            href={`https://x.com/${row.handle}`}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                        >
-                                                            @{row.handle}
-                                                        </a>
-                                                    </div>
-                                                    <span className={statusClass(row.status)}>{row.status}</span>
-                                                </div>
+                                                </article>
+                                            ))}
+                                        </div>
+                                    </>
+                                )}
 
-                                                <dl className="collab-summary">
-                                                    <div className="collab-summary-row">
-                                                        <dt>Giveaway</dt>
-                                                        <dd>{row.prize}</dd>
-                                                    </div>
-                                                    {row.dates && (
-                                                        <div className="collab-summary-row">
-                                                            <dt>Dates</dt>
-                                                            <dd>{row.dates}</dd>
-                                                        </div>
-                                                    )}
-                                                    {row.note && (
-                                                        <div className="collab-summary-row">
-                                                            <dt>Their note</dt>
-                                                            <dd>{row.note}</dd>
-                                                        </div>
-                                                    )}
-                                                    <div className="collab-summary-row">
-                                                        <dt>Wallet</dt>
-                                                        <dd>{shortWallet(row.wallet)}</dd>
-                                                    </div>
-                                                    <div className="collab-summary-row">
-                                                        <dt>Sent</dt>
-                                                        <dd>
-                                                            {when(row.at)}
-                                                            {row.revisions > 1 ? ` · ${row.revisions} revisions` : ''}
-                                                            {row.slug ? ` · slug ${row.slug}` : ''}
-                                                        </dd>
-                                                    </div>
-                                                    <div className="collab-summary-row">
-                                                        <dt>Picture</dt>
-                                                        <dd>
-                                                            {row.hasPhoto
-                                                                ? `${Math.round((row.photoBytes || 0) / 1024)} KB${row.photoUrl ? `, uploaded ${when(row.photoAt)}` : ' — kept, but only an approved project’s picture is served'}`
-                                                                : 'none yet'}
-                                                        </dd>
-                                                    </div>
-                                                    {row.decidedAt && (
-                                                        <div className="collab-summary-row">
-                                                            <dt>Decided</dt>
-                                                            <dd>{when(row.decidedAt)}{row.decidedNote ? ` — ${row.decidedNote}` : ''}</dd>
-                                                        </div>
-                                                    )}
-                                                </dl>
-
-                                                {row.status === 'pending' ? (
-                                                    <div className="collab-actions">
-                                                        <input
-                                                            className="collab-review-note"
-                                                            type="text"
-                                                            maxLength={REVIEW.noteLimit}
-                                                            placeholder={REVIEW.notePlaceholder}
-                                                            aria-label={`Note for ${row.name}`}
-                                                            value={notes[row.wallet] || ''}
-                                                            onChange={(event) => setNotes((prev) => ({ ...prev, [row.wallet]: event.target.value }))}
-                                                            disabled={!!busy}
-                                                        />
-                                                        <button
-                                                            type="button"
-                                                            className="btn btn-primary btn-md"
-                                                            onClick={() => decide(row.wallet, 'approved')}
-                                                            disabled={!!busy}
-                                                        >
-                                                            {busy === row.wallet ? REVIEW.deciding : REVIEW.approve}
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            className="btn btn-ghost btn-md collab-danger"
-                                                            onClick={() => decide(row.wallet, 'rejected')}
-                                                            disabled={!!busy}
-                                                        >
-                                                            {REVIEW.reject}
-                                                        </button>
-                                                    </div>
-                                                ) : (
-                                                    <p className="collab-review-hint">
-                                                        {row.status === 'approved' ? REVIEW.approvedRow : REVIEW.rejectedRow}
-                                                    </p>
-                                                )}
-                                            </article>
-                                        ))}
-                                    </div>
-                                </>
-                            )}
-
-                            {signedIn && (
-                                <p className="collab-register-note">{REVIEW.footnote}</p>
-                            )}
-                        </div>
-                    </section>
-                </main>
+                                {signedIn && (
+                                    <p className="collab-register-note">{REVIEW.footnote}</p>
+                                )}
+                            </div>
+                        </section>
+                    </main>
+                </div>
             </div>
         </>
     );

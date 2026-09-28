@@ -265,7 +265,7 @@ export default function CollabClient({ projects = [] }) {
     return (
         <>
             <link rel="stylesheet" href="/theme.css?v=9" />
-            <link rel="stylesheet" href="/css/collab.css?v=4" />
+            <link rel="stylesheet" href="/css/collab.css?v=5" />
             {/* The wallets this page can connect: it is a React route, so it has to pull the source
                 in itself — and the menu module, which turns the header pill into the menu every
                 other route has. */}
@@ -299,199 +299,210 @@ export default function CollabClient({ projects = [] }) {
                     </div>
                 )}
 
-                <main className="collab-main">
-                    <section className="collab-hero">
-                        <p className="collab-kicker">{HERO.kicker}</p>
-                        <h2 className="collab-headline">{HERO.title}</h2>
-                        <p className="collab-lead">{HERO.lead}</p>
-                        <p className="collab-hero-sub">{HERO.sub}</p>
-                        <a className="collab-jump" href="#projects">See the live giveaways ↓</a>
-                    </section>
+                {/* The scrolling box, and the reason this page needs one: `theme.css` pins
+                    `html, body { height: 100%; overflow: hidden }` because the game's routes are
+                    fixed-height apps that scroll inside themselves. A route that is instead a
+                    document thousands of pixels tall therefore has to scroll in a box of its own —
+                    the same shape `/docs` uses. It is the body's own box, so the banners and the
+                    head stay put while the terms move: a message about a submission the reader is
+                    filling in at the bottom of the page must not scroll away above them. `min-height:
+                    0` because a flex child refuses to shrink below its content by default, which is
+                    what would leave the last two sections unreachable with no scrollbar anywhere. */}
+                <div className="collab-scroll">
+                    <main className="collab-main">
+                        <section className="collab-hero">
+                            <p className="collab-kicker">{HERO.kicker}</p>
+                            <h2 className="collab-headline">{HERO.title}</h2>
+                            <p className="collab-lead">{HERO.lead}</p>
+                            <p className="collab-hero-sub">{HERO.sub}</p>
+                            <a className="collab-jump" href="#projects">See the live giveaways ↓</a>
+                        </section>
 
-                    <section className="collab-section" id="offer">
-                        <div className="collab-section-head">
-                            <p className="collab-eyebrow">The offer</p>
-                            <h2 className="collab-section-title">What we offer your community</h2>
-                            <p className="collab-section-sub">
-                                Two prizes, and a collaboration can be built from either or both.
-                            </p>
-                        </div>
-                        <div className="collab-offers">
-                            {OFFERS.map((offer) => (
-                                <article className="collab-offer" key={offer.key}>
-                                    <div className="collab-offer-head">
-                                        <h3 className="collab-offer-title">{offer.title}</h3>
-                                        <span className="collab-offer-tag">{offer.tag}</span>
+                        <section className="collab-section" id="offer">
+                            <div className="collab-section-head">
+                                <p className="collab-eyebrow">The offer</p>
+                                <h2 className="collab-section-title">What we offer your community</h2>
+                                <p className="collab-section-sub">
+                                    Two prizes, and a collaboration can be built from either or both.
+                                </p>
+                            </div>
+                            <div className="collab-offers">
+                                {OFFERS.map((offer) => (
+                                    <article className="collab-offer" key={offer.key}>
+                                        <div className="collab-offer-head">
+                                            <h3 className="collab-offer-title">{offer.title}</h3>
+                                            <span className="collab-offer-tag">{offer.tag}</span>
+                                        </div>
+                                        <p className="collab-offer-summary">{offer.summary}</p>
+                                        <ul className="collab-list">
+                                            {offer.points.map((point) => (
+                                                <li className="collab-list-item" key={point}>{point}</li>
+                                            ))}
+                                        </ul>
+                                        <p className="collab-fine">{offer.fine}</p>
+                                    </article>
+                                ))}
+                            </div>
+                        </section>
+
+                        <section className="collab-section" id="use">
+                            <div className="collab-section-head">
+                                <p className="collab-eyebrow">The prizes</p>
+                                <h2 className="collab-section-title">What these NFTs are used for</h2>
+                                <p className="collab-section-sub">
+                                    Every figure below is the number the reward contracts were deployed with.
+                                </p>
+                            </div>
+                            <div className="collab-uses">
+                                {NFT_USE.map((use) => (
+                                    <article className="collab-use" key={use.key}>
+                                        <h3 className="collab-use-title">{use.title}</h3>
+                                        <p className="collab-use-lede">{use.lede}</p>
+                                        <dl className="collab-points">
+                                            {use.points.map((point) => (
+                                                <div className="collab-point" key={point.label}>
+                                                    <dt className="collab-point-label">{point.label}</dt>
+                                                    <dd className="collab-point-text">{point.text}</dd>
+                                                </div>
+                                            ))}
+                                        </dl>
+                                    </article>
+                                ))}
+                            </div>
+                        </section>
+
+                        <section className="collab-section" id="terms">
+                            <div className="collab-section-head">
+                                <p className="collab-eyebrow">Your side</p>
+                                <h2 className="collab-section-title">{PARTNER_TERMS.title}</h2>
+                                <p className="collab-section-sub">{PARTNER_TERMS.sub}</p>
+                            </div>
+                            <div className="collab-terms">
+                                {PARTNER_TERMS.items.map((item) => (
+                                    <div className="collab-term" key={item.title}>
+                                        <h3 className="collab-term-title">{item.title}</h3>
+                                        <p className="collab-term-text">{item.text}</p>
                                     </div>
-                                    <p className="collab-offer-summary">{offer.summary}</p>
-                                    <ul className="collab-list">
-                                        {offer.points.map((point) => (
-                                            <li className="collab-list-item" key={point}>{point}</li>
-                                        ))}
-                                    </ul>
-                                    <p className="collab-fine">{offer.fine}</p>
-                                </article>
-                            ))}
-                        </div>
-                    </section>
+                                ))}
+                            </div>
+                        </section>
 
-                    <section className="collab-section" id="use">
-                        <div className="collab-section-head">
-                            <p className="collab-eyebrow">The prizes</p>
-                            <h2 className="collab-section-title">What these NFTs are used for</h2>
-                            <p className="collab-section-sub">
-                                Every figure below is the number the reward contracts were deployed with.
-                            </p>
-                        </div>
-                        <div className="collab-uses">
-                            {NFT_USE.map((use) => (
-                                <article className="collab-use" key={use.key}>
-                                    <h3 className="collab-use-title">{use.title}</h3>
-                                    <p className="collab-use-lede">{use.lede}</p>
-                                    <dl className="collab-points">
-                                        {use.points.map((point) => (
-                                            <div className="collab-point" key={point.label}>
-                                                <dt className="collab-point-label">{point.label}</dt>
-                                                <dd className="collab-point-text">{point.text}</dd>
-                                            </div>
-                                        ))}
-                                    </dl>
-                                </article>
-                            ))}
-                        </div>
-                    </section>
+                        <section className="collab-section" id="how">
+                            <div className="collab-section-head">
+                                <p className="collab-eyebrow">End to end</p>
+                                <h2 className="collab-section-title">How a collab runs</h2>
+                            </div>
+                            <ol className="collab-steps">
+                                {COLLAB_STEPS.map((step, index) => (
+                                    <li className="collab-step" key={step.title}>
+                                        <span className="collab-step-n" aria-hidden="true">{index + 1}</span>
+                                        <span className="collab-step-body">
+                                            <span className="collab-step-title">{step.title}</span>
+                                            <span className="collab-step-text">{step.text}</span>
+                                        </span>
+                                    </li>
+                                ))}
+                            </ol>
+                        </section>
 
-                    <section className="collab-section" id="terms">
-                        <div className="collab-section-head">
-                            <p className="collab-eyebrow">Your side</p>
-                            <h2 className="collab-section-title">{PARTNER_TERMS.title}</h2>
-                            <p className="collab-section-sub">{PARTNER_TERMS.sub}</p>
-                        </div>
-                        <div className="collab-terms">
-                            {PARTNER_TERMS.items.map((item) => (
-                                <div className="collab-term" key={item.title}>
-                                    <h3 className="collab-term-title">{item.title}</h3>
-                                    <p className="collab-term-text">{item.text}</p>
-                                </div>
-                            ))}
-                        </div>
-                    </section>
+                        <section className="collab-section collab-projects" id="projects">
+                            <div className="collab-section-head">
+                                <p className="collab-eyebrow">Register</p>
+                                <h2 className="collab-section-title">Collab giveaways</h2>
+                                <p className="collab-section-sub">
+                                    Connect a wallet and register for the giveaway you want to enter. One wallet,
+                                    one entry per project.
+                                </p>
+                            </div>
 
-                    <section className="collab-section" id="how">
-                        <div className="collab-section-head">
-                            <p className="collab-eyebrow">End to end</p>
-                            <h2 className="collab-section-title">How a collab runs</h2>
-                        </div>
-                        <ol className="collab-steps">
-                            {COLLAB_STEPS.map((step, index) => (
-                                <li className="collab-step" key={step.title}>
-                                    <span className="collab-step-n" aria-hidden="true">{index + 1}</span>
-                                    <span className="collab-step-body">
-                                        <span className="collab-step-title">{step.title}</span>
-                                        <span className="collab-step-text">{step.text}</span>
-                                    </span>
-                                </li>
-                            ))}
-                        </ol>
-                    </section>
-
-                    <section className="collab-section collab-projects" id="projects">
-                        <div className="collab-section-head">
-                            <p className="collab-eyebrow">Register</p>
-                            <h2 className="collab-section-title">Collab giveaways</h2>
-                            <p className="collab-section-sub">
-                                Connect a wallet and register for the giveaway you want to enter. One wallet,
-                                one entry per project.
-                            </p>
-                        </div>
-
-                        <div className="collab-tabs" role="tablist" aria-label="Collab giveaway projects">
-                            {projects.map((entry) => (
-                                <button
-                                    key={entry.slug}
-                                    type="button"
-                                    role="tab"
-                                    aria-selected={entry.slug === active}
-                                    className={`collab-tab${entry.slug === active ? ' is-active' : ''}`}
-                                    onClick={() => handleTab(entry.slug)}
-                                >
-                                    {entry.avatar ? (
-                                        <img className="collab-tab-pfp" src={entry.avatar} alt="" width={28} height={28} />
-                                    ) : (
-                                        <span className="collab-tab-initials" aria-hidden="true">{initialOf(entry.name)}</span>
-                                    )}
-                                    <span className="collab-tab-text">
-                                        <span className="collab-tab-name">{entry.name}</span>
-                                        <span className="collab-tab-handle">@{entry.handle}</span>
-                                    </span>
-                                </button>
-                            ))}
-                        </div>
-
-                        {!projects.length && (
-                            <p className="collab-projects-empty">{PROJECTS_EMPTY}</p>
-                        )}
-
-                        {project && (
-                            <article className={`collab-project${state.registered ? ' is-registered' : ''}`}>
-                                <div className="collab-project-head">
-                                    {project.avatar ? (
-                                        <img className="collab-project-pfp" src={project.avatar} alt={`${project.name} on X`} width={72} height={72} />
-                                    ) : (
-                                        <span className="collab-project-initials" aria-hidden="true">{initialOf(project.name)}</span>
-                                    )}
-                                    <div className="collab-project-meta">
-                                        <h3 className="collab-project-name">{project.name}</h3>
-                                        <a className="collab-project-handle" href={project.url} target="_blank" rel="noopener noreferrer">
-                                            @{project.handle}
-                                        </a>
-                                        <p className="collab-project-prize">{project.prize}</p>
-                                    </div>
-                                    <span className={`collab-status${state.registered ? ' is-in' : ''}`}>
-                                        {state.registered ? 'Registered' : project.status === 'open' ? 'Open' : 'Closed'}
-                                    </span>
-                                </div>
-                                <p className="collab-project-blurb">{project.blurb}</p>
-                                <div className="collab-register">
+                            <div className="collab-tabs" role="tablist" aria-label="Collab giveaway projects">
+                                {projects.map((entry) => (
                                     <button
+                                        key={entry.slug}
                                         type="button"
-                                        className="btn btn-primary btn-md collab-register-btn"
-                                        onClick={() => register(project.slug)}
-                                        disabled={!!busy || state.registered}
+                                        role="tab"
+                                        aria-selected={entry.slug === active}
+                                        className={`collab-tab${entry.slug === active ? ' is-active' : ''}`}
+                                        onClick={() => handleTab(entry.slug)}
                                     >
-                                        {label}
+                                        {entry.avatar ? (
+                                            <img className="collab-tab-pfp" src={entry.avatar} alt="" width={28} height={28} />
+                                        ) : (
+                                            <span className="collab-tab-initials" aria-hidden="true">{initialOf(entry.name)}</span>
+                                        )}
+                                        <span className="collab-tab-text">
+                                            <span className="collab-tab-name">{entry.name}</span>
+                                            <span className="collab-tab-handle">@{entry.handle}</span>
+                                        </span>
                                     </button>
-                                    <p className="collab-register-note">
-                                        {state.registered
-                                            ? 'This wallet is on the entry list. Prizes are drawn from these wallets and announced on X.'
-                                            : 'You will be asked to sign once — no gas, no transaction. Signing is what puts the wallet on the entry list, so nobody can enter an address they do not hold.'}
-                                    </p>
-                                </div>
-                            </article>
-                        )}
-                    </section>
+                                ))}
+                            </div>
 
-                    {/* The request form sits above the contact block on purpose: it is the way in, and
-                        the DM and the Discord invite are what to use when the form cannot say it. */}
-                    <CollabSubmission address={address} signed={signed} onAddress={setAddress} />
+                            {!projects.length && (
+                                <p className="collab-projects-empty">{PROJECTS_EMPTY}</p>
+                            )}
 
-                    <section className="collab-section collab-contact" id="contact">
-                        <h2 className="collab-section-title">Want your project here?</h2>
-                        <p className="collab-contact-copy">
-                            The form above is the fastest way — send the giveaway details, the prize, the number and
-                            your preferred dates from the account you post with. We add the project tab, you post the
-                            collab, and we share it. If anything about it needs a conversation first, reach us here.
-                        </p>
-                        <div className="collab-contact-links">
-                            <a className="collab-link" href={CONTACT.x} target="_blank" rel="noopener noreferrer">
-                                DM @{CONTACT.handle} on X
-                            </a>
-                            <a className="collab-link" href={CONTACT.discord} target="_blank" rel="noopener noreferrer">
-                                Open a ticket in Discord
-                            </a>
-                        </div>
-                    </section>
-                </main>
+                            {project && (
+                                <article className={`collab-project${state.registered ? ' is-registered' : ''}`}>
+                                    <div className="collab-project-head">
+                                        {project.avatar ? (
+                                            <img className="collab-project-pfp" src={project.avatar} alt={`${project.name} on X`} width={72} height={72} />
+                                        ) : (
+                                            <span className="collab-project-initials" aria-hidden="true">{initialOf(project.name)}</span>
+                                        )}
+                                        <div className="collab-project-meta">
+                                            <h3 className="collab-project-name">{project.name}</h3>
+                                            <a className="collab-project-handle" href={project.url} target="_blank" rel="noopener noreferrer">
+                                                @{project.handle}
+                                            </a>
+                                            <p className="collab-project-prize">{project.prize}</p>
+                                        </div>
+                                        <span className={`collab-status${state.registered ? ' is-in' : ''}`}>
+                                            {state.registered ? 'Registered' : project.status === 'open' ? 'Open' : 'Closed'}
+                                        </span>
+                                    </div>
+                                    <p className="collab-project-blurb">{project.blurb}</p>
+                                    <div className="collab-register">
+                                        <button
+                                            type="button"
+                                            className="btn btn-primary btn-md collab-register-btn"
+                                            onClick={() => register(project.slug)}
+                                            disabled={!!busy || state.registered}
+                                        >
+                                            {label}
+                                        </button>
+                                        <p className="collab-register-note">
+                                            {state.registered
+                                                ? 'This wallet is on the entry list. Prizes are drawn from these wallets and announced on X.'
+                                                : 'You will be asked to sign once — no gas, no transaction. Signing is what puts the wallet on the entry list, so nobody can enter an address they do not hold.'}
+                                        </p>
+                                    </div>
+                                </article>
+                            )}
+                        </section>
+
+                        {/* The request form sits above the contact block on purpose: it is the way in, and
+                            the DM and the Discord invite are what to use when the form cannot say it. */}
+                        <CollabSubmission address={address} signed={signed} onAddress={setAddress} />
+
+                        <section className="collab-section collab-contact" id="contact">
+                            <h2 className="collab-section-title">Want your project here?</h2>
+                            <p className="collab-contact-copy">
+                                The form above is the fastest way — send the giveaway details, the prize, the number and
+                                your preferred dates from the account you post with. We add the project tab, you post the
+                                collab, and we share it. If anything about it needs a conversation first, reach us here.
+                            </p>
+                            <div className="collab-contact-links">
+                                <a className="collab-link" href={CONTACT.x} target="_blank" rel="noopener noreferrer">
+                                    DM @{CONTACT.handle} on X
+                                </a>
+                                <a className="collab-link" href={CONTACT.discord} target="_blank" rel="noopener noreferrer">
+                                    Open a ticket in Discord
+                                </a>
+                            </div>
+                        </section>
+                    </main>
+                </div>
             </div>
         </>
     );

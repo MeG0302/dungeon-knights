@@ -15,8 +15,13 @@
    after the theme and must not depend on being loaded at all.
    ========================================================================== */
 
+/* The shell. `theme.css` pins `html, body { height: 100%; overflow: hidden }` — the game's routes
+   are fixed-height apps whose panes scroll inside them — so a route is exactly one viewport tall
+   and nothing past that viewport is reachable unless the route scrolls in a box of its own. This
+   page is some four thousand pixels of terms, so it needs one: `height` rather than `min-height`
+   makes the shell the window, and the scrolling child inside it is what moves. */
 .collab-page {
-    min-height: 100vh;
+    height: 100vh;
     display: flex;
     flex-direction: column;
     background:
@@ -98,6 +103,29 @@
 }
 
 /* ------------------------------------------------------------------- the body */
+/* The scrolling element, and the one thing this page was missing: with the document clipped to the
+   viewport and nothing inside it scrolling, the giveaways, the form and the contact block sat
+   below the fold with no way to reach them. It wraps the reading column rather than being it, so
+   the scrollbar sits at the window edge instead of at the 1080px column's edge — the shape `/docs`
+   uses. It is also why the head and the banners are outside it: an error raised by the form at the
+   bottom of the page has to be visible from where the form is. `min-height: 0` because a flex child
+   refuses to shrink below its content by default, which would leave the shell overflowing a clipped
+   document instead of scrolling this box. */
+.collab-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+}
+
+/* Motion is the reader's to decide, and this route has exactly one thing that moves on its own. */
+@media (prefers-reduced-motion: reduce) {
+    .collab-scroll {
+        scroll-behavior: auto;
+    }
+}
+
 .collab-main {
     width: 100%;
     max-width: 1080px;
