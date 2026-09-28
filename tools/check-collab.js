@@ -475,6 +475,32 @@ function freshProcess(snippet, env = {}, modulePath = STORE_PATH) {
     rec('and an empty store says so rather than showing an empty tab',
         /PROJECTS_EMPTY/.test(clientSource) && /collab-projects-empty/.test(sheet));
 
+    // ------------------------------------------------------------------------------ the scroll box
+    // The bug this guards, because it is invisible in every source-level check above: `theme.css`
+    // clips `html, body` to one viewport (`height: 100%; overflow: hidden`) because the game's
+    // routes are fixed-height apps that scroll inside themselves — so a route that does *not*
+    // scroll in a box of its own is a route whose lower half cannot be reached at all. `/collab` and
+    // `/collab/review` were written without one: ~4,100px of terms, a three-field form and the
+    // contact block sat below a clipped fold with no scrollbar anywhere on the page.
+    const reviewClientSource = read(path.join(ROOT, 'app', 'collab', 'review', 'client.js'));
+    const theme = read(path.join(ROOT, 'public', 'theme.css'));
+    const boxCount = (source) => (source.match(/className="collab-scroll"/g) || []).length;
+    const sheetLink = (source) => (source.match(/\/css\/collab\.css\?v=\d+/) || [])[0] || '';
+    rec('the document is clipped at the viewport, which is why a route must scroll inside itself',
+        /html,\s*body\s*\{[^}]*overflow:\s*hidden/.test(theme));
+    rec('the shell is the window, not a column allowed to grow past it',
+        /\.collab-page\s*\{[^}]*height:\s*100vh/.test(sheet) && !/\.collab-page\s*\{[^}]*min-height/.test(sheet));
+    rec('  … and its body scrolls in a box of its own, the way `/docs` does',
+        /\.collab-scroll\s*\{[^}]*flex:\s*1[^}]*min-height:\s*0[^}]*overflow-y:\s*auto/.test(sheet));
+    rec('both collab routes have exactly one such box', boxCount(clientSource) === 1 && boxCount(reviewClientSource) === 1);
+    rec('  … wrapping the reading column instead of being it, so the scrollbar lands at the window edge',
+        /collab-scroll[^>]*>\s*<main className="collab-main"/.test(clientSource)
+        && /collab-scroll[^>]*>\s*<main className="collab-main"/.test(reviewClientSource));
+    rec('  … and the head stays outside it, so a form\'s error cannot scroll out of sight',
+        clientSource.indexOf('collab-head') < clientSource.indexOf('collab-scroll'));
+    rec('both link the same stamped sheet, so neither can be served the other\'s rules',
+        !!sheetLink(clientSource) && sheetLink(clientSource) === sheetLink(reviewClientSource));
+
     // ------------------------------------------------------------------------------- the reachability
     section('Where the page lives');
     rec('the apex serves it, rather than sending a partner to the password',

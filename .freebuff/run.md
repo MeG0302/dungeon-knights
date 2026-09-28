@@ -7330,3 +7330,65 @@ this browser is signed in with.** If the second one is the owner's real wallet, 
 `COLLAB_OWNERS` (comma-separated) or the page will keep refusing them.
 
 
+
+## 29. `/collab` could not be scrolled — the two routes that never got a scroll box
+
+Reported from the live site in as many words: *"i cannot scroll these pages … ever else page is
+working good i just cannot scroll collab and collab review page."* Both were mine, both shipped in
+`ac8be8d`, and the cause is a house rule neither route obeyed.
+
+`public/theme.css` pins the document:
+
+```css
+html, body { width: 100%; height: 100%; overflow: hidden; }
+```
+
+…because the game's routes are fixed-height apps whose panes scroll inside them. So on this site a
+route *is* one viewport tall, and a route taller than one viewport is reachable **only** if it scrolls
+inside a box of its own. `/docs`, `/genesis`, `/points` and `/portfolio` each have one
+(`.docs-scroll`, `side-panel-body`); `/collab` and `/collab/review` had `min-height: 100vh` on the
+shell and nothing scrolling anywhere. `/collab` is some 4,100px of terms, tab and form, of which the
+first 820px were on screen: the giveaways, the request form and the contact block — the whole reason
+a partner opens the page — sat below a clipped fold with no scrollbar to say so.
+
+**The fix is the shape `/docs` already uses**, not something new. `.collab-page` becomes
+`height: 100vh`, and a `.collab-scroll` box (`flex: 1; min-height: 0; overflow-y: auto;
+-webkit-overflow-scrolling: touch; scroll-behavior: smooth`, with the reduced-motion opt-out) wraps
+`<main class="collab-main">` in both clients. Three details worth keeping:
+
+- **The box wraps the reading column rather than being it.** `overflow-y: auto` on `.collab-main`
+  would have put the scrollbar at the edge of the 1080px column — inland on a wide screen — while
+  wrapping it keeps the scrollbar at the window edge, like every other route.
+- **`min-height: 0` is load-bearing.** A flex child refuses to shrink below its content by default,
+  so without it the shell overflows a clipped document and there is still no scrollbar anywhere.
+  That is precisely how the bug survived review: nothing in the source looks wrong.
+- **The head and the banners stay outside the box**, so the submission form's error is visible from
+  the bottom of the page, where the form is.
+
+**Verified on the live host**, after `8e61c69` → `dungeon-knights-4hblni9j2-meglast320-1694`, aliased
+across the four hosts. `/collab` renders `.collab-scroll` with `overflow-y: auto`: 741px of viewport
+over 4,181px of content, **3,440px of travel**, and a scroll to the end brings the last section
+(`contact`) fully into view; the document itself is still `docScrollable: 0`. `/docs`, measured the
+same way on the same host as the control, is the same shape: `docScrollable: 0` and 5,413px of
+travel inside `.docs-scroll`. `/collab/review` carries the same box and its signed-out content is
+shorter than the viewport, so tall content was proved by cloning the section six times in the live
+DOM — 2,183px of travel, and a scroll to the end reached 2,183 exactly.
+
+**A measurement caveat, recorded because it cost time.** The panel's `preview_scroll` was unreliable
+in this session: three queued wheel events arrived at once, and their target was *not* inside the
+scroll box (`inside: false`) because they landed where the cursor had been left — over the header,
+which is deliberately outside the box. Wheel input is a poor probe here; `elementFromPoint` at five
+spread points returns elements inside `.collab-scroll` in every case, so a wheel over the page body
+cannot land anywhere else, and `scrollTop` writes (with `scroll-behavior` forced to `auto`, because
+smooth scrolling is suspended in a background tab) land where the content says they should.
+
+`tools/check-collab.js` is now **285/285**, seven of them new and written to make this class of bug
+visible to a source-level check: the document is clipped (read out of `theme.css`), the shell is
+`height: 100vh` and not `min-height`, the box has `flex: 1; min-height: 0; overflow-y: auto`, each
+collab route has exactly one such box and it wraps `.collab-main`, the head comes before it, and both
+routes link the same stamped sheet so they cannot drift apart. Also green: `check-styles` (`/collab`
+109 tokens, `/collab/review` 47, 0 unstyled), `check-wallet-menu` 19/19, `check-gate` 150/150,
+`check-docs` 77/77, `check-identifiers` 4/4. `npx next build` lists `/collab` as `ƒ` and
+`/collab/review` as `○`. `public/css/collab.css` stamps `?v=5`.
+
+
