@@ -154,6 +154,7 @@
 @media (hover: hover) and (pointer: fine) {
     .home-btn:hover { transform: translateY(-1px); }
     .home-btn-secondary:hover { border-color: rgba(232, 224, 212, 0.6); }
+    .home-collab:hover { color: var(--accent-gold-light, #F4D03F); border-bottom-color: var(--accent-gold, #D4AF37); }
     .home-footer a:hover { color: var(--accent-gold, #D4AF37); }
 }
 
@@ -163,7 +164,8 @@
  * against the gold border. Named here rather than left to the theme, which styles none of this
  * page's controls. */
 .home-btn:focus-visible,
-.home-footer a:focus-visible {
+.home-footer a:focus-visible,
+.home-collab:focus-visible {
     outline: 2px solid var(--accent-gold-light, #F4D03F);
     outline-offset: 3px;
 }
@@ -190,6 +192,31 @@
     letter-spacing: 0.5px;
     text-transform: none;
     color: #9d968a;
+}
+
+/* ------------------------------------------------------------- the third doorway
+ * The collab page, for somebody arriving with a project rather than a wallet. It is a line of text
+ * under the pair rather than a third tile in the row: the two buttons above are a choice between
+ * things a visitor can do today, and a third one at that weight would read as a third way to join
+ * the same thing. Same tracked-out bronze as the footer row, one step brighter and underlined, so
+ * it belongs to this page without competing with what the page is actually asking for.
+ *
+ * The underline is load-bearing — with no fill and no border, it is the only thing that says
+ * "link" — and `touch-action` is here for the same reason it is on the buttons: this is still a
+ * tap target on a phone, and the one way off the page for a keyboard. */
+.home-collab {
+    display: inline-block;
+    margin-top: 14px;
+    padding-bottom: 2px;
+    border-bottom: 1px solid rgba(232, 224, 212, 0.22);
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #b3aa9c;
+    text-decoration: none;
+    touch-action: manipulation;
 }
 
 /* ---------------------------------------------------------------------- the queue
@@ -309,6 +336,9 @@
     .home-line { margin-top: 12px; max-width: 620px; font-size: 12.5px; line-height: 1.55; }
     .home-actions { margin-top: 16px; gap: 10px; }
     .home-btn { min-width: 200px; padding: 11px 18px; }
+    /* The third line has to earn its 14px here: a phone in landscape is the one shape with no
+       height to spare, and this row is the newest thing in the column. */
+    .home-collab { margin-top: 9px; font-size: 10.5px; letter-spacing: 0.1em; }
 }
 
 @media (max-width: 560px) {

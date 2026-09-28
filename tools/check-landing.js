@@ -135,6 +135,44 @@ function rec(label, pass, detail) {
         /class="home-video"[^>]*autoplay[^>]*loop[^>]*muted[^>]*playsinline/.test(body)
         || /class="home-video"[^>]*autoplay[^>]*muted[^>]*playsinline[^>]*loop/.test(body));
 
+    // ------------------------------------------------------------------ the third doorway
+    // The collab page, and the only thing on this page added below the two buttons: a partner is not
+    // the stranger this page is written for, so it is a line of text *under* the pair rather than a
+    // third tile in it. All three ways that could go wrong silently are pinned, because every one of
+    // them is a one-line edit: it could be dropped into the footer row instead of the column, it
+    // could be handed `.home-btn` and become a third thing the visitor is asked to choose, and it
+    // could be given a label long enough to wrap on the phone this page is most often opened on.
+    // Measured at 320pt: 136px of the 284px line, one line, and 26px of clearance above the footer
+    // at 740×360 — the shape with no height to spare.
+    const centerBlock = (body.match(/<main class="home-center">[\s\S]*?<\/main>/) || [''])[0];
+    const actionsBlock = (centerBlock.match(/<div class="home-actions">[\s\S]*?<\/div>/) || [''])[0];
+    const collab = (centerBlock.match(/<a class="home-collab"[^>]*>[^<]*<\/a>/) || [''])[0];
+    rec('the collab page is linked from the column, below the two buttons',
+        !!actionsBlock && !!collab && centerBlock.indexOf(collab) > centerBlock.indexOf(actionsBlock),
+        collab || 'no collab link, so the only way to /collab is by typing it');
+    rec('  \u2026 pointing at /collab, which the apex serves without a password',
+        collab === '<a class="home-collab" href="/collab">Partner with us</a>', collab || '');
+    rec('  \u2026 and not as a third button in the row a visitor picks from',
+        !actionsBlock.includes('home-collab') && [...actionsBlock.matchAll(/<a /g)].length === 2
+        && !/class="[^"]*home-btn[^"]*"[^>]*>\s*Partner/.test(body),
+        `${[...actionsBlock.matchAll(/<a /g)].length} links in .home-actions`);
+    // With no fill and no border box, one underlined line of text is the whole of what says "link"
+    // here, so the underline is pinned as well as the things that keep it a control — the tap
+    // affordance, the ring a keyboard needs, and a hover that a touch screen will not leave stuck on.
+    rec('  \u2026 styled as the quiet link it is, with a focus ring and a guarded hover',
+        /\.home-collab\s*\{[^}]*display:\s*inline-block/.test(css)
+        && /\.home-collab\s*\{[^}]*border-bottom:\s*1px solid/.test(css)
+        && /\.home-collab\s*\{[^}]*text-decoration:\s*none/.test(css)
+        && /\.home-collab\s*\{[^}]*touch-action:\s*manipulation/.test(css)
+        && /\.home-collab:focus-visible/.test(css)
+        && /@media \(hover: hover\) and \(pointer: fine\) \{[\s\S]*?\.home-collab:hover/.test(css),
+        '.home-collab');
+    // 14px of margin and a 17px line are cheap on a laptop and not on a phone held sideways, which
+    // is the one shape where the column has 360px to live in and nothing to give.
+    rec('  \u2026 and it tightens in the block that has to fit a landscape phone',
+        /@media \(max-height: 620px\) and \(max-width: 1024px\)[\s\S]*?\.home-collab\s*\{[^}]*font-size:\s*10\.5px/.test(css),
+        'the short-viewport block');
+
     // ------------------------------------------------------------------- the footer's page row
     // Wayfinding, added after the collapse to a single public surface: the pages a stranger can
     // actually open, then the two places the project talks. The labels are pinned because this is a
