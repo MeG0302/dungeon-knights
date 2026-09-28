@@ -7712,4 +7712,35 @@ and only the `500 / 5,000 DNG` mint price left on the page; `/pitch` slide 07 sh
 `check-genesis` 74/74, `check-docs` 77/77, `check-rarity` 64/64, `check-copies` 2/2, `check-gate`
 150/150, `check-styles` all styled, `check-contracts` 61 contracts.
 
+## 34. Shipped — the quiet line and the payout strip are on all four hosts
+
+Two commits: `2a9b76f` (§32, the front-page link and its guards) and `fec57c3` (§33, the payout
+strip across the collab page, the deck, `/tokenomics`, `/mint` and the portfolio card). Pushed to
+`origin/main` as `7a59da5..fec57c3`, then deployed with
+`npx vercel --prod --yes --scope meglast320-1694` — build `dungeon-knights-1oxeduj2m-meglast320-1694`,
+re-aliased onto `dungeonknights.io`, `www.dungeonknights.io`, `app.dungeonknights.io` and
+`dungeon-knights.vercel.app`.
+
+**Read back off the live hosts, not the deployment URL.** `dungeonknights.io` serves
+`<a class="home-collab" href="/collab">Partner with us` on the front page, and `/collab` serves the
+new sentence — *settled on chain against the contract's own table* — with none of the old
+`100 / 60 / 36 / 20 DNG` ladder left in the markup. `/portfolio`'s route chunk carries `runs a day`
+and no `DNG / run`. `/mint`'s odds script (`/mint-page.js`, a public asset the gate does not cover)
+carries `runs a day` and no `expected earnings`.
+
+**The three routes that cannot be curled.** `/tokenomics`, `/pitch` and `/mint` 308 from the apex to
+the app host and then to `/gate?next=…`, so an unauthenticated `curl` gets the gate's body, not the
+page. The proof that the deployed build is this tree is the build log rather than the HTML:
+`1oxeduj2m` reports `/tokenomics` 7.43 kB and `/portfolio` 9.01 kB against `qztau6w2k`'s 7.53 kB and
+9.03 kB, which are exactly the sizes this tree builds to. Reading those three by eye needs the gate
+passed in a browser.
+
+**The deploy was made from a tree that is not clean, and that is worth knowing.** `vercel --prod`
+uploads the working directory, so the other thread's in-flight files — `public/battle-kit.js`,
+`public/sound-toggle.js`, both CSS files, the monster art, and the *unstaged* `lib/static-pages.js`
+hunks that wire them into other routes' script lists — went up with the deploy. All of those assets
+were already being served before this deploy and the front page references none of them, so nothing
+new was exposed; but the script references themselves are now live alongside the files they point
+at, and they are still uncommitted. Anyone who commits that file should commit the assets with it.
+
 
