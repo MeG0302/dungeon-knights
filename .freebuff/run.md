@@ -7585,3 +7585,131 @@ announced figure”* and the disclosure card *“…is still TBD”*. `/genesis`
 the apex, unchanged by this one.
 
 
+## 32. The front page gets a third way in — and `/collab` was unreachable from it
+
+The owner asked in one line: *“is the collab page button there in front page? make it below the points
+program and join the waitlist (lower in between both).”* The honest answer to the first half was **no**.
+`STATIC_PAGES.home.body` carried exactly two calls to action — `/points` and `/genesis` — plus a footer
+row of five labels, and nothing on the apex pointed at `/collab` at all: the one page written for a
+partner was reachable only by typing it. That is what this section closes, and the placement the owner
+asked for is the one the page wanted anyway.
+
+**A line of text, not a third button.** The row above is a choice between two things a visitor can do
+with a wallet today. A third tile at that weight — the same 240px floor, the same 14px of padding, the
+same lettering as the pair — would read as a third way to join the same thing. So the link sits *under*
+the pair, centred with the column, wearing the footer row's own language (Inter, 12px, `0.14em`
+tracking, uppercase, `#b3aa9c`) with one underline and no fill or border box, because with the fill gone
+the underline is the whole of what says link. It lives inside `<main class="home-center">` and not in
+the footer nav: it belongs to the column a visitor reads, not to the wayfinding row.
+
+**Measured at six viewports rather than reasoned about** (dev server, 3111, `?__app=0` so localhost
+takes the apex branch): 1440×900 the column is 351px, the link 136×17, with 230px of clearance above
+the footer; 1280×600 the same column with 80px of room; 390×844, a 471px column and 114px; 360×740,
+482px and 56px; 320×740, 507px and 44px with every label still on one line; and 740×360 — the shape
+with nothing to spare — a 232px column, 26px above the footer, and no scroll. Nothing overflows
+horizontally at any of them. One thing worth recording: the landscape-short block (`max-height: 620px`)
+also catches a 320×568 phone in *portrait*, so the short narrow phone gets the tightened 10.5px link as
+well — the label is one line either way, 113px and 136px of a 284px line. The two reservation floors in
+`check-landing` did not need to move, and that is not luck: the distance between the column and the
+footer is `padding-bottom − footer height` (132 − 125 on a phone), so a column that grows scrolls the
+document instead of colliding with the footer.
+
+**The stamp, and the harness.** `css/home.css` moved `?v=6` → `?v=7` in `home.styles`, which is the
+habit for a sheet a page loads by URL. `lib/static-pages.js` is another thread's in-flight file, so
+only the home body and that one stamp were touched and every other hunk in it is still theirs. Five
+checks were added to `tools/check-landing.js`, and eleven mutations that should break them were run and
+caught: deleting the link (two fail), pointing it at `/genesis`, handing it `.home-btn` (three fail),
+`display: block`, dropping the underline, the focus ring, the guarded hover or `touch-action`, dropping
+the landscape tightening, lengthening the label past what a small phone fits, and moving the link into
+the footer row instead of the column — that last one also fails the footer's five-label pin, which is
+the point of keeping both. `check-landing` is **43/43**, with `check-collab` 287/287, `check-gate`
+150/150, `check-genesis` 74/74, `check-styles` all styled (the new class is defined by a sheet the route
+loads, which is what that harness asks), `check-copies` 2/2, and `check-docs`, `check-back`,
+`check-wallet-menu` and `check-identifiers` green.
+
+**Read back from the live host before trusting the link.** The one way this could be a dead end is the
+target: on the app host `/collab` sits behind the password, so a front-page link that routed there
+would hand a partner a login box. `dungeonknights.io/collab` answers the collab page itself
+("Collab · Dungeon Knights"), because `APEX_PUBLIC` in `lib/app-routing.js` has carried `/collab`
+since §26 — the page a partner is sent to is public on the apex by design, and this link is the first
+thing on the site that points at it.
+
+**Not built, not committed, not deployed.** `npx next build` was deliberately *not* run: `next dev -p
+3111` holds the same `.next`, which is the trap §31 records, and that server is where the page was
+verified. The changed route compiled and served with the new link in it, which is all a build would
+have said here — a static string, a stylesheet and a harness changed and no module logic did. On the
+owner's word the build runs with the server stopped and restarted on 3111, then the usual `vercel
+--prod` and the four-host re-alias.
+
+
+## 33. The collab page stops quoting the money — no per-run, per-day $DNG figure on it
+
+The owner, reading `/collab`: *“each knight pays its own daily reward: 100 $DNG × 4 runs (Legendary), 60
+$DNG × 3 runs (Epic) … i told you to not give even a single point for dng … if more are there jus
+remove it fast.”* That line was `lib/collab-content.js#NFT_USE` — the Knights bullet templated
+`KNIGHT_LADDER` into `100 $DNG × 4 runs (Legendary), …`, and the Genesis bullet printed the flat
+per-clear figure and the `1,200 a day at the cap` beside it. Both are gone, and so are the fields that
+made them possible: `KNIGHT_LADDER` now carries `tier` and `hashPower` only (`perRun`, `runsPerDay` and
+`perDay` are deleted rather than left unused, because a ladder that still holds them is a payout
+waiting for somebody to template it back in), and `GENESIS_REWARD_PER_CLEAR`, `GENESIS_DAILY_RUNS` and
+`GENESIS_DAILY_CAPACITY` are no longer imported at all. The two bullets keep their claim — each knight
+is paid for its own runs, settled on chain against the contract's table — and quote no money. It is the
+rule `/genesis` already carries, down to the shape of the guard: `check-genesis.js` fails on a `\d…
+DNG` in that page's rendered copy, and `check-collab.js` now does the same for this one. The collab
+page was the last public page promising a *number* rather than the mechanism.
+
+**What is deliberately still on the page,** so a later pass does not take it as an oversight: the
+capsule *open price* (`500` → `5,000 $DNG`, the one cost a winner carries — hiding it is how a
+community finds out after winning that it has been misled), the weekly `$DNG` pool with no figure
+attached, and `$DNG` as the token's name. Those are a price and a name, not a payout.
+
+**Guarded, and falsified four ways.** `tools/check-collab.js` now sweeps **every string the page
+renders** for that shape — `\d… $DNG ×`, `$DNG per clear/run/day`, `$DNG a day` — rather than the one
+line that had it, because the same sentence existed in two places and a check naming one would have
+passed while the other still printed the money. The second check pins the ladder's field list, so
+`perRun` coming back is caught even with no copy using it. Four mutations, all caught by name: the
+per-run ladder templated back into the bullet, a `100 $DNG per run` pasted into `HERO` instead (the
+sweep, not the line), `perRun` regrown on the ladder, and a `300 $DNG per clear` put back in the
+Genesis bullet. `check-collab` **288/288**, and `check-landing` 43/43, `check-genesis` 74/74,
+`check-pitch` 48/48, `check-token-math` 71/71, `check-docs` 77/77, `check-rarity` 64/64,
+`check-copies` 2/2, `check-gate` 150/150, `check-styles` all styled. Read back in the browser on 3111:
+`/collab` renders `each knight you own is paid for its own runs, each day, settled on chain against the
+contract's own table`, no `$DNG ×` anywhere, and the only `$DNG` figures left are the open price ramp.
+
+**The other four surfaces, asked and answered in one turn.** The four places still printing a payout
+figure were named back to the owner — `/tokenomics`, the deck, the portfolio card's meta and the
+Summoning Chamber's line — with the note that §31 had recorded the opposite decision for the first two.
+The answer was all four, so the same rule went out with them:
+
+- **`/tokenomics`** — the by-tier table loses its `Per clear` and `A day` columns, the Genesis card's
+  hero is the run count rather than `300`, its `Ceiling a day 1,200 DNG` fact becomes the sentence that
+  the payout is the same whatever the roll, the two scenario cells that quoted *what a clear pays at
+  this scale* are gone, and both `pays` strings describe the tier and its runs instead of the money.
+  `GENESIS_REWARD_PER_CLEAR`, `GENESIS_DAILY_CAPACITY` and `dailyCapacity` are no longer imported.
+- **The pitch deck** — slide 07's table keeps `Tier / Roll / Runs a day / Hash power` and loses both
+  money columns and the flat-per-clear caption; its stats become expected clears, clears to repay a
+  summon, and the self-funding count; the *Clear* step on slide 04 and the ROI quote now say what the
+  table **is** rather than what it pays. `GENESIS_REWARD_PER_CLEAR` and `dailyCapacity` come out of the
+  imports with the same kind of note the capsule count already carries.
+- **The Summoning Chamber** — `${r.dungeonReward} DNG / clear · ${r.dailyRuns} runs` becomes
+  `${r.dailyRuns} runs a day` and `${r.hashPower} HP`, and the expected-earnings paragraph under the
+  odds table (which turned the table into a payback period) is deleted with it.
+- **The portfolio card** — `metaTop` is `N runs a day` instead of `N DNG / run · N runs`.
+
+**What is deliberately still printed, and where the line was drawn:** the *aggregate* numbers — the
+vault's `1,415,120 DNG a week`, the four lines' `Nk DNG a day at the reference`, the runway, the burn,
+the summon price and the capsule open ramp. Those are the token's own budget rather than what a knight
+is paid, they are what §31 was explicitly told to keep, and `/tokenomics` is a page about the partition.
+What no page prints any more is what a clear, a run or a day **of a knight's play** is worth. If the
+rule is stricter than that, the aggregates are the remaining list and it is one more pass.
+
+**Verified in the browser, page by page:** `/collab` prose with no figure (above); `/tokenomics`
+renders the four lines and the partition with no per-clear or per-day payout; `/mint`'s odds block now
+reads `Common 50.0% / 5 runs a day / 15 HP … Legendary 1.0% / 4 runs a day / 100 HP` with no DNG in it
+and only the `500 / 5,000 DNG` mint price left on the page; `/pitch` slide 07 shows
+`Tier / Roll / Runs a day / Hash power` and the stat `CLEARS TO REPAY`. Every harness green again:
+`check-token-math` 71/71, `check-pitch` 48/48, `check-collab` 288/288, `check-landing` 43/43,
+`check-genesis` 74/74, `check-docs` 77/77, `check-rarity` 64/64, `check-copies` 2/2, `check-gate`
+150/150, `check-styles` all styled, `check-contracts` 61 contracts.
+
+

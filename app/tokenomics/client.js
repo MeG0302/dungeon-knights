@@ -46,7 +46,6 @@ import {
 import {
     KNIGHT_TIERS,
     RARITY,
-    dailyCapacity,
     expectedClearsPerDay,
     expectedRewardPerDay,
 } from '../../lib/knights';
@@ -54,9 +53,7 @@ import {
     DISTRIBUTION,
     DNG_DECIMALS,
     DNG_SUPPLY,
-    GENESIS_DAILY_CAPACITY,
     GENESIS_DAILY_RUNS,
-    GENESIS_REWARD_PER_CLEAR,
     MIN_WEEKS,
     REFERENCE_GENESIS_ACTIVE,
     REFERENCE_KNIGHTS_ACTIVE,
@@ -87,7 +84,7 @@ const LINES = [
         key: 'genesisDungeon',
         label: 'Genesis · dungeon',
         collection: 'genesis',
-        pays: (v) => `${GENESIS_REWARD_PER_CLEAR} DNG a clear, ${GENESIS_DAILY_RUNS} runs a day — flat, whatever the hash power`,
+        pays: () => `a flat reward per clear, the same for every Genesis Knight whatever its hash power, across its daily runs`,
     },
     {
         key: 'genesisStaking',
@@ -99,7 +96,7 @@ const LINES = [
         key: 'knightsDungeon',
         label: 'Knights · dungeon',
         collection: 'knights',
-        pays: () => `${KNIGHT_TIERS.map((t) => RARITY[t].dungeonReward).join(' / ')} DNG by tier`,
+        pays: () => `paid by tier, and by how many runs the tier is allowed each day`,
     },
     {
         key: 'knightsStaking',
@@ -492,16 +489,6 @@ export default function TokenomicsClient() {
                                         {scenario.scale >= 1 ? 'the full table is payable' : 'every reward moves down together'}
                                     </span>
                                 </div>
-                                <div className="tk-scenario-cell">
-                                    <span className="tk-scenario-cell-label">A Genesis clear pays</span>
-                                    <span className="tk-num">{fmt(GENESIS_REWARD_PER_CLEAR * scenario.scale, scenario.scale < 1 ? 1 : 0)} DNG</span>
-                                    <span className="tk-scenario-cell-sub">instead of {GENESIS_REWARD_PER_CLEAR}</span>
-                                </div>
-                                <div className="tk-scenario-cell">
-                                    <span className="tk-scenario-cell-label">A Legendary clear pays</span>
-                                    <span className="tk-num">{fmt(RARITY.LEGENDARY.dungeonReward * scenario.scale, scenario.scale < 1 ? 1 : 0)} DNG</span>
-                                    <span className="tk-scenario-cell-sub">instead of {RARITY.LEGENDARY.dungeonReward}</span>
-                                </div>
                             </div>
 
                             <svg className="tk-curve" viewBox="0 0 300 80" role="img"
@@ -585,12 +572,12 @@ export default function TokenomicsClient() {
                                     <span className="tk-table-tag tk-num">{fmt(GENESIS_SUPPLY)} fixed</span>
                                 </div>
                                 <div className="tk-table-hero">
-                                    <span className="tk-table-hero-value tk-num">{GENESIS_REWARD_PER_CLEAR}</span>
-                                    <span className="tk-table-hero-unit">DNG per clear, flat</span>
+                                    <span className="tk-table-hero-value tk-num">{GENESIS_DAILY_RUNS}×</span>
+                                    <span className="tk-table-hero-unit">a day, one flat reward for every knight</span>
                                 </div>
                                 <dl className="tk-facts">
                                     <div><dt>Runs a day</dt><dd className="tk-num">{GENESIS_DAILY_RUNS}</dd></div>
-                                    <div><dt>Ceiling a day</dt><dd className="tk-num">{fmt(GENESIS_DAILY_CAPACITY)} DNG</dd></div>
+                                    <div><dt>Payout</dt><dd>The same per clear, whatever the roll</dd></div>
                                     <div><dt>Hash power</dt><dd className="tk-num">{HASH_POWER_MIN} – {fmt(HASH_POWER_MAX)}</dd></div>
                                     <div><dt>Can stake</dt><dd>Yes — raffle tickets + yield</dd></div>
                                     <div><dt>Can enter the raffle</dt><dd>Yes, and only Genesis can</dd></div>
@@ -621,15 +608,13 @@ export default function TokenomicsClient() {
                                 <div className="tk-table-scroll">
                                     <table className="tk-tier-table">
                                         <caption className="tk-sr-only">
-                                            Knight tiers: drop rate, reward per clear, daily runs, ceiling and hash power
+                                            Knight tiers: drop rate, daily runs and hash power
                                         </caption>
                                         <thead>
                                             <tr>
                                                 <th scope="col">Tier</th>
                                                 <th scope="col">Drop</th>
-                                                <th scope="col">Per clear</th>
                                                 <th scope="col">Runs</th>
-                                                <th scope="col">A day</th>
                                                 <th scope="col">HP</th>
                                             </tr>
                                         </thead>
@@ -643,9 +628,7 @@ export default function TokenomicsClient() {
                                                             {tier.name}
                                                         </th>
                                                         <td className="tk-num">{pct(tier.dropRate, tier.dropRate < 0.05 ? 1 : 0)}</td>
-                                                        <td className="tk-num is-strong">{tier.dungeonReward}</td>
-                                                        <td className="tk-num">{tier.dailyRuns}</td>
-                                                        <td className="tk-num">{fmt(dailyCapacity(key))}</td>
+                                                        <td className="tk-num is-strong">{tier.dailyRuns}</td>
                                                         <td className="tk-num">{tier.hashPower}</td>
                                                     </tr>
                                                 );
@@ -655,9 +638,9 @@ export default function TokenomicsClient() {
                                 </div>
                                 <dl className="tk-facts">
                                     <div>
-                                        <dt>Expected earnings</dt>
+                                        <dt>Expected play</dt>
                                         <dd className="tk-num">
-                                            {fmt(model.expectedKnightsPerDay, 1)} DNG a day, {fmt(model.expectedKnightsClears, 2)} clears
+                                            {fmt(model.expectedKnightsClears, 2)} clears a day
                                         </dd>
                                     </div>
                                     <div>

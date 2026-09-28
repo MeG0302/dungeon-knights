@@ -604,7 +604,7 @@ export default function PortfolioClient() {
                                                     hpMin={15}
                                                     hpMax={100}
                                                     rarity={knight.rarity}
-                                                    metaTop={`${meta.dungeonReward} DNG / run · ${meta.dailyRuns} runs`}
+                                                    metaTop={`${meta.dailyRuns} runs a day`}
                                                     metaBottom={`${Math.round(meta.dropRate * 100)}% drop`}
                                                 />
                                             );

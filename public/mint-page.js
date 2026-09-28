@@ -50,42 +50,23 @@ class MintPage {
     const container = document.getElementById('rarityChances');
     if (!container || !window.RARITY_TIERS || !window.RARITY_CONFIG) return;
 
-    // Drop rate alone is not what a buyer needs: the odds say how likely a tier is, the
-    // reward says what the tier is worth, and only both together answer "is this 500 DNG
-    // well spent". The earnings line is the tier's own capacity, so it is the same number
-    // the game pays and `check-token-math` pins.
+    // Drop rate alone is not what a buyer needs either: the odds say how likely a tier is, the run
+    // count says how much it can be played, and hash power says what the vault reads. What a run
+    // *pays* is deliberately not here. The owner's rule, and the reward contract's table is the only
+    // place that number lives — a page that prints it is a second copy nothing updates.
     container.innerHTML = window.RARITY_TIERS.map(tier => {
       const r = window.RARITY_CONFIG[tier];
-      const cap = r.dungeonReward * r.dailyRuns;
       return `
         <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;font-size:12px">
           <span style="display:flex;align-items:center;gap:6px"><span class="dot dot-${tier}"></span> ${r.name}</span>
           <span style="color:var(--text-muted)">${(r.dropRate * 100).toFixed(1)}%</span>
         </div>
         <div style="display:flex;justify-content:space-between;gap:8px;font-size:10px;color:var(--text-muted);margin:-2px 0 3px 16px">
-          <span>${r.dungeonReward} DNG / clear &middot; ${r.dailyRuns} runs</span>
-          <span>${cap} a day &middot; ${r.hashPower} HP</span>
+          <span>${r.dailyRuns} runs a day</span>
+          <span>${r.hashPower} HP</span>
         </div>
       `;
     }).join('');
-
-    // The expectation is the *weighted capacity* (sum of p x reward x runs), not the product
-    // of the average reward and the average run count — the tiers that pay most also get the
-    // most runs, so the product overstates it.
-    const expectedPerDay = window.RARITY_TIERS.reduce((sum, tier) => {
-      const r = window.RARITY_CONFIG[tier];
-      return sum + r.dropRate * r.dungeonReward * r.dailyRuns;
-    }, 0);
-    const price = this.mintPrice();
-
-    container.innerHTML += `
-      <div style="border-top:1px solid var(--border-dim);margin-top:9px;padding-top:9px;font-size:10.5px;line-height:1.6;color:var(--text-muted)">
-        Expected at the published odds and the published budget (scale 1.00):
-        <strong style="color:var(--text-secondary)">${expectedPerDay.toFixed(1)} DNG a day</strong> per knight,
-        so a ${price} DNG summon repays itself in about
-        <strong style="color:var(--text-secondary)">${Math.ceil(price / expectedPerDay)} days</strong> of running every dungeon it is allowed.
-      </div>
-    `;
 
     const perKnight = document.getElementById('cost-per-knight');
     if (perKnight) perKnight.textContent = `${this.mintPrice()} DNG`;

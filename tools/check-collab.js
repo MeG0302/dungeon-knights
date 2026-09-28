@@ -339,9 +339,25 @@ function freshProcess(snippet, env = {}, modulePath = STORE_PATH) {
         Content.NFT_USE.length === 2 && Content.NFT_USE.map((use) => use.key).join(',') === 'knights,genesis');
     rec('  … and every block says what the NFT is actually for',
         Content.NFT_USE.every((use) => use.points.length >= 3 && use.lede.length > 40));
-    rec('the reward table on the page is the game\'s own table',
+    // The owner's rule, and the one `/genesis` already carries: the page says what the dungeons pay
+    // and how a run settles, and quotes no money. Both halves are pinned, because the failure is
+    // symmetric — a figure pasted back into the copy, or a ladder that quietly keeps the payout fields
+    // for the next template to pick up. The sweep is over every string the page renders rather than
+    // over the one line that used to hold it: the same sentence existed in two places before this
+    // pass, and a check naming one of them would have passed while the other still printed the money.
+    const pageCopy = JSON.stringify([
+        Content.HERO, Content.OFFERS, Content.NFT_USE, Content.PARTNER_TERMS, Content.COLLAB_STEPS,
+    ]);
+    const payoutHits = pageCopy.match(/\d[\d,]* \$DNG (×|per |a )|\$DNG ×|\$DNG (per|a) (clear|run|day)/g) || [];
+    rec('the page quotes no per-clear, per-run or per-day $DNG figure',
+        payoutHits.length === 0,
+        payoutHits.length ? payoutHits.join(' | ') : 'the dungeons still pay — the money is not printed');
+    rec('  \u2026 and the tier list it prints carries hash power and no payout field at all',
         Content.KNIGHT_LADDER.length === 5
-        && Content.NFT_USE[0].points.some((point) => point.text.includes(Content.fmtInt(Content.KNIGHT_LADDER[0].perRun))));
+        && Content.KNIGHT_LADDER.every((row) => typeof row.hashPower === 'number'
+            && row.perRun === undefined && row.runsPerDay === undefined && row.perDay === undefined)
+        && Content.NFT_USE[0].points.some((point) => point.text.includes(Content.fmtInt(Content.KNIGHT_LADDER[0].hashPower))),
+        Object.keys(Content.KNIGHT_LADDER[0]).join(', '));
     rec('the partner\'s side is written down, and it is the X post',
         Content.PARTNER_TERMS.items.some((item) => /on your X/.test(item.title))
         && Content.PARTNER_TERMS.items.some((item) => /we share/i.test(item.title) || /we share/i.test(item.text)));
