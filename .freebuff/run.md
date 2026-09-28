@@ -7461,3 +7461,95 @@ inside its box (`overflow-y: auto`, document clipped to the viewport), so §29's
 deployment.
 
 
+
+## 31. The other three places the count was public — `/staking`, `/tokenomics` and the deck
+
+The owner closed §30's open question in one line: *"make /staking, /tokenomics and the pitch deck
+stop printing 200 capsules a week for the raffle, and say TBA there too, without breaking the vault
+maths that read the config value."* §30 ended by naming those three as the places the figure was
+still public; this is that correction, with the one constraint that matters kept intact.
+
+**What was actually printing it.** Five sites, and one of them was not the config at all:
+
+  - `/staking`, Arya's "The numbers" line: *“…and **200** capsules go to the draw.”* — the constant
+    interpolated straight into a sentence. It now reads *“the week's capsules go to the draw — the
+    count is still **TBA**.”*
+  - `/staking`, the **Capsules left** tile: `{pool.left} / {pool.capsulesPerWeek ?? CAPSULES_PER_WEEK}`.
+    On a chain-backed vault this was already a dash, because the contract publishes no `awarded`; on
+    the preview vault it printed `200 / 200`, a figure true only in the first minute of a week. It
+    now prints **TBA** in both states.
+  - `/staking`, the raffle panel's closing line: *“The draw takes **200** winning ticket numbers from
+    the whole pool…”* — a **typed literal**, the only one of the five that no config could ever move.
+    It now says the winner count *“is a figure the owner has not announced, so it reads **TBA**”*.
+  - `/tokenomics`, the capsules section's own lede: `**{CAPSULES_PER_WEEK}** capsules are awarded each
+    week by the raffle…` — now *“the weekly count is still **TBA**”*.
+  - The deck, slide 4's raffle step: `**200 capsules a week** are awarded to staked Genesis by ticket
+    share — never sold.` — now *“the weekly count is **TBA** rather than an announced figure.”*
+
+**Two more figures were the same number wearing an economics hat**, and both were rephrased rather
+than deleted, because the claim they make is still true: `/tokenomics`'s fine print (*“the 200 weekly
+opens alone cover both Knights lines”* → *“the weekly opens alone cover both Knights lines”*, with the
+DNG and the break-even Knights count left exactly where they were) and the deck's economics stat
+(`from here the 200 weekly opens cover both Knights lines` → the same sentence without the count).
+
+**What was deliberately *not* touched, because the instruction protected it.** `CAPSULES_PER_WEEK` is
+still `200` in `lib/staking-config.js`, and every piece of maths that reads it still does:
+`capsuleFundingPerWeek(minted, opensPerWeek = CAPSULES_PER_WEEK)`, `capsuleBreakEvenMinted()`,
+`token-math.js`'s faucet (`perYear = CAPSULES_PER_WEEK * 52`), `staking-source.js`'s
+`capsulesPerWeek`/`left`, and `reward-config.js`'s `economy().capsulesPerWeek`, which
+`/api/staking/config` still serves. On `/staking` that has a visible consequence and it is the
+intended one: the **odds still work**. `expectedCapsules()`-derived figures (the tile's *“Your share
+of the draw: X% → N expected”* and the raffle table's **Expected** column) are computed from the same
+config value, so the page withdrew the *announcement* of the weekly total and kept the arithmetic a
+staker uses to see their odds. The one line that changed shape is the tile's denominator, which was
+never odds — it was a count.
+
+**The imports are the guard, and they differ per file on purpose.** `/tokenomics` and the deck no
+longer import `CAPSULES_PER_WEEK` at all: neither has any maths that needs it, every use was copy, so
+the figure is now *out of scope* on those two pages — a sentence that wants it does not resolve.
+`/staking` keeps the import, because the odds maths is exactly what the owner asked not to break; its
+protection is the three checks below instead.
+
+**Guards, and each one falsified by mutation before it was trusted.** `tools/check-staking.js` gains a
+section of six (**201/201**), `check-token-math.js` four (**68/68**), `check-pitch.js` five
+(**48/48**). Comments are stripped before the copy is read, the way `check-genesis.js` strips them, so
+a guard cannot pass by reading its own explanation. The mutations, each run and watched to fail by
+name, then reverted:
+
+| mutation | fails as |
+| --- | --- |
+| `${CAPSULES_PER_WEEK}` put back into Arya's line | *“never interpolates the constant into its copy”*, and the TBA count drops to 2 |
+| `200 winning ticket numbers` typed back into the raffle panel | *“nor types the count as a literal”* |
+| the deck's disclosure card reverted to *“the 200 weekly capsules split…”* | *“no slide announces a weekly capsule count in any wording”* + *“calls the count undecided, not just the split”* |
+| `{CAPSULES_PER_WEEK}` put back on the tokenomics page | *“no longer imports the constant, so no sentence here can quote it”* + *“says TBA where the weekly count was”* |
+
+**Verified in the browser** (dev server, 3111, a wallet connected so the vault is chain-backed): the
+**Capsules left** tile reads **TBA** with *“Your share of the draw: 0% → 0 expected”* still under it,
+the only bare `200`s left in the page's text are the two hash-power band counts in the power ladder
+(200 Spark, 200 Radiant), and the two hidden-panel strings — Arya's line and the raffle panel's
+closer — are served in `/_next/static/chunks/app/staking/page.js`, which is as live as a wallet with
+no stake can be made to show them. `/tokenomics` renders *“The raffle awards capsules each week to
+staked Genesis Knights, and the weekly count is still TBA”* and *“the weekly opens alone cover both
+Knights lines (617,120 DNG a week at the reference)”*; the only `200` on that page is inside `1,200 DNG`,
+which is a reward figure. `/pitch` serves locally and its rendered text contains **no** `200` at all;
+reading the module directly shows the three changed strings on the `loop`, `economics` and
+`disclosure` slides. `check-styles` keeps all three routes fully styled (`/staking` 149 tokens,
+`/tokenomics` 118, 0 unstyled), and `check-collab` 287/287, `check-genesis` 74/74, `check-wallet-menu`
+19/19, `check-docs` 77/77, `check-identifiers` 4/4, `check-gate` 150/150, `check-back` 18/18,
+`check-contracts` 61 contracts, `check-copies` 2/2 are all green; `npx next build` lists `/staking` at
+20.6 kB, `/tokenomics` at 7.53 kB and `/pitch` at 4.23 kB.
+
+**One operational trap, recorded because it cost a confusing minute.** Running `npx next build` in a
+checkout that already has `next dev` running on the same `.next` directory leaves the dev server
+serving `500`s for `/_next/static/**` (the chunks are replaced underneath it), and the symptom in the
+browser is a page stuck on *“Reading the vault…”* with MIME-type errors in the console — not
+anything that looks like a build problem. The fix is to restart the dev server. Verify the build
+first, then restart 3111, then look at the page.
+
+**Still public, and not in this instruction:** `public/mint-page.js` prints `economy.capsulesPerWeek`
+in the Summoning Chamber's capsule note (*“the 200 weekly opens alone cover the whole Knights reward
+line”*), and `/api/staking/config` still publishes the field for anyone reading the JSON. Both are
+config-as-data; the page's copy is the same announcement this section removed elsewhere, so it is the
+next place to decide about.
+
+

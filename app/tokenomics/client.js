@@ -32,7 +32,11 @@ import BackLink from '../back-link';
 import { SITE_NAME } from '../../lib/site';
 import { forgetWallet, savedAddress, shortAddress } from '../../lib/points-client';
 import {
-    CAPSULES_PER_WEEK,
+    // `CAPSULES_PER_WEEK` is deliberately not imported here. It is still the config value in
+    // `lib/staking-config.js` and every piece of vault maths reads it there; what this page must
+    // not do is print it as an announcement. The weekly draw's size is the owner's to publish,
+    // so the two places that quoted it now read TBA — the same correction `/genesis` and `/collab`
+    // carry, and the reason the figure cannot quietly come back here.
     GENESIS_SUPPLY,
     HASH_POWER_BANDS,
     HASH_POWER_MAX,
@@ -694,10 +698,10 @@ export default function TokenomicsClient() {
                         <div className="tk-section-head">
                             <h2 className="tk-h2">The only way a Knight enters circulation</h2>
                             <p className="tk-section-sub">
-                                <strong>{CAPSULES_PER_WEEK}</strong> capsules are awarded each week by the raffle, to
-                                staked Genesis Knights. They are never sold. Opening one burns it and reveals a Knight at
-                                the drop rates above — and the price rises with the collection, because a flat fee cannot
-                                price a growing one.
+                                The raffle awards capsules each week to staked Genesis Knights, and the weekly
+                                count is still <strong>TBA</strong>. They are never sold. Opening one burns it and
+                                reveals a Knight at the drop rates above — and the price rises with the collection,
+                                because a flat fee cannot price a growing one.
                             </p>
                         </div>
 
@@ -732,7 +736,7 @@ export default function TokenomicsClient() {
 
                                 <p className="tk-capsule-fine">
                                     The marker is the crossover: from about <strong>{fmt(model.breakEven)} Knights</strong>{' '}
-                                    the {CAPSULES_PER_WEEK} weekly opens alone cover <em>both</em> Knights lines
+                                    the weekly opens alone cover <em>both</em> Knights lines
                                     ({fmt((model.lines.knightsDungeon + model.lines.knightsStaking) * 7)} DNG a week at the
                                     reference). Below it, the faucet is subsidised — which is the honest thing to state,
                                     because a capsule faucet that funds itself from day one would mean the Knights lines

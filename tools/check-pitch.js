@@ -304,6 +304,39 @@ rec('the contract count on the delivery slide is the number of addresses the dec
     shipped.includes(String(Object.keys(CONTRACTS).length)) && Object.keys(CONTRACTS).length === siteHexes.size,
     `${Object.keys(CONTRACTS).length} contracts`);
 
+/* The owner's instruction: the three public surfaces stop announcing the weekly capsule count and
+ * say TBA instead, "without breaking the vault maths that read the config value". The maths is
+ * checked elsewhere — the break-even and the funding are the model's own, above — and what is
+ * checked here is that the deck cannot print the count at all: it no longer imports the constant,
+ * so a slide that wanted it would not resolve. The copy half matters just as much, because a claim
+ * deleted quietly is a claim the reader never sees was withdrawn, so the slides have to say what
+ * is undecided rather than just going silent. */
+const deckCode = deckSource.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+rec('the deck no longer imports the weekly capsule count, so no slide can print it',
+    !/CAPSULES_PER_WEEK/.test(deckCode),
+    'the constant stays in lib/staking-config.js, where the vault maths reads it');
+
+const loopSlide = stringsOf(slideOf('loop')?.blocks || []).join(' ');
+rec('the raffle step states TBA rather than a weekly capsule figure',
+    /TBA/.test(loopSlide) && !/capsules a week/i.test(loopSlide),
+    'the number a reader could hold the deck to is withdrawn, not hidden');
+
+const allCopy = SLIDES.flatMap((slide) => stringsOf(slide.blocks)).join(' ');
+rec('  … and no slide announces a weekly capsule count in any wording',
+    !/capsules a week/i.test(allCopy) && !/weekly capsules/i.test(allCopy),
+    'the announcement is gone from the deck, not just from the slide it was on');
+
+const economicsSlide = stringsOf(slideOf('economics')?.blocks || []).join(' ');
+rec('  … while the self-funding claim it still makes is the model\u2019s own break-even',
+    /weekly opens cover both Knights lines/.test(economicsSlide)
+    && economicsSlide.includes(Deck.fmt(MODEL.breakEvenKnights)),
+    `${Deck.fmt(MODEL.breakEvenKnights)} Knights`);
+
+const disclosureSlide = stringsOf(slideOf('disclosure')?.blocks || []).join(' ');
+rec('  … and the disclosure slide calls the count undecided, not just the split',
+    /still TBD/.test(disclosureSlide) && !/weekly capsules/.test(disclosureSlide),
+    'the open question now includes how many capsules a week the raffle gives away');
+
 rec('the closing slide links the site, the game, the source and an explorer, all of them real',
     ['site', 'game', 'code'].every((key) => /^https:\/\//.test(LINKS[key]))
         && LINKS.explorer.startsWith('https://')

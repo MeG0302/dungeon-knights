@@ -900,6 +900,47 @@ section('Loading the vault');
     rec('and the preview is still writable, as a preview', nothingLive.canWrite === true);
 }
 
+// ---------------------------------------------- a figure the page no longer announces
+//
+// The owner's instruction: "/staking … stop printing 200 capsules a week for the raffle, and say
+// TBA there too, without breaking the vault maths that read the config value." The number is
+// still settled in `lib/staking-config.js` and still enforced by the raffle contract; what
+// changed is that this page does not announce it, exactly as `/genesis` and `/collab` already
+// do. Three things could put it back — a literal typed into the copy, the constant interpolated
+// into a sentence, and the tile that divided the week by it — so each is checked here. The odds
+// arithmetic is checked the *other way round*, because that maths is the thing the instruction
+// protects: it has to keep reading the config value.
+section('The weekly capsule count is not announced yet');
+
+{
+    const page = readFileSync(new URL('../app/staking/client.js', import.meta.url), 'utf8');
+    // Comments are stripped first, for the reason `check-genesis.js` strips them: a guard that
+    // reads its own explanation proves nothing.
+    const stated = page.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    const tbas = (stated.match(/\bTBA\b/g) || []).length;
+
+    rec('the page says TBA where the weekly count was, in every place it appeared',
+        tbas >= 3, `${tbas} TBA`);
+
+    rec('  … and never interpolates the constant into its copy',
+        !/\$\{CAPSULES_PER_WEEK\}/.test(stated),
+        'the figure is no longer in scope for a sentence');
+
+    rec('  … nor types the count as a literal', !/\b200\b/.test(stated),
+        'not even once, in prose or in a table');
+
+    rec('  … and the capsules-left tile no longer divides the week by a printed total',
+        !/pool\.capsulesPerWeek/.test(stated),
+        'it reads TBA instead of a figure that was only true in the first minute of a week');
+
+    rec('the odds arithmetic still reads the config value, so the vault maths is intact',
+        /\*\s*CAPSULES_PER_WEEK\b/.test(stated) && CAPSULES_PER_WEEK === 200,
+        `${expectedCapsules(100, 100)} capsules expected when one wallet holds the whole draw`);
+
+    rec('  … and the draw is still explained and still priced, so a staked knight is worth holding',
+        /winning ticket numbers/.test(stated) && /totals\.expectedCapsules/.test(stated));
+}
+
 console.log('');
 const failed = results.filter((r) => !r.pass);
 console.log(`${results.length - failed.length}/${results.length} checks passed`);

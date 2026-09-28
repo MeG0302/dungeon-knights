@@ -379,6 +379,29 @@ rec('the economy block was actually located in the route', servedBlock.length > 
     rec('and the route serves that exact table, not a copy of it', servedTable);
 }
 
+// ------------------------------------------------ a count the page does not announce yet
+//
+// The owner's instruction: "/staking, /tokenomics and the pitch deck … stop printing 200 capsules
+// a week for the raffle, and say TBA there too, without breaking the vault maths that read the
+// config value." The maths is checked above — the faucet, the break-even, the served payload —
+// and this is the copy half of it: the page cannot print the figure any more because it no longer
+// has it, while the vault's own sums keep reading the constant out of `lib/staking-config.js`.
+console.log('\nthe weekly capsule count is not announced yet (app/tokenomics/client.js)');
+{
+    const page = doc('app/tokenomics/client.js')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*\/\/.*$/gm, '');
+    rec('the page no longer imports the constant, so no sentence here can quote it',
+        !/CAPSULES_PER_WEEK/.test(page));
+    rec('  … and it says TBA where the weekly count was', /\bTBA\b/.test(page));
+    rec('  … while the prize and the way it is won are still named',
+        /raffle awards capsules each week to staked Genesis Knights/i.test(page.replace(/\s+/g, ' ')));
+    rec('  … and the vault maths that reads the constant is untouched',
+        model.capsulesPerWeek === CAPSULES_PER_WEEK && CAPSULES_PER_WEEK === 200
+        && capsuleOpenPrice(0) * CAPSULES_PER_WEEK === 100_000,
+        `${FMT.int(capsuleOpenPrice(0) * CAPSULES_PER_WEEK)} DNG a week of open fees at zero Knights`);
+}
+
 console.log('');
 const failed = results.filter((r) => !r.pass);
 console.log(`${results.length - failed.length}/${results.length} checks passed`);

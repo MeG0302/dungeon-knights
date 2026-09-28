@@ -164,7 +164,11 @@ function tourSteps(live, actions) {
                 if (v.poolDng === null) {
                     return 'The weekly pool has not loaded yet, so the DNG figures are blank rather than guessed. Your <em>share</em> of that pool is real either way and it grows every second while you watch.';
                 }
-                return `A pool of <strong>${v.poolDng.toLocaleString()} DNG</strong> is split each week in proportion to tickets, and <strong>${CAPSULES_PER_WEEK}</strong> capsules go to the draw. Both are claimable without unstaking. That pool is a <em>fixed share</em> of everything the vault releases, so the uncapped Knights collection cannot dilute it by growing.`;
+                // The size of the weekly draw is the owner's to announce and is still TBA, so Arya
+                // states that rather than quoting `CAPSULES_PER_WEEK` as though it were settled —
+                // the same correction `/genesis` and `/collab` already carry. The number itself is
+                // untouched in `lib/staking-config.js`, where the vault maths still reads it.
+                return `A pool of <strong>${v.poolDng.toLocaleString()} DNG</strong> is split each week in proportion to tickets, and the week's capsules go to the draw — the count is still <strong>TBA</strong>. Both are claimable without unstaking. That pool is a <em>fixed share</em> of everything the vault releases, so the uncapped Knights collection cannot dilute it by growing.`;
             },
         },
         {
@@ -1374,14 +1378,15 @@ export default function StakingClient() {
                                     <span className="sv-tile-value sv-num" aria-hidden="true">
                                         {isKnights
                                             ? fmtInt(totals.hashPower)
-                                            : pool.left === null
-                                                // The contract does not publish how many of this week's
-                                                // capsules have already been awarded, so on a
-                                                // chain-backed vault this is a dash rather than a
-                                                // repeating "200 left" that would be true only on
-                                                // the first minute of the week.
-                                                ? '—'
-                                                : <>{pool.left} <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>/ {pool.capsulesPerWeek ?? CAPSULES_PER_WEEK}</span></>}
+                                            // The week's capsule total is the owner's to announce and is still
+                                            // TBA, so this tile no longer divides it. It used to print
+                                            // `pool.left` against the weekly figure, and never could honestly:
+                                            // the contract does not publish how many of this week's capsules
+                                            // have already been awarded, so a repeating "200 left" was true
+                                            // only in the first minute of a week. `pool.left` and
+                                            // `pool.capsulesPerWeek` are still computed in
+                                            // `lib/staking-source.js` (and parsed here) — neither is printed.
+                                            : 'TBA'}
                                     </span>
                                     <span className="sv-tile-sub">
                                         {isKnights
@@ -1782,8 +1787,10 @@ export default function StakingClient() {
                                         ))}
                                     </div>
                                     <p className="sv-summary-label">
-                                        The draw takes 200 winning ticket numbers from the whole pool and awards one
-                                        capsule each. With few knights staked, one entry can take most of a week.
+                                        The draw takes winning ticket numbers from the whole pool and awards one
+                                        capsule each; how many winners a week is a figure the owner has not
+                                        announced, so it reads <strong>TBA</strong>. With few knights staked, one
+                                        entry can take most of a week.
                                     </p>
                                     </>
                                 )}
