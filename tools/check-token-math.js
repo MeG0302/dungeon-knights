@@ -386,7 +386,7 @@ rec('the economy block was actually located in the route', servedBlock.length > 
 // config value." The maths is checked above — the faucet, the break-even, the served payload —
 // and this is the copy half of it: the page cannot print the figure any more because it no longer
 // has it, while the vault's own sums keep reading the constant out of `lib/staking-config.js`.
-console.log('\nthe weekly capsule count is not announced yet (app/tokenomics/client.js)');
+console.log('\nthe weekly capsule count is not announced yet (the economy page and the mint)');
 {
     const page = doc('app/tokenomics/client.js')
         .replace(/\/\*[\s\S]*?\*\//g, '')
@@ -400,6 +400,21 @@ console.log('\nthe weekly capsule count is not announced yet (app/tokenomics/cli
         model.capsulesPerWeek === CAPSULES_PER_WEEK && CAPSULES_PER_WEEK === 200
         && capsuleOpenPrice(0) * CAPSULES_PER_WEEK === 100_000,
         `${FMT.int(capsuleOpenPrice(0) * CAPSULES_PER_WEEK)} DNG a week of open fees at zero Knights`);
+
+    // The Summoning Chamber's capsule note is the last place the same announcement lived. It
+    // reads `economy.capsulesPerWeek` off the same payload, so the fix is the same shape: stop
+    // carrying the field, keep the claim it was attached to. The API keeps serving it — that is
+    // config, and the vault maths on the server reads it.
+    const mint = doc('public/mint-page.js')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*\/\/.*$/gm, '');
+    rec('the mint note no longer reads the weekly count off the payload',
+        !/capsulesPerWeek/.test(mint), 'the field stays in the API and out of the copy');
+    rec('  … and says the count is TBA where the capsule award is described',
+        /how many a week is still TBA/.test(mint));
+    rec('  … while the break-even claim it still makes names no count',
+        /crossover: from about/.test(mint)
+        && /the weekly opens alone cover the whole Knights reward line/.test(mint));
 }
 
 console.log('');

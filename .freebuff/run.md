@@ -7546,10 +7546,28 @@ browser is a page stuck on *“Reading the vault…”* with MIME-type errors in
 anything that looks like a build problem. The fix is to restart the dev server. Verify the build
 first, then restart 3111, then look at the page.
 
-**Still public, and not in this instruction:** `public/mint-page.js` prints `economy.capsulesPerWeek`
-in the Summoning Chamber's capsule note (*“the 200 weekly opens alone cover the whole Knights reward
-line”*), and `/api/staking/config` still publishes the field for anyone reading the JSON. Both are
-config-as-data; the page's copy is the same announcement this section removed elsewhere, so it is the
-next place to decide about.
+**The Summoning Chamber, on the owner's call.** `public/mint-page.js` was the fourth page with the
+same line — its capsule note read *“from about 5,746 Knights the **200** weekly opens alone cover the
+whole Knights reward line”*, `economy.capsulesPerWeek` read straight off `/api/staking/config`. The
+owner asked for it in the same breath as the three, and it is now the same shape: the page stops
+assigning the field at all (so no sentence here can reach it), the award sentence says *“never sold,
+and how many a week is still TBA”*, and the crossover sentence keeps its claim and its 5,746 Knights
+without the count. `/api/staking/config` **keeps serving `capsulesPerWeek`** and should: it is config,
+the vault maths on the server reads it, and `check-token-math` asserts both that the field reaches the
+browser and that no page prints it as an announcement — which is the distinction this whole section is
+about.
+
+**The `?v=` stamp question, answered with a header rather than a guess.** `lib/static-pages.js` fetches
+that script as `mint-page.js?v=5`, so the habit would be to bump it — except the file is another
+thread's in-flight edit (a cache-stamp pass over `audio.js`, `layout.css`, `dungeon.js`, `ui.js`), and
+touching it would mean either committing somebody else's hunks or shipping a fix no returning visitor
+sees. Checking the deployed header settled it: `dungeonknights.io/mint-page.js?v=5` answers
+`Cache-Control: public, max-age=0, must-revalidate` with an `ETag`, so every request revalidates and a
+changed file is picked up immediately. The stamps exist for the *videos*, which are fetched by URL and
+reuse cached ranges across query strings; they are not load-bearing for a revalidated script, so
+`lib/static-pages.js` was left alone. The same correction on `/mint`: two mutations, both failing by
+name — re-reading `economy.capsulesPerWeek` into the page, and dropping the *“how many a week is
+still TBA”* clause. `check-token-math` is **71/71**, and `check-rarity` 64/64, `check-styles` all
+styled, `check-copies` 2/2, `check-contracts` 61 contracts.
 
 

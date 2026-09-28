@@ -306,11 +306,12 @@ class MintPage {
    * that will eventually disagree with the contract.
    *
    * It rises with the collection — 500 DNG at zero Knights to 5,000 at the reference size,
-   * flat above it — because a
-   * flat fee cannot price a growing collection — at 200 opens a week a 500-DNG fee funds
-   * roughly 2% of the reward budget, and per-Knight payouts would fall about ten-fold a
-   * year. The marker on the track is the crossover: from about 5,700 Knights the 200 weekly
-   * opens alone cover the whole Knights reward line.
+   * flat above it — because a flat fee cannot price a growing collection: at the weekly open
+   * count `CAPSULES_PER_WEEK` sets in `lib/staking-config.js`, a 500-DNG fee funds roughly 2%
+   * of the reward budget, and per-Knight payouts would fall about ten-fold a year. The marker
+   * on the track is the crossover that config produces, and it is the only one of these
+   * figures this page prints — the weekly count itself is still TBA and is deliberately not
+   * quoted here, the same correction `/staking`, `/tokenomics` and the deck carry.
    */
   async renderCapsules() {
     this.capsuleQuantity = 1;
@@ -318,7 +319,6 @@ class MintPage {
     this.capsulePriceAtReference = null;
     this.capsuleBreakEvenMinted = null;
     this.capsuleReferenceSize = null;
-    this.capsulesPerWeek = null;
     this.capsulesHeld = null;
     this.capsuleReason = null;
     this.isOpeningCapsules = false;
@@ -335,7 +335,9 @@ class MintPage {
       this.capsulePriceAtReference = economy.capsuleOpenPriceAtReference;
       this.capsuleBreakEvenMinted = economy.capsuleBreakEvenMinted;
       this.capsuleReferenceSize = economy.knightsReferenceSize;
-      this.capsulesPerWeek = economy.capsulesPerWeek;
+      // `economy.capsulesPerWeek` is deliberately not read. The API still serves it — it is
+      // config, and the vault maths reads it — but this note is copy, and the weekly count is
+      // not announced yet. Not carrying the field is what keeps it out of a sentence here.
       // `config.reason` is deliberately *not* used here. It explains why the *Staking
       // Vault* is showing preview data, which is not a fact about this page — the button
       // label and the holdings chip already say capsules are not deployed.
@@ -420,13 +422,14 @@ class MintPage {
     if (this.capsuleReason) {
       note.push(this.capsuleReason);
     } else if (this.capsuleReferenceSize) {
-      note.push('Capsules are awarded by the weekly draw to staked Genesis Knights — never sold. '
+      note.push('Capsules are awarded by the weekly draw to staked Genesis Knights — never sold, '
+        + 'and how many a week is still TBA. '
         + 'Opening one reveals a Knight at the published odds, and the price rises with the '
         + `collection: ${fmt(this.capsulePrice)} DNG at zero Knights to ${fmt(this.capsulePriceAtReference)} `
         + `at ${fmt(this.capsuleReferenceSize)}.`);
       if (this.capsuleBreakEvenMinted) {
         note.push(`The marker is the crossover: from about ${fmt(this.capsuleBreakEvenMinted)} Knights `
-          + `the ${fmt(this.capsulesPerWeek)} weekly opens alone cover the whole Knights reward line.`);
+          + 'the weekly opens alone cover the whole Knights reward line.');
       }
     }
     set('capsule-note', note.join(' '));
