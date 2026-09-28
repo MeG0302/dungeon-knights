@@ -1,7 +1,7 @@
 import CollabClient from './client';
 import { listedProjects } from '../../lib/collab-store';
 import { SITE_NAME } from '../../lib/site';
-import { CAPSULES_PER_WEEK, GENESIS_SUPPLY } from '../../lib/staking-config';
+import { GENESIS_SUPPLY } from '../../lib/staking-config';
 
 /**
  * `/collab` — the page a partner is sent to, which is why it is public on the apex.
@@ -22,10 +22,14 @@ import { CAPSULES_PER_WEEK, GENESIS_SUPPLY } from '../../lib/staking-config';
 
 export const dynamic = 'force-dynamic';
 
+// The prize named here and in the offers below is what it actually is: **Knight capsules**, handed to
+// the partner's community. There is no such thing as a Genesis capsule, and no capsule count belongs
+// in this description — how many capsules a collab carries is agreed per collaboration, and the
+// weekly raffle's own count is not published yet (see `/genesis`, which says TBA).
 const DESCRIPTION =
   `Partner with ${SITE_NAME}: free Knight capsules and Genesis NFT whitelist spots for your community, `
   + `a collab post we share, and a registration tab on this page. ${GENESIS_SUPPLY.toLocaleString('en-US')} `
-  + `Genesis Knights, ${CAPSULES_PER_WEEK.toLocaleString('en-US')} capsules a week.`;
+  + `Genesis Knights, and a weekly Knight-capsule raffle.`;
 
 export const metadata = {
   title: { absolute: `Collab · ${SITE_NAME}` },

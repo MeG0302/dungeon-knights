@@ -324,8 +324,15 @@ function freshProcess(snippet, env = {}, modulePath = STORE_PATH) {
         && /free/i.test(capsuleOffer.points.join(' ')));
     rec('the Genesis offer quotes the real supply',
         genesisOffer.summary.includes(Content.fmtInt(Staking.GENESIS_SUPPLY)), genesisOffer.summary.slice(0, 80));
-    rec('  … and the real raffle',
-        genesisOffer.points.join(' ').includes(`${Content.fmtInt(Staking.CAPSULES_PER_WEEK)} capsules a week`));
+    // The raffle is described, and the count is *not* stated — the owner's correction: the prize is
+    // Knight capsules, and "200 capsules" was never a promise anybody had made. Neither offer states
+    // a capsule count now, and the raffle's own count is TBA on `/genesis`.
+    rec('  … and the raffle it is entered into, with no capsule count attached to it',
+        /weekly Knight-capsule raffle|weekly draw/.test(genesisOffer.points.join(' '))
+        && !genesisOffer.points.join(' ').includes(Content.fmtInt(Staking.CAPSULES_PER_WEEK)));
+    rec('the prize named is the Knight capsule, and no line promises a Genesis capsule',
+        /Knight capsules/.test(capsuleOffer.title)
+        && !/Genesis capsule/i.test(JSON.stringify([Content.OFFERS, Content.NFT_USE, Content.HERO])));
     rec('both prizes say what a place costs, rather than implying it is free',
         /not a free one/.test(genesisOffer.fine));
     rec('the NFT utility has a side for each collection',
@@ -1045,6 +1052,11 @@ function freshProcess(snippet, env = {}, modulePath = STORE_PATH) {
         && !/collab-ratios/.test(subSource));
     rec('the copy a project reads at each step is in the content module',
         ['pendingTitle', 'approvedTitle', 'rejectedTitle', 'needsWallet', 'cardNote'].every((key) => typeof Content.SUBMISSION[key] === 'string'));
+    // The card is one file of the artwork with the two portraits replaced, and the note said otherwise
+    // for two sections after that was true — "Both sizes are the same pieces … the banner" described
+    // the first design. Copy that outlives the thing it describes is the failure this catches.
+    rec('the card note describes the card that is actually made, at one size',
+        /1600×900/.test(Content.SUBMISSION.cardNote) && !/both sizes|the banner/i.test(Content.SUBMISSION.cardNote));
     rec('  … and it names the account that answers', Content.SUBMISSION.pendingBody.includes('hear back from us'));
 
     // ------------------------------------------------------------------------ the owner's tool

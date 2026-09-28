@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import BackLink from '../back-link';
 import { GENESIS_PFP } from '../../lib/knights';
 import {
-    CAPSULES_PER_WEEK, GENESIS_SUPPLY, HASH_POWER_BANDS, HASH_POWER_MAX, HASH_POWER_MIN,
-    TICKET_CAP_HOURS, ticketsPerHour, weekEnd,
+    GENESIS_SUPPLY, HASH_POWER_BANDS, HASH_POWER_MAX, HASH_POWER_MIN,
+    TICKET_CAP_HOURS, ticketsPerHour,
 } from '../../lib/staking-config';
 
 /**
@@ -50,17 +50,6 @@ function rangeOf(band) {
     return `${fmtInt(band.lo)}–${fmtInt(band.hi)}`;
 }
 
-function fmtCountdown(ms) {
-    const total = Math.max(0, Math.floor(ms / 1000));
-    const days = Math.floor(total / 86400);
-    const hours = Math.floor((total % 86400) / 3600);
-    const mins = Math.floor((total % 3600) / 60);
-    const secs = total % 60;
-    if (days > 0) return `${days}d ${hours}h ${mins}m`;
-    if (hours > 0) return `${hours}h ${mins}m ${secs}s`;
-    return `${mins}m ${secs}s`;
-}
-
 export default function GenesisClient({ shots = [] }) {
     const [email, setEmail] = useState('');
     const [address, setAddress] = useState('');
@@ -68,17 +57,6 @@ export default function GenesisClient({ shots = [] }) {
     const [busy, setBusy] = useState(false);
     const [done, setDone] = useState(false);
     const [message, setMessage] = useState(null);
-    const [nowMs, setNowMs] = useState(() => Date.now());
-
-    // The clock behind the supply bar's countdown. A second is the resolution the bar prints, and a
-    // hidden tab stops paying for it — a background tab has no reader to keep current.
-    useEffect(() => {
-        const id = setInterval(() => {
-            if (typeof document !== 'undefined' && document.hidden) return;
-            setNowMs(Date.now());
-        }, 1000);
-        return () => clearInterval(id);
-    }, []);
 
     /**
      * No minted count is published yet, so the bar states the supply rather than a fraction of it.
@@ -255,9 +233,14 @@ export default function GenesisClient({ shots = [] }) {
                                         style={{ width: minted != null && GENESIS_SUPPLY ? `${Math.min(100, (minted / GENESIS_SUPPLY) * 100)}%` : '100%' }}
                                     />
                                 </span>
-                                <span className="gn-supplybar-countdown nft-num" aria-live="off">
-                                    Draw in <strong>{fmtCountdown(weekEnd(nowMs) - nowMs)}</strong> · {fmtInt(CAPSULES_PER_WEEK)} capsules
-                                </span>
+                                {/* The date of the next draw and how many capsules are in it are both the
+                                    owner's to announce, and neither is settled — so the bar states neither
+                                    rather than printing a date the raffle may not keep. Both figures exist
+                                    in `lib/staking-config.js` (`weekEnd`, `CAPSULES_PER_WEEK`) and come
+                                    back here from there when they are decided; until then this page prints
+                                    no countdown, which is also why it runs no clock: a page that is wrong
+                                    once a second is a worse neighbour than a page that says TBA. */}
+                                <span className="gn-supplybar-countdown nft-num">Next draw <strong>TBA</strong></span>
                             </div>
 
                             <div className="gn-hero">
@@ -283,7 +266,7 @@ export default function GenesisClient({ shots = [] }) {
                                 </div>
                                 <div className="gn-tile">
                                     <span className="gn-tile-label">Capsules a week</span>
-                                    <span className="gn-tile-value gn-num">{fmtInt(CAPSULES_PER_WEEK)}</span>
+                                    <span className="gn-tile-value">TBA</span>
                                     <span className="gn-tile-sub">Awarded to staked Genesis knights, split by tickets.</span>
                                 </div>
                             </div>
@@ -379,7 +362,7 @@ export default function GenesisClient({ shots = [] }) {
                                     </div>
                                     <div className="gn-box">
                                         <div className="gn-box-head">The weekly draw</div>
-                                        <div className="gn-box-value gn-num">{fmtInt(CAPSULES_PER_WEEK)}<span className="gn-box-unit">capsules / week</span></div>
+                                        <div className="gn-box-value">TBA<span className="gn-box-unit">capsules / week</span></div>
                                         <p className="gn-box-copy">
                                             A staked Genesis knight is entered automatically, and one ticket can win. Each
                                             capsule opens into one Knight from the summonable collection, and its tier decides

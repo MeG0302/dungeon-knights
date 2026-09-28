@@ -81,6 +81,25 @@ const pageSource = code(read(PAGE));
 const css = code(read('public/css/genesis.css'));
 
 /**
+ * The page's own words, with the places a number can live without being a figure it states.
+ *
+ * `width={168}` is a crest's pixel size and `href="/css/genesis.css?v=4"` is a cache key;
+ * neither is a claim about the collection. `Math.floor(ms / 1000)` and a `}, 1000)` timer are
+ * milliseconds by definition — 1,000 hash power and one second are not the same kind of fact.
+ *
+ * Everything else stays: JSX text, rendered `{...}` values and string literals, so a published
+ * figure typed into the page's prose is still caught. These three exclusions exist because the
+ * blunt rule was red against a page that reads every figure from `lib/staking-config.js` and
+ * `lib/reward-config.js`, and a guard that is wrong about the correct tree is one nobody reads.
+ */
+const stated = clientSource
+    .replace(/=\{[^{}]*\}/g, '=')
+    .replace(/="[^"]*"/g, '="')
+    .replace(/='[^']*'/g, "='")
+    .replace(/\b\w+\s*\/\s*1000\b/g, ' ')
+    .replace(/,\s*1000\s*\)/g, ')');
+
+/**
  * The same source with runs of whitespace collapsed — because JSX wraps prose across lines.
  *
  * This is not tidiness: a check for "enforced by the game contract" failed against a page that says
@@ -102,8 +121,12 @@ rec('the collection page exists, and the server component that feeds it', !!clie
 // Named imports, so a check can tell "used" from "mentioned in the import line". This is the list a
 // failure should send somebody to: a figure that is imported and then printed as a literal would
 // pass an "is it imported" check and fail the one below.
+// `CAPSULES_PER_WEEK` is deliberately absent from this list: the page no longer imports it at all,
+// because the number of capsules in the weekly raffle is not announced yet and the page says TBA.
+// The `PUBLISHED` list below still holds it, which is what keeps the figure from coming back as a
+// literal the moment somebody decides the bar looks empty.
 const IMPORTED = [
-    'GENESIS_SUPPLY', 'HASH_POWER_MIN', 'HASH_POWER_MAX', 'HASH_POWER_BANDS', 'CAPSULES_PER_WEEK',
+    'GENESIS_SUPPLY', 'HASH_POWER_MIN', 'HASH_POWER_MAX', 'HASH_POWER_BANDS',
     'TICKET_CAP_HOURS', 'ticketsPerHour',
 ];
 for (const name of IMPORTED) {
@@ -132,10 +155,23 @@ for (const [what, value] of PUBLISHED) {
     const shown = Number(value).toLocaleString('en-US');
     // `1,024` or `1024`; `1,200` or `1200`.
     const pattern = new RegExp(`\\b${shown.replace(/,/g, ',?')}\\b`);
-    const hit = clientSource.match(pattern);
+    const hit = stated.match(pattern);
     rec(`${what} (${shown}) is not typed into the page`, !hit,
         hit ? 'a figure copied into the page drifts the moment the table moves' : 'read from config');
 }
+
+section('No draw date, no capsule count — both are TBA');
+// The owner's instruction: "remove draw in 6 days 15 hour and 200 capsule just write TBA". Neither
+// number is settled, and the bar that carried them was the only thing on the page that had to tick,
+// so the page runs no clock at all now. These three checks are what stop a countdown creeping back
+// in: a literal count is caught above, an import by the check on that import, and a clock by this one.
+rec('the page says TBA where the next draw and its capsule count were',
+    (clientSource.match(/\bTBA\b/g) || []).length >= 2,
+    `${(clientSource.match(/\bTBA\b/g) || []).length} TBA`);
+rec('  … and runs no clock counting down to one',
+    !/setInterval|requestAnimationFrame|fmtCountdown|weekEnd/.test(clientSource));
+rec('  … while still saying what the raffle is, so a staked knight is still worth holding',
+    /weekly (Knight-capsule )?raffle|weekly draw|The weekly draw/i.test(stated));
 
 section('No reward figure is stated anywhere on the page');
 // The instruction, in the owner's words: "you dont need to tell 300 DNG/ clear or any dng/run or

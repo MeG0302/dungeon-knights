@@ -7392,3 +7392,61 @@ routes link the same stamped sheet so they cannot drift apart. Also green: `chec
 `/collab/review` as `○`. `public/css/collab.css` stamps `?v=5`.
 
 
+
+## 30. No capsule count and no draw date — the prize is a Knight capsule, and the number is TBA
+
+Two corrections from the owner, in one message: *"i never said we will give 200 genesis capsules it was
+simply knight capsule … for the genesis page you need to remove draw in 6 days 15 hour and 200 capsule
+just write TBA"*.
+
+They were both right, and both were on pages that had gone live hours earlier.
+
+**The collab page promised a number nobody had promised.** The Genesis offer read *"Genesis is the only
+collection that draws: 200 capsules a week go to staked Genesis knights"*, and the utility list
+repeated it. That is `CAPSULES_PER_WEEK` read out of `lib/staking-config.js` — the vault's own config —
+printed on a page whose reader is a partner deciding what their community is being offered. A config
+value is not an announcement, and "Genesis … 200 capsules" is one word away from offering 200 Genesis
+capsules, which is not a thing that exists. The prize is a **Knight capsule** — the one that opens into
+a Knight from the summonable collection — and how many of them *a collab* carries is agreed per
+collaboration, which the offer's fine print already said.
+
+**The genesis page printed a countdown to a date that is not scheduled.** *"Draw in 6d 15h 12m · 200
+capsules"* was the supply bar's second line, and the same 200 appeared as a tile (*Capsules a week*) and
+as a box (*The weekly draw*). `weekEnd()` computes a Friday from the clock, so it was always about to
+invent a date.
+
+**What the two pages say now.** `/genesis`: `Next draw TBA` in the bar, `TBA` for the capsules-a-week
+tile, `TBA` capsules / week in the draw box. The number is still owned by `staking-config.js` and the
+page still imports no literal — the three lines are the only place the value would go back, and
+`tools/check-genesis.js` still holds `CAPSULES_PER_WEEK` in its `PUBLISHED` list so the figure cannot
+creep in as a typed 200 either. `/collab`: the raffle is described and counted nowhere ("the weekly
+Knight-capsule raffle goes to staked Genesis knights, split by tickets"), and both pages' descriptions
+dropped the figure — a meta description is quoted by search engines and chat cards long after it stops
+being true.
+
+**The countdown took the clock with it, and that is a real simplification.** Removed: `fmtCountdown`, the
+`nowMs` state, the one-second `setInterval` and the `useEffect` import, plus `weekEnd` and
+`CAPSULES_PER_WEEK` from the page's imports. The supply bar was the only thing on `/genesis` that had to
+re-render every second; a static page that says TBA is cheaper and cannot be wrong once a second.
+`check-genesis` now asserts there is no `setInterval`/`requestAnimationFrame`/`fmtCountdown`/`weekEnd`
+left in the client at all.
+
+**Also found while re-reading the collab page for exactly this kind of staleness:** `SUBMISSION.cardNote`
+still said *"Both sizes are the same pieces: your picture, ours, the banner, and the prize line"* — the
+first card design, two sections after §25 replaced it with one 1600×900 file that **is** the artwork.
+It now describes the card that is actually made, and `check-collab` asserts the note names that one
+size, so the copy cannot outlive the art again.
+
+**Verified in the browser** (dev server, 3111): the bar reads `GENESIS SUPPLY 1,024 fixed · Next draw
+TBA`, the tile `CAPSULES A WEEK TBA`, the box `TBA CAPSULES / WEEK`, and nothing on the page ticks. The
+four `200`s left on `/genesis` are hash-power band counts (200 Spark, 200 Radiant), not capsules. On
+`/collab` the offer reads *the weekly Knight-capsule raffle*, no capsule count appears anywhere in the
+rendered text, and no line promises a "Genesis capsule". `check-collab` **287/287**, `check-genesis`
+**74/74**, and `check-styles`, `check-wallet-menu`, `check-docs`, `check-identifiers`, `check-gate` all
+green; `npx next build` compiles with `/genesis` at 4.92 kB and `/collab` at 8.35 kB.
+
+**Left deliberately alone, and worth a decision:** `/staking`, `/tokenomics` and the pitch deck still
+print 200 capsules a week for the same raffle, because they quote the vault's own config against its
+own math. If the count is genuinely unannounced, those are the next three places it is still public.
+
+

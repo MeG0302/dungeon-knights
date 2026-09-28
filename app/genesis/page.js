@@ -1,7 +1,7 @@
 import GenesisClient from './client';
 import { readShots } from '../../lib/genesis-shots';
 import { SITE_NAME } from '../../lib/site';
-import { CAPSULES_PER_WEEK, GENESIS_SUPPLY, HASH_POWER_MAX, HASH_POWER_MIN } from '../../lib/staking-config';
+import { GENESIS_SUPPLY, HASH_POWER_MAX, HASH_POWER_MIN } from '../../lib/staking-config';
 
 /**
  * `/genesis` — the collection page the landing page's second button opens.
@@ -18,7 +18,10 @@ import { CAPSULES_PER_WEEK, GENESIS_SUPPLY, HASH_POWER_MAX, HASH_POWER_MIN } fro
 
 export const dynamic = 'force-dynamic';
 
-const DESCRIPTION = `The ${GENESIS_SUPPLY.toLocaleString('en-US')} Genesis Knights. Fixed supply, ${HASH_POWER_MIN}–${HASH_POWER_MAX} hash power, a ${CAPSULES_PER_WEEK}-capsule raffle every week, and a share of the weekly $DNG pool.`;
+// No capsule figure and no date in the description either: the weekly Knight-capsule raffle has no
+// published count or schedule yet, and a meta description is quoted by search engines and chat
+// cards long after it stops being true. The page itself says TBA for both.
+const DESCRIPTION = `The ${GENESIS_SUPPLY.toLocaleString('en-US')} Genesis Knights. Fixed supply, ${HASH_POWER_MIN}–${HASH_POWER_MAX} hash power, a weekly Knight-capsule raffle, and a share of the weekly $DNG pool.`;
 
 export const metadata = {
     title: { absolute: `Genesis Knights · ${SITE_NAME}` },
