@@ -168,11 +168,23 @@ function reactSheets(source) {
     return [...new Set(['theme.css', ...hrefs])];
 }
 
-/** The `lib/` modules a route's client imports, one level deep. */
-function importedLibs(source) {
+/**
+ * The modules a route's client reaches for, one hop out — and there are two kinds of hop.
+ *
+ * The `lib/` modules it imports, and its **siblings**: the files sitting next to it in its own route
+ * folder. The sibling hop was missing until `/collab` needed it, and the gap was real rather than
+ * theoretical — `app/points/client.js` renders `./dungeon`, so half of that page's markup was in a
+ * file no sweep read. A route that is more than one file is not an exotic shape here.
+ */
+function importedLibs(source, dir) {
     const libs = [];
     for (const match of source.matchAll(/from\s+'\.\.\/\.\.\/lib\/([\w-]+)'/g)) {
         libs.push(read(`lib/${match[1]}.js`));
+    }
+    if (dir) {
+        for (const match of source.matchAll(/from\s+'\.\/([\w-]+)'/g)) {
+            libs.push(read(`${dir}/${match[1]}.js`));
+        }
     }
     return libs;
 }
@@ -202,16 +214,30 @@ for (const [key, page] of Object.entries(STATIC_PAGES)) {
     routes.push({ name: `/${key === 'landing' ? '' : key}`, sources, sheets, key, page });
 }
 
+/**
+ * A React route, one directory: its client, the `lib/` modules and siblings it reaches for, and the
+ * sheets it links.
+ *
+ * A **nested** route is the same shape one level down — `/collab/review` is the owner's half of
+ * `/collab` — and it is not exotic: `app/page.js` plus `app/<name>/page.js` was the whole list until a
+ * route needed to live under another one. Reading only the top level would have reported "all styled"
+ * about a page nothing had looked at, which is the failure this file exists for in the first place.
+ */
+function reactRoute(relDir, name) {
+    const client = read(`${relDir}/client.js`);
+    if (!client) return null;
+    return { name, sources: [client, ...importedLibs(client, relDir)], sheets: reactSheets(client).map(sheetPath) };
+}
+
 for (const dir of fs.readdirSync(path.join(ROOT, 'app'), { withFileTypes: true })) {
-    if (!dir.isDirectory()) continue;
-    const clientRel = `app/${dir.name}/client.js`;
-    const client = read(clientRel);
-    if (!client) continue;
-    routes.push({
-        name: `/${dir.name}`,
-        sources: [client, ...importedLibs(client)],
-        sheets: reactSheets(client).map(sheetPath),
-    });
+    if (!dir.isDirectory() || dir.name === 'api') continue;
+    const top = reactRoute(`app/${dir.name}`, `/${dir.name}`);
+    if (top) routes.push(top);
+    for (const sub of fs.readdirSync(path.join(ROOT, 'app', dir.name), { withFileTypes: true })) {
+        if (!sub.isDirectory()) continue;
+        const nested = reactRoute(`app/${dir.name}/${sub.name}`, `/${dir.name}/${sub.name}`);
+        if (nested) routes.push(nested);
+    }
 }
 
 // ------------------------------------------- a script's runtime dependency, which nothing implies

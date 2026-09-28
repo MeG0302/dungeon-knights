@@ -28,6 +28,11 @@ export default function sitemap() {
     // land on. It is on the apex's public list for the same reason, and `tools/check-gate.js`
     // asserts the two agree rather than assuming they do.
     { path: '/docs', priority: 0.8, changeFrequency: 'weekly' },
+    // The collaboration terms. Here because it is a page a partner is *sent*, which means it is a
+    // page somebody has to be able to find without being handed the URL — and it is on the apex's
+    // public list (`lib/app-routing.js`), so listing it is a promise the apex keeps. The two have to
+    // agree; `tools/check-collab.js` asserts they do.
+    { path: '/collab', priority: 0.6, changeFrequency: 'weekly' },
     // On this list for the same reason `/points` is: a player who won something should be able to
     // find the page that pays it without knowing a URL.
     ...(REDEEM_LIVE ? [{ path: '/redeem', priority: 0.9, changeFrequency: 'weekly' }] : []),

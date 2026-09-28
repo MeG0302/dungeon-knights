@@ -60,6 +60,14 @@ for (const entry of fs.readdirSync(path.join(ROOT, 'app'), { withFileTypes: true
     if (!entry.isDirectory() || entry.name === 'api') continue;
     const page = `app/${entry.name}/page.js`;
     if (exists(page)) routes.push({ route: `/${entry.name}`, page });
+    // One level down as well, because a route can be a page *under* another one — `/collab/review`
+    // is the owner's half of `/collab`. The claim this file makes is "every route", and a route the
+    // list does not contain is a route the claim quietly stopped being about.
+    for (const sub of fs.readdirSync(path.join(ROOT, 'app', entry.name), { withFileTypes: true })) {
+        if (!sub.isDirectory()) continue;
+        const nested = `app/${entry.name}/${sub.name}/page.js`;
+        if (exists(nested)) routes.push({ route: `/${entry.name}/${sub.name}`, page: nested });
+    }
 }
 routes.sort((a, b) => (a.route === '/' ? -1 : b.route === '/' ? 1 : a.route.localeCompare(b.route)));
 

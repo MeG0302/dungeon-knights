@@ -1,0 +1,1215 @@
+/* ==========================================================================
+   Collab terms — /collab
+   ==========================================================================
+
+   A page a partner reads top to bottom, so the sheet is written in reading
+   order: the head, the hero, the offer, the prizes, the ask, the steps, and
+   then the registration tab. Nothing here is decoration for its own sake —
+   the page's job is to be legible to somebody deciding whether to work with
+   the project, and to a community that then has to sign a wallet.
+
+   It wears the house palette rather than a marketing skin: the same charcoal
+   stone, bronze and single gold accent as `/docs` and `/points`, so a partner
+   arriving from either recognises where they are. Every colour is a
+   `theme.css` variable with a literal fallback, because this sheet is loaded
+   after the theme and must not depend on being loaded at all.
+   ========================================================================== */
+
+.collab-page {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background:
+        radial-gradient(1100px 640px at 50% -8%, rgba(212, 175, 55, 0.06), rgba(13, 10, 8, 0) 70%),
+        var(--bg-void, #0d0a08);
+    color: var(--text-primary, #e8e2d7);
+}
+
+/* ------------------------------------------------------------------ the head */
+.collab-head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px clamp(14px, 3vw, 34px);
+    border-bottom: 1px solid var(--border-dim, #2a241d);
+    flex-wrap: wrap;
+}
+
+.collab-head-titles {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.collab-title {
+    margin: 0;
+    font-family: var(--font-display, Cinzel, serif);
+    font-size: clamp(1.15rem, 2.4vw, 1.6rem);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent-gold, #d4af37);
+}
+
+.collab-sub {
+    margin: 0;
+    font-size: 12px;
+    color: var(--text-muted, #8a8177);
+}
+
+.collab-wallet {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* ---------------------------------------------------------------- the banners */
+.collab-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 12px clamp(14px, 3vw, 34px) 0;
+    padding: 10px 14px;
+    border-radius: var(--radius-md, 8px);
+    font-size: 12.5px;
+    border: 1px solid var(--border-base, #33291d);
+    background: var(--bg-panel, #161310);
+}
+
+.collab-banner.is-error {
+    border-color: var(--tint-mine, #7a2f2f);
+    color: #f0c9c9;
+}
+
+.collab-banner.is-notice {
+    border-color: var(--border-bronze, #5a4a2c);
+    color: var(--text-secondary, #c9c1b4);
+}
+
+.collab-banner-x {
+    margin-left: auto;
+    background: none;
+    border: 0;
+    color: inherit;
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1;
+}
+
+/* ------------------------------------------------------------------- the body */
+.collab-main {
+    width: 100%;
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: clamp(18px, 4vw, 40px) clamp(14px, 3vw, 34px) 64px;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(30px, 5vw, 54px);
+}
+
+/* ------------------------------------------------------------------- the hero */
+.collab-hero {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: clamp(18px, 3vw, 30px) clamp(16px, 3vw, 28px);
+    border: 1px solid var(--border-bronze, #5a4a2c);
+    border-radius: var(--radius-lg, 12px);
+    background:
+        linear-gradient(180deg, rgba(212, 175, 55, 0.05), rgba(212, 175, 55, 0) 60%),
+        var(--bg-panel, #161310);
+}
+
+.collab-kicker {
+    margin: 0;
+    font-family: var(--font-heading, Cinzel, serif);
+    font-size: 11px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--text-muted, #8a8177);
+}
+
+.collab-headline {
+    margin: 0;
+    font-family: var(--font-display, Cinzel, serif);
+    font-size: clamp(1.5rem, 3.6vw, 2.4rem);
+    line-height: 1.15;
+    color: var(--accent-gold, #d4af37);
+}
+
+.collab-lead {
+    margin: 0;
+    font-size: clamp(0.95rem, 1.5vw, 1.05rem);
+    line-height: 1.6;
+    color: var(--text-secondary, #c9c1b4);
+    max-width: 68ch;
+}
+
+.collab-hero-sub {
+    margin: 0;
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--text-muted, #8a8177);
+    max-width: 68ch;
+}
+
+.collab-jump {
+    align-self: flex-start;
+    margin-top: 4px;
+    font-family: var(--font-heading, Cinzel, serif);
+    font-size: 12px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    text-decoration: none;
+    color: var(--accent-gold, #d4af37);
+    border-bottom: 1px solid var(--border-bronze, #5a4a2c);
+    padding-bottom: 2px;
+}
+
+.collab-jump:hover {
+    border-bottom-color: var(--accent-gold, #d4af37);
+}
+
+/* ---------------------------------------------------------------- the sections */
+.collab-section {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    scroll-margin-top: 18px;
+}
+
+.collab-section-head {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.collab-eyebrow {
+    margin: 0;
+    font-family: var(--font-heading, Cinzel, serif);
+    font-size: 10.5px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent-bronze, #b08d57);
+}
+
+.collab-section-title {
+    margin: 0;
+    font-family: var(--font-display, Cinzel, serif);
+    font-size: clamp(1.2rem, 2.4vw, 1.7rem);
+    letter-spacing: 1px;
+    color: var(--text-primary, #e8e2d7);
+}
+
+.collab-section-sub {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-muted, #8a8177);
+    max-width: 72ch;
+}
+
+/* ------------------------------------------------------------- the two offers */
+.collab-offers {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+    gap: 16px;
+}
+
+.collab-offer {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 18px clamp(14px, 2vw, 20px);
+    border: 1px solid var(--border-base, #33291d);
+    border-radius: var(--radius-lg, 12px);
+    background: var(--bg-panel, #161310);
+}
+
+.collab-offer-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.collab-offer-title {
+    margin: 0;
+    font-family: var(--font-heading, Cinzel, serif);
+    font-size: 1.1rem;
+    color: var(--accent-gold, #d4af37);
+}
+
+.collab-offer-tag {
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-muted, #8a8177);
+    border: 1px solid var(--border-dim, #2a241d);
+    border-radius: 999px;
+    padding: 2px 9px;
+}
+
+.collab-offer-summary {
+    margin: 0;
+    font-size: 13.5px;
+    line-height: 1.6;
+    color: var(--text-secondary, #c9c1b4);
+}
+
+.collab-list {
+    margin: 0;
+    padding: 0 0 0 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.collab-list-item {
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--text-secondary, #c9c1b4);
+}
+
+.collab-list-item::marker {
+    color: var(--accent-bronze, #b08d57);
+}
+
+.collab-fine {
+    margin: auto 0 0;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border-dim, #2a241d);
+    font-size: 11.5px;
+    line-height: 1.55;
+    color: var(--text-muted, #8a8177);
+}
+
+/* ------------------------------------------------------------ the NFT utility */
+.collab-uses {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 16px;
+}
+
+.collab-use {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 18px clamp(14px, 2vw, 20px);
+    border: 1px solid var(--border-base, #33291d);
+    border-radius: var(--radius-lg, 12px);
+    background: linear-gradient(180deg, rgba(212, 175, 55, 0.035), rgba(212, 175, 55, 0) 40%), var(--bg-panel, #161310);
+}
+
+.collab-use-title {
+    margin: 0;
+    font-family: var(--font-heading, Cinzel, serif);
+    font-size: 1rem;
+    color: var(--accent-gold, #d4af37);
+}
+
+.collab-use-lede {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-secondary, #c9c1b4);
+}
+
+.collab-points {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.collab-point {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-dim, #2a241d);
+}
+
+.collab-point-label {
+    margin: 0;
+    font-family: var(--font-heading, Cinzel, serif);
+    font-size: 11px;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--accent-bronze, #b08d57);
+}
+
+.collab-point-text {
+    margin: 0;
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--text-secondary, #c9c1b4);
+}
+
+/* ------------------------------------------------------------- the partner ask */
+.collab-terms {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 14px;
+}
+
+.collab-term {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 16px;
+    border: 1px solid var(--border-base, #33291d);
+    border-left: 3px solid var(--accent-bronze, #b08d57);
+    border-radius: var(--radius-md, 8px);
+    background: var(--bg-panel, #161310);
+}
+
+.collab-term-title {
+    margin: 0;
+    font-family: var(--font-heading, Cinzel, serif);
+    font-size: 0.95rem;
+    color: var(--text-primary, #e8e2d7);
+}
+
+.collab-term-text {
+    margin: 0;
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--text-secondary, #c9c1b4);
+}
+
+/* ------------------------------------------------------------------ the steps */
+.collab-steps {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.collab-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 14px 16px;
+    border: 1px solid var(--border-base, #33291d);
+    border-radius: var(--radius-md, 8px);
+    background: var(--bg-panel, #161310);
+}
+
+.collab-step-n {
+    flex: 0 0 auto;
+    width: 26px;
+    height: 26px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    border: 1px solid var(--border-bronze, #5a4a2c);
+    font-family: var(--font-heading, Cinzel, serif);
+    font-size: 12px;
+    color: var(--accent-gold, #d4af37);
+}
+
+.collab-step-body {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.collab-step-title {
+    font-family: var(--font-heading, Cinzel, serif);
+    font-size: 0.95rem;
+    color: var(--text-primary, #e8e2d7);
+}
+
+.collab-step-text {
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--text-secondary, #c9c1b4);
+}
+
+/* ------------------------------------------------------- the giveaway projects */
+.collab-projects {
+    padding: clamp(16px, 3vw, 26px);
+    border: 1px solid var(--border-bronze, #5a4a2c);
+    border-radius: var(--radius-lg, 12px);
+    background:
+        linear-gradient(180deg, rgba(212, 175, 55, 0.05), rgba(212, 175, 55, 0) 45%),
+        var(--bg-panel, #161310);
+}
+
+.collab-tabs {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border-dim, #2a241d);
+}
+
+.collab-tab {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px 8px 8px;
+    border: 1px solid var(--border-base, #33291d);
+    border-radius: 999px;
+    background: var(--bg-deep, #12100e);
+    color: var(--text-muted, #8a8177);
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+    transition: border-color 120ms ease, color 120ms ease;
+}
+
+.collab-tab:hover {
+    border-color: var(--border-bronze, #5a4a2c);
+}
+
+.collab-tab.is-active {
+    border-color: var(--accent-gold, #d4af37);
+    color: var(--text-primary, #e8e2d7);
+    background: rgba(212, 175, 55, 0.08);
+}
+
+.collab-tab-pfp {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid var(--border-bronze, #5a4a2c);
+}
+
+/* A project is on the tab from the moment it is approved; its picture arrives after. The chip shows
+   its initial in the meantime — the same circle, in the sheet's own bronze, rather than a hole in
+   the row or somebody else's face. */
+.collab-tab-initials {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1px solid var(--border-bronze, #5a4a2c);
+    background: rgba(176, 141, 87, 0.12);
+    font-family: var(--font-heading, Cinzel, serif);
+    font-size: 12px;
+    line-height: 1;
+    color: var(--accent-bronze, #b08d57);
+}
+
+.collab-tab-text {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+}
+
+.collab-tab-name {
+    font-family: var(--font-heading, Cinzel, serif);
+    font-size: 12.5px;
+    line-height: 1.2;
+}
+
+.collab-tab-handle {
+    font-size: 10.5px;
+    color: var(--text-muted, #8a8177);
+}
+
+/* What the tab says when the store has no approved giveaway on it at all. */
+.collab-projects-empty {
+    margin: 16px 0 0;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-secondary, #c9c1b4);
+    max-width: 72ch;
+}
+
+.collab-project {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-top: 16px;
+    padding: clamp(14px, 2.5vw, 22px);
+    border: 1px solid var(--border-base, #33291d);
+    border-radius: var(--radius-lg, 12px);
+    background: var(--bg-deep, #12100e);
+}
+
+.collab-project.is-registered {
+    border-color: var(--accent-bronze, #b08d57);
+}
+
+.collab-project-head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+.collab-project-pfp {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid var(--border-bronze, #5a4a2c);
+    background: #000;
+}
+
+/* The same circle at the panel's size, for a project whose picture has not been uploaded yet. */
+.collab-project-initials {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 72px;
+    height: 72px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    border: 1px solid var(--border-bronze, #5a4a2c);
+    background: rgba(176, 141, 87, 0.12);
+    font-family: var(--font-display, Cinzel, serif);
+    font-size: 1.6rem;
+    line-height: 1;
+    color: var(--accent-bronze, #b08d57);
+}
+
+.collab-project-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.collab-project-name {
+    margin: 0;
+    font-family: var(--font-display, Cinzel, serif);
+    font-size: 1.25rem;
+    color: var(--accent-gold, #d4af37);
+}
+
+.collab-project-handle {
+    font-size: 12px;
+    color: var(--text-muted, #8a8177);
+    text-decoration: none;
+    width: fit-content;
+    border-bottom: 1px solid transparent;
+}
+
+.collab-project-handle:hover {
+    color: var(--text-secondary, #c9c1b4);
+    border-bottom-color: var(--border-bronze, #5a4a2c);
+}
+
+.collab-project-prize {
+    margin: 0;
+    font-size: 12.5px;
+    color: var(--text-secondary, #c9c1b4);
+}
+
+.collab-status {
+    margin-left: auto;
+    font-family: var(--font-heading, Cinzel, serif);
+    font-size: 10.5px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 4px 11px;
+    border-radius: 999px;
+    border: 1px solid var(--border-bronze, #5a4a2c);
+    color: var(--accent-bronze, #b08d57);
+}
+
+.collab-status.is-in {
+    border-color: var(--accent-gold, #d4af37);
+    color: var(--accent-gold, #d4af37);
+}
+
+.collab-project-blurb {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-secondary, #c9c1b4);
+    max-width: 72ch;
+}
+
+.collab-register {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-start;
+    padding-top: 14px;
+    border-top: 1px solid var(--border-dim, #2a241d);
+}
+
+.collab-register-btn {
+    min-width: 240px;
+}
+
+.collab-register-btn:disabled {
+    opacity: 0.72;
+    cursor: default;
+}
+
+.collab-register-note {
+    margin: 0;
+    font-size: 11.5px;
+    line-height: 1.6;
+    color: var(--text-muted, #8a8177);
+    max-width: 62ch;
+}
+
+/* ---------------------------------------------------------------- the contact */
+.collab-contact {
+    align-items: flex-start;
+    padding-top: 22px;
+    border-top: 1px solid var(--border-dim, #2a241d);
+}
+
+.collab-contact-copy {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-secondary, #c9c1b4);
+    max-width: 72ch;
+}
+
+.collab-contact-links {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.collab-link {
+    font-family: var(--font-heading, Cinzel, serif);
+    font-size: 12px;
+    letter-spacing: 0.6px;
+    text-decoration: none;
+    padding: 9px 16px;
+    border: 1px solid var(--border-bronze, #5a4a2c);
+    border-radius: var(--radius-md, 8px);
+    color: var(--accent-gold, #d4af37);
+    background: var(--bg-panel, #161310);
+}
+
+.collab-link:hover {
+    border-color: var(--accent-gold, #d4af37);
+}
+
+/* ------------------------------------------------------- the request, and the card */
+.collab-submit .collab-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: clamp(16px, 3vw, 26px);
+    border: 1px solid var(--border-base, #33291d);
+    border-radius: var(--radius-lg, 12px);
+    background: var(--bg-panel, #161310);
+}
+
+.collab-submit-intro {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-secondary, #c9c1b4);
+    max-width: 72ch;
+}
+
+.collab-state {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: clamp(14px, 2.4vw, 20px);
+    border: 1px solid var(--border-bronze, #5a4a2c);
+    border-radius: var(--radius-md, 8px);
+    background: var(--bg-deep, #12100e);
+}
+
+.collab-state.is-approved {
+    border-color: var(--accent-gold, #d4af37);
+}
+
+.collab-state-title {
+    margin: 0;
+    font-family: var(--font-heading, Cinzel, serif);
+    font-size: 1.05rem;
+    color: var(--accent-gold, #d4af37);
+}
+
+.collab-state-copy {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-secondary, #c9c1b4);
+    max-width: 72ch;
+}
+
+.collab-summary {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.collab-summary-row {
+    display: flex;
+    gap: 14px;
+    align-items: baseline;
+    font-size: 12.5px;
+    line-height: 1.55;
+}
+
+.collab-summary-row dt {
+    flex: 0 0 116px;
+    font-family: var(--font-heading, Cinzel, serif);
+    font-size: 10.5px;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--accent-bronze, #b08d57);
+}
+
+.collab-summary-row dd {
+    margin: 0;
+    color: var(--text-secondary, #c9c1b4);
+    word-break: break-word;
+}
+
+.collab-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.collab-danger {
+    color: #f0c9c9;
+    border-color: var(--tint-mine, #7a2f2f);
+}
+
+/* -------------------------------------------------------------- the approved upload */
+.collab-approval {
+    display: flex;
+    gap: 18px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.collab-approval-preview {
+    width: 96px;
+    height: 96px;
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    border: 2px solid var(--border-bronze, #5a4a2c);
+    background: var(--bg-panel, #161310);
+    overflow: hidden;
+}
+
+.collab-approval-photo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.collab-approval-empty {
+    font-family: var(--font-display, Cinzel, serif);
+    font-size: 30px;
+    color: var(--text-muted, #8a8177);
+}
+
+.collab-approval-side {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+    flex: 1 1 260px;
+}
+
+.collab-upload {
+    display: inline-flex;
+    cursor: pointer;
+    width: fit-content;
+}
+
+/* The real input is kept in the tab order and out of the layout: a file button styled by hand cannot
+   be triggered from a `<span>`, and `display:none` would take it out of the keyboard's reach. */
+.collab-upload-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.collab-upload-btn {
+    pointer-events: none;
+}
+
+/* --------------------------------------------------------------------------- the card */
+.collab-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border-dim, #2a241d);
+}
+
+.collab-card-head {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+}
+
+.collab-card-note {
+    margin: 0;
+    font-size: 12px;
+    color: var(--text-muted, #8a8177);
+}
+
+/* The canvas is the preview *and* the artifact: it keeps its own resolution — 1600x900, the
+   artwork's own shape — and is scaled by CSS, so what is downloaded is exactly what was drawn. */
+.collab-canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-width: 760px;
+    margin: 0 auto;
+    aspect-ratio: 16 / 9;
+    border: 1px solid var(--border-base, #33291d);
+    border-radius: var(--radius-md, 8px);
+    background: var(--bg-void, #0d0a08);
+    opacity: 0.15;
+    transition: opacity 200ms ease;
+}
+
+.collab-canvas.is-drawn {
+    opacity: 1;
+    aspect-ratio: auto;
+}
+
+.collab-card-busy,
+.collab-card-error {
+    margin: 0;
+    font-size: 12px;
+    text-align: center;
+}
+
+.collab-card-busy {
+    color: var(--text-muted, #8a8177);
+}
+
+.collab-card-error {
+    color: #f0c9c9;
+}
+
+/* -------------------------------------------------------------------------- the form */
+.collab-form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.collab-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.collab-field-label {
+    font-family: var(--font-heading, Cinzel, serif);
+    font-size: 11px;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--accent-bronze, #b08d57);
+}
+
+.collab-field-optional {
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--text-muted, #8a8177);
+}
+
+.collab-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    font: inherit;
+    font-size: 13px;
+    color: var(--text-primary, #e8e2d7);
+    background: var(--bg-deep, #12100e);
+    border: 1px solid var(--border-base, #33291d);
+    border-radius: var(--radius-md, 8px);
+}
+
+.collab-input:focus {
+    outline: none;
+    border-color: var(--accent-gold, #d4af37);
+}
+
+.collab-input::placeholder {
+    color: var(--text-muted, #8a8177);
+}
+
+.collab-textarea {
+    resize: vertical;
+    min-height: 72px;
+}
+
+.collab-send {
+    min-width: 240px;
+}
+
+.collab-send:disabled {
+    opacity: 0.72;
+    cursor: default;
+}
+
+/* ------------------------------------------------------------- the owner's review */
+/* `/collab/review`. The page reuses the panel, the banners and the summary list above; what is new
+   is the bar of counts, the request rows, and the one input a decision writes. */
+.collab-review-bar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+}
+
+.collab-review-stats {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.collab-review-stat {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 7px 13px;
+    border: 1px solid var(--border-base, #33291d);
+    border-radius: 999px;
+    background: var(--bg-deep, #12100e);
+    color: var(--text-muted, #8a8177);
+    cursor: pointer;
+    font: inherit;
+    transition: border-color 120ms ease, color 120ms ease;
+}
+
+.collab-review-stat:hover {
+    border-color: var(--border-bronze, #5a4a2c);
+}
+
+.collab-review-stat.is-active {
+    border-color: var(--accent-gold, #d4af37);
+    background: rgba(212, 175, 55, 0.08);
+    color: var(--text-primary, #e8e2d7);
+}
+
+.collab-review-stat-n {
+    font-family: var(--font-heading, Cinzel, serif);
+    font-size: 14px;
+    color: var(--accent-gold, #d4af37);
+}
+
+.collab-review-stat-label {
+    font-family: var(--font-heading, Cinzel, serif);
+    font-size: 10.5px;
+    letter-spacing: 1.4px;
+    text-transform: uppercase;
+}
+
+.collab-review-you {
+    margin: 0 0 14px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--text-muted, #8a8177);
+    word-break: break-word;
+}
+
+.collab-review-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.collab-review-row {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: clamp(12px, 2.2vw, 18px);
+    border: 1px solid var(--border-base, #33291d);
+    border-left-width: 3px;
+    border-radius: var(--radius-md, 8px);
+    background: var(--bg-deep, #12100e);
+}
+
+/* The left edge is the fast read: waiting, let in, turned down. */
+.collab-review-row.is-pending {
+    border-left-color: var(--accent-bronze, #b08d57);
+}
+
+.collab-review-row.is-approved {
+    border-left-color: var(--accent-gold, #d4af37);
+}
+
+.collab-review-row.is-rejected {
+    border-left-color: var(--tint-mine, #7a2f2f);
+}
+
+.collab-review-head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+.collab-review-thumb {
+    width: 56px;
+    height: 56px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid var(--border-bronze, #5a4a2c);
+    background: #000;
+}
+
+/* No picture yet: their initial, in the same circle, in the sheet's own bronze. */
+.collab-review-thumb-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    border: 1px solid var(--border-bronze, #5a4a2c);
+    background: rgba(176, 141, 87, 0.12);
+    font-family: var(--font-display, Cinzel, serif);
+    font-size: 1.3rem;
+    line-height: 1;
+    color: var(--accent-bronze, #b08d57);
+}
+
+.collab-review-who {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.collab-review-name {
+    margin: 0;
+    font-family: var(--font-heading, Cinzel, serif);
+    font-size: 1.05rem;
+    color: var(--accent-gold, #d4af37);
+}
+
+.collab-review-handle {
+    font-size: 12px;
+    color: var(--text-muted, #8a8177);
+    text-decoration: none;
+    width: fit-content;
+    border-bottom: 1px solid transparent;
+}
+
+.collab-review-handle:hover {
+    color: var(--text-secondary, #c9c1b4);
+    border-bottom-color: var(--border-bronze, #5a4a2c);
+}
+
+.collab-status.is-pending {
+    border-color: var(--border-bronze, #5a4a2c);
+    color: var(--accent-bronze, #b08d57);
+}
+
+.collab-status.is-approved {
+    border-color: var(--accent-gold, #d4af37);
+    color: var(--accent-gold, #d4af37);
+}
+
+.collab-status.is-rejected {
+    border-color: var(--tint-mine, #7a2f2f);
+    color: #f0c9c9;
+}
+
+.collab-review-note {
+    flex: 1 1 260px;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 9px 12px;
+    font: inherit;
+    font-size: 12.5px;
+    color: var(--text-primary, #e8e2d7);
+    background: var(--bg-panel, #161310);
+    border: 1px solid var(--border-base, #33291d);
+    border-radius: var(--radius-md, 8px);
+}
+
+.collab-review-note:focus {
+    outline: none;
+    border-color: var(--accent-gold, #d4af37);
+}
+
+.collab-review-note::placeholder {
+    color: var(--text-muted, #8a8177);
+}
+
+.collab-review-hint {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--text-muted, #8a8177);
+    max-width: 72ch;
+}
+
+/* ------------------------------------------------------------------- the phone */
+@media (max-width: 620px) {
+    .collab-status {
+        margin-left: 0;
+    }
+
+    .collab-review-bar {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .collab-review-stat {
+        flex: 1 1 auto;
+    }
+
+    .collab-review-note {
+        flex: 1 1 auto;
+    }
+
+    .collab-register-btn {
+        min-width: 0;
+        width: 100%;
+    }
+
+    .collab-tab {
+        flex: 1 1 auto;
+    }
+
+    .collab-summary-row {
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .collab-summary-row dt {
+        flex: 0 0 auto;
+    }
+
+    .collab-send {
+        min-width: 0;
+        width: 100%;
+    }
+
+    .collab-card-head {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}
