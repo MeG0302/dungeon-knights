@@ -7570,4 +7570,18 @@ name — re-reading `economy.capsulesPerWeek` into the page, and dropping the *�
 still TBA”* clause. `check-token-math` is **71/71**, and `check-rarity` 64/64, `check-styles` all
 styled, `check-copies` 2/2, `check-contracts` 61 contracts.
 
+**Deployed as the owner asked:** `38cf15d` and `7657648` →
+`dungeon-knights-qztau6w2k-meglast320-1694`, aliased by hand across `dungeonknights.io`,
+`www.dungeonknights.io`, `app.dungeonknights.io` and `dungeon-knights.vercel.app`. Read back from
+`app.dungeonknights.io`, not the deployment URL, because `/staking`, `/tokenomics` and `/mint` are app
+pages — the apex answers them with a `308` to `app.dungeonknights.io`, which is the routing module
+doing its job, not a broken deploy. `/staking`: the **Capsules left** tile reads `TBA`, and the only
+`200`s on the page are the two hash-power band counts. `/tokenomics`: *“The raffle awards capsules each
+week to staked Genesis Knights, and the weekly count is still TBA”*, and *“the weekly opens alone cover
+both Knights lines (617,120 DNG a week at the reference)”*; the only `200` is inside `1,200 DNG`.
+`/mint`: *“never sold, and how many a week is still TBA”*, no `200` anywhere. `/pitch` behind the gate:
+zero `200` in the whole rendered deck, the raffle step reads *“the weekly count is TBA rather than an
+announced figure”* and the disclosure card *“…is still TBD”*. `/genesis` and `/collab` still `200` on
+the apex, unchanged by this one.
+
 
